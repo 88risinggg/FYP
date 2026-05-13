@@ -91,7 +91,7 @@ npm run dev
 Frontend URL:
 
 ```text
-http://127.0.0.1:4173
+http://localhost:5173
 ```
 
 If the backend is on a different port, create `frontend/.env`:
@@ -99,8 +99,6 @@ If the backend is on a different port, create `frontend/.env`:
 ```env
 VITE_API_URL=http://localhost:4001
 ```
-
-Note: for this workspace, `npm run dev` builds the Vite app and serves it with `vite preview`. This avoids a OneDrive path permission issue in Vite's hot dev dependency optimizer while keeping the prototype runnable.
 
 ## MySQL Setup
 
