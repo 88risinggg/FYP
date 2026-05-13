@@ -5,6 +5,10 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: #f8fafc;
-  color: #0f172a;
+  background: #fff6fa;
+  color: #22151f;
+}
+
+* {
+  box-sizing: border-box;
 }
