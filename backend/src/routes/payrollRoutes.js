@@ -105,37 +105,6 @@ router.post("/upload", allowRoles("Admin", "HR"), async (req, res) => {
   res.json({ rows: uploaded, log: uploadLogs[0] });
 });
 
-router.get("/template", allowRoles("Admin", "HR"), async (req, res) => {
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("Payroll Template");
-  const headers = [
-    "staff_id",
-    "staff_name",
-    "email",
-    "payroll_month",
-    "working_days",
-    "no_pay_leave_days",
-    "basic_salary",
-    "services_commission",
-    "product_commission",
-    "credit_commission",
-    "allowance",
-    "loan_deduction",
-    "other_deduction"
-  ];
-  worksheet.addRow(headers);
-  worksheet.columns.forEach((column) => {
-    column.width = 18;
-  });
-  worksheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-  worksheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } };
-  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  res.setHeader("Content-Disposition", "attachment; filename=PayrollTemplate.xlsx");
-  await workbook.xlsx.write(res);
-  addAudit(req.user.email, "Downloaded payroll template", "Payroll");
-  res.end();
-});
-
 router.post("/payslips/:payrollId/generate", allowRoles("Admin", "HR"), async (req, res) => {
   const payroll = withCalculations().find((record) => record.id === Number(req.params.payrollId));
   if (!payroll) return res.status(404).json({ message: "Payroll record not found" });
@@ -148,9 +117,6 @@ router.post("/payslips/:payrollId/generate", allowRoles("Admin", "HR"), async (r
     staff_name: payroll.staff_name,
     payroll_month: payroll.payroll_month,
     fileUrl: `/generated/payslips/${filename}`,
-    approval_status: "pending",
-    approved_by: null,
-    approved_at: null,
     createdAt: new Date().toISOString()
   };
   payslips.unshift(payslip);
@@ -166,9 +132,6 @@ router.get("/payslips", allowRoles("Admin", "HR", "Staff"), (req, res) => {
 router.post("/payslips/:payslipId/email", allowRoles("Admin", "HR"), async (req, res) => {
   const payslip = payslips.find((item) => item.id === Number(req.params.payslipId));
   if (!payslip) return res.status(404).json({ message: "Payslip not found" });
-  if (payslip.approval_status !== "approved") {
-    return res.status(403).json({ message: "Payslip must be approved by Finance before sending" });
-  }
   const staff = staffProfiles.find((item) => item.staff_id === payslip.staff_id);
   const subject = `Payslip for ${payslip.payroll_month}`;
   const result = await sendPrototypeEmail({
