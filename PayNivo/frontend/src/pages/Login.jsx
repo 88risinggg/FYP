@@ -35,7 +35,11 @@ export default function Login() {
       localStorage.setItem("paynivo_user", JSON.stringify(response.data.user));
       navigate(rolePath[response.data.user.role] || "/login");
     } catch (err) {
-      setError(err.response?.data?.message || "Unable to sign in.");
+      if (err.code === "ERR_NETWORK") {
+        setError("Cannot connect to backend server. Start backend on http://localhost:5000 and refresh this page.");
+      } else {
+        setError(err.response?.data?.message || "Unable to sign in.");
+      }
     } finally {
       setLoading(false);
     }

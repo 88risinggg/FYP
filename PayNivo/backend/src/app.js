@@ -11,7 +11,16 @@ export function createApp() {
   const app = express();
 
   app.use(cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin(origin, callback) {
+      const configuredOrigin = process.env.FRONTEND_URL;
+      const isLocalVite = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin || "");
+
+      if (!origin || isLocalVite || origin === configuredOrigin) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS blocked origin: ${origin}`));
+    },
     credentials: true
   }));
   app.use(express.json());
