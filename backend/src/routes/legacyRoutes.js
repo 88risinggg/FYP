@@ -81,7 +81,15 @@ router.post("/payslips/:payrollId/generate", async (req, res) => {
     staff_id: payroll.staff_id,
     staff_name: payroll.staff_name,
     payroll_month: payroll.payroll_month,
+    basic_salary: payroll.basic_salary,
+    net_pay: payroll.net_pay,
+    employee_cpf: payroll.employee_cpf,
+    total_earnings: payroll.total_earnings,
+    total_deductions: payroll.total_deductions,
     fileUrl: `/generated/payslips/${filename}`,
+    approval_status: "pending",
+    approved_by: null,
+    approved_at: null,
     createdAt: new Date().toISOString()
   };
   payslips.unshift(payslip);
@@ -92,6 +100,9 @@ router.post("/payslips/:payrollId/generate", async (req, res) => {
 router.post("/email/payslip/:payslipId", async (req, res) => {
   const payslip = payslips.find((item) => item.id === Number(req.params.payslipId));
   if (!payslip) return res.status(404).json({ message: "Payslip not found" });
+  if (payslip.approval_status !== "approved") {
+    return res.status(403).json({ message: "Payslip must be approved by Finance before sending" });
+  }
   const staff = staffProfiles.find((item) => item.staff_id === payslip.staff_id);
   const subject = `Payslip for ${payslip.payroll_month}`;
   const result = await sendPrototypeEmail({
@@ -100,7 +111,9 @@ router.post("/email/payslip/:payslipId", async (req, res) => {
     html: `<p>Hello ${payslip.staff_name},</p><p>Your payslip for ${payslip.payroll_month} is ready.</p>`
   });
   addAudit(req.user.email, "Email sent: payslip", "Email");
-  res.json({ sent: true, result });
+  payslip.approval_status = "sent";
+  payslip.sent_at = new Date().toISOString();
+  res.json({ sent: true, result, payslip });
 });
 
 export default router;

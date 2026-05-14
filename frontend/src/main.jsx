@@ -396,7 +396,7 @@ function PayrollPage({ api, user }) {
   }
 
   async function generatePayslip(id) {
-    const result = await api.request(`/api/payslips/${id}/generate`, { method: "POST" });
+    const result = await api.request(`/api/payroll/payslips/${id}/generate`, { method: "POST" });
     api.notify(`Payslip generated for ${result.staff_name}.`);
   }
 
@@ -476,7 +476,7 @@ function PayslipPage({ api, user }) {
   const payroll = useLoad(() => api.request("/api/payroll"), []);
 
   async function sendEmail(id) {
-    await api.request(`/api/email/payslip/${id}`, { method: "POST" });
+    await api.request(`/api/payroll/payslips/${id}/email`, { method: "POST" });
     api.notify("Payslip email queued or sent.");
   }
 
