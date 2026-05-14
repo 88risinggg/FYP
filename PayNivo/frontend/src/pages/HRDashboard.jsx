@@ -6,6 +6,7 @@ export default function HRDashboard() {
   const [payslips, setPayslips] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [generateStatus, setGenerateStatus] = useState({});
   const [sendStatus, setSendStatus] = useState({});
   const [uploadFile, setUploadFile] = useState(null);
@@ -17,6 +18,16 @@ export default function HRDashboard() {
     fetchPayrollRecords();
     fetchPayslips();
   }, []);
+
+  useEffect(() => {
+    if (!success) return undefined;
+
+    const timeoutId = window.setTimeout(() => {
+      setSuccess("");
+    }, 5000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [success]);
 
   const fetchPayrollRecords = async () => {
     setLoading(true);
@@ -52,6 +63,7 @@ export default function HRDashboard() {
 
   const generatePayslip = async (payrollId) => {
     setGenerateStatus((prev) => ({ ...prev, [payrollId]: "generating" }));
+    setSuccess("");
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(`http://localhost:4001/api/payroll/payslips/${payrollId}/generate`, {
@@ -64,7 +76,7 @@ export default function HRDashboard() {
       }
       setGenerateStatus((prev) => ({ ...prev, [payrollId]: "generated" }));
       fetchPayslips(); // Refresh payslips list
-      alert("Payslip generated successfully!");
+      setSuccess("Payslip generated and sent to Finance for approval. It will appear in the Payslip tab once Finance approves it.");
     } catch (err) {
       setError(err.message);
       setGenerateStatus((prev) => ({ ...prev, [payrollId]: "error" }));
@@ -103,6 +115,7 @@ export default function HRDashboard() {
     setUploadFile(file);
     setUploading(true);
     setError("");
+    setSuccess("");
     setUploadResults(null);
 
     try {
@@ -123,8 +136,19 @@ export default function HRDashboard() {
       const data = await response.json();
       setUploadResults(data);
       setShowUploadResults(true);
-      fetchPayrollRecords(); // Refresh records
-      alert(`Upload successful! ${data.log.totalRows} records processed.`);
+      setPayrollRecords((prev) => {
+        const existingIds = new Set(prev.map((record) => record.id));
+        const nextRecords = [...prev];
+
+        data.rows.forEach((row) => {
+          if (!existingIds.has(row.id)) {
+            nextRecords.unshift(row);
+          }
+        });
+
+        return nextRecords;
+      });
+      setSuccess(`Upload successful. ${data.log.totalRows} payroll rows were processed with calculated values.`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -153,10 +177,17 @@ export default function HRDashboard() {
     }
   };
 
+  const visiblePayslips = payslips.filter(
+    (payslip) => payslip.approval_status === "approved" || payslip.approval_status === "sent"
+  );
+  const pendingFinancePayslips = payslips.filter((payslip) => payslip.approval_status === "pending");
+  const payrollDisplayRows = uploadResults?.rows?.length ? payrollRecords : payrollRecords;
+
   return (
     <DashboardShell role="HR" title="HR Dashboard - Monthly Payroll Processing">
       <div className="p-6 space-y-8">
         {error && <div className="bg-red-100 text-red-800 p-4 rounded mb-4">{error}</div>}
+        {success && <div className="bg-green-100 text-green-800 p-4 rounded mb-4">{success}</div>}
 
         {/* Workflow Guide */}
         <div className="bg-blue-50 border-l-4 border-blue-500 p-6 rounded">
@@ -236,13 +267,13 @@ export default function HRDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {payrollRecords.map((record) => (
+                    {payrollDisplayRows.map((record) => (
                     <tr key={record.id} className="hover:bg-gray-50">
                       <td className="border p-3">{record.staff_id}</td>
                       <td className="border p-3">{record.staff_name}</td>
                       <td className="border p-3">{record.payroll_month}</td>
-                      <td className="border p-3 text-right font-semibold">${record.basic_salary || 0}</td>
-                      <td className="border p-3 text-right font-bold text-green-600">${record.net_pay || 0}</td>
+                        <td className="border p-3 text-right font-semibold">${Number(record.basic_salary || 0).toFixed(2)}</td>
+                        <td className="border p-3 text-right font-bold text-green-600">${Number(record.net_pay || 0).toFixed(2)}</td>
                       <td className="border p-3 text-center">
                         <span className="px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-800">
                           ✓ Valid
@@ -277,48 +308,22 @@ export default function HRDashboard() {
               <strong>Approval Workflow:</strong> After generating payslips, Finance will review and approve them manually. Once approved, you can send them to staff via email.
             </p>
           </div>
+
+          <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+            <p className="font-semibold text-slate-900">Pending payslips are hidden from this tab</p>
+            <p className="mt-1">
+              {pendingFinancePayslips.length > 0
+                ? `${pendingFinancePayslips.length} payslip(s) are currently waiting for Finance approval.`
+                : "No payslips are waiting for Finance approval right now."}
+            </p>
+          </div>
           
-          {payslips.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">No payslips generated yet. Upload payroll data and generate payslips above.</p>
+          {visiblePayslips.length === 0 ? (
+            <p className="text-center text-gray-500 py-8">No approved payslips available yet. Finance must approve generated payslips before they appear here.</p>
           ) : (
             <div className="space-y-6">
-              {/* Pending Approval */}
-              {payslips.filter(p => p.approval_status === "pending").length > 0 && (
-                <div className="bg-yellow-50 p-6 rounded border-2 border-yellow-200">
-                  <h3 className="text-lg font-bold text-yellow-900 mb-4">⏳ Pending Finance Approval</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse border border-gray-300 text-sm">
-                      <thead className="bg-yellow-100">
-                        <tr>
-                          <th className="border p-2 text-left">Staff ID</th>
-                          <th className="border p-2 text-left">Staff Name</th>
-                          <th className="border p-2 text-left">Month</th>
-                          <th className="border p-2 text-right">Net Pay</th>
-                          <th className="border p-2 text-center">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {payslips.filter(p => p.approval_status === "pending").map((payslip) => (
-                          <tr key={payslip.id} className="hover:bg-yellow-50">
-                            <td className="border p-2">{payslip.staff_id}</td>
-                            <td className="border p-2">{payslip.staff_name}</td>
-                            <td className="border p-2">{payslip.payroll_month}</td>
-                            <td className="border p-2 text-right font-semibold">${payslip.net_pay || 0}</td>
-                            <td className="border p-2 text-center">
-                              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
-                                Pending
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
               {/* Approved - Ready to Send */}
-              {payslips.filter(p => p.approval_status === "approved").length > 0 && (
+              {visiblePayslips.filter(p => p.approval_status === "approved").length > 0 && (
                 <div className="bg-green-50 p-6 rounded border-2 border-green-200">
                   <h3 className="text-lg font-bold text-green-900 mb-4">✅ Approved - Ready to Send</h3>
                   <div className="overflow-x-auto">
@@ -334,7 +339,7 @@ export default function HRDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {payslips.filter(p => p.approval_status === "approved").map((payslip) => (
+                        {visiblePayslips.filter(p => p.approval_status === "approved").map((payslip) => (
                           <tr key={payslip.id} className="hover:bg-green-50">
                             <td className="border p-2">{payslip.staff_id}</td>
                             <td className="border p-2">{payslip.staff_name}</td>
@@ -367,7 +372,7 @@ export default function HRDashboard() {
               )}
 
               {/* Already Sent */}
-              {payslips.filter(p => p.approval_status === "sent").length > 0 && (
+              {visiblePayslips.filter(p => p.approval_status === "sent").length > 0 && (
                 <div className="bg-blue-50 p-6 rounded border-2 border-blue-200">
                   <h3 className="text-lg font-bold text-blue-900 mb-4">📧 Sent to Staff</h3>
                   <div className="overflow-x-auto">
@@ -382,7 +387,7 @@ export default function HRDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {payslips.filter(p => p.approval_status === "sent").map((payslip) => (
+                        {visiblePayslips.filter(p => p.approval_status === "sent").map((payslip) => (
                           <tr key={payslip.id} className="hover:bg-blue-50">
                             <td className="border p-2">{payslip.staff_id}</td>
                             <td className="border p-2">{payslip.staff_name}</td>

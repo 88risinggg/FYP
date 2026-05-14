@@ -237,10 +237,46 @@ function AdminDashboard({ api, setPage }) {
 function FinanceDashboard({ api, setPage }) {
   const { data } = useLoad(() => api.request("/api/dashboard"), []);
   const reports = useLoad(() => api.request("/api/reports"), []);
+  const [pendingPayslips, setPendingPayslips] = useState([]);
+  const [approvalStatus, setApprovalStatus] = useState({});
+
+  useEffect(() => {
+    api.request("/api/finance/payslips/pending")
+      .then(setPendingPayslips)
+      .catch(() => setPendingPayslips([]));
+  }, []);
+
+  async function approvePayslip(id) {
+    setApprovalStatus((prev) => ({ ...prev, [id]: "approving" }));
+    try {
+      await api.request(`/api/finance/payslips/${id}/approve`, { method: "POST" });
+      setPendingPayslips((prev) => prev.filter((p) => p.id !== id));
+      setApprovalStatus((prev) => ({ ...prev, [id]: "done" }));
+      api.notify("Payslip approved. HR can now send it to the staff.");
+    } catch {
+      setApprovalStatus((prev) => ({ ...prev, [id]: "error" }));
+      api.notify("Failed to approve payslip.");
+    }
+  }
+
+  async function rejectPayslip(id) {
+    setApprovalStatus((prev) => ({ ...prev, [id]: "rejecting" }));
+    try {
+      await api.request(`/api/finance/payslips/${id}/reject`, { method: "POST" });
+      setPendingPayslips((prev) => prev.filter((p) => p.id !== id));
+      setApprovalStatus((prev) => ({ ...prev, [id]: "done" }));
+      api.notify("Payslip rejected.");
+    } catch {
+      setApprovalStatus((prev) => ({ ...prev, [id]: "error" }));
+      api.notify("Failed to reject payslip.");
+    }
+  }
+
   if (!data || !reports.data) return <Loading />;
+
   return (
     <section className="stack">
-      <PageHeader title="Finance dashboard" subtitle="Invoices, payment status, and bank transfer approvals." />
+      <PageHeader title="Finance dashboard" subtitle="Invoices, payment status, and payslip approvals." />
       <StatGrid stats={[
         { label: "Invoices", value: reports.data.invoice.totalInvoices },
         { label: "Paid", value: reports.data.invoice.paidInvoices },
@@ -252,6 +288,47 @@ function FinanceDashboard({ api, setPage }) {
         { title: "Approve payment", text: "Review bank transfer payment proof.", action: () => setPage("invoice") },
         { title: "Invoice reports", text: "Check paid, unpaid, and overdue totals.", action: () => setPage("reports") }
       ]} />
+
+      {/* Payslip Approval Section */}
+      <Panel title={`Payslip Approval Queue${pendingPayslips.length > 0 ? ` — ${pendingPayslips.length} pending` : ""}`}>
+        {pendingPayslips.length === 0 ? (
+          <EmptyState title="No payslips pending approval" text="Once HR generates payslips, they will appear here for your review." />
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  {["Staff", "Month", "Net Pay", "Actions"].map((h) => <th key={h}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {pendingPayslips.map((payslip) => (
+                  <tr key={payslip.id}>
+                    <td><strong>{payslip.staff_name}</strong><br /><span className="muted">{payslip.staff_id}</span></td>
+                    <td>{payslip.payroll_month}</td>
+                    <td><strong>{money(payslip.net_pay)}</strong></td>
+                    <td>
+                      <button
+                        onClick={() => approvePayslip(payslip.id)}
+                        disabled={approvalStatus[payslip.id] === "approving"}
+                      >
+                        {approvalStatus[payslip.id] === "approving" ? "Approving..." : "Approve"}
+                      </button>
+                      {" "}
+                      <button
+                        onClick={() => rejectPayslip(payslip.id)}
+                        disabled={approvalStatus[payslip.id] === "rejecting"}
+                      >
+                        {approvalStatus[payslip.id] === "rejecting" ? "Rejecting..." : "Reject"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
     </section>
   );
 }
@@ -397,25 +474,41 @@ function PayrollTableContent({ records, onGenerate }) {
 function PayslipPage({ api, user }) {
   const payslipsState = useLoad(() => api.request("/api/payslips"), []);
   const payroll = useLoad(() => api.request("/api/payroll"), []);
+
   async function sendEmail(id) {
     await api.request(`/api/email/payslip/${id}`, { method: "POST" });
     api.notify("Payslip email queued or sent.");
   }
+
   if (!payslipsState.data || !payroll.data) return <Loading />;
+
+  // Only show approved or sent payslips — pending ones wait for Finance
+  const visiblePayslips = payslipsState.data.filter(
+    (p) => p.approval_status === "approved" || p.approval_status === "sent"
+  );
+  const pendingCount = payslipsState.data.filter((p) => p.approval_status === "pending").length;
+
   return (
     <section className="stack">
       <PageHeader title={user.role === "Staff" ? "My payslip" : "Payslips"} subtitle="Generated PDF payslips and salary breakdown." />
       {user.role === "Staff" && payroll.data[0] && <PayrollTable records={payroll.data} title="Salary breakdown" />}
+      {pendingCount > 0 && (
+        <div className="notice">
+          {pendingCount} payslip(s) are waiting for Finance approval and will appear here once approved.
+        </div>
+      )}
       <Panel title="Generated payslips">
         <ResponsiveTable
           headers={["Staff", "Month", "PDF", "Email"]}
-          rows={payslipsState.data.map((payslip) => [
+          rows={visiblePayslips.map((payslip) => [
             payslip.staff_name,
             payslip.payroll_month,
             <a href={`${API_URL}${payslip.fileUrl}`} target="_blank" rel="noreferrer">Download PDF</a>,
-            user.role !== "Staff" ? <button onClick={() => sendEmail(payslip.id)}>Send payslip email</button> : "Staff access"
+            user.role !== "Staff"
+              ? <button onClick={() => sendEmail(payslip.id)}>Send payslip email</button>
+              : "Staff access"
           ])}
-          empty="No payslips generated yet. Generate one from the Payroll page."
+          empty="No approved payslips yet. Finance must approve generated payslips before they appear here."
         />
       </Panel>
     </section>

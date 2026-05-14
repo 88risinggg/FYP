@@ -67,7 +67,8 @@ export default function FinanceDashboard() {
     const styles = {
       pending: "bg-yellow-100 text-yellow-800",
       approved: "bg-green-100 text-green-800",
-      rejected: "bg-red-100 text-red-800"
+      rejected: "bg-red-100 text-red-800",
+      sent: "bg-blue-100 text-blue-800"
     };
     return (
       <span className={`px-3 py-1 rounded-full text-sm font-semibold ${styles[status] || "bg-gray-100"}`}>
@@ -76,6 +77,10 @@ export default function FinanceDashboard() {
     );
   };
 
+  const pendingPayslips = payslips.filter((payslip) => payslip.approval_status === "pending");
+  const approvedPayslips = payslips.filter((payslip) => payslip.approval_status === "approved");
+  const rejectedPayslips = payslips.filter((payslip) => payslip.approval_status === "rejected");
+
   return (
     <DashboardShell role="Finance" title="Finance Dashboard">
       <div className="p-6">
@@ -83,10 +88,37 @@ export default function FinanceDashboard() {
 
         {error && <div className="bg-red-100 text-red-800 p-4 rounded mb-4">{error}</div>}
 
+        <div className="grid gap-4 mb-6 sm:grid-cols-3">
+          <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+            <p className="text-sm font-semibold text-yellow-900">Pending Approval</p>
+            <p className="mt-2 text-3xl font-bold text-yellow-950">{pendingPayslips.length}</p>
+          </div>
+          <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+            <p className="text-sm font-semibold text-green-900">Approved</p>
+            <p className="mt-2 text-3xl font-bold text-green-950">{approvedPayslips.length}</p>
+          </div>
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+            <p className="text-sm font-semibold text-red-900">Rejected</p>
+            <p className="mt-2 text-3xl font-bold text-red-950">{rejectedPayslips.length}</p>
+          </div>
+        </div>
+
+        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-5">
+          <h3 className="text-lg font-semibold text-blue-950">Finance approval guidance</h3>
+          <p className="mt-2 text-sm text-blue-900">
+            Review the pending payslips below, then approve or reject them manually. HR can only send payslips after Finance approves them.
+          </p>
+        </div>
+
         {loading ? (
           <p className="text-center text-gray-500">Loading payslips...</p>
-        ) : payslips.length === 0 ? (
-          <p className="text-center text-gray-500">No pending payslips</p>
+        ) : pendingPayslips.length === 0 ? (
+          <div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
+            <p className="text-slate-700 font-semibold">No payslips are waiting for approval right now.</p>
+            <p className="mt-2 text-sm text-slate-500">
+              Once HR uploads payroll data and generates payslips, they will appear here automatically.
+            </p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse border border-gray-300">
@@ -101,12 +133,12 @@ export default function FinanceDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {payslips.map((payslip) => (
+                {pendingPayslips.map((payslip) => (
                   <tr key={payslip.id} className="hover:bg-gray-50">
                     <td className="border p-3">{payslip.staff_id}</td>
                     <td className="border p-3">{payslip.staff_name}</td>
                     <td className="border p-3">{payslip.payroll_month}</td>
-                    <td className="border p-3 text-right">${payslip.net_pay || 0}</td>
+                    <td className="border p-3 text-right font-semibold">${Number(payslip.net_pay || 0).toFixed(2)}</td>
                     <td className="border p-3 text-center">{getStatusBadge(payslip.approval_status)}</td>
                     <td className="border p-3 text-center">
                       {payslip.approval_status === "pending" ? (
@@ -134,6 +166,15 @@ export default function FinanceDashboard() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {approvedPayslips.length > 0 && (
+          <div className="mt-8 rounded-lg border border-green-200 bg-green-50 p-5">
+            <h3 className="text-lg font-semibold text-green-950 mb-3">Approved payslips</h3>
+            <p className="text-sm text-green-900">
+              These have already been approved and are waiting for HR to send them.
+            </p>
           </div>
         )}
 

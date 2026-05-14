@@ -4,6 +4,7 @@ import authRoutes from "./routes/authRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import financeRoutes from "./routes/financeRoutes.js";
 import hrRoutes from "./routes/hrRoutes.js";
+import payrollRoutes from "./routes/payrollRoutes.js";
 import staffRoutes from "./routes/staffRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js";
 
@@ -25,6 +26,7 @@ export function createApp() {
   app.use("/api/admin", adminRoutes);
   app.use("/api/finance", financeRoutes);
   app.use("/api/hr", hrRoutes);
+  app.use("/api/payroll", payrollRoutes);
   app.use("/api/staff", staffRoutes);
   app.use("/api/customer", customerRoutes);
 
