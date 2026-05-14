@@ -272,8 +272,9 @@ router.post("/upload", allowRoles("Admin", "HR"), async (req, res) => {
         services_commission: Number(record.services_commission || 0),
         product_commission: Number(record.product_commission || 0),
         credit_commission: Number(record.credit_commission || 0),
+        allowance: Number(record.allowance || payrollRateConfig.defaultAllowanceRate || 0),
         loan_deduction: Number(record.loan_deduction || 0),
-        other_deduction: Number(record.other_deduction || 0)
+        other_deduction: Number(record.other_deduction || payrollRateConfig.defaultDeductionRate || 0)
       };
       
       // Validate payroll data and combine with staff validation errors
@@ -340,8 +341,10 @@ router.post("/payslips/:payslipId/email", allowRoles("Admin", "HR"), async (req,
     subject,
     html: `<p>Hello ${payslip.staff_name},</p><p>Your payslip for ${payslip.payroll_month} is ready.</p>`
   });
+  payslip.approval_status = "sent";
+  payslip.sent_at = new Date().toISOString();
   addAudit(req.user.email, "Email sent: payslip", "Email");
-  res.json({ sent: true, result });
+  res.json({ sent: true, result, payslip });
 });
 
 export default router;
