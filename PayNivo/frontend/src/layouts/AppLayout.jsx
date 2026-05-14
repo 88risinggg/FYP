@@ -9,6 +9,14 @@ const navItems = [
 ];
 
 export default function AppLayout() {
+  const user = JSON.parse(localStorage.getItem("paynivo_user") || "null");
+
+  function logout() {
+    localStorage.removeItem("paynivo_token");
+    localStorage.removeItem("paynivo_user");
+    window.location.href = "/login";
+  }
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">
@@ -33,6 +41,22 @@ export default function AppLayout() {
               </NavLink>
             ))}
           </nav>
+
+          {user && (
+            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-slate-950">{user.name}</p>
+                <p className="truncate text-xs text-slate-500">{user.email}</p>
+              </div>
+              <button
+                type="button"
+                onClick={logout}
+                className="rounded-md bg-white px-3 py-1.5 text-xs font-bold text-brand-700 shadow-sm hover:bg-brand-50"
+              >
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
