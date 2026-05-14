@@ -1,6 +1,31 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+
+# Environment variables — never commit these
 .env
+.env.local
+.env.production
+PayNivo/backend/.env
+PayNivo/frontend/.env
+
+# Logs
 *.log
+npm-debug.log*
+
+# Uploaded files (user data)
 backend/src/uploads/
+PayNivo/backend/src/uploads/
+
+# Generated payslip PDFs
 backend/src/generated/payslips/*.pdf
+PayNivo/backend/src/generated/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json
