@@ -5,7 +5,8 @@ const passwordHash = bcrypt.hashSync("password", 10);
 export const demoUsers = [
   { id: 1, name: "Admin User", email: "admin@paynivo.com", role: "Admin", passwordHash },
   { id: 2, name: "Finance User", email: "finance@paynivo.com", role: "Finance", passwordHash },
-  { id: 3, name: "HR User", email: "hr@paynivo.com", role: "HR", passwordHash }
+  { id: 3, name: "HR User", email: "hr@paynivo.com", role: "HR", passwordHash },
+  { id: 4, name: "Staff User", email: "staff@paynivo.com", role: "Staff", passwordHash }
 ];
 
 export function publicUser(user) {

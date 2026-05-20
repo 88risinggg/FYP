@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../services/api.js";
 
 const fallback = { metrics: [], users: [], roles: [], payrollRates: [], invoiceSettings: [], reminderSettings: [], systemSettings: {}, reports: [], auditLogs: [], emailLogs: [] };
@@ -25,6 +26,14 @@ const pageTitles = {
 };
 
 const moduleRequirements = ["Manage user accounts and roles", "Configure payroll rates", "Manage invoice settings", "Configure reminder settings", "View dashboard and system overview", "View and export reports", "View audit logs", "Manage system settings", "Monitor email notification logs"];
+
+function getStoredUser() {
+  try {
+    return JSON.parse(localStorage.getItem("paynivo_user") || "null");
+  } catch {
+    return null;
+  }
+}
 
 function IconBox({ children, tone = "blue" }) {
   const tones = { blue: "bg-blue-600", green: "bg-emerald-500", amber: "bg-orange-500", purple: "bg-violet-500", teal: "bg-cyan-500", red: "bg-red-500", slate: "bg-slate-600" };
@@ -81,9 +90,11 @@ function StatCard({ label, value, hint, tone, icon }) {
 }
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
   const [data, setData] = useState(fallback);
   const [activeTab, setActiveTab] = useState("overview");
   const [message, setMessage] = useState("");
+  const [currentUser] = useState(() => getStoredUser() || { name: "Demo User", email: "demo@paynivo.com", role: "User" });
   const [newUser, setNewUser] = useState({ name: "", email: "", role: "Finance" });
   const [report, setReport] = useState({ name: "Admin overview report", format: "Excel" });
 
@@ -94,6 +105,12 @@ export default function AdminDashboard() {
   }, []);
 
   const pageTitle = pageTitles[activeTab] || pageTitles.overview;
+  const initials = currentUser.name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   function apply(response, success) {
     setData({ ...fallback, ...response.data.dashboard });
@@ -138,6 +155,12 @@ export default function AdminDashboard() {
     URL.revokeObjectURL(url);
   }
 
+  function logout() {
+    localStorage.removeItem("paynivo_token");
+    localStorage.removeItem("paynivo_user");
+    navigate("/login");
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 lg:grid lg:grid-cols-[260px_1fr]">
       <aside className="border-r border-slate-200 bg-white lg:sticky lg:top-0 lg:h-screen">
@@ -165,7 +188,17 @@ export default function AdminDashboard() {
           ))}
         </nav>
 
-        <div className="mt-auto hidden border-t border-slate-100 px-5 py-5 text-sm font-semibold text-slate-500 lg:block">Collapse</div>
+        <div className="border-t border-slate-100 px-5 py-5">
+          <div className="flex items-start gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-blue-100 text-sm font-black text-blue-700">{initials}</div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black text-slate-950">{currentUser.name}</p>
+              <p className="text-xs font-bold text-slate-500">{currentUser.role}</p>
+              <p className="truncate text-xs text-slate-500">{currentUser.email}</p>
+            </div>
+          </div>
+          <button onClick={logout} className="mt-4 h-10 w-full rounded-md border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50">Log out</button>
+        </div>
       </aside>
 
       <main className="min-w-0">
@@ -180,12 +213,13 @@ export default function AdminDashboard() {
               <input className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Search invoices, users, settings..." />
             </div>
             <button className="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-600">N</button>
-            <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-full bg-blue-100 text-sm font-black text-blue-700">AU</div>
-              <div className="hidden sm:block">
-                <p className="text-sm font-black text-slate-950">Admin User</p>
-                <p className="text-xs text-slate-500">Administrator</p>
+            <div className="flex items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-2">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-blue-100 text-sm font-black text-blue-700">{initials}</div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-slate-950">{currentUser.name}</p>
+                <p className="truncate text-xs text-slate-500">{currentUser.role} - {currentUser.email}</p>
               </div>
+              <button onClick={logout} className="ml-1 h-9 rounded-md border border-slate-200 px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50">Log out</button>
             </div>
           </div>
         </header>

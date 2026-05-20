@@ -22,6 +22,13 @@ function PreviewMetric({ label, value, tone, icon }) {
   );
 }
 
+const demoCredentials = [
+  { name: "Admin User", role: "Admin", email: "admin@paynivo.com" },
+  { name: "Finance User", role: "Finance", email: "finance@paynivo.com" },
+  { name: "HR User", role: "HR", email: "hr@paynivo.com" },
+  { name: "Staff User", role: "Staff", email: "staff@paynivo.com" }
+];
+
 export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("admin@paynivo.com");
@@ -34,6 +41,7 @@ export default function Login() {
     try {
       const response = await api.post("/auth/login", { email, password });
       localStorage.setItem("paynivo_token", response.data.token);
+      localStorage.setItem("paynivo_user", JSON.stringify(response.data.user));
       navigate("/admin");
     } catch (err) {
       setError(err.response?.data?.message || "Unable to sign in.");
@@ -102,7 +110,7 @@ export default function Login() {
         <form onSubmit={submit} className="rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-5">
             <h2 className="text-lg font-black text-slate-950">Sign in</h2>
-            <p className="mt-1 text-sm text-slate-500">Use the demo admin account to continue.</p>
+            <p className="mt-1 text-sm text-slate-500">Use any demo account to continue.</p>
           </div>
 
           <div className="space-y-4 p-6">
@@ -121,9 +129,29 @@ export default function Login() {
             <button className="h-11 w-full rounded-md bg-blue-600 px-4 text-sm font-black text-white transition hover:bg-blue-700">Sign in</button>
 
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              <p className="font-black text-slate-950">Demo credentials</p>
-              <p className="mt-1">admin@paynivo.com</p>
-              <p>password</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-black text-slate-950">Demo credentials</p>
+                <p className="text-xs font-bold text-slate-500">Password: password</p>
+              </div>
+              <div className="mt-3 space-y-2">
+                {demoCredentials.map((account) => (
+                  <button
+                    key={account.email}
+                    type="button"
+                    onClick={() => {
+                      setEmail(account.email);
+                      setPassword("password");
+                    }}
+                    className="flex w-full items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-left transition hover:border-blue-300 hover:bg-blue-50"
+                  >
+                    <span>
+                      <span className="block font-black text-slate-900">{account.name}</span>
+                      <span className="block text-xs text-slate-500">{account.email}</span>
+                    </span>
+                    <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-black text-blue-700 ring-1 ring-blue-200">{account.role}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </form>

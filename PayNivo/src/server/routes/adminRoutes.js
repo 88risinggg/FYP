@@ -37,7 +37,7 @@ function dashboardPayload() {
   };
 }
 
-router.get("/dashboard", ...adminOnly, (_req, res) => res.json(dashboardPayload()));
+router.get("/dashboard", requireAuth, (_req, res) => res.json(dashboardPayload()));
 
 router.post("/users", ...adminOnly, (req, res) => {
   const name = String(req.body.name || "").trim();

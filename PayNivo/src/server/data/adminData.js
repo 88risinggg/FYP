@@ -1,13 +1,15 @@
 export const adminUsers = [
   { id: "USR-001", name: "Admin User", email: "admin@paynivo.com", role: "Admin", status: "Active", mfa: "Enabled", lastLogin: "Today, 09:10" },
   { id: "USR-002", name: "Finance User", email: "finance@paynivo.com", role: "Finance", status: "Active", mfa: "Enabled", lastLogin: "Today, 08:42" },
-  { id: "USR-003", name: "HR User", email: "hr@paynivo.com", role: "HR", status: "Active", mfa: "Enabled", lastLogin: "Yesterday, 17:35" }
+  { id: "USR-003", name: "HR User", email: "hr@paynivo.com", role: "HR", status: "Active", mfa: "Enabled", lastLogin: "Yesterday, 17:35" },
+  { id: "USR-004", name: "Staff User", email: "staff@paynivo.com", role: "Staff", status: "Active", mfa: "Pending", lastLogin: "Never" }
 ];
 
 export const adminRoles = [
   { role: "Admin", users: 1, permissions: ["User accounts", "Role access", "System settings", "Audit logs"] },
   { role: "Finance", users: 1, permissions: ["Invoices", "Payment approvals", "Customers", "Invoice reports"] },
-  { role: "HR", users: 1, permissions: ["Payroll processing", "Staff records", "Payslips"] }
+  { role: "HR", users: 1, permissions: ["Payroll processing", "Staff records", "Payslips"] },
+  { role: "Staff", users: 1, permissions: ["Profile access", "Payslip viewing", "Invoice requests"] }
 ];
 
 export const payrollRates = [
