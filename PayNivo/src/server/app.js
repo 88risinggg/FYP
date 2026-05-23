@@ -1,8 +1,6 @@
 import cors from "cors";
 import express from "express";
-import adminRoutes from "./routes/adminRoutes.js";
-import authRoutes from "./routes/authRoutes.js";
-import projectRoutes from "./routes/projectRoutes.js";
+import pool from "./db.js";
 
 export function createApp() {
   const app = express();
@@ -14,24 +12,18 @@ export function createApp() {
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",
-      project: "Automated Invoicing and Payroll System",
-      referenceSystem: "Xero Invoicing and Payroll",
-      stack: {
-        frontend: "React",
-        backend: "Node.js + Express",
-        database: "MySQL",
-        pdf: "Puppeteer",
-        excel: "ExcelJS",
-        email: "Nodemailer",
-        payments: "Stripe API",
-        whatsapp: "Meta WhatsApp Cloud API"
-      }
+      database: "configured"
     });
   });
 
-  app.use("/api/auth", authRoutes);
-  app.use("/api/admin", adminRoutes);
-  app.use("/api/project", projectRoutes);
+  app.get("/api/db/ping", async (_req, res) => {
+    try {
+      await pool.query("SELECT 1");
+      res.json({ status: "ok" });
+    } catch (_err) {
+      res.status(500).json({ status: "error" });
+    }
+  });
 
   app.use((req, res) => res.status(404).json({ message: `Route not found: ${req.method} ${req.originalUrl}` }));
   return app;
