@@ -1,7 +1,10 @@
 import { NavLink } from "react-router-dom";
 import { ClipboardList } from "lucide-react";
 
-export default function Sidebar({ sections }) {
+export default function Sidebar({
+  sections,
+  title = "Automated Invoicing & Payroll System"
+}) {
   return (
     <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-slate-200 bg-white lg:flex lg:flex-col">
       <div className="flex h-20 items-center gap-3 border-b border-slate-200 px-5">
@@ -9,7 +12,7 @@ export default function Sidebar({ sections }) {
           <ClipboardList size={23} strokeWidth={2.2} />
         </div>
         <p className="text-sm font-semibold leading-5 text-slate-950">
-          Automated Invoicing & Payroll System
+          {title}
         </p>
       </div>
 
@@ -48,4 +51,3 @@ export default function Sidebar({ sections }) {
     </aside>
   );
 }
-

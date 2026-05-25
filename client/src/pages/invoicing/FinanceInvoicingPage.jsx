@@ -68,8 +68,6 @@ export default function FinanceInvoicingPage() {
       user={session?.user}
       sidebarSections={financeSidebarSections}
       searchPlaceholder="Search invoices, customers, payments..."
-      profileName="Finance User"
-      profileRole="Finance Manager"
     >
       <div className="min-h-[calc(100vh-8rem)] rounded-xl border border-dashed border-slate-300 bg-white p-8 shadow-sm">
         <p className="text-sm text-slate-500">

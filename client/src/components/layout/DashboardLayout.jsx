@@ -38,21 +38,42 @@ const defaultSidebarSections = [
   }
 ];
 
+const roleProfiles = {
+  Admin: {
+    name: "Admin User",
+    role: "Administrator"
+  },
+  Finance: {
+    name: "Finance User",
+    role: "Finance Manager"
+  },
+  HR: {
+    name: "HR User",
+    role: "Human Resources"
+  },
+  Staff: {
+    name: "Staff User",
+    role: "Staff"
+  }
+};
+
 export default function DashboardLayout({
   children,
   pageTitle,
   user,
   sidebarSections = defaultSidebarSections,
+  sidebarTitle,
   searchPlaceholder = "Search invoices, users, settings...",
   profileName,
   profileRole
 }) {
-  const displayName = profileName || user?.name || "Admin User";
-  const displayRole = profileRole || user?.role || "Administrator";
+  const roleProfile = roleProfiles[user?.role];
+  const displayName = profileName || user?.name || roleProfile?.name || "User";
+  const displayRole = profileRole || roleProfile?.role || user?.role || "User";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <Sidebar sections={sidebarSections} />
+      <Sidebar sections={sidebarSections} title={sidebarTitle} />
 
       <div className="lg:pl-64">
         <header className="sticky top-0 z-10 flex h-20 items-center gap-4 border-b border-slate-200 bg-white px-4 sm:px-6">

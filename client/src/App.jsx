@@ -4,6 +4,10 @@ import LoginPage from "./pages/LoginPage.jsx";
 import ModuleSelectionPage from "./pages/ModuleSelectionPage.jsx";
 import AdminInvoicingDashboard from "./pages/invoicing/AdminInvoicingDashboard.jsx";
 import FinanceInvoicingPage from "./pages/invoicing/FinanceInvoicingPage.jsx";
+import AdminPayrollPage from "./pages/payroll/AdminPayrollPage.jsx";
+import FinancePayrollPage from "./pages/payroll/FinancePayrollPage.jsx";
+import HRPayrollPage from "./pages/payroll/HRPayrollPage.jsx";
+import StaffPayrollPage from "./pages/payroll/StaffPayrollPage.jsx";
 import { getStoredSession } from "./services/sessionService.js";
 
 function ProtectedRoute({ children }) {
@@ -49,6 +53,70 @@ function FinanceInvoicingRoute({ children }) {
   return children;
 }
 
+function AdminPayrollRoute({ children }) {
+  const session = getStoredSession();
+  const user = session?.user;
+  const canAccessPayroll = user?.allowedModules?.includes("payroll");
+
+  if (!session?.token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user?.role !== "Admin" || !canAccessPayroll) {
+    return <Navigate to="/module-selection" replace />;
+  }
+
+  return children;
+}
+
+function FinancePayrollRoute({ children }) {
+  const session = getStoredSession();
+  const user = session?.user;
+  const canAccessPayroll = user?.allowedModules?.includes("payroll");
+
+  if (!session?.token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user?.role !== "Finance" || !canAccessPayroll) {
+    return <Navigate to="/module-selection" replace />;
+  }
+
+  return children;
+}
+
+function HRPayrollRoute({ children }) {
+  const session = getStoredSession();
+  const user = session?.user;
+  const canAccessPayroll = user?.allowedModules?.includes("payroll");
+
+  if (!session?.token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user?.role !== "HR" || !canAccessPayroll) {
+    return <Navigate to="/module-selection" replace />;
+  }
+
+  return children;
+}
+
+function StaffPayrollRoute({ children }) {
+  const session = getStoredSession();
+  const user = session?.user;
+  const canAccessPayroll = user?.allowedModules?.includes("payroll");
+
+  if (!session?.token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user?.role !== "Staff" || !canAccessPayroll) {
+    return <Navigate to="/module-selection" replace />;
+  }
+
+  return children;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -63,7 +131,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/invoicing/admin"
+        path="/dashboard/invoicing/admin/*"
         element={
           <AdminInvoicingRoute>
             <AdminInvoicingDashboard />
@@ -76,6 +144,38 @@ export default function App() {
           <FinanceInvoicingRoute>
             <FinanceInvoicingPage />
           </FinanceInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/payroll/admin/*"
+        element={
+          <AdminPayrollRoute>
+            <AdminPayrollPage />
+          </AdminPayrollRoute>
+        }
+      />
+      <Route
+        path="/dashboard/payroll/finance/*"
+        element={
+          <FinancePayrollRoute>
+            <FinancePayrollPage />
+          </FinancePayrollRoute>
+        }
+      />
+      <Route
+        path="/dashboard/payroll/hr/*"
+        element={
+          <HRPayrollRoute>
+            <HRPayrollPage />
+          </HRPayrollRoute>
+        }
+      />
+      <Route
+        path="/dashboard/payroll/staff/*"
+        element={
+          <StaffPayrollRoute>
+            <StaffPayrollPage />
+          </StaffPayrollRoute>
         }
       />
     </Routes>

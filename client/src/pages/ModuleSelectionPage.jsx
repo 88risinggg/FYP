@@ -32,6 +32,26 @@ export default function ModuleSelectionPage() {
 
     if (moduleKey === "invoicing" && user?.role === "Finance") {
       navigate("/dashboard/invoicing/finance");
+      return;
+    }
+
+    if (moduleKey === "payroll" && user?.role === "Admin") {
+      navigate("/dashboard/payroll/admin");
+      return;
+    }
+
+    if (moduleKey === "payroll" && user?.role === "Finance") {
+      navigate("/dashboard/payroll/finance");
+      return;
+    }
+
+    if (moduleKey === "payroll" && user?.role === "HR") {
+      navigate("/dashboard/payroll/hr");
+      return;
+    }
+
+    if (moduleKey === "payroll" && user?.role === "Staff") {
+      navigate("/dashboard/payroll/staff");
     }
   }
 
