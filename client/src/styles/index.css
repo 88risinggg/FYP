@@ -8,6 +8,53 @@
 
 body {
   margin: 0;
+  background: #090014;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(199, 125, 255, 0.8) rgba(255, 255, 255, 0.06);
+}
+
+*::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(180deg, #7b2ff7, #ff4ddb);
+}
+
+@layer components {
+  .neon-page {
+    @apply min-h-screen bg-[#090014] text-white;
+    background-image:
+      radial-gradient(circle at 18% 18%, rgba(123, 47, 247, 0.28), transparent 30%),
+      radial-gradient(circle at 82% 12%, rgba(255, 77, 219, 0.18), transparent 28%),
+      linear-gradient(135deg, #090014 0%, #120022 48%, #1a0033 100%);
+  }
+
+  .neon-glass {
+    @apply border border-white/10 bg-white/[0.055] shadow-2xl backdrop-blur-2xl;
+    box-shadow: 0 24px 80px rgba(9, 0, 20, 0.45), 0 0 32px rgba(157, 78, 221, 0.12);
+  }
+
+  .neon-border {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 28px rgba(199, 125, 255, 0.18);
+  }
+
+  .neon-text-muted {
+    @apply text-[#d8c6e8];
+  }
+
+  .neon-button {
+    @apply rounded-xl bg-gradient-to-r from-[#7B2FF7] via-[#9D4EDD] to-[#FF4DDB] text-white shadow-lg transition;
+    box-shadow: 0 0 24px rgba(157, 78, 221, 0.35);
+  }
+}

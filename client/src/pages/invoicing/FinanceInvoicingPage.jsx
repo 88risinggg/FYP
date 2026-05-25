@@ -69,8 +69,8 @@ export default function FinanceInvoicingPage() {
       sidebarSections={financeSidebarSections}
       searchPlaceholder="Search invoices, customers, payments..."
     >
-      <div className="min-h-[calc(100vh-8rem)] rounded-xl border border-dashed border-slate-300 bg-white p-8 shadow-sm">
-        <p className="text-sm text-slate-500">
+      <div className="neon-glass neon-border min-h-[calc(100vh-8rem)] rounded-2xl border-dashed p-8">
+        <p className="text-sm text-[#d8c6e8]">
           This page is reserved for module development.
         </p>
       </div>

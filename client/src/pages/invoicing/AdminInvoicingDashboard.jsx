@@ -96,9 +96,9 @@ export default function AdminInvoicingDashboard() {
       searchPlaceholder="Search invoices, users, settings..."
     >
       <section>
-        <h2 className="text-2xl font-semibold text-slate-950">{heading}</h2>
-        <div className="mt-6 min-h-[calc(100vh-12rem)] rounded-xl border border-dashed border-slate-300 bg-white p-8 shadow-sm">
-          <p className="text-sm text-slate-500">
+        <h2 className="text-2xl font-semibold text-white">{heading}</h2>
+        <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl border-dashed p-8">
+          <p className="text-sm text-[#d8c6e8]">
             This page is reserved for module development.
           </p>
         </div>
