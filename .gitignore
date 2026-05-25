@@ -1,7 +1,9 @@
 node_modules/
-**/node_modules/
-dist/
-**/dist/
-*.log
 .env
-**/.env
+dist/
+build/
+coverage/
+generated/
+uploads/
+npm-debug.log*
+
