@@ -2,9 +2,10 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
-const { staffProfiles } = require("../services/data");
+const { staffProfiles, payrollRuns, payslips, payrollRateConfig, PAYSLIP_STATUSES } = require("../services/data");
 const { addAudit } = require("../services/audit");
 const { parseFile, extractStaffNames, titleCase } = require("../services/importParser");
+const { calculatePayslipsFromRows } = require("../services/payrollCalculation");
 const { authenticateToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/rolesMiddleware");
 
@@ -300,5 +301,159 @@ router.post(
   }
 );
 // ----- END: employee upload/validation + optional create endpoint -----
+
+// ----- Payroll Run Management -----
+router.post("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
+  const { period_month, period_year } = req.body;
+
+  if (!period_month || !period_year) {
+    return res.status(400).json({ message: "period_month and period_year are required" });
+  }
+
+  const payrollRunId = `PR-${period_year}-${String(period_month).padStart(2, "0")}-${Date.now().toString(36).toUpperCase()}`;
+
+  const payrollRun = {
+    payroll_run_id: payrollRunId,
+    period_month,
+    period_year,
+    status: "created",
+    total_payslips: 0,
+    approved_count: 0,
+    created_at: new Date().toISOString(),
+    created_by: req.user.email
+  };
+
+  payrollRuns.push(payrollRun);
+  addAudit(req.user.email, `Created payroll run ${payrollRunId} for ${period_month}/${period_year}`, "HR");
+  res.status(201).json(payrollRun);
+});
+
+router.get("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), (_req, res) => {
+  res.json(payrollRuns);
+});
+
+router.get("/payroll-run/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
+  const run = payrollRuns.find(r => r.payroll_run_id === req.params.id);
+  if (!run) {
+    return res.status(404).json({ message: "Payroll run not found" });
+  }
+  res.json(run);
+});
+
+// ----- Payslip Generation from Upload -----
+router.post(
+  "/payslips/generate",
+  authenticateToken,
+  allowRoles("Admin", "HR"),
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "File required (form field name: file)" });
+      }
+
+      const { payroll_run_id, period_month, period_year } = req.body;
+
+      if (!payroll_run_id) {
+        return res.status(400).json({ message: "payroll_run_id is required" });
+      }
+
+      // Verify payroll run exists
+      const payrollRun = payrollRuns.find(r => r.payroll_run_id === payroll_run_id);
+      if (!payrollRun) {
+        return res.status(404).json({ message: "Payroll run not found" });
+      }
+
+      // Parse uploaded payroll file
+      const rows = await parseFile(req.file.path, req.file.originalname);
+
+      if (rows.length === 0) {
+        return res.status(400).json({ message: "Uploaded file has no data rows" });
+      }
+
+      // Use payroll calculation service to generate payslips
+      const { created: generatedPayslips, skipped } = calculatePayslipsFromRows(
+        rows,
+        staffProfiles,
+        payrollRateConfig,
+        payroll_run_id,
+        req.user.email
+      );
+
+      // Save all generated payslips to in-memory array
+      const savedPayslips = [];
+      generatedPayslips.forEach((slip) => {
+        payslips.push(slip);
+        savedPayslips.push(slip);
+      });
+
+      // Update payroll run
+      payrollRun.total_payslips = savedPayslips.length;
+      payrollRun.status = "payslips_generated";
+
+      addAudit(
+        req.user.email,
+        `Generated ${savedPayslips.length} payslips from ${req.file.originalname} in run ${payroll_run_id}`,
+        "Payroll"
+      );
+
+      res.json({
+        message: "Payslips generated successfully",
+        payroll_run_id,
+        generated_count: savedPayslips.length,
+        skipped_count: skipped.length,
+        payslips: savedPayslips,
+        skipped,
+        summary: {
+          total_gross: generatedPayslips.reduce((sum, p) => sum + p.gross_salary, 0).toFixed(2),
+          total_deductions: generatedPayslips.reduce((sum, p) => sum + p.total_deductions, 0).toFixed(2),
+          total_net: generatedPayslips.reduce((sum, p) => sum + p.net_pay, 0).toFixed(2)
+        }
+      });
+    } catch (err) {
+      res.status(400).json({ message: "Payslip generation failed", error: err.message });
+    }
+  }
+);
+
+// ----- Payslip Retrieval -----
+router.get("/payslips", authenticateToken, allowRoles("Admin", "HR", "Finance", "Staff"), (req, res) => {
+  // HR/Admin sees all payslips, Finance sees only pending/approved ones, Staff sees only their sent payslips
+  let filteredPayslips = payslips;
+
+  if (req.user.role === "Finance") {
+    filteredPayslips = payslips.filter(
+      (p) =>
+        p.status === PAYSLIP_STATUSES.FINANCE_PENDING ||
+        p.status === PAYSLIP_STATUSES.ADMIN_PENDING ||
+        p.status === PAYSLIP_STATUSES.FINANCE_APPROVED
+    );
+  } else if (req.user.role === "Staff") {
+    // Staff should only see payslips that have been sent to them
+    filteredPayslips = payslips.filter(
+      (p) => p.staff_email && p.staff_email.toLowerCase() === req.user.email.toLowerCase() && p.status === PAYSLIP_STATUSES.SENT_TO_STAFF
+    );
+  }
+
+  res.json(filteredPayslips);
+});
+
+router.get("/payslips/:id", authenticateToken, allowRoles("Admin", "HR", "Finance", "Staff"), (req, res) => {
+  const payslip = payslips.find((p) => p.payslip_id === req.params.id);
+  if (!payslip) {
+    return res.status(404).json({ message: "Payslip not found" });
+  }
+
+  if (req.user.role === "Staff") {
+    if (!payslip.staff_email || payslip.staff_email.toLowerCase() !== req.user.email.toLowerCase()) {
+      return res.status(403).json({ message: "Not authorized to view this payslip" });
+    }
+    if (payslip.status !== PAYSLIP_STATUSES.SENT_TO_STAFF) {
+      return res.status(400).json({ message: "Payslip not yet released to staff" });
+    }
+  }
+
+  res.json(payslip);
+});
 
 module.exports = router;

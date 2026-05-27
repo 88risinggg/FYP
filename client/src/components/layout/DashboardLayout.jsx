@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Bell,
   FileBarChart,
@@ -7,10 +8,13 @@ import {
   Settings,
   Shield,
   UserCog,
-  Users
+  Users,
+  X
 } from "lucide-react";
 
+import { NavLink, useNavigate } from "react-router-dom";
 import Sidebar from "./Sidebar.jsx";
+import { clearSession } from "../../services/sessionService.js";
 
 const defaultSidebarSections = [
   {
@@ -70,6 +74,16 @@ export default function DashboardLayout({
   const roleProfile = roleProfiles[user?.role];
   const displayName = profileName || user?.name || roleProfile?.name || "User";
   const displayRole = profileRole || roleProfile?.role || user?.role || "User";
+  const navigate = useNavigate();
+
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  const [notifications] = useState([
+    { id: "N1", title: "Payslip generated", body: "9 payslips generated", unread: true },
+    { id: "N2", title: "Payroll run created", body: "Payroll run PR-2026-05 created", unread: false }
+  ]);
 
   return (
     <div className="neon-page relative overflow-hidden">
@@ -80,7 +94,8 @@ export default function DashboardLayout({
         <header className="sticky top-0 z-10 flex h-20 items-center gap-4 border-b border-white/10 bg-[#090014]/70 px-4 shadow-xl shadow-purple-950/20 backdrop-blur-2xl sm:px-6">
           <button
             type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-white/10 hover:text-white"
+            onClick={() => setMobileOpen(true)}
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-white/10 hover:text-white lg:hidden"
             aria-label="Open menu"
           >
             <Menu size={21} />
@@ -99,26 +114,96 @@ export default function DashboardLayout({
             />
           </div>
 
-          <button
-            type="button"
-            className="relative flex h-10 w-10 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-white/10 hover:text-white"
-            aria-label="Notifications"
-          >
-            <Bell size={20} />
-            <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#FF4DDB] ring-2 ring-[#090014]" />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setNotifOpen((s) => !s)}
+              className="relative flex h-10 w-10 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-white/10 hover:text-white"
+              aria-label="Notifications"
+            >
+              <Bell size={20} />
+              <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#FF4DDB] ring-2 ring-[#090014]" />
+            </button>
 
-          <div className="flex items-center gap-3 rounded-lg px-2 py-1.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#C77DFF]/15 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
-              <UserCog size={20} />
-            </div>
-            <div className="hidden leading-tight sm:block">
-              <p className="text-sm font-semibold text-white">{displayName}</p>
-              <p className="text-xs text-[#d8c6e8]/75">{displayRole}</p>
-            </div>
+            {notifOpen && (
+              <div className="absolute right-0 mt-2 w-80 rounded-lg bg-[#0b0710] border border-white/10 shadow-lg z-50">
+                <div className="p-3">
+                  <p className="text-sm font-semibold text-white">Notifications</p>
+                </div>
+                <div className="max-h-56 overflow-y-auto">
+                  {notifications.map(n => (
+                    <div key={n.id} className={`px-4 py-3 border-t border-white/5 ${n.unread ? 'bg-white/2' : ''}`}>
+                      <p className="text-sm text-white font-medium">{n.title}</p>
+                      <p className="text-xs text-[#d8c6e8]">{n.body}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="p-3 border-t border-white/5 text-center">
+                  <button className="text-sm text-[#C77DFF]">View all</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setProfileOpen((s) => !s)}
+              className="flex items-center gap-3 rounded-lg px-2 py-1.5"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#C77DFF]/15 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
+                <UserCog size={20} />
+              </div>
+              <div className="hidden leading-tight sm:block">
+                <p className="text-sm font-semibold text-white">{displayName}</p>
+                <p className="text-xs text-[#d8c6e8]/75">{displayRole}</p>
+              </div>
+            </button>
+
+            {profileOpen && (
+              <div className="absolute right-0 mt-2 w-48 rounded-lg bg-[#0b0710] border border-white/10 shadow-lg z-50">
+                <div className="p-2">
+                  <button className="w-full text-left px-3 py-2 rounded hover:bg-white/5 text-sm text-white">Profile</button>
+                  <button
+                    className="w-full text-left px-3 py-2 rounded hover:bg-white/5 text-sm text-white"
+                    onClick={() => { clearSession(); navigate('/login'); }}
+                  >
+                    Logout
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </header>
-
+        
+        {/* Mobile drawer */}
+        {mobileOpen && (
+          <div className="lg:hidden fixed inset-0 z-40">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
+            <div className="relative h-full w-64 bg-[#090014]/95 border-r border-white/10">
+              <div className="flex items-center justify-between p-4">
+                <div className="text-white font-semibold">{sidebarTitle}</div>
+                <button className="p-2 text-[#d8c6e8]" onClick={() => setMobileOpen(false)} aria-label="Close">
+                  <X />
+                </button>
+              </div>
+              <nav className="px-3 py-4">
+                {sidebarSections.map((section) => (
+                  <div key={section.label} className="mb-4">
+                    <p className="mb-2 px-2 text-xs uppercase text-[#C77DFF]/70">{section.label}</p>
+                    <div className="space-y-1">
+                      {section.items.map((item) => (
+                        <NavLink key={item.label} to={item.path} onClick={() => setMobileOpen(false)} className="block rounded px-3 py-2 text-sm text-[#d8c6e8] hover:bg-white/5">
+                          <div className="flex items-center gap-3"><item.icon size={16} />{item.label}</div>
+                        </NavLink>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </nav>
+            </div>
+          </div>
+        )}
         <main className="px-4 py-6 sm:px-6">
           {children}
         </main>

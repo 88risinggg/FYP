@@ -342,11 +342,11 @@ function StaffRecordsView() {
                 <select
                   value={editFormData.status || "Active"}
                   onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white"
                 >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                  <option value="Leave">Leave</option>
+                  <option value="Active" style={{ backgroundColor: '#1e293b', color: '#ffffff' }}>Active</option>
+                  <option value="Inactive" style={{ backgroundColor: '#1e293b', color: '#ffffff' }}>Inactive</option>
+                  <option value="Leave" style={{ backgroundColor: '#1e293b', color: '#ffffff' }}>Leave</option>
                 </select>
               </div>
             </div>
@@ -591,74 +591,318 @@ function PayrollRunsView() {
 }
 
 function PayslipsView() {
-  const mockPayslips = [
-    {
-      payslip_id: "PS001",
-      staff_name: "John Doe",
-      period: "January 2024",
-      gross_amount: "$2,150.00",
-      deductions: "$320.50",
-      net_amount: "$1,829.50",
-      status: "Paid"
-    },
-    {
-      payslip_id: "PS002",
-      staff_name: "Jane Smith",
-      period: "January 2024",
-      gross_amount: "$2,400.00",
-      deductions: "$380.00",
-      net_amount: "$2,020.00",
-      status: "Paid"
-    },
-    {
-      payslip_id: "PS003",
-      staff_name: "Mike Johnson",
-      period: "January 2024",
-      gross_amount: "$1,900.00",
-      deductions: "$285.00",
-      net_amount: "$1,615.00",
-      status: "Generated"
+  const session = getStoredSession();
+  const [payslips, setPayslips] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [payrollMonth, setPayrollMonth] = useState(new Date().toLocaleString('en-US', { month: 'long' }));
+  const [payrollYear, setPayrollYear] = useState(new Date().getFullYear());
+  const [actionInProgress, setActionInProgress] = useState(null);
+
+  const fetchPayslips = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const response = await fetch(`${API_BASE_URL}/api/hr/payslips`, {
+        headers: {
+          ...getAuthHeaders(session?.token)
+        }
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to load payslips");
+      }
+
+      const data = await response.json();
+      setPayslips(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err.message || "Failed to load payslips");
+      setPayslips([]);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const generatePayslips = async (e) => {
+    e.preventDefault();
+    if (!selectedFile) {
+      setError("Choose a payroll file first");
+      return;
+    }
+
+    try {
+      setGenerating(true);
+      setError("");
+      setSuccessMessage("");
+
+      // First create payroll run
+      const runResponse = await fetch(`${API_BASE_URL}/api/hr/payroll-run`, {
+        method: "POST",
+        headers: {
+          ...getAuthHeaders(session?.token),
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          period_month: payrollMonth,
+          period_year: payrollYear
+        })
+      });
+
+      if (!runResponse.ok) {
+        const body = await runResponse.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to create payroll run");
+      }
+
+      const runData = await runResponse.json();
+      const payrollRunId = runData.payroll_run_id;
+
+      // Then generate payslips
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("payroll_run_id", payrollRunId);
+      formData.append("period_month", payrollMonth);
+      formData.append("period_year", payrollYear);
+
+      const response = await fetch(`${API_BASE_URL}/api/hr/payslips/generate`, {
+        method: "POST",
+        headers: {
+          ...getAuthHeaders(session?.token)
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to generate payslips");
+      }
+
+      const result = await response.json();
+      setSuccessMessage(`Successfully generated ${result.generated_count} payslips. ${result.skipped_count} records were skipped.`);
+      setSelectedFile(null);
+      await fetchPayslips();
+      setTimeout(() => setSuccessMessage(""), 5000);
+    } catch (err) {
+      setError(err.message || "Failed to generate payslips");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "draft":
+        return "bg-gray-500/20 text-gray-300";
+      case "finance_pending":
+        return "bg-yellow-500/20 text-yellow-300";
+      case "finance_approved":
+        return "bg-blue-500/20 text-blue-300";
+      case "admin_pending":
+        return "bg-purple-500/20 text-purple-300";
+      case "admin_approved":
+        return "bg-cyan-500/20 text-cyan-300";
+      case "sent_to_staff":
+        return "bg-emerald-500/20 text-emerald-300";
+      case "rejected":
+        return "bg-red-500/20 text-red-300";
+      default:
+        return "bg-white/10 text-white";
+    }
+  };
+
+  const getStatusLabel = (status) => {
+    return status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  };
+
+  const handleSendToFinance = async (payslipId) => {
+    try {
+      setActionInProgress(payslipId);
+      setError("");
+      const response = await fetch(`${API_BASE_URL}/api/payroll/payslips/${payslipId}/send-to-finance`, {
+        method: "PUT",
+        headers: {
+          ...getAuthHeaders(session?.token),
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to send to Finance");
+      }
+
+      setSuccessMessage("Payslip sent to Finance");
+      await fetchPayslips();
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      setError(err.message || "Failed to send to Finance");
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  useEffect(() => {
+    fetchPayslips();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.token]);
 
   return (
     <div className="space-y-5">
-      <div className="neon-glass neon-border rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-white/10 bg-white/5 text-[#d8c6e8]">
-              <tr>
-                <th className="px-4 py-3 font-medium">Payslip ID</th>
-                <th className="px-4 py-3 font-medium">Staff Name</th>
-                <th className="px-4 py-3 font-medium">Period</th>
-                <th className="px-4 py-3 font-medium">Gross Amount</th>
-                <th className="px-4 py-3 font-medium">Deductions</th>
-                <th className="px-4 py-3 font-medium">Net Amount</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockPayslips.map((payslip) => (
-                <tr key={payslip.payslip_id} className="border-b border-white/5 text-white">
-                  <td className="px-4 py-3 text-[#d8c6e8]">{payslip.payslip_id}</td>
-                  <td className="px-4 py-3">{payslip.staff_name}</td>
-                  <td className="px-4 py-3 text-[#d8c6e8]">{payslip.period}</td>
-                  <td className="px-4 py-3 text-[#d8c6e8]">{payslip.gross_amount}</td>
-                  <td className="px-4 py-3 text-red-300">{payslip.deductions}</td>
-                  <td className="px-4 py-3 text-emerald-300">{payslip.net_amount}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      payslip.status === "Paid" ? "bg-emerald-500/20 text-emerald-300" :
-                      "bg-blue-500/20 text-blue-300"
-                    }`}>
-                      {payslip.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="neon-glass neon-border rounded-2xl p-6">
+        <h3 className="text-lg font-semibold text-white">Generate Payslips</h3>
+        <p className="mt-2 text-sm text-[#d8c6e8]">
+          Upload a payroll file to generate payslips. They will be created in draft status.
+        </p>
+      </div>
+
+      {error && (
+        <div className="neon-glass neon-border rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
+          {error}
         </div>
+      )}
+
+      {successMessage && (
+        <div className="neon-glass neon-border rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-200">
+          {successMessage}
+        </div>
+      )}
+
+      <form onSubmit={generatePayslips} className="neon-glass neon-border rounded-2xl p-6 space-y-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium text-[#d8c6e8]">Payroll Month</label>
+            <select
+              value={payrollMonth}
+              onChange={(e) => setPayrollMonth(e.target.value)}
+              className="mt-2 w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white"
+            >
+              {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(m => (
+                <option key={m} value={m} style={{ backgroundColor: '#1e293b', color: '#ffffff' }}>{m}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#d8c6e8]">Payroll Year</label>
+            <input
+              type="number"
+              value={payrollYear}
+              onChange={(e) => setPayrollYear(parseInt(e.target.value))}
+              className="mt-2 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-[#d8c6e8]">Payroll File (CSV/XLSX)</label>
+          <input
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+            className="mt-2 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white file:mr-4 file:rounded-md file:border-0 file:bg-[#C77DFF] file:px-4 file:py-2 file:text-white hover:file:bg-[#b866ff]"
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={generating}
+          className="w-full rounded-lg bg-emerald-500/20 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50"
+        >
+          {generating ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="animate-spin" size={16} /> Generating...
+            </span>
+          ) : (
+            "Generate Payslips"
+          )}
+        </button>
+      </form>
+
+      <div className="neon-glass neon-border rounded-2xl overflow-hidden">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-white/5 p-6">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Payslips</h3>
+            <p className="mt-1 text-sm text-[#d8c6e8]">
+              {payslips.length} total payslips
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={fetchPayslips}
+            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
+          >
+            Refresh
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center gap-3 p-6 text-[#d8c6e8]">
+            <Loader2 className="animate-spin" size={18} />
+            Loading payslips...
+          </div>
+        ) : payslips.length === 0 ? (
+          <div className="p-6 text-sm text-[#d8c6e8]">
+            No payslips yet. Upload a payroll file to generate them.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-white/10 bg-white/5 text-[#d8c6e8]">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Payslip ID</th>
+                  <th className="px-4 py-3 font-medium">Staff Name</th>
+                  <th className="px-4 py-3 font-medium">Period</th>
+                  <th className="px-4 py-3 font-medium">Gross</th>
+                  <th className="px-4 py-3 font-medium">Deductions</th>
+                  <th className="px-4 py-3 font-medium">Net Pay</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payslips.map((payslip) => (
+                  <tr key={payslip.payslip_id} className="border-b border-white/5 text-white">
+                    <td className="px-4 py-3 text-[#d8c6e8]">{payslip.payslip_id}</td>
+                    <td className="px-4 py-3">{payslip.staff_name}</td>
+                    <td className="px-4 py-3 text-[#d8c6e8]">
+                      {payslip.period_month} {payslip.period_year}
+                    </td>
+                    <td className="px-4 py-3 text-[#d8c6e8]">
+                      ${payslip.gross_salary?.toFixed(2) || "0.00"}
+                    </td>
+                    <td className="px-4 py-3 text-red-300">
+                      ${payslip.total_deductions?.toFixed(2) || "0.00"}
+                    </td>
+                    <td className="px-4 py-3 text-emerald-300">
+                      ${payslip.net_pay?.toFixed(2) || "0.00"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(payslip.status)}`}>
+                        {getStatusLabel(payslip.status)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {payslip.status === 'draft' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSendToFinance(payslip.payslip_id)}
+                          disabled={actionInProgress === payslip.payslip_id}
+                          className="rounded-lg bg-indigo-500/20 px-3 py-1 text-xs text-indigo-300 hover:bg-indigo-500/30 disabled:opacity-50"
+                        >
+                          {actionInProgress === payslip.payslip_id ? 'Sending...' : 'Send to Finance'}
+                        </button>
+                      ) : (
+                        <span className="text-sm text-[#d8c6e8]">-</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
