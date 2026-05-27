@@ -10,8 +10,9 @@ import { useLocation } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
+import AdminUserManagementPage from "./AdminUserManagementPage.jsx";
 
-const pageTitle = "Automated Invoicing System – Admin Dashboard";
+const pageTitle = "Automated Invoicing System - Admin Dashboard";
 
 const invoicingSidebarSections = [
   {
@@ -86,23 +87,28 @@ export default function AdminInvoicingDashboard() {
   const session = getStoredSession();
   const location = useLocation();
   const heading = routeHeadings[location.pathname] || "Dashboard";
+  const isUserManagement = location.pathname === "/dashboard/invoicing/admin/users";
 
   return (
     <DashboardLayout
-      pageTitle={pageTitle}
+      pageTitle={isUserManagement ? "Automated Invoicing System - User Management" : pageTitle}
       user={session?.user}
       sidebarSections={invoicingSidebarSections}
       sidebarTitle="Automated Invoicing & Payroll System"
       searchPlaceholder="Search invoices, users, settings..."
     >
-      <section>
-        <h2 className="text-2xl font-semibold text-white">{heading}</h2>
-        <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl border-dashed p-8">
-          <p className="text-sm text-[#d8c6e8]">
-            This page is reserved for module development.
-          </p>
-        </div>
-      </section>
+      {isUserManagement ? (
+        <AdminUserManagementPage />
+      ) : (
+        <section>
+          <h2 className="text-2xl font-semibold text-white">{heading}</h2>
+          <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl border-dashed p-8">
+            <p className="text-sm text-[#d8c6e8]">
+              This page is reserved for module development.
+            </p>
+          </div>
+        </section>
+      )}
     </DashboardLayout>
   );
 }
