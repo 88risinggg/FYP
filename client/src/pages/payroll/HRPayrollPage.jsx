@@ -99,6 +99,10 @@ function StaffRecordsView() {
   const [staffRecords, setStaffRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingStaff, setEditingStaff] = useState(null);
+  const [editFormData, setEditFormData] = useState({});
 
   const fetchStaff = async () => {
     try {
@@ -122,6 +126,73 @@ function StaffRecordsView() {
       setStaffRecords([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEdit = (staff) => {
+    setEditingStaff(staff);
+    setEditFormData({
+      staff_name: staff.staff_name || "",
+      email: staff.email || "",
+      phone: staff.phone || "",
+      department: staff.department || "",
+      base_salary: staff.base_salary || "",
+      status: staff.status || "Active"
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateStaff = async () => {
+    if (!editingStaff) return;
+
+    try {
+      setError("");
+      const response = await fetch(`${API_BASE_URL}/api/hr/staff/${editingStaff.staff_id}`, {
+        method: "PUT",
+        headers: {
+          ...getAuthHeaders(session?.token),
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(editFormData)
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to update staff record");
+      }
+
+      setSuccessMessage("Staff record updated successfully");
+      setIsEditModalOpen(false);
+      setEditingStaff(null);
+      await fetchStaff();
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      setError(err.message || "Failed to update staff record");
+    }
+  };
+
+  const handleDeleteStaff = async (staffId) => {
+    if (!window.confirm("Are you sure you want to delete this staff record?")) return;
+
+    try {
+      setError("");
+      const response = await fetch(`${API_BASE_URL}/api/hr/staff/${staffId}`, {
+        method: "DELETE",
+        headers: {
+          ...getAuthHeaders(session?.token)
+        }
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to delete staff record");
+      }
+
+      setSuccessMessage("Staff record deleted successfully");
+      await fetchStaff();
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      setError(err.message || "Failed to delete staff record");
     }
   };
 
@@ -153,6 +224,12 @@ function StaffRecordsView() {
       {error ? (
         <div className="neon-glass neon-border rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
           {error}
+        </div>
+      ) : null}
+
+      {successMessage ? (
+        <div className="neon-glass neon-border rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-200">
+          {successMessage}
         </div>
       ) : null}
 
@@ -196,8 +273,8 @@ function StaffRecordsView() {
                     <td className="px-4 py-3">
                       <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs text-emerald-300"> {staff.status || "active"}</span></td>
                       <td className="px-4 py-3">
-                        <div className="flex gap-2"><button type="button" className="rounded-lg bg-blue-500/20 px-3 py-1 text-xs text-blue-300 hover:bg-blue-500/30">Edit</button>
-                        <button type="button" className="rounded-lg bg-red-500/20 px-3 py-1 text-xs text-red-300 hover:bg-red-500/30" >
+                        <div className="flex gap-2"><button type="button" onClick={() => handleEdit(staff)} className="rounded-lg bg-blue-500/20 px-3 py-1 text-xs text-blue-300 hover:bg-blue-500/30">Edit</button>
+                        <button type="button" onClick={() => handleDeleteStaff(staff.staff_id)} className="rounded-lg bg-red-500/20 px-3 py-1 text-xs text-red-300 hover:bg-red-500/30" >
                           Delete
                         </button>
                       </div>
@@ -209,6 +286,92 @@ function StaffRecordsView() {
           </div>
         )}
       </div>
+
+      {isEditModalOpen && editingStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="neon-glass neon-border rounded-2xl w-full max-w-md p-6 m-4">
+            <h3 className="text-lg font-semibold text-white">Edit Staff Record</h3>
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-[#d8c6e8]">Name</label>
+                <input
+                  type="text"
+                  value={editFormData.staff_name || ""}
+                  onChange={(e) => setEditFormData({ ...editFormData, staff_name: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder-white/30"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#d8c6e8]">Email</label>
+                <input
+                  type="email"
+                  value={editFormData.email || ""}
+                  onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder-white/30"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#d8c6e8]">Phone</label>
+                <input
+                  type="text"
+                  value={editFormData.phone || ""}
+                  onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder-white/30"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#d8c6e8]">Department</label>
+                <input
+                  type="text"
+                  value={editFormData.department || ""}
+                  onChange={(e) => setEditFormData({ ...editFormData, department: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder-white/30"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#d8c6e8]">Base Salary</label>
+                <input
+                  type="number"
+                  value={editFormData.base_salary || ""}
+                  onChange={(e) => setEditFormData({ ...editFormData, base_salary: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder-white/30"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#d8c6e8]">Status</label>
+                <select
+                  value={editFormData.status || "Active"}
+                  onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                  <option value="Leave">Leave</option>
+                </select>
+              </div>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={handleUpdateStaff}
+                className="flex-1 rounded-lg bg-emerald-500/20 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-500/30"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingStaff(null);
+                }}
+                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -357,6 +520,232 @@ function PayrollUploadView() {
   );
 }
 
+function PayrollRunsView() {
+  const mockPayrollRuns = [
+    {
+      run_id: "PR001",
+      period: "January 2024",
+      status: "Completed",
+      staff_count: 25,
+      total_amount: "$45,230.50",
+      run_date: "2024-01-31"
+    },
+    {
+      run_id: "PR002",
+      period: "February 2024",
+      status: "In Progress",
+      staff_count: 25,
+      total_amount: "$45,650.00",
+      run_date: "2024-02-15"
+    },
+    {
+      run_id: "PR003",
+      period: "March 2024",
+      status: "Pending",
+      staff_count: 24,
+      total_amount: "$44,920.75",
+      run_date: "2024-03-31"
+    }
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="neon-glass neon-border rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-white/10 bg-white/5 text-[#d8c6e8]">
+              <tr>
+                <th className="px-4 py-3 font-medium">Run ID</th>
+                <th className="px-4 py-3 font-medium">Period</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Staff Count</th>
+                <th className="px-4 py-3 font-medium">Total Amount</th>
+                <th className="px-4 py-3 font-medium">Run Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mockPayrollRuns.map((run) => (
+                <tr key={run.run_id} className="border-b border-white/5 text-white">
+                  <td className="px-4 py-3 text-[#d8c6e8]">{run.run_id}</td>
+                  <td className="px-4 py-3">{run.period}</td>
+                  <td className="px-4 py-3">
+                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      run.status === "Completed" ? "bg-emerald-500/20 text-emerald-300" :
+                      run.status === "In Progress" ? "bg-blue-500/20 text-blue-300" :
+                      "bg-yellow-500/20 text-yellow-300"
+                    }`}>
+                      {run.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-[#d8c6e8]">{run.staff_count}</td>
+                  <td className="px-4 py-3 text-[#d8c6e8]">{run.total_amount}</td>
+                  <td className="px-4 py-3 text-[#d8c6e8]">{run.run_date}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PayslipsView() {
+  const mockPayslips = [
+    {
+      payslip_id: "PS001",
+      staff_name: "John Doe",
+      period: "January 2024",
+      gross_amount: "$2,150.00",
+      deductions: "$320.50",
+      net_amount: "$1,829.50",
+      status: "Paid"
+    },
+    {
+      payslip_id: "PS002",
+      staff_name: "Jane Smith",
+      period: "January 2024",
+      gross_amount: "$2,400.00",
+      deductions: "$380.00",
+      net_amount: "$2,020.00",
+      status: "Paid"
+    },
+    {
+      payslip_id: "PS003",
+      staff_name: "Mike Johnson",
+      period: "January 2024",
+      gross_amount: "$1,900.00",
+      deductions: "$285.00",
+      net_amount: "$1,615.00",
+      status: "Generated"
+    }
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="neon-glass neon-border rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-white/10 bg-white/5 text-[#d8c6e8]">
+              <tr>
+                <th className="px-4 py-3 font-medium">Payslip ID</th>
+                <th className="px-4 py-3 font-medium">Staff Name</th>
+                <th className="px-4 py-3 font-medium">Period</th>
+                <th className="px-4 py-3 font-medium">Gross Amount</th>
+                <th className="px-4 py-3 font-medium">Deductions</th>
+                <th className="px-4 py-3 font-medium">Net Amount</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mockPayslips.map((payslip) => (
+                <tr key={payslip.payslip_id} className="border-b border-white/5 text-white">
+                  <td className="px-4 py-3 text-[#d8c6e8]">{payslip.payslip_id}</td>
+                  <td className="px-4 py-3">{payslip.staff_name}</td>
+                  <td className="px-4 py-3 text-[#d8c6e8]">{payslip.period}</td>
+                  <td className="px-4 py-3 text-[#d8c6e8]">{payslip.gross_amount}</td>
+                  <td className="px-4 py-3 text-red-300">{payslip.deductions}</td>
+                  <td className="px-4 py-3 text-emerald-300">{payslip.net_amount}</td>
+                  <td className="px-4 py-3">
+                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      payslip.status === "Paid" ? "bg-emerald-500/20 text-emerald-300" :
+                      "bg-blue-500/20 text-blue-300"
+                    }`}>
+                      {payslip.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NotificationsView() {
+  const mockNotifications = [
+    {
+      notif_id: "N001",
+      type: "Payroll Alert",
+      message: "Payroll run PR002 has been initiated for February 2024",
+      timestamp: "2024-02-15 09:30:00",
+      read: false,
+      priority: "High"
+    },
+    {
+      notif_id: "N002",
+      type: "Staff Update",
+      message: "New staff member Jane Doe has been added to the system",
+      timestamp: "2024-02-14 14:20:00",
+      read: false,
+      priority: "Medium"
+    },
+    {
+      notif_id: "N003",
+      type: "System Info",
+      message: "Monthly audit report is ready for review",
+      timestamp: "2024-02-13 10:00:00",
+      read: true,
+      priority: "Low"
+    },
+    {
+      notif_id: "N004",
+      type: "Finance Alert",
+      message: "Invoice INV-2024-002 payment received",
+      timestamp: "2024-02-12 16:45:00",
+      read: true,
+      priority: "Low"
+    }
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="neon-glass neon-border rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-white/10 bg-white/5 text-[#d8c6e8]">
+              <tr>
+                <th className="px-4 py-3 font-medium">Type</th>
+                <th className="px-4 py-3 font-medium">Message</th>
+                <th className="px-4 py-3 font-medium">Timestamp</th>
+                <th className="px-4 py-3 font-medium">Priority</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mockNotifications.map((notif) => (
+                <tr key={notif.notif_id} className="border-b border-white/5 text-white">
+                  <td className="px-4 py-3 text-[#d8c6e8]">{notif.type}</td>
+                  <td className="px-4 py-3 text-white">{notif.message}</td>
+                  <td className="px-4 py-3 text-[#d8c6e8]">{notif.timestamp}</td>
+                  <td className="px-4 py-3">
+                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      notif.priority === "High" ? "bg-red-500/20 text-red-300" :
+                      notif.priority === "Medium" ? "bg-yellow-500/20 text-yellow-300" :
+                      "bg-blue-500/20 text-blue-300"
+                    }`}>
+                      {notif.priority}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      notif.read ? "bg-white/10 text-white/70" : "bg-blue-500/20 text-blue-300"
+                    }`}>
+                      {notif.read ? "Read" : "Unread"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function HRPayrollPage() {
   const session = getStoredSession();
   const location = useLocation();
@@ -372,13 +761,24 @@ export default function HRPayrollPage() {
       return <PayrollUploadView />;
     }
 
+    if (activePath === "/dashboard/payroll/hr/payroll-runs") {
+      return <PayrollRunsView />;
+    }
+
+    if (activePath === "/dashboard/payroll/hr/payslips") {
+      return <PayslipsView />;
+    }
+
+    if (activePath === "/dashboard/payroll/hr/notifications") {
+      return <NotificationsView />;
+    }
+
     return (
       <div className="space-y-4">
         <div className="neon-glass neon-border rounded-2xl p-5 text-white">
-          <p className="text-sm font-semibold text-white">HR upload workspace loaded</p>
-          <p className="mt-1 break-all text-sm text-[#d8c6e8]">{activePath}</p>
+          <p className="text-sm font-semibold text-white">HR Dashboard</p>
+          <p className="mt-1 break-all text-sm text-[#d8c6e8]">Welcome to the HR Payroll Module</p>
         </div>
-        <PayrollUploadView />
       </div>
     );
   };

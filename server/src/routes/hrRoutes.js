@@ -20,6 +20,45 @@ function generateStaffId() {
   return `STF${String(next).padStart(3, "0")}`;
 }
 
+// ----- Parameterized routes (MUST come before generic /staff routes) -----
+router.get("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
+  const { id } = req.params;
+  const staff = staffProfiles.find(s => s.staff_id === id);
+  if (!staff) return res.status(404).json({ message: "Staff record not found" });
+  res.json(staff);
+});
+
+router.put("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
+  const { id } = req.params;
+  const updates = req.body;
+  
+  const staff = staffProfiles.find(s => s.staff_id === id);
+  if (!staff) return res.status(404).json({ message: "Staff record not found" });
+
+  const allowedUpdates = ["staff_name", "email", "phone", "department", "base_salary", "status"];
+  
+  allowedUpdates.forEach(field => {
+    if (updates[field] !== undefined) {
+      staff[field] = updates[field];
+    }
+  });
+
+  addAudit(req.user.email, `Updated staff record ${id}`, "HR");
+  res.json({ message: "Staff record updated successfully", staff });
+});
+
+router.delete("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
+  const { id } = req.params;
+  const index = staffProfiles.findIndex(s => s.staff_id === id);
+  
+  if (index === -1) return res.status(404).json({ message: "Staff record not found" });
+
+  const deletedStaff = staffProfiles.splice(index, 1)[0];
+  addAudit(req.user.email, `Deleted staff record ${id}`, "HR");
+  res.json({ message: "Staff record deleted successfully", deletedStaff });
+});
+// ----- End parameterized routes -----
+
 router.get("/staff", authenticateToken, allowRoles("Admin", "HR"), (_req, res) => {
   res.json(staffProfiles);
 });
@@ -261,36 +300,5 @@ router.post(
   }
 );
 // ----- END: employee upload/validation + optional create endpoint -----
-
-
-router.post("/staff/:id/update", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
-  const { id } = req.params;
-  const updates = req.body;
-  
-  const staff = staffProfiles.find(s => s.staff_id === id);
-  if (!staff) return res.status(404).json({ message: "Staff record not found" });
-
-  const allowedUpdates = ["staff_name", "email", "phone", "department", "base_salary", "status"];
-  
-  allowedUpdates.forEach(field => {
-    if (updates[field] !== undefined) {
-      staff[field] = updates[field];
-    }
-  });
-
-  addAudit(req.user.email, `Updated staff record ${id}`, "HR");
-  res.json({ message: "Staff record updated successfully", staff });
-});
-
-router.post("/staff/:id/delete", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
-  const { id } = req.params;
-  const index = staffProfiles.findIndex(s => s.staff_id === id);
-  
-  if (index === -1) return res.status(404).json({ message: "Staff record not found" });
-
-  const deletedStaff = staffProfiles.splice(index, 1)[0];
-  addAudit(req.user.email, `Deleted staff record ${id}`, "HR");
-  res.json({ message: "Staff record deleted successfully", deletedStaff });
-});
 
 module.exports = router;

@@ -1,0 +1,7 @@
+{
+  "staff_name": "John Doe",
+  "email": "john@test.com",
+  "phone": "12345",
+  "department": "HR",
+  "base_salary": 5000
+}
