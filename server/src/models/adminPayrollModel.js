@@ -109,6 +109,53 @@ async function listPayrollSettings() {
   return rows;
 }
 
+async function listMbmfEligibilitySummary() {
+  const [[staffCount]] = await pool.execute(
+    "SELECT COUNT(*) AS total FROM staff"
+  );
+  const [religionColumns] = await pool.execute(
+    "SHOW COLUMNS FROM staff LIKE 'religion'"
+  );
+
+  if (!religionColumns.length) {
+    return {
+      hasReligionColumn: false,
+      totalStaff: staffCount.total,
+      eligibleMuslimEmployees: 0,
+      nonEligibleEmployees: staffCount.total,
+      sampleEmployees: []
+    };
+  }
+
+  const [[summary]] = await pool.execute(
+    `SELECT
+      COUNT(*) AS totalStaff,
+      SUM(CASE WHEN LOWER(TRIM(COALESCE(religion, ''))) = 'muslim' THEN 1 ELSE 0 END) AS eligibleMuslimEmployees,
+      SUM(CASE WHEN LOWER(TRIM(COALESCE(religion, ''))) <> 'muslim' THEN 1 ELSE 0 END) AS nonEligibleEmployees
+    FROM staff`
+  );
+  const [sampleEmployees] = await pool.execute(
+    `SELECT
+      staff.employee_id,
+      staff.employee_code,
+      staff.religion,
+      user.name
+    FROM staff
+    LEFT JOIN user ON staff.user_user_id = user.user_id
+    WHERE LOWER(TRIM(COALESCE(staff.religion, ''))) = 'muslim'
+    ORDER BY user.name
+    LIMIT 5`
+  );
+
+  return {
+    hasReligionColumn: true,
+    totalStaff: summary.totalStaff || 0,
+    eligibleMuslimEmployees: summary.eligibleMuslimEmployees || 0,
+    nonEligibleEmployees: summary.nonEligibleEmployees || 0,
+    sampleEmployees
+  };
+}
+
 async function upsertPayrollSetting({ settingKey, settingValue, description, updatedBy }) {
   await pool.execute(
     `INSERT INTO payroll_setting
@@ -299,6 +346,7 @@ module.exports = {
   getUserById,
   getDashboardStats,
   listAuditLogs,
+  listMbmfEligibilitySummary,
   listPayrollRuns,
   listPayrollSettings,
   listPayslipLayouts,

@@ -1,0 +1,150 @@
+export const cpfAgeTierRows = [
+  ["55 and below", "20.00", "17.00"],
+  ["Above 55 to 60", "19.00", "16.00"],
+  ["Above 60 to 65", "15.50", "13.00"],
+  ["Above 65 to 70", "12.00", "10.00"],
+  ["Above 70", "7.50", "7.50"]
+].map(([ageGroup, employeeRate, employerRate]) => ({
+  ageGroup,
+  slug: slugify(ageGroup),
+  employeeRate,
+  employerRate
+}));
+
+export const earningComponentRows = [
+  ["Basic salary", "Yes", "Ordinary Wage", "Base monthly salary subject to CPF."],
+  ["Allowance", "Yes", "Ordinary Wage", "Regular cash allowance included in CPF wage base."],
+  ["Commission", "Yes", "Additional Wage", "Variable sales or performance payment."],
+  ["Bonus", "Yes", "Additional Wage", "Additional wage subject to CPF ceiling rules."],
+  ["Reimbursement", "No", "Non-CPF", "Business expense repayment is excluded from CPF."],
+  ["Tips", "No", "Non-CPF", "Excluded unless Admin reclassifies it as CPF-applicable pay."]
+].map(([component, includeCpf, wageType, remarks]) => ({
+  component,
+  slug: slugify(component),
+  includeCpf,
+  wageType,
+  remarks
+}));
+
+export const deductionComponentRows = [
+  ["Employee CPF", "Statutory", "Yes", "No", "Employee CPF reduces net pay but does not reduce CPF wage base."],
+  ["Loan", "Loan", "Yes", "No", "Loan repayment deduction."],
+  ["MBMF", "Statutory", "Yes", "No", "Mosque Building and Mendaki Fund contribution. Applies only when staff religion is Muslim."],
+  ["CDAC", "Statutory", "Yes", "No", "Chinese Development Assistance Council contribution."],
+  ["SINDA", "Statutory", "Yes", "No", "Singapore Indian Development Association contribution."],
+  ["ECF", "Statutory", "Yes", "No", "Eurasian Community Fund contribution."],
+  ["Salary advance", "Recovery", "Yes", "No", "Recovery of salary already advanced."],
+  ["No-pay leave", "Recovery", "Yes", "Yes", "Reduces gross CPF-applicable wages for unpaid leave."]
+].map(([deduction, type, affectsNetPay, affectsCpfWageBase, remarks]) => ({
+  deduction,
+  slug: slugify(deduction),
+  type,
+  affectsNetPay,
+  affectsCpfWageBase,
+  remarks
+}));
+
+export const employerContributionRows = [
+  ["Employer CPF", "Statutory", "CPF-applicable wages", "Employer CPF cost based on Admin age-tier rate."],
+  ["SDL", "Statutory", "Gross monthly remuneration", "Skills Development Levy employer-side cost."],
+  ["Other employer-side statutory cost", "Other", "Admin-defined", "Reserved for future employer statutory costs."]
+].map(([item, type, basis, remarks]) => ({
+  item,
+  slug: slugify(item),
+  type,
+  basis,
+  remarks
+}));
+
+export const mbmfDefaultSettings = {
+  enabled: "Enabled",
+  effectiveFrom: "2026-01-01",
+  rateType: "Percentage of Gross Salary",
+  employeeRate: "0.50",
+  employerRate: "0.50",
+  monthlyWageCeiling: "7000.00",
+  employerExpenseAccount: "6810 - MBMF Employer Expense",
+  employeePayableAccount: "2110 - MBMF Payable (Employee)",
+  clearingAccount: "2140 - MBMF Payable Clearing",
+  paymentBankAccount: "1210 - Bank - MBMF",
+  applicableReligion: "Muslim"
+};
+
+export function slugify(value) {
+  return String(value)
+    .toLowerCase()
+    .replaceAll("&", "and")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+export function buildSettingsByKey(settings = []) {
+  return Object.fromEntries(settings.map((setting) => [setting.setting_key, setting]));
+}
+
+export function getSettingValue(settingsByKey, key, fallback = "") {
+  return settingsByKey[key]?.setting_value || fallback;
+}
+
+export function createDefaultFinancePayrollConfig() {
+  return resolveFinancePayrollConfig([]);
+}
+
+export function resolveFinancePayrollConfig(settings = []) {
+  const settingsByKey = buildSettingsByKey(settings);
+  const rateTiers = cpfAgeTierRows.map((row) => ({
+    ageGroup: row.ageGroup,
+    employeeOrdinaryRate: Number(getSettingValue(settingsByKey, `cpf_rate_${row.slug}_employee_percent`, row.employeeRate)),
+    employerOrdinaryRate: Number(getSettingValue(settingsByKey, `cpf_rate_${row.slug}_employer_percent`, row.employerRate))
+  }));
+  const componentRules = Object.fromEntries(
+    earningComponentRows.map((row) => [
+      row.component.toLowerCase(),
+      {
+        cpfApplicable: getSettingValue(settingsByKey, `earning_component_${row.slug}_cpf_applicable`, row.includeCpf) === "Yes",
+        wageType: getSettingValue(settingsByKey, `earning_component_${row.slug}_wage_type`, row.wageType),
+        remarks: getSettingValue(settingsByKey, `earning_component_${row.slug}_remarks`, row.remarks)
+      }
+    ])
+  );
+  const deductionRules = Object.fromEntries(
+    deductionComponentRows.map((row) => [
+      row.deduction.toLowerCase(),
+      {
+        type: getSettingValue(settingsByKey, `deduction_component_${row.slug}_type`, row.type),
+        affectsNetPay: getSettingValue(settingsByKey, `deduction_component_${row.slug}_affects_net_pay`, row.affectsNetPay) === "Yes",
+        affectsCpfWageBase: getSettingValue(settingsByKey, `deduction_component_${row.slug}_affects_cpf_wage_base`, row.affectsCpfWageBase) === "Yes",
+        remarks: getSettingValue(settingsByKey, `deduction_component_${row.slug}_remarks`, row.remarks)
+      }
+    ])
+  );
+  const employerContributionRules = Object.fromEntries(
+    employerContributionRows.map((row) => [
+      row.item.toLowerCase(),
+      {
+        type: getSettingValue(settingsByKey, `employer_contribution_${row.slug}_type`, row.type),
+        basis: getSettingValue(settingsByKey, `employer_contribution_${row.slug}_basis`, row.basis),
+        remarks: getSettingValue(settingsByKey, `employer_contribution_${row.slug}_remarks`, row.remarks)
+      }
+    ])
+  );
+
+  return {
+    source: "Admin Payroll Settings",
+    monthlyWageCeiling: Number(getSettingValue(settingsByKey, "cpf_monthly_wage_ceiling", "8000")),
+    effectiveFrom: getSettingValue(settingsByKey, "cpf_wage_ceiling_effective_from", "2026-01-01"),
+    paymentDue: getSettingValue(settingsByKey, "cpf_payment_due_day", "14th of next month"),
+    rateTiers,
+    componentRules,
+    deductionRules,
+    employerContributionRules,
+    mbmf: {
+      enabled: getSettingValue(settingsByKey, "mbmf_enabled", mbmfDefaultSettings.enabled) === "Enabled",
+      applicableReligion: getSettingValue(settingsByKey, "mbmf_applicable_religion", mbmfDefaultSettings.applicableReligion),
+      effectiveFrom: getSettingValue(settingsByKey, "mbmf_effective_from", mbmfDefaultSettings.effectiveFrom),
+      employeeRate: Number(getSettingValue(settingsByKey, "mbmf_employee_rate_percent", mbmfDefaultSettings.employeeRate)),
+      employerRate: Number(getSettingValue(settingsByKey, "mbmf_employer_rate_percent", mbmfDefaultSettings.employerRate)),
+      monthlyWageCeiling: Number(getSettingValue(settingsByKey, "mbmf_monthly_wage_ceiling", mbmfDefaultSettings.monthlyWageCeiling))
+    }
+  };
+}

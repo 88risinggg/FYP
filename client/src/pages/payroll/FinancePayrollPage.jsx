@@ -26,7 +26,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
+import { getPayrollRuleConfig } from "../../services/adminPayrollService.js";
 import { getStoredSession } from "../../services/sessionService.js";
+import {
+  createDefaultFinancePayrollConfig,
+  resolveFinancePayrollConfig
+} from "../../utils/payrollRules.js";
 
 const pageTitle = "Automated Payroll System - Finance Payroll Dashboard";
 const FINANCE_PAYROLL_STORAGE_KEY = "financePayrollWorkflowStateV3";
@@ -79,61 +84,7 @@ const routeHeadings = {
   "/dashboard/payroll/finance/payroll-summaries": "Payroll Summaries"
 };
 
-const adminCpfConfiguration = {
-  source: "Admin Payroll Settings",
-  monthlyWageCeiling: 6800,
-  effectiveFrom: "01 Jan 2024",
-  paymentDue: "14th of next month",
-  rateTiers: [
-    {
-      ageGroup: "55 and below",
-      employeeOrdinaryRate: 20,
-      employerOrdinaryRate: 17
-    },
-    {
-      ageGroup: "Above 55 to 60",
-      employeeOrdinaryRate: 19,
-      employerOrdinaryRate: 16
-    },
-    {
-      ageGroup: "Above 60 to 65",
-      employeeOrdinaryRate: 15.5,
-      employerOrdinaryRate: 13
-    },
-    {
-      ageGroup: "Above 65 to 70",
-      employeeOrdinaryRate: 12,
-      employerOrdinaryRate: 10
-    },
-    {
-      ageGroup: "Above 70",
-      employeeOrdinaryRate: 7.5,
-      employerOrdinaryRate: 7.5
-    }
-  ],
-  componentRules: {
-    "basic salary": {
-      cpfApplicable: true,
-      wageType: "Ordinary Wage"
-    },
-    "transport allowance": {
-      cpfApplicable: false,
-      wageType: "Non-CPF"
-    },
-    "credit commission": {
-      cpfApplicable: false,
-      wageType: "Non-CPF"
-    },
-    "physical products commission": {
-      cpfApplicable: false,
-      wageType: "Non-CPF"
-    },
-    "services commission": {
-      cpfApplicable: false,
-      wageType: "Non-CPF"
-    }
-  }
-};
+let adminCpfConfiguration = createDefaultFinancePayrollConfig();
 
 const workflowSteps = [
   {
@@ -195,6 +146,7 @@ const initialPayrollRuns = [
         cpfAgeGroup: "55 and below",
         grossPay: 4200,
         previousGrossPay: 4200,
+        religion: "Buddhist",
         allowances: 250,
         deductions: 80,
         employeeCpf: 840,
@@ -225,6 +177,7 @@ const initialPayrollRuns = [
         cpfAgeGroup: "55 and below",
         grossPay: 3800,
         previousGrossPay: 3800,
+        religion: "Christian",
         allowances: 200,
         deductions: 60,
         employeeCpf: 760,
@@ -255,6 +208,7 @@ const initialPayrollRuns = [
         cpfAgeGroup: "55 and below",
         grossPay: 4500,
         previousGrossPay: 3600,
+        religion: "Muslim",
         allowances: 300,
         deductions: 120,
         employeeCpf: 900,
@@ -305,6 +259,7 @@ const initialPayrollRuns = [
         cpfAgeGroup: "55 and below",
         grossPay: 4200,
         previousGrossPay: 4200,
+        religion: "Buddhist",
         allowances: 250,
         deductions: 80,
         employeeCpf: 840,
@@ -335,6 +290,7 @@ const initialPayrollRuns = [
         cpfAgeGroup: "55 and below",
         grossPay: 3800,
         previousGrossPay: 3800,
+        religion: "Christian",
         allowances: 200,
         deductions: 60,
         employeeCpf: 760,
@@ -410,11 +366,67 @@ function sumPayrollItems(items = []) {
   return items.reduce((total, item) => total + Number(item.amount || 0), 0);
 }
 
+function normalizePayrollLabel(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getCanonicalComponentKey(label) {
+  const normalized = normalizePayrollLabel(label);
+
+  if (normalized.includes("basic")) return "basic salary";
+  if (normalized.includes("allowance")) return "allowance";
+  if (normalized.includes("commission")) return "commission";
+  if (normalized.includes("bonus")) return "bonus";
+  if (normalized.includes("reimbursement")) return "reimbursement";
+  if (normalized.includes("tips") || normalized.includes("tip")) return "tips";
+  return normalized;
+}
+
 function getPayrollComponentRule(label) {
-  return adminCpfConfiguration.componentRules[String(label || "").trim().toLowerCase()] || {
+  return adminCpfConfiguration.componentRules[getCanonicalComponentKey(label)] || {
     cpfApplicable: false,
     wageType: "Unclassified"
   };
+}
+
+function getPayrollDeductionRule(label) {
+  const normalized = normalizePayrollLabel(label);
+  const key = normalized.includes("mbmf")
+    ? "mbmf"
+    : normalized.includes("cpf")
+      ? "employee cpf"
+      : normalized.includes("loan")
+        ? "loan"
+        : normalized.includes("advance")
+          ? "salary advance"
+          : normalized.includes("no-pay")
+            ? "no-pay leave"
+            : normalized;
+
+  return adminCpfConfiguration.deductionRules?.[key] || {
+    affectsNetPay: true,
+    affectsCpfWageBase: false,
+    type: "Other"
+  };
+}
+
+function isEmployeeMbmfEligible(employee) {
+  const configuredReligion = normalizePayrollLabel(adminCpfConfiguration.mbmf?.applicableReligion || "Muslim");
+  return adminCpfConfiguration.mbmf?.enabled && normalizePayrollLabel(employee.religion) === configuredReligion;
+}
+
+function getMbmfWageBase(employee) {
+  return Math.min(getEmployeeTotalEarnings(employee), Number(adminCpfConfiguration.mbmf?.monthlyWageCeiling || 0));
+}
+
+function getExpectedMbmfEmployeeAmount(employee) {
+  if (!isEmployeeMbmfEligible(employee)) return 0;
+  return getMbmfWageBase(employee) * (Number(adminCpfConfiguration.mbmf?.employeeRate || 0) / 100);
+}
+
+function getMbmfDeductionAmount(employee) {
+  const mbmfItem = getEmployeeDeductionItems(employee).find((item) => normalizePayrollLabel(item.label).includes("mbmf"));
+  return Number(mbmfItem?.amount || 0);
 }
 
 function isCpfApplicableEarning(item) {
@@ -492,6 +504,7 @@ function getRunTotals(run) {
       const totalDeductions = getEmployeeTotalDeductions(employee);
       const employeeCpf = getEmployeeCpfAmount(employee);
       const employerCpf = getEmployerCpfAmount(employee);
+      const employeeMbmf = getMbmfDeductionAmount(employee);
 
       return {
         grossPay: result.grossPay + basicPay,
@@ -499,6 +512,7 @@ function getRunTotals(run) {
         deductions: result.deductions + totalDeductions,
         employeeCpf: result.employeeCpf + employeeCpf,
         employerCpf: result.employerCpf + employerCpf,
+        employeeMbmf: result.employeeMbmf + employeeMbmf,
         netPay: result.netPay + netPay
       };
     },
@@ -508,6 +522,7 @@ function getRunTotals(run) {
       deductions: 0,
       employeeCpf: 0,
       employerCpf: 0,
+      employeeMbmf: 0,
       netPay: 0
     }
   );
@@ -535,6 +550,8 @@ function getEmployeeExceptions(employee) {
   const expectedEmployerCpf = Math.round(cpfWageBase * (cpfRateTier.employerOrdinaryRate / 100));
   const employeeCpf = getEmployeeCpfAmount(employee);
   const employerCpf = getEmployerCpfAmount(employee);
+  const expectedMbmf = getExpectedMbmfEmployeeAmount(employee);
+  const mbmfDeduction = getMbmfDeductionAmount(employee);
   const hasUnclassifiedEarnings = getEmployeeEarningItems(employee).some(
     (item) => getPayrollComponentRule(item.label).wageType === "Unclassified" && typeof item.cpfApplicable !== "boolean"
   );
@@ -552,6 +569,12 @@ function getEmployeeExceptions(employee) {
   }
   if (Math.abs(employerCpf - expectedEmployerCpf) > 1) {
     exceptions.push("Employer CPF does not match CPF-applicable wage calculation");
+  }
+  if (!isEmployeeMbmfEligible(employee) && mbmfDeduction > 0) {
+    exceptions.push("MBMF should not apply because staff religion is not Muslim");
+  }
+  if (isEmployeeMbmfEligible(employee) && Math.abs(mbmfDeduction - expectedMbmf) > 1) {
+    exceptions.push("MBMF does not match Admin Muslim employee contribution rule");
   }
   if (employee.previousGrossPay && totalEarnings > employee.previousGrossPay * 1.2) {
     exceptions.push("Gross pay increased by more than 20%");
@@ -609,6 +632,13 @@ function getComplianceChecks(run) {
       label: "SDL employer contribution",
       status: allHaveSdl,
       detail: "Employer SDL item is available for every staff record"
+    },
+    {
+      label: "MBMF Muslim-only applicability",
+      status: !hasException("mbmf"),
+      detail: adminCpfConfiguration.mbmf?.enabled
+        ? `Applied only when staff religion is ${adminCpfConfiguration.mbmf.applicableReligion}`
+        : "MBMF is disabled in Admin settings"
     },
     {
       label: "Loan and recovery deductions",
@@ -1000,22 +1030,24 @@ function AdminCpfConfigPanel() {
     ["Rate Source", adminCpfConfiguration.source],
     ["Monthly Wage Ceiling", formatMoney(adminCpfConfiguration.monthlyWageCeiling)],
     ["Effective From", adminCpfConfiguration.effectiveFrom],
-    ["Payment Due", adminCpfConfiguration.paymentDue]
+    ["Payment Due", adminCpfConfiguration.paymentDue],
+    ["MBMF Rule", adminCpfConfiguration.mbmf?.enabled ? `${adminCpfConfiguration.mbmf.employeeRate}% Muslim employees only` : "Disabled"]
   ];
   const componentRows = Object.entries(adminCpfConfiguration.componentRules);
+  const deductionRows = Object.entries(adminCpfConfiguration.deductionRules || {});
 
   return (
     <div className="neon-glass neon-border rounded-2xl p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-white">CPF Configuration</h3>
-          <p className="mt-1 text-sm text-[#d8c6e8]">Read-only rates linked from Admin payroll settings.</p>
+          <h3 className="text-lg font-semibold text-white">Admin Payroll Rules</h3>
+          <p className="mt-1 text-sm text-[#d8c6e8]">Read-only CPF, component and statutory contribution rules from Admin.</p>
         </div>
         <span className="w-fit rounded-full border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 px-3 py-1 text-xs font-semibold text-[#BAE6FD]">
           Admin controlled
         </span>
       </div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         {rows.map(([label, value]) => (
           <div key={label} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">{label}</p>
@@ -1052,6 +1084,43 @@ function AdminCpfConfigPanel() {
             <span className="text-[#d8c6e8]">{rule.wageType}</span>
           </div>
         ))}
+      </div>
+      <div className="mt-5 grid gap-4 xl:grid-cols-2">
+        <div className="overflow-hidden rounded-xl border border-white/10">
+          <div className="grid grid-cols-3 gap-3 border-b border-white/10 bg-white/[0.04] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">
+            <span>Deduction</span>
+            <span>Type</span>
+            <span>CPF Wage Base</span>
+          </div>
+          {deductionRows.map(([deduction, rule]) => (
+            <div key={deduction} className="grid grid-cols-3 gap-3 border-b border-white/10 px-4 py-3 text-sm last:border-b-0">
+              <span className="font-semibold capitalize text-white">{deduction}</span>
+              <span className="text-[#d8c6e8]">{rule.type}</span>
+              <span className="text-[#d8c6e8]">{rule.affectsCpfWageBase ? "Affects" : "No effect"}</span>
+            </div>
+          ))}
+        </div>
+        <div className="rounded-xl border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 p-4">
+          <h4 className="text-sm font-semibold text-white">MBMF Applicability</h4>
+          <p className="mt-2 text-sm text-[#BAE6FD]">
+            Finance applies MBMF only when staff religion is {adminCpfConfiguration.mbmf?.applicableReligion || "Muslim"}.
+            Other religions are skipped even if the deduction item appears in the payroll upload.
+          </p>
+          <div className="mt-4 grid gap-2 text-sm text-[#d8c6e8]">
+            <div className="flex justify-between gap-3">
+              <span>Employee rate</span>
+              <span className="font-semibold text-white">{adminCpfConfiguration.mbmf?.employeeRate ?? 0}%</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span>Employer rate</span>
+              <span className="font-semibold text-white">{adminCpfConfiguration.mbmf?.employerRate ?? 0}%</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span>Wage ceiling</span>
+              <span className="font-semibold text-white">{formatMoney(adminCpfConfiguration.mbmf?.monthlyWageCeiling)}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1480,6 +1549,7 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {[
                 ["department", "Department"],
+                ["religion", "Religion"],
                 ["workLocation", "Work Location"],
                 ["bankType", "Bank Type"],
                 ["bankAccount", "Bank Account"],
@@ -1740,6 +1810,7 @@ function buildReportRows(selectedRun) {
     ["Pay Run Summary", selectedRun.status, formatPayrollPeriod(selectedRun)],
     ["Exception Summary", `${exceptionCount} system exception(s)`, `${approvedStaffCount}/${selectedRun.employees.length} staff approved`],
     ["CPF Summary", `Employee ${formatMoney(totals.employeeCpf)}`, `Employer ${formatMoney(totals.employerCpf)}`],
+    ["MBMF Summary", `Employee ${formatMoney(totals.employeeMbmf)}`, `${adminCpfConfiguration.mbmf?.applicableReligion || "Muslim"} staff only`],
     ["Deduction Summary", `Total ${formatMoney(totals.deductions)}`, "CPF, loans and funds"],
     ["Compliance Checklist", `${getComplianceSummary(selectedRun).passed}/${getComplianceSummary(selectedRun).total} passed`, `${getComplianceSummary(selectedRun).failed} issue(s)`],
     ["Audit Trail", `${getAuditEntries(selectedRun).length} event(s)`, "Workflow history"],
@@ -1831,6 +1902,19 @@ function getDeductionReportRows(selectedRun) {
         formatMoney(getEmployeeNetPay(employee))
       ])
     )
+  ];
+}
+
+function getMbmfReportRows(selectedRun) {
+  return [
+    ["Employee", "Religion", "Eligible", "Expected MBMF", "Actual MBMF"],
+    ...selectedRun.employees.map((employee) => [
+      employee.name,
+      employee.religion || "Not recorded",
+      isEmployeeMbmfEligible(employee) ? "Yes" : "No",
+      formatMoney(getExpectedMbmfEmployeeAmount(employee)),
+      formatMoney(getMbmfDeductionAmount(employee))
+    ])
   ];
 }
 
@@ -1951,6 +2035,17 @@ function downloadReport(selectedRun, reportTitle) {
       tableRows: getCpfReportRows(selectedRun),
       footer: "CPF validation uses Admin component classification before applying CPF rates."
     },
+    "MBMF Summary": {
+      filename: "mbmf-summary",
+      summaryRows: [
+        ["Employee MBMF", formatMoney(totals.employeeMbmf), "Muslim employees only"],
+        ["Applicable Religion", adminCpfConfiguration.mbmf?.applicableReligion || "Muslim", "Read from Admin settings"],
+        ["Employee Rate", `${adminCpfConfiguration.mbmf?.employeeRate ?? 0}%`, "Admin controlled"],
+        ["Wage Ceiling", formatMoney(adminCpfConfiguration.mbmf?.monthlyWageCeiling), adminCpfConfiguration.mbmf?.effectiveFrom || "Not configured"]
+      ],
+      tableRows: getMbmfReportRows(selectedRun),
+      footer: "MBMF validation applies only to staff records whose religion is Muslim."
+    },
     "Deduction Summary": {
       filename: "deduction-summary",
       summaryRows: [
@@ -2057,6 +2152,7 @@ function PayrollSummariesView({ selectedRun }) {
     ["Other Earnings", totals.allowances],
     ["Deductions", totals.deductions],
     ["Employee CPF", totals.employeeCpf],
+    ["Employee MBMF", totals.employeeMbmf],
     ["Employer CPF", totals.employerCpf],
     ["Net Pay", totals.netPay]
   ];
@@ -2130,10 +2226,28 @@ export default function FinancePayrollPage() {
   const heading = routeHeadings[location.pathname] || "Dashboard";
   const [payrollRuns, setPayrollRuns] = useState(getInitialPayrollRuns);
   const [selectedRunId, setSelectedRunId] = useState(() => getInitialPayrollRuns()[0]?.id || "");
+  const [payrollRuleConfig, setPayrollRuleConfig] = useState(createDefaultFinancePayrollConfig);
+  const [configError, setConfigError] = useState("");
+
+  adminCpfConfiguration = payrollRuleConfig;
 
   useEffect(() => {
     localStorage.setItem(FINANCE_PAYROLL_STORAGE_KEY, JSON.stringify(payrollRuns));
   }, [payrollRuns]);
+
+  useEffect(() => {
+    async function loadPayrollRuleConfig() {
+      try {
+        setConfigError("");
+        const data = await getPayrollRuleConfig();
+        setPayrollRuleConfig(resolveFinancePayrollConfig(data.settings || []));
+      } catch (error) {
+        setConfigError(error.message);
+      }
+    }
+
+    loadPayrollRuleConfig();
+  }, []);
 
   const selectedRun = useMemo(
     () => payrollRuns.find((run) => run.id === selectedRunId) || payrollRuns[0],
@@ -2280,6 +2394,11 @@ export default function FinancePayrollPage() {
       sidebarTitle="Automated Invoicing & Payroll System"
       searchPlaceholder="Search payroll runs, staff, reports..."
     >
+      {configError ? (
+        <div className="mb-4 rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-4 text-sm text-[#FFE2B8]">
+          Admin payroll settings could not be loaded. Finance is using fallback payroll rules. {configError}
+        </div>
+      ) : null}
       {selectedRun ? (
         <FinancePayrollContent
           heading={heading}
