@@ -4,6 +4,10 @@ export function getAdminPayrollDashboard() {
   return apiRequest("/api/payroll/admin/dashboard");
 }
 
+export function getPayrollRuleConfig() {
+  return apiRequest("/api/payroll/admin/config");
+}
+
 export function addPayslipLayout(layout) {
   return apiRequest("/api/payroll/admin/payslip-layouts", {
     method: "POST",

@@ -6,6 +6,7 @@ const {
   getUserById,
   getDashboardStats,
   listAuditLogs,
+  listMbmfEligibilitySummary,
   listPayrollRuns,
   listPayrollSettings,
   listPayslipLayouts,
@@ -24,14 +25,15 @@ function normalizeFileType(fileType) {
 
 async function getAdminPayrollDashboard(req, res) {
   try {
-    const [stats, layouts, settings, payrollRuns, auditLogs, roleSummary, users] = await Promise.all([
+    const [stats, layouts, settings, payrollRuns, auditLogs, roleSummary, users, mbmfEligibility] = await Promise.all([
       getDashboardStats(),
       listPayslipLayouts(),
       listPayrollSettings(),
       listPayrollRuns(),
       listAuditLogs(),
       listUsersWithRoles(),
-      listUsers()
+      listUsers(),
+      listMbmfEligibilitySummary()
     ]);
 
     res.json({
@@ -41,7 +43,8 @@ async function getAdminPayrollDashboard(req, res) {
       payrollRuns,
       auditLogs,
       roleSummary,
-      users
+      users,
+      mbmfEligibility
     });
   } catch (error) {
     res.status(500).json({
@@ -57,6 +60,24 @@ async function getPayslipLayouts(req, res) {
   } catch (error) {
     res.status(500).json({
       message: "Failed to load payslip layouts."
+    });
+  }
+}
+
+async function getPayrollRuleConfig(req, res) {
+  try {
+    const [settings, mbmfEligibility] = await Promise.all([
+      listPayrollSettings(),
+      listMbmfEligibilitySummary()
+    ]);
+
+    res.json({
+      settings,
+      mbmfEligibility
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to load payroll rule config."
     });
   }
 }
@@ -306,6 +327,7 @@ module.exports = {
   changeUserRole,
   changeUserStatus,
   getAdminPayrollDashboard,
+  getPayrollRuleConfig,
   getPayslipLayouts,
   makeDefaultPayslipLayout,
   resetUserPassword,

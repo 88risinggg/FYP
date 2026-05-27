@@ -30,6 +30,16 @@ import {
   updateUserStatus
 } from "../../services/adminPayrollService.js";
 import { getStoredSession } from "../../services/sessionService.js";
+import {
+  buildSettingsByKey,
+  cpfAgeTierRows,
+  cpfCalculationSettings,
+  cpfCeilingHistory,
+  cpfCeilingSettings,
+  deductionComponentRows,
+  earningComponentRows,
+  employerContributionRows
+} from "../../utils/payrollRules.js";
 
 const pageTitle = "Automated Payroll System - Admin Dashboard";
 
@@ -134,78 +144,6 @@ const workflowSteps = [
   }
 ];
 
-const cpfCalculationSettings = [
-  {
-    key: "cpf_calculation_basis",
-    label: "CPF Calculation Basis",
-    description: "Choose whether CPF is calculated by percentage of wages or fixed amount.",
-    placeholder: "% of Wages"
-  },
-  {
-    key: "cpf_rate_view_mode",
-    label: "CPF Rate View",
-    description: "Default rate view shown to Finance when reviewing CPF settings.",
-    placeholder: "Age Group"
-  },
-  {
-    key: "cpf_additional_wage_basis",
-    label: "Additional Wage Basis",
-    description: "Rule for bonuses and additional wages when included in CPF.",
-    placeholder: "Apply CPF ceiling"
-  }
-];
-
-const cpfRateRows = [
-  ["55 and below", "20.00", "20.00", "17.00", "17.00"],
-  ["Above 55 to 60", "19.00", "19.00", "16.00", "16.00"],
-  ["Above 60 to 65", "15.50", "15.50", "13.00", "13.00"],
-  ["Above 65 to 70", "12.00", "12.00", "10.00", "10.00"],
-  ["Above 70", "7.50", "7.50", "7.50", "7.50"]
-].map(([ageGroup, employeeOrdinary, employeeAdditional, employerOrdinary, employerAdditional]) => ({
-  ageGroup,
-  slug: ageGroup.toLowerCase().replaceAll(" ", "_").replaceAll(".", "").replaceAll("to", "to"),
-  employeeOrdinary,
-  employeeAdditional,
-  employerOrdinary,
-  employerAdditional
-}));
-
-const wageComponentRows = [
-  ["Basic Salary", "Yes", "Ordinary Wage", "Always included"],
-  ["Fixed Allowance", "Yes", "Ordinary Wage", "Included"],
-  ["Overtime", "Yes", "Ordinary Wage", "Included"],
-  ["Commission", "No", "-", "Excluded"],
-  ["Bonus", "Yes", "Additional Wage", "Included if above ceiling"],
-  ["Director Fees", "No", "-", "Excluded"]
-].map(([component, includeCpf, wageType, remarks]) => ({
-  component,
-  slug: component.toLowerCase().replaceAll(" ", "_"),
-  includeCpf,
-  wageType,
-  remarks
-}));
-
-const cpfCeilingSettings = [
-  {
-    key: "cpf_wage_ceiling_effective_from",
-    label: "Effective From",
-    description: "Date the monthly wage ceiling takes effect.",
-    placeholder: "01/01/2024"
-  },
-  {
-    key: "cpf_monthly_wage_ceiling",
-    label: "Monthly Wage Ceiling (SGD)",
-    description: "Monthly CPF wage ceiling applied based on pay period.",
-    placeholder: "6800.00"
-  }
-];
-
-const cpfCeilingHistory = [
-  ["01/01/2024", "6,800.00"],
-  ["01/01/2023", "6,300.00"],
-  ["01/01/2022", "6,000.00"]
-];
-
 const cpfAccountMappings = [
   {
     key: "cpf_account_employee_payable",
@@ -253,6 +191,20 @@ const otherCpfSettings = [
     placeholder: "Enabled"
   }
 ];
+
+const mbmfDefaultSettings = {
+  enabled: "Enabled",
+  effectiveFrom: "2026-01-01",
+  rateType: "Percentage of Gross Salary",
+  employeeRate: "0.50",
+  employerRate: "0.50",
+  monthlyWageCeiling: "7000.00",
+  employerExpenseAccount: "6810 - MBMF Employer Expense",
+  employeePayableAccount: "2110 - MBMF Payable (Employee)",
+  clearingAccount: "2140 - MBMF Payable Clearing",
+  paymentBankAccount: "1210 - Bank - MBMF",
+  applicableReligion: "Muslim"
+};
 
 function ActionButton({ icon: Icon, children, variant = "primary", onClick, disabled = false }) {
   const className =
@@ -1038,24 +990,20 @@ function SettingInput({ value, onChange, placeholder }) {
 
 function CpfRateTable({ onSave, settingsByKey }) {
   const [rows, setRows] = useState(() =>
-    cpfRateRows.map((row) => ({
+    cpfAgeTierRows.map((row) => ({
       ...row,
-      employeeOrdinary: settingsByKey[`cpf_rate_${row.slug}_employee_ordinary`]?.setting_value || row.employeeOrdinary,
-      employeeAdditional: settingsByKey[`cpf_rate_${row.slug}_employee_additional`]?.setting_value || row.employeeAdditional,
-      employerOrdinary: settingsByKey[`cpf_rate_${row.slug}_employer_ordinary`]?.setting_value || row.employerOrdinary,
-      employerAdditional: settingsByKey[`cpf_rate_${row.slug}_employer_additional`]?.setting_value || row.employerAdditional
+      employeeRate: settingsByKey[`cpf_rate_${row.slug}_employee_percent`]?.setting_value || settingsByKey[`cpf_rate_${row.slug}_employee_ordinary`]?.setting_value || row.employeeRate,
+      employerRate: settingsByKey[`cpf_rate_${row.slug}_employer_percent`]?.setting_value || settingsByKey[`cpf_rate_${row.slug}_employer_ordinary`]?.setting_value || row.employerRate
     }))
   );
   const [savingSlug, setSavingSlug] = useState("");
 
   useEffect(() => {
     setRows(
-      cpfRateRows.map((row) => ({
+      cpfAgeTierRows.map((row) => ({
         ...row,
-        employeeOrdinary: settingsByKey[`cpf_rate_${row.slug}_employee_ordinary`]?.setting_value || row.employeeOrdinary,
-        employeeAdditional: settingsByKey[`cpf_rate_${row.slug}_employee_additional`]?.setting_value || row.employeeAdditional,
-        employerOrdinary: settingsByKey[`cpf_rate_${row.slug}_employer_ordinary`]?.setting_value || row.employerOrdinary,
-        employerAdditional: settingsByKey[`cpf_rate_${row.slug}_employer_additional`]?.setting_value || row.employerAdditional
+        employeeRate: settingsByKey[`cpf_rate_${row.slug}_employee_percent`]?.setting_value || settingsByKey[`cpf_rate_${row.slug}_employee_ordinary`]?.setting_value || row.employeeRate,
+        employerRate: settingsByKey[`cpf_rate_${row.slug}_employer_percent`]?.setting_value || settingsByKey[`cpf_rate_${row.slug}_employer_ordinary`]?.setting_value || row.employerRate
       }))
     );
   }, [settingsByKey]);
@@ -1071,21 +1019,13 @@ function CpfRateTable({ onSave, settingsByKey }) {
 
     try {
       await Promise.all([
-        onSave(`cpf_rate_${row.slug}_employee_ordinary`, {
-          settingValue: row.employeeOrdinary,
-          description: `${row.ageGroup} employee CPF ordinary wage rate.`
+        onSave(`cpf_rate_${row.slug}_employee_percent`, {
+          settingValue: row.employeeRate,
+          description: `${row.ageGroup} employee CPF rate.`
         }),
-        onSave(`cpf_rate_${row.slug}_employee_additional`, {
-          settingValue: row.employeeAdditional,
-          description: `${row.ageGroup} employee CPF additional wage rate.`
-        }),
-        onSave(`cpf_rate_${row.slug}_employer_ordinary`, {
-          settingValue: row.employerOrdinary,
-          description: `${row.ageGroup} employer CPF ordinary wage rate.`
-        }),
-        onSave(`cpf_rate_${row.slug}_employer_additional`, {
-          settingValue: row.employerAdditional,
-          description: `${row.ageGroup} employer CPF additional wage rate.`
+        onSave(`cpf_rate_${row.slug}_employer_percent`, {
+          settingValue: row.employerRate,
+          description: `${row.ageGroup} employer CPF rate.`
         })
       ]);
     } finally {
@@ -1096,18 +1036,16 @@ function CpfRateTable({ onSave, settingsByKey }) {
   return (
     <section className="neon-glass neon-border overflow-hidden rounded-2xl">
       <div className="border-b border-white/10 px-5 py-4">
-        <h3 className="text-lg font-semibold text-white">CPF Rate Configuration by Age Group</h3>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Set employee and employer CPF rates for ordinary and additional wages.</p>
+        <h3 className="text-lg font-semibold text-white">CPF Age-Tier Rates</h3>
+        <p className="mt-1 text-sm text-[#d8c6e8]">Set employee and employer CPF percentage rates by age tier.</p>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-[58rem] w-full border-separate border-spacing-0 text-left text-sm">
+        <table className="min-w-[44rem] w-full border-separate border-spacing-0 text-left text-sm">
           <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
             <tr>
               <th className="border-b border-white/10 px-4 py-3">Age Group</th>
-              <th className="border-b border-white/10 px-4 py-3">Employee Ordinary %</th>
-              <th className="border-b border-white/10 px-4 py-3">Employee Additional %</th>
-              <th className="border-b border-white/10 px-4 py-3">Employer Ordinary %</th>
-              <th className="border-b border-white/10 px-4 py-3">Employer Additional %</th>
+              <th className="border-b border-white/10 px-4 py-3">Employee CPF %</th>
+              <th className="border-b border-white/10 px-4 py-3">Employer CPF %</th>
               <th className="border-b border-white/10 px-4 py-3">Action</th>
             </tr>
           </thead>
@@ -1116,16 +1054,10 @@ function CpfRateTable({ onSave, settingsByKey }) {
               <tr key={row.slug}>
                 <td className="border-b border-white/10 px-4 py-4 font-semibold text-white">{row.ageGroup}</td>
                 <td className="border-b border-white/10 px-4 py-4">
-                  <SettingInput value={row.employeeOrdinary} onChange={(value) => updateRow(row.slug, "employeeOrdinary", value)} />
+                  <SettingInput value={row.employeeRate} onChange={(value) => updateRow(row.slug, "employeeRate", value)} />
                 </td>
                 <td className="border-b border-white/10 px-4 py-4">
-                  <SettingInput value={row.employeeAdditional} onChange={(value) => updateRow(row.slug, "employeeAdditional", value)} />
-                </td>
-                <td className="border-b border-white/10 px-4 py-4">
-                  <SettingInput value={row.employerOrdinary} onChange={(value) => updateRow(row.slug, "employerOrdinary", value)} />
-                </td>
-                <td className="border-b border-white/10 px-4 py-4">
-                  <SettingInput value={row.employerAdditional} onChange={(value) => updateRow(row.slug, "employerAdditional", value)} />
+                  <SettingInput value={row.employerRate} onChange={(value) => updateRow(row.slug, "employerRate", value)} />
                 </td>
                 <td className="border-b border-white/10 px-4 py-4">
                   <button
@@ -1148,20 +1080,22 @@ function CpfRateTable({ onSave, settingsByKey }) {
 
 function WageComponentTable({ onSave, settingsByKey }) {
   const [rows, setRows] = useState(() =>
-    wageComponentRows.map((row) => ({
+    earningComponentRows.map((row) => ({
       ...row,
-      includeCpf: settingsByKey[`cpf_component_${row.slug}_included`]?.setting_value || row.includeCpf,
-      wageType: settingsByKey[`cpf_component_${row.slug}_wage_type`]?.setting_value || row.wageType
+      includeCpf: settingsByKey[`earning_component_${row.slug}_cpf_applicable`]?.setting_value || settingsByKey[`cpf_component_${row.slug}_included`]?.setting_value || row.includeCpf,
+      wageType: settingsByKey[`earning_component_${row.slug}_wage_type`]?.setting_value || settingsByKey[`cpf_component_${row.slug}_wage_type`]?.setting_value || row.wageType,
+      remarks: settingsByKey[`earning_component_${row.slug}_remarks`]?.setting_value || row.remarks
     }))
   );
   const [savingSlug, setSavingSlug] = useState("");
 
   useEffect(() => {
     setRows(
-      wageComponentRows.map((row) => ({
+      earningComponentRows.map((row) => ({
         ...row,
-        includeCpf: settingsByKey[`cpf_component_${row.slug}_included`]?.setting_value || row.includeCpf,
-        wageType: settingsByKey[`cpf_component_${row.slug}_wage_type`]?.setting_value || row.wageType
+        includeCpf: settingsByKey[`earning_component_${row.slug}_cpf_applicable`]?.setting_value || settingsByKey[`cpf_component_${row.slug}_included`]?.setting_value || row.includeCpf,
+        wageType: settingsByKey[`earning_component_${row.slug}_wage_type`]?.setting_value || settingsByKey[`cpf_component_${row.slug}_wage_type`]?.setting_value || row.wageType,
+        remarks: settingsByKey[`earning_component_${row.slug}_remarks`]?.setting_value || row.remarks
       }))
     );
   }, [settingsByKey]);
@@ -1177,13 +1111,17 @@ function WageComponentTable({ onSave, settingsByKey }) {
 
     try {
       await Promise.all([
-        onSave(`cpf_component_${row.slug}_included`, {
+        onSave(`earning_component_${row.slug}_cpf_applicable`, {
           settingValue: row.includeCpf,
-          description: `${row.component} CPF inclusion setting.`
+          description: `${row.component} CPF applicability setting.`
         }),
-        onSave(`cpf_component_${row.slug}_wage_type`, {
+        onSave(`earning_component_${row.slug}_wage_type`, {
           settingValue: row.wageType,
           description: `${row.component} CPF wage type setting.`
+        }),
+        onSave(`earning_component_${row.slug}_remarks`, {
+          settingValue: row.remarks,
+          description: `${row.component} earning component remarks.`
         })
       ]);
     } finally {
@@ -1194,15 +1132,15 @@ function WageComponentTable({ onSave, settingsByKey }) {
   return (
     <section className="neon-glass neon-border overflow-hidden rounded-2xl">
       <div className="border-b border-white/10 px-5 py-4">
-        <h3 className="text-lg font-semibold text-white">Wage Components for CPF</h3>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Define which pay components are included in CPF and how they are classified.</p>
+        <h3 className="text-lg font-semibold text-white">Earning Component Classification</h3>
+        <p className="mt-1 text-sm text-[#d8c6e8]">Define which earning components feed CPF and how each wage type is classified.</p>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-[48rem] w-full border-separate border-spacing-0 text-left text-sm">
+        <table className="min-w-[58rem] w-full border-separate border-spacing-0 text-left text-sm">
           <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
             <tr>
-              <th className="border-b border-white/10 px-4 py-3">Pay Component</th>
-              <th className="border-b border-white/10 px-4 py-3">Include in CPF</th>
+              <th className="border-b border-white/10 px-4 py-3">Component Name</th>
+              <th className="border-b border-white/10 px-4 py-3">CPF Applicable</th>
               <th className="border-b border-white/10 px-4 py-3">Wage Type</th>
               <th className="border-b border-white/10 px-4 py-3">Remarks</th>
               <th className="border-b border-white/10 px-4 py-3">Action</th>
@@ -1228,12 +1166,14 @@ function WageComponentTable({ onSave, settingsByKey }) {
                     onChange={(event) => updateRow(row.slug, "wageType", event.target.value)}
                     className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
                   >
-                    <option value="-">-</option>
                     <option value="Ordinary Wage">Ordinary Wage</option>
                     <option value="Additional Wage">Additional Wage</option>
+                    <option value="Non-CPF">Non-CPF</option>
                   </select>
                 </td>
-                <td className="border-b border-white/10 px-4 py-4 text-[#d8c6e8]">{row.remarks}</td>
+                <td className="border-b border-white/10 px-4 py-4">
+                  <SettingInput value={row.remarks} onChange={(value) => updateRow(row.slug, "remarks", value)} />
+                </td>
                 <td className="border-b border-white/10 px-4 py-4">
                   <button
                     type="button"
@@ -1248,6 +1188,529 @@ function WageComponentTable({ onSave, settingsByKey }) {
             ))}
           </tbody>
         </table>
+      </div>
+    </section>
+  );
+}
+
+function DeductionComponentTable({ onSave, settingsByKey }) {
+  const [rows, setRows] = useState(() =>
+    deductionComponentRows.map((row) => ({
+      ...row,
+      type: settingsByKey[`deduction_component_${row.slug}_type`]?.setting_value || row.type,
+      affectsNetPay: settingsByKey[`deduction_component_${row.slug}_affects_net_pay`]?.setting_value || row.affectsNetPay,
+      affectsCpfWageBase: settingsByKey[`deduction_component_${row.slug}_affects_cpf_wage_base`]?.setting_value || row.affectsCpfWageBase,
+      remarks: settingsByKey[`deduction_component_${row.slug}_remarks`]?.setting_value || row.remarks
+    }))
+  );
+  const [savingSlug, setSavingSlug] = useState("");
+
+  useEffect(() => {
+    setRows(
+      deductionComponentRows.map((row) => ({
+        ...row,
+        type: settingsByKey[`deduction_component_${row.slug}_type`]?.setting_value || row.type,
+        affectsNetPay: settingsByKey[`deduction_component_${row.slug}_affects_net_pay`]?.setting_value || row.affectsNetPay,
+        affectsCpfWageBase: settingsByKey[`deduction_component_${row.slug}_affects_cpf_wage_base`]?.setting_value || row.affectsCpfWageBase,
+        remarks: settingsByKey[`deduction_component_${row.slug}_remarks`]?.setting_value || row.remarks
+      }))
+    );
+  }, [settingsByKey]);
+
+  const updateRow = (slug, field, value) => {
+    setRows((currentRows) =>
+      currentRows.map((row) => (row.slug === slug ? { ...row, [field]: value } : row))
+    );
+  };
+
+  const saveRow = async (row) => {
+    setSavingSlug(row.slug);
+
+    try {
+      await Promise.all([
+        onSave(`deduction_component_${row.slug}_type`, {
+          settingValue: row.type,
+          description: `${row.deduction} deduction type.`
+        }),
+        onSave(`deduction_component_${row.slug}_affects_net_pay`, {
+          settingValue: row.affectsNetPay,
+          description: `${row.deduction} affects net pay setting.`
+        }),
+        onSave(`deduction_component_${row.slug}_affects_cpf_wage_base`, {
+          settingValue: row.affectsCpfWageBase,
+          description: `${row.deduction} affects CPF wage base setting.`
+        }),
+        onSave(`deduction_component_${row.slug}_remarks`, {
+          settingValue: row.remarks,
+          description: `${row.deduction} deduction remarks.`
+        })
+      ]);
+    } finally {
+      setSavingSlug("");
+    }
+  };
+
+  return (
+    <section className="neon-glass neon-border overflow-hidden rounded-2xl">
+      <div className="border-b border-white/10 px-5 py-4">
+        <h3 className="text-lg font-semibold text-white">Deduction Component Classification</h3>
+        <p className="mt-1 text-sm text-[#d8c6e8]">Define deduction treatment for net pay and CPF wage base validation.</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-[66rem] w-full border-separate border-spacing-0 text-left text-sm">
+          <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
+            <tr>
+              <th className="border-b border-white/10 px-4 py-3">Deduction Name</th>
+              <th className="border-b border-white/10 px-4 py-3">Type</th>
+              <th className="border-b border-white/10 px-4 py-3">Affects Net Pay</th>
+              <th className="border-b border-white/10 px-4 py-3">Affects CPF Wage Base</th>
+              <th className="border-b border-white/10 px-4 py-3">Remarks</th>
+              <th className="border-b border-white/10 px-4 py-3">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.slug}>
+                <td className="border-b border-white/10 px-4 py-4 font-semibold text-white">{row.deduction}</td>
+                <td className="border-b border-white/10 px-4 py-4">
+                  <select
+                    value={row.type}
+                    onChange={(event) => updateRow(row.slug, "type", event.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                  >
+                    <option value="Statutory">Statutory</option>
+                    <option value="Loan">Loan</option>
+                    <option value="Recovery">Recovery</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </td>
+                <td className="border-b border-white/10 px-4 py-4">
+                  <select
+                    value={row.affectsNetPay}
+                    onChange={(event) => updateRow(row.slug, "affectsNetPay", event.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                  >
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </select>
+                </td>
+                <td className="border-b border-white/10 px-4 py-4">
+                  <select
+                    value={row.affectsCpfWageBase}
+                    onChange={(event) => updateRow(row.slug, "affectsCpfWageBase", event.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                  >
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </select>
+                </td>
+                <td className="border-b border-white/10 px-4 py-4">
+                  <SettingInput value={row.remarks} onChange={(value) => updateRow(row.slug, "remarks", value)} />
+                </td>
+                <td className="border-b border-white/10 px-4 py-4">
+                  <button
+                    type="button"
+                    className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => saveRow(row)}
+                    disabled={savingSlug === row.slug}
+                  >
+                    {savingSlug === row.slug ? "Saving..." : "Save"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function EmployerContributionTable({ onSave, settingsByKey }) {
+  const [rows, setRows] = useState(() =>
+    employerContributionRows.map((row) => ({
+      ...row,
+      type: settingsByKey[`employer_contribution_${row.slug}_type`]?.setting_value || row.type,
+      basis: settingsByKey[`employer_contribution_${row.slug}_basis`]?.setting_value || row.basis,
+      remarks: settingsByKey[`employer_contribution_${row.slug}_remarks`]?.setting_value || row.remarks
+    }))
+  );
+  const [savingSlug, setSavingSlug] = useState("");
+
+  useEffect(() => {
+    setRows(
+      employerContributionRows.map((row) => ({
+        ...row,
+        type: settingsByKey[`employer_contribution_${row.slug}_type`]?.setting_value || row.type,
+        basis: settingsByKey[`employer_contribution_${row.slug}_basis`]?.setting_value || row.basis,
+        remarks: settingsByKey[`employer_contribution_${row.slug}_remarks`]?.setting_value || row.remarks
+      }))
+    );
+  }, [settingsByKey]);
+
+  const updateRow = (slug, field, value) => {
+    setRows((currentRows) =>
+      currentRows.map((row) => (row.slug === slug ? { ...row, [field]: value } : row))
+    );
+  };
+
+  const saveRow = async (row) => {
+    setSavingSlug(row.slug);
+
+    try {
+      await Promise.all([
+        onSave(`employer_contribution_${row.slug}_type`, {
+          settingValue: row.type,
+          description: `${row.item} employer contribution type.`
+        }),
+        onSave(`employer_contribution_${row.slug}_basis`, {
+          settingValue: row.basis,
+          description: `${row.item} employer contribution basis.`
+        }),
+        onSave(`employer_contribution_${row.slug}_remarks`, {
+          settingValue: row.remarks,
+          description: `${row.item} employer contribution remarks.`
+        })
+      ]);
+    } finally {
+      setSavingSlug("");
+    }
+  };
+
+  return (
+    <section className="neon-glass neon-border overflow-hidden rounded-2xl">
+      <div className="border-b border-white/10 px-5 py-4">
+        <h3 className="text-lg font-semibold text-white">Employer Contribution Items</h3>
+        <p className="mt-1 text-sm text-[#d8c6e8]">Define employer-side statutory and payroll cost items for Finance review.</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-[52rem] w-full border-separate border-spacing-0 text-left text-sm">
+          <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
+            <tr>
+              <th className="border-b border-white/10 px-4 py-3">Item</th>
+              <th className="border-b border-white/10 px-4 py-3">Type</th>
+              <th className="border-b border-white/10 px-4 py-3">Basis</th>
+              <th className="border-b border-white/10 px-4 py-3">Remarks</th>
+              <th className="border-b border-white/10 px-4 py-3">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.slug}>
+                <td className="border-b border-white/10 px-4 py-4 font-semibold text-white">{row.item}</td>
+                <td className="border-b border-white/10 px-4 py-4">
+                  <select
+                    value={row.type}
+                    onChange={(event) => updateRow(row.slug, "type", event.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                  >
+                    <option value="Statutory">Statutory</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </td>
+                <td className="border-b border-white/10 px-4 py-4">
+                  <SettingInput value={row.basis} onChange={(value) => updateRow(row.slug, "basis", value)} />
+                </td>
+                <td className="border-b border-white/10 px-4 py-4">
+                  <SettingInput value={row.remarks} onChange={(value) => updateRow(row.slug, "remarks", value)} />
+                </td>
+                <td className="border-b border-white/10 px-4 py-4">
+                  <button
+                    type="button"
+                    className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => saveRow(row)}
+                    disabled={savingSlug === row.slug}
+                  >
+                    {savingSlug === row.slug ? "Saving..." : "Save"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function getMbmfValue(settingsByKey, key, fallback) {
+  return settingsByKey[key]?.setting_value || fallback;
+}
+
+function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
+  const [form, setForm] = useState(() => ({
+    enabled: getMbmfValue(settingsByKey, "mbmf_enabled", mbmfDefaultSettings.enabled),
+    effectiveFrom: getMbmfValue(settingsByKey, "mbmf_effective_from", mbmfDefaultSettings.effectiveFrom),
+    rateType: getMbmfValue(settingsByKey, "mbmf_rate_type", mbmfDefaultSettings.rateType),
+    employeeRate: getMbmfValue(settingsByKey, "mbmf_employee_rate_percent", mbmfDefaultSettings.employeeRate),
+    employerRate: getMbmfValue(settingsByKey, "mbmf_employer_rate_percent", mbmfDefaultSettings.employerRate),
+    monthlyWageCeiling: getMbmfValue(settingsByKey, "mbmf_monthly_wage_ceiling", mbmfDefaultSettings.monthlyWageCeiling),
+    employerExpenseAccount: getMbmfValue(settingsByKey, "mbmf_gl_employer_expense_account", mbmfDefaultSettings.employerExpenseAccount),
+    employeePayableAccount: getMbmfValue(settingsByKey, "mbmf_gl_employee_payable_account", mbmfDefaultSettings.employeePayableAccount),
+    clearingAccount: getMbmfValue(settingsByKey, "mbmf_gl_clearing_account", mbmfDefaultSettings.clearingAccount),
+    paymentBankAccount: getMbmfValue(settingsByKey, "mbmf_payment_bank_account", mbmfDefaultSettings.paymentBankAccount),
+    applicableReligion: getMbmfValue(settingsByKey, "mbmf_applicable_religion", mbmfDefaultSettings.applicableReligion)
+  }));
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setForm({
+      enabled: getMbmfValue(settingsByKey, "mbmf_enabled", mbmfDefaultSettings.enabled),
+      effectiveFrom: getMbmfValue(settingsByKey, "mbmf_effective_from", mbmfDefaultSettings.effectiveFrom),
+      rateType: getMbmfValue(settingsByKey, "mbmf_rate_type", mbmfDefaultSettings.rateType),
+      employeeRate: getMbmfValue(settingsByKey, "mbmf_employee_rate_percent", mbmfDefaultSettings.employeeRate),
+      employerRate: getMbmfValue(settingsByKey, "mbmf_employer_rate_percent", mbmfDefaultSettings.employerRate),
+      monthlyWageCeiling: getMbmfValue(settingsByKey, "mbmf_monthly_wage_ceiling", mbmfDefaultSettings.monthlyWageCeiling),
+      employerExpenseAccount: getMbmfValue(settingsByKey, "mbmf_gl_employer_expense_account", mbmfDefaultSettings.employerExpenseAccount),
+      employeePayableAccount: getMbmfValue(settingsByKey, "mbmf_gl_employee_payable_account", mbmfDefaultSettings.employeePayableAccount),
+      clearingAccount: getMbmfValue(settingsByKey, "mbmf_gl_clearing_account", mbmfDefaultSettings.clearingAccount),
+      paymentBankAccount: getMbmfValue(settingsByKey, "mbmf_payment_bank_account", mbmfDefaultSettings.paymentBankAccount),
+      applicableReligion: getMbmfValue(settingsByKey, "mbmf_applicable_religion", mbmfDefaultSettings.applicableReligion)
+    });
+  }, [settingsByKey]);
+
+  const updateForm = (field, value) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+  const employeeRate = Number(form.employeeRate || 0);
+  const employerRate = Number(form.employerRate || 0);
+  const ceiling = Number(form.monthlyWageCeiling || 0);
+  const examples = [4000, 7000, 9500].map((grossSalary) => {
+    const salaryConsidered = Math.min(grossSalary, ceiling || grossSalary);
+    const employeeAmount = salaryConsidered * (employeeRate / 100);
+    const employerAmount = salaryConsidered * (employerRate / 100);
+
+    return {
+      grossSalary,
+      salaryConsidered,
+      employeeAmount,
+      employerAmount,
+      total: employeeAmount + employerAmount
+    };
+  });
+
+  const saveMbmfSettings = async () => {
+    setIsSaving(true);
+
+    try {
+      await Promise.all([
+        onSave("mbmf_enabled", {
+          settingValue: form.enabled,
+          description: "Enable MBMF contribution for eligible Muslim employees."
+        }),
+        onSave("mbmf_applicable_religion", {
+          settingValue: form.applicableReligion,
+          description: "Religion value that makes an employee eligible for MBMF."
+        }),
+        onSave("mbmf_effective_from", {
+          settingValue: form.effectiveFrom,
+          description: "MBMF contribution effective date."
+        }),
+        onSave("mbmf_rate_type", {
+          settingValue: form.rateType,
+          description: "MBMF contribution rate type."
+        }),
+        onSave("mbmf_employee_rate_percent", {
+          settingValue: form.employeeRate,
+          description: "MBMF employee contribution percentage."
+        }),
+        onSave("mbmf_employer_rate_percent", {
+          settingValue: form.employerRate,
+          description: "MBMF employer contribution percentage."
+        }),
+        onSave("mbmf_monthly_wage_ceiling", {
+          settingValue: form.monthlyWageCeiling,
+          description: "MBMF monthly wage ceiling."
+        }),
+        onSave("mbmf_gl_employer_expense_account", {
+          settingValue: form.employerExpenseAccount,
+          description: "MBMF employer expense GL account."
+        }),
+        onSave("mbmf_gl_employee_payable_account", {
+          settingValue: form.employeePayableAccount,
+          description: "MBMF employee payable GL account."
+        }),
+        onSave("mbmf_gl_clearing_account", {
+          settingValue: form.clearingAccount,
+          description: "MBMF payable clearing GL account."
+        }),
+        onSave("mbmf_payment_bank_account", {
+          settingValue: form.paymentBankAccount,
+          description: "MBMF payment bank account."
+        })
+      ]);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h3 className="text-lg font-semibold text-white">MBMF Contribution Rules</h3>
+        <p className="mt-1 text-sm text-[#d8c6e8]">
+          Configure MBMF so payroll applies it only to employees whose staff religion is Muslim.
+        </p>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.4fr_0.8fr]">
+        <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            <section className="neon-glass neon-border rounded-2xl p-5">
+              <h4 className="font-semibold text-white">1. Enable MBMF</h4>
+              <div className="mt-5 flex items-center justify-between gap-3">
+                <span className="text-sm text-[#d8c6e8]">Enable MBMF Contribution</span>
+                <select
+                  value={form.enabled}
+                  onChange={(event) => updateForm("enabled", event.target.value)}
+                  className="rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                >
+                  <option value="Enabled">Enabled</option>
+                  <option value="Disabled">Disabled</option>
+                </select>
+              </div>
+              <p className="mt-4 rounded-xl border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 p-3 text-sm text-[#BAE6FD]">
+                MBMF is calculated only for employees with religion set to {form.applicableReligion}.
+              </p>
+            </section>
+
+            <section className="neon-glass neon-border rounded-2xl p-5">
+              <h4 className="font-semibold text-white">2. Contribution Rates</h4>
+              <div className="mt-4 space-y-3">
+                <SettingInput value={form.effectiveFrom} onChange={(value) => updateForm("effectiveFrom", value)} placeholder="Effective date" />
+                <select
+                  value={form.rateType}
+                  onChange={(event) => updateForm("rateType", event.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                >
+                  <option value="Percentage of Gross Salary">Percentage of Gross Salary</option>
+                  <option value="Fixed Amount">Fixed Amount</option>
+                </select>
+                <SettingInput value={form.employeeRate} onChange={(value) => updateForm("employeeRate", value)} placeholder="Employee rate %" />
+                <SettingInput value={form.employerRate} onChange={(value) => updateForm("employerRate", value)} placeholder="Employer rate %" />
+                <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-[#d8c6e8]">
+                  Total Rate: <span className="font-semibold text-white">{(employeeRate + employerRate).toFixed(2)}%</span>
+                </div>
+              </div>
+            </section>
+
+            <section className="neon-glass neon-border rounded-2xl p-5">
+              <h4 className="font-semibold text-white">3. Wage Ceiling</h4>
+              <div className="mt-4 space-y-3">
+                <select
+                  value="Monthly Wage Ceiling"
+                  className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                  disabled
+                >
+                  <option value="Monthly Wage Ceiling">Monthly Wage Ceiling</option>
+                </select>
+                <SettingInput value={form.monthlyWageCeiling} onChange={(value) => updateForm("monthlyWageCeiling", value)} placeholder="Monthly wage ceiling" />
+              </div>
+              <p className="mt-4 rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-3 text-sm text-[#FFE2B8]">
+                If gross salary is above the ceiling, MBMF uses the ceiling amount only.
+              </p>
+            </section>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
+            <section className="neon-glass neon-border rounded-2xl p-5">
+              <h4 className="font-semibold text-white">4. Map GL Accounts</h4>
+              <div className="mt-4 grid gap-3">
+                <SettingInput value={form.employerExpenseAccount} onChange={(value) => updateForm("employerExpenseAccount", value)} />
+                <SettingInput value={form.employeePayableAccount} onChange={(value) => updateForm("employeePayableAccount", value)} />
+                <SettingInput value={form.clearingAccount} onChange={(value) => updateForm("clearingAccount", value)} />
+                <SettingInput value={form.paymentBankAccount} onChange={(value) => updateForm("paymentBankAccount", value)} />
+              </div>
+            </section>
+
+            <section className="neon-glass neon-border rounded-2xl p-5">
+              <h4 className="font-semibold text-white">5. Save & Apply</h4>
+              <div className="mt-4 rounded-xl border border-[#7CFFB2]/25 bg-[#7CFFB2]/10 p-4 text-sm text-[#D8FFE6]">
+                Saved MBMF settings are applied to eligible Muslim employees only.
+              </div>
+              <button
+                type="button"
+                className="mt-5 rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={saveMbmfSettings}
+                disabled={isSaving}
+              >
+                {isSaving ? "Saving..." : "Save MBMF Settings"}
+              </button>
+            </section>
+          </div>
+
+          <section className="neon-glass neon-border overflow-hidden rounded-2xl">
+            <div className="border-b border-white/10 px-5 py-4">
+              <h4 className="font-semibold text-white">Contribution Calculation Example</h4>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-[52rem] w-full border-separate border-spacing-0 text-left text-sm">
+                <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
+                  <tr>
+                    <th className="border-b border-white/10 px-4 py-3">Gross Salary</th>
+                    <th className="border-b border-white/10 px-4 py-3">Wage Ceiling</th>
+                    <th className="border-b border-white/10 px-4 py-3">Salary Considered</th>
+                    <th className="border-b border-white/10 px-4 py-3">Employee</th>
+                    <th className="border-b border-white/10 px-4 py-3">Employer</th>
+                    <th className="border-b border-white/10 px-4 py-3">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {examples.map((example) => (
+                    <tr key={example.grossSalary}>
+                      <td className="border-b border-white/10 px-4 py-3 text-white">{formatMoney(example.grossSalary)}</td>
+                      <td className="border-b border-white/10 px-4 py-3 text-[#d8c6e8]">{formatMoney(ceiling)}</td>
+                      <td className="border-b border-white/10 px-4 py-3 text-[#d8c6e8]">{formatMoney(example.salaryConsidered)}</td>
+                      <td className="border-b border-white/10 px-4 py-3 text-[#d8c6e8]">{formatMoney(example.employeeAmount)}</td>
+                      <td className="border-b border-white/10 px-4 py-3 text-[#d8c6e8]">{formatMoney(example.employerAmount)}</td>
+                      <td className="border-b border-white/10 px-4 py-3 font-semibold text-white">{formatMoney(example.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <aside className="space-y-4">
+          <section className="neon-glass neon-border rounded-2xl p-5">
+            <h4 className="font-semibold text-white">Applicability</h4>
+            <div className="mt-4 rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 p-4">
+              <p className="text-sm font-semibold text-white">Applicable To</p>
+              <p className="mt-1 text-sm text-[#d8c6e8]">All employees where staff.religion = {form.applicableReligion}</p>
+            </div>
+            <div className="mt-4 grid gap-3 text-sm">
+              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                <span className="text-[#d8c6e8]">Total Staff</span>
+                <span className="font-semibold text-white">{eligibility?.totalStaff ?? 0}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                <span className="text-[#d8c6e8]">Eligible Muslim Staff</span>
+                <span className="font-semibold text-[#7CFFB2]">{eligibility?.eligibleMuslimEmployees ?? 0}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                <span className="text-[#d8c6e8]">Not Applied</span>
+                <span className="font-semibold text-white">{eligibility?.nonEligibleEmployees ?? 0}</span>
+              </div>
+            </div>
+            {!eligibility?.hasReligionColumn ? (
+              <p className="mt-4 rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-3 text-sm text-[#FFE2B8]">
+                Add a religion column to the staff table so the system can identify Muslim employees.
+              </p>
+            ) : null}
+          </section>
+
+          <section className="neon-glass neon-border rounded-2xl p-5">
+            <h4 className="font-semibold text-white">Process Flow</h4>
+            <ol className="mt-4 space-y-3 text-sm text-[#d8c6e8]">
+              <li>1. Payroll reads staff religion from the employee database.</li>
+              <li>2. MBMF is calculated only when religion is Muslim.</li>
+              <li>3. Non-Muslim employees are skipped automatically.</li>
+              <li>4. Employee and employer amounts are shown separately.</li>
+              <li>5. GL accounts are used for journal posting and payment.</li>
+            </ol>
+          </section>
+        </aside>
       </div>
     </section>
   );
@@ -1281,9 +1744,9 @@ function CpfCeilingPanel({ onSave, settingsByKey }) {
   );
 }
 
-function SettingsView({ onUpdateSetting, settings = [] }) {
+function SettingsView({ mbmfEligibility, onUpdateSetting, settings = [] }) {
   const settingsByKey = useMemo(
-    () => Object.fromEntries(settings.map((setting) => [setting.setting_key, setting])),
+    () => buildSettingsByKey(settings),
     [settings]
   );
 
@@ -1307,6 +1770,13 @@ function SettingsView({ onUpdateSetting, settings = [] }) {
         />
         <CpfRateTable settingsByKey={settingsByKey} onSave={onUpdateSetting} />
         <WageComponentTable settingsByKey={settingsByKey} onSave={onUpdateSetting} />
+        <DeductionComponentTable settingsByKey={settingsByKey} onSave={onUpdateSetting} />
+        <MbmfContributionPanel
+          eligibility={mbmfEligibility}
+          settingsByKey={settingsByKey}
+          onSave={onUpdateSetting}
+        />
+        <EmployerContributionTable settingsByKey={settingsByKey} onSave={onUpdateSetting} />
         <CpfCeilingPanel settingsByKey={settingsByKey} onSave={onUpdateSetting} />
         <SettingsSection
           definitions={cpfAccountMappings}
@@ -1847,7 +2317,13 @@ function AdminPayrollContent({
     );
   }
   if (pathname.endsWith("/settings")) {
-    return <SettingsView settings={data?.settings} onUpdateSetting={onUpdateSetting} />;
+    return (
+      <SettingsView
+        mbmfEligibility={data?.mbmfEligibility}
+        settings={data?.settings}
+        onUpdateSetting={onUpdateSetting}
+      />
+    );
   }
   if (pathname.endsWith("/payslip-layouts")) {
     return (

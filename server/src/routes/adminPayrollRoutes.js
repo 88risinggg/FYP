@@ -5,6 +5,7 @@ const {
   changeUserRole,
   changeUserStatus,
   getAdminPayrollDashboard,
+  getPayrollRuleConfig,
   getPayslipLayouts,
   makeDefaultPayslipLayout,
   resetUserPassword,
@@ -24,7 +25,21 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-router.use(authenticateToken, requireAdmin);
+function requirePayrollConfigReader(req, res, next) {
+  if (!["Admin", "Finance"].includes(req.user?.role)) {
+    return res.status(403).json({
+      message: "Payroll config access required"
+    });
+  }
+
+  next();
+}
+
+router.use(authenticateToken);
+
+router.get("/config", requirePayrollConfigReader, getPayrollRuleConfig);
+
+router.use(requireAdmin);
 
 router.get("/dashboard", getAdminPayrollDashboard);
 router.get("/payslip-layouts", getPayslipLayouts);
