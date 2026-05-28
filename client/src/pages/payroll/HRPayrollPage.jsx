@@ -4,6 +4,7 @@ import {
   ClipboardList,
   FileUp,
   FileText,
+  Send,
   Loader2,
   LayoutDashboard,
   Upload,
@@ -66,6 +67,60 @@ const routeHeadings = {
   "/dashboard/payroll/hr/notifications": "Notifications"
 };
 
+function HRDashboardView() {
+  const session = getStoredSession();
+  const [counts, setCounts] = useState({ total: 0, active: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`${API_BASE_URL}/api/hr/staff`, { headers: { ...getAuthHeaders(session?.token) } });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!mounted) return;
+        const total = Array.isArray(data) ? data.length : 0;
+        const active = Array.isArray(data) ? data.filter(s => (s.status || '').toString().toLowerCase() === 'active').length : 0;
+        setCounts({ total, active });
+      } catch (e) {
+        // ignore
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [session?.token]);
+
+  const pct = counts.total ? Math.round((counts.active / counts.total) * 100) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="neon-glass neon-border rounded-2xl p-4">
+          <div className="text-sm text-[#d8c6e8]">Total Employees</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{loading ? '...' : counts.total}</div>
+        </div>
+        <div className="neon-glass neon-border rounded-2xl p-4">
+          <div className="text-sm text-[#d8c6e8]">Active Employees</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{loading ? '...' : counts.active}</div>
+        </div>
+        <div className="neon-glass neon-border rounded-2xl p-4 flex items-center justify-center">
+          <div className="text-center">
+            <svg width="80" height="80" viewBox="0 0 36 36">
+              <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#1f2937" strokeWidth="4"/>
+              <path stroke="#10b981" strokeWidth="4" strokeDasharray={`${pct},100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none"/>
+            </svg>
+            <div className="mt-2 text-sm text-[#d8c6e8]">Active %</div>
+            <div className="text-lg font-semibold text-white">{pct}%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function getAuthHeaders(token) {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
@@ -103,6 +158,9 @@ function StaffRecordsView() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
   const [editFormData, setEditFormData] = useState({});
+  const [advanceRequests, setAdvanceRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [approvingId, setApprovingId] = useState(null);
 
   const fetchStaff = async () => {
     try {
@@ -132,9 +190,6 @@ function StaffRecordsView() {
   const handleEdit = (staff) => {
     setEditingStaff(staff);
     setEditFormData({
-      staff_name: staff.staff_name || "",
-      email: staff.email || "",
-      phone: staff.phone || "",
       department: staff.department || "",
       base_salary: staff.base_salary || "",
       status: staff.status || "Active"
@@ -196,8 +251,61 @@ function StaffRecordsView() {
     }
   };
 
+  const fetchAdvanceRequests = async () => {
+    try {
+      setLoadingRequests(true);
+      setError("");
+      const response = await fetch(`${API_BASE_URL}/api/hr/advance-requests`, {
+        headers: {
+          ...getAuthHeaders(session?.token)
+        }
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || 'Failed to load advance requests');
+      }
+
+      const data = await response.json();
+      setAdvanceRequests(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
+
+  const approveAdvanceRequest = async (requestId) => {
+    try {
+      setApprovingId(requestId);
+      setError('');
+      const response = await fetch(`${API_BASE_URL}/api/hr/advance-requests/${requestId}/approve`, {
+        method: 'PUT',
+        headers: {
+          ...getAuthHeaders(session?.token),
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || 'Failed to approve');
+      }
+
+      await fetchAdvanceRequests();
+      setSuccessMessage('Advance request approved and queued for Finance');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (err) {
+      setError(err.message || 'Failed to approve');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
   useEffect(() => {
     fetchStaff();
+    fetchAdvanceRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.token]);
 
@@ -219,6 +327,8 @@ function StaffRecordsView() {
             Refresh
           </button>
         </div>
+
+        
       </div>
 
       {error ? (
@@ -273,12 +383,13 @@ function StaffRecordsView() {
                     <td className="px-4 py-3">
                       <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs text-emerald-300"> {staff.status || "active"}</span></td>
                       <td className="px-4 py-3">
-                        <div className="flex gap-2"><button type="button" onClick={() => handleEdit(staff)} className="rounded-lg bg-blue-500/20 px-3 py-1 text-xs text-blue-300 hover:bg-blue-500/30">Edit</button>
-                        <button type="button" onClick={() => handleDeleteStaff(staff.staff_id)} className="rounded-lg bg-red-500/20 px-3 py-1 text-xs text-red-300 hover:bg-red-500/30" >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => handleEdit(staff)} className="rounded-lg bg-blue-500/20 px-3 py-1 text-xs text-blue-300 hover:bg-blue-500/30">Edit</button>
+                          <button type="button" onClick={() => handleDeleteStaff(staff.staff_id)} className="rounded-lg bg-red-500/20 px-3 py-1 text-xs text-red-300 hover:bg-red-500/30" >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
                   </tr>
                 ))}
               </tbody>
@@ -292,32 +403,13 @@ function StaffRecordsView() {
           <div className="neon-glass neon-border rounded-2xl w-full max-w-md p-6 m-4">
             <h3 className="text-lg font-semibold text-white">Edit Staff Record</h3>
             <div className="mt-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-[#d8c6e8]">Name</label>
-                <input
-                  type="text"
-                  value={editFormData.staff_name || ""}
-                  onChange={(e) => setEditFormData({ ...editFormData, staff_name: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder-white/30"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[#d8c6e8]">Email</label>
-                <input
-                  type="email"
-                  value={editFormData.email || ""}
-                  onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder-white/30"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[#d8c6e8]">Phone</label>
-                <input
-                  type="text"
-                  value={editFormData.phone || ""}
-                  onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder-white/30"
-                />
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p className="text-sm font-medium text-white">{editingStaff.staff_name || "-"}</p>
+                <p className="mt-1 text-sm text-[#d8c6e8]">{editingStaff.email || "-"}</p>
+                <p className="mt-1 text-sm text-[#d8c6e8]">{editingStaff.phone || "-"}</p>
+                <p className="mt-3 text-xs text-[#d8c6e8]">
+                  Personal contact details can only be updated by the staff member.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-[#d8c6e8]">Department</label>
@@ -372,6 +464,30 @@ function StaffRecordsView() {
           </div>
         </div>
       )}
+      
+
+      {/* Advance requests list for HR */}
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+        <h4 className="text-sm font-semibold text-white">Advance Pay Requests</h4>
+        <div className="mt-3">
+          {loadingRequests ? (
+            <div className="text-sm text-[#d8c6e8]">Loading requests...</div>
+          ) : advanceRequests.length === 0 ? (
+            <div className="text-sm text-[#d8c6e8]">No advance requests</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-white/10 text-[#d8c6e8]"><tr><th className="px-3 py-2">ID</th><th className="px-3 py-2">Staff</th><th className="px-3 py-2">Amount</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Actions</th></tr></thead>
+                <tbody>
+                  {advanceRequests.map(r=> (
+                    <tr key={r.request_id} className="border-b border-white/5 text-white"><td className="px-3 py-2 text-[#d8c6e8]">{r.request_id}</td><td className="px-3 py-2">{r.staff_id}</td><td className="px-3 py-2">${r.requested_amount}</td><td className="px-3 py-2 text-[#d8c6e8]">{r.status}</td><td className="px-3 py-2">{r.status==='pending' ? <button onClick={()=>approveAdvanceRequest(r.request_id)} disabled={approvingId===r.request_id} className="rounded-lg bg-indigo-500/20 px-3 py-1 text-xs text-indigo-300 hover:bg-indigo-500/30">{approvingId===r.request_id ? 'Approving...' : 'Approve'}</button> : '-'}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -521,70 +637,99 @@ function PayrollUploadView() {
 }
 
 function PayrollRunsView() {
-  const mockPayrollRuns = [
-    {
-      run_id: "PR001",
-      period: "January 2024",
-      status: "Completed",
-      staff_count: 25,
-      total_amount: "$45,230.50",
-      run_date: "2024-01-31"
-    },
-    {
-      run_id: "PR002",
-      period: "February 2024",
-      status: "In Progress",
-      staff_count: 25,
-      total_amount: "$45,650.00",
-      run_date: "2024-02-15"
-    },
-    {
-      run_id: "PR003",
-      period: "March 2024",
-      status: "Pending",
-      staff_count: 24,
-      total_amount: "$44,920.75",
-      run_date: "2024-03-31"
+  const session = getStoredSession();
+  const [payrollRuns, setPayrollRuns] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const fetchPayrollRuns = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const response = await fetch(`${API_BASE_URL}/api/hr/payroll-run`, {
+        headers: {
+          ...getAuthHeaders(session?.token)
+        }
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to load payroll runs");
+      }
+
+      const data = await response.json();
+      setPayrollRuns(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err.message || "Failed to load payroll runs");
+      setPayrollRuns([]);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  useEffect(() => {
+    fetchPayrollRuns();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.token]);
 
   return (
     <div className="space-y-5">
-      <div className="neon-glass neon-border rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-white/10 bg-white/5 text-[#d8c6e8]">
-              <tr>
-                <th className="px-4 py-3 font-medium">Run ID</th>
-                <th className="px-4 py-3 font-medium">Period</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Staff Count</th>
-                <th className="px-4 py-3 font-medium">Total Amount</th>
-                <th className="px-4 py-3 font-medium">Run Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockPayrollRuns.map((run) => (
-                <tr key={run.run_id} className="border-b border-white/5 text-white">
-                  <td className="px-4 py-3 text-[#d8c6e8]">{run.run_id}</td>
-                  <td className="px-4 py-3">{run.period}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      run.status === "Completed" ? "bg-emerald-500/20 text-emerald-300" :
-                      run.status === "In Progress" ? "bg-blue-500/20 text-blue-300" :
-                      "bg-yellow-500/20 text-yellow-300"
-                    }`}>
-                      {run.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-[#d8c6e8]">{run.staff_count}</td>
-                  <td className="px-4 py-3 text-[#d8c6e8]">{run.total_amount}</td>
-                  <td className="px-4 py-3 text-[#d8c6e8]">{run.run_date}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {error ? (
+        <div className="neon-glass neon-border rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
+          {error}
         </div>
+      ) : null}
+
+      <div className="neon-glass neon-border rounded-2xl overflow-hidden">
+        {loading ? (
+          <div className="flex items-center gap-3 p-6 text-[#d8c6e8]">
+            <Loader2 className="animate-spin" size={18} />
+            Loading payroll runs...
+          </div>
+        ) : payrollRuns.length === 0 ? (
+          <div className="p-6 text-sm text-[#d8c6e8]">
+            No payroll runs yet. Create a run when generating payslips.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-white/10 bg-white/5 text-[#d8c6e8]">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Run ID</th>
+                  <th className="px-4 py-3 font-medium">Period</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Staff Count</th>
+                  <th className="px-4 py-3 font-medium">Total Amount</th>
+                  <th className="px-4 py-3 font-medium">Run Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payrollRuns.map((run) => (
+                  <tr key={run.payroll_run_id || run.run_id} className="border-b border-white/5 text-white">
+                    <td className="px-4 py-3 text-[#d8c6e8]">{run.payroll_run_id || run.run_id || "-"}</td>
+                    <td className="px-4 py-3">
+                      {run.period || `${run.period_month || "-"} ${run.period_year || ""}`.trim()}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${
+                        run.status === "completed" || run.status === "Completed" ? "bg-emerald-500/20 text-emerald-300" :
+                        run.status === "created" || run.status === "In Progress" ? "bg-blue-500/20 text-blue-300" :
+                        "bg-yellow-500/20 text-yellow-300"
+                      }`}>
+                        {run.status || "-"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-[#d8c6e8]">{run.staff_count ?? run.total_payslips ?? 0}</td>
+                    <td className="px-4 py-3 text-[#d8c6e8]">{run.total_amount || "-"}</td>
+                    <td className="px-4 py-3 text-[#d8c6e8]">
+                      {run.run_date || (run.created_at ? new Date(run.created_at).toLocaleDateString() : "-")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -597,6 +742,10 @@ function PayslipsView() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [confirmPayload, setConfirmPayload] = useState(null);
+  const [toasts, setToasts] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [payrollMonth, setPayrollMonth] = useState(new Date().toLocaleString('en-US', { month: 'long' }));
   const [payrollYear, setPayrollYear] = useState(new Date().getFullYear());
@@ -619,11 +768,75 @@ function PayslipsView() {
 
       const data = await response.json();
       setPayslips(Array.isArray(data) ? data : []);
+      setSelectedIds(new Set());
     } catch (err) {
       setError(err.message || "Failed to load payslips");
       setPayslips([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleSelect = (id) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+
+  const selectAllDrafts = () => {
+    const draftIds = payslips.filter(p => p.status === 'draft').map(p => p.payslip_id);
+    if (draftIds.length === 0) return;
+    // if all already selected, clear
+    const allSelected = draftIds.every(id => selectedIds.has(id));
+    setSelectedIds(allSelected ? new Set() : new Set(draftIds));
+  };
+
+  const openConfirmBulkSend = (opts) => {
+    // opts: { payslip_ids: [...]} or { allDrafts: true }
+    const count = opts.allDrafts ? payslips.filter(p=>p.status==='draft').length : (opts.payslip_ids || []).length;
+    if (count === 0) {
+      setError('No draft payslips selected');
+      return;
+    }
+    setConfirmPayload(opts);
+    setConfirmModalOpen(true);
+  };
+
+  const performBulkSend = async () => {
+    if (!confirmPayload) return;
+    try {
+      setActionInProgress('bulk');
+      setError("");
+      const response = await fetch(`${API_BASE_URL}/api/payroll/payslips/bulk-send-to-finance`, {
+        method: 'PUT',
+        headers: {
+          ...getAuthHeaders(session?.token),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(confirmPayload)
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || 'Bulk send failed');
+      }
+
+      const body = await response.json();
+      const sent = body.updated_count ?? 0;
+      const skipped = (body.skipped && body.skipped.length) ? body.skipped.length : 0;
+      setSuccessMessage(`${sent} sent. ${skipped} skipped.`);
+      // show toast
+      addToast('success', `${sent} sent. ${skipped} skipped.`);
+      setConfirmModalOpen(false);
+      setConfirmPayload(null);
+      await fetchPayslips();
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (err) {
+      setError(err.message || 'Bulk send failed');
+      addToast('error', err.message || 'Bulk send failed');
+    } finally {
+      setActionInProgress(null);
     }
   };
 
@@ -721,7 +934,7 @@ function PayslipsView() {
     try {
       setActionInProgress(payslipId);
       setError("");
-      const response = await fetch(`${API_BASE_URL}/api/payroll/payslips/${payslipId}/send-to-finance`, {
+      const response = await fetch(`${API_BASE_URL}/api/hr/payslips/${payslipId}/send-to-finance`, {
         method: "PUT",
         headers: {
           ...getAuthHeaders(session?.token),
@@ -735,13 +948,23 @@ function PayslipsView() {
       }
 
       setSuccessMessage("Payslip sent to Finance");
+      addToast('success', 'Payslip sent to Finance');
       await fetchPayslips();
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
       setError(err.message || "Failed to send to Finance");
+      addToast('error', err.message || 'Failed to send to Finance');
     } finally {
       setActionInProgress(null);
     }
+  };
+
+  const removeToast = (id) => setToasts((t) => t.filter(x => x.id !== id));
+
+  const addToast = (type, message) => {
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    setToasts((t) => [...t, { id, type, message }]);
+    setTimeout(() => setToasts((t) => t.filter(x => x.id !== id)), 4000);
   };
 
   useEffect(() => {
@@ -751,6 +974,17 @@ function PayslipsView() {
 
   return (
     <div className="space-y-5">
+      {/* Toasts container */}
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        {toasts.map(t => (
+          <div key={t.id} className={`max-w-sm rounded-lg px-4 py-2 shadow-lg ${t.type === 'success' ? 'bg-emerald-500/90 text-white' : 'bg-red-600/90 text-white'}`}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="text-sm">{t.message}</div>
+              <button onClick={() => removeToast(t.id)} className="text-white/80 text-xs">Dismiss</button>
+            </div>
+          </div>
+        ))}
+      </div>
       <div className="neon-glass neon-border rounded-2xl p-6">
         <h3 className="text-lg font-semibold text-white">Generate Payslips</h3>
         <p className="mt-2 text-sm text-[#d8c6e8]">
@@ -824,17 +1058,43 @@ function PayslipsView() {
         <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-white/5 p-6">
           <div>
             <h3 className="text-lg font-semibold text-white">Payslips</h3>
-            <p className="mt-1 text-sm text-[#d8c6e8]">
-              {payslips.length} total payslips
-            </p>
+            <p className="mt-1 text-sm text-[#d8c6e8]">{payslips.length} total payslips</p>
           </div>
-          <button
-            type="button"
-            onClick={fetchPayslips}
-            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
-          >
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={selectAllDrafts}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white hover:bg-white/10"
+            >
+              {Array.from(selectedIds).length > 0 ? 'Clear selection' : 'Select Drafts'}
+            </button>
+            <button
+              type="button"
+              onClick={() => openConfirmBulkSend({ payslip_ids: Array.from(selectedIds) })}
+              disabled={actionInProgress === 'bulk' || selectedIds.size === 0}
+              title="Send selected to Finance"
+              aria-label="Send selected to Finance"
+              className="rounded-lg bg-indigo-500/20 p-2 text-indigo-300 hover:bg-indigo-500/30 disabled:opacity-50 relative"
+            >
+              {actionInProgress === 'bulk' ? (
+                <span className="text-sm">Sending...</span>
+              ) : (
+                <div className="relative">
+                  <Send size={16} />
+                  {selectedIds.size > 0 && (
+                    <span className="absolute -top-2 -right-2 inline-flex items-center justify-center bg-red-600 text-white text-xs rounded-full w-5 h-5">{selectedIds.size}</span>
+                  )}
+                </div>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={fetchPayslips}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white hover:bg-white/10"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -850,8 +1110,9 @@ function PayslipsView() {
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-white/10 bg-white/5 text-[#d8c6e8]">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Payslip ID</th>
+                  <tr>
+                    <th className="px-4 py-3 font-medium"><input type="checkbox" checked={payslips.filter(p=>p.status==='draft').length>0 && payslips.filter(p=>p.status==='draft').every(p=>selectedIds.has(p.payslip_id))} onChange={selectAllDrafts} /></th>
+                    <th className="px-4 py-3 font-medium">Payslip ID</th>
                   <th className="px-4 py-3 font-medium">Staff Name</th>
                   <th className="px-4 py-3 font-medium">Period</th>
                   <th className="px-4 py-3 font-medium">Gross</th>
@@ -864,6 +1125,14 @@ function PayslipsView() {
               <tbody>
                 {payslips.map((payslip) => (
                   <tr key={payslip.payslip_id} className="border-b border-white/5 text-white">
+                    <td className="px-4 py-3 text-[#d8c6e8]">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(payslip.payslip_id)}
+                        onChange={() => toggleSelect(payslip.payslip_id)}
+                        disabled={payslip.status !== 'draft'}
+                      />
+                    </td>
                     <td className="px-4 py-3 text-[#d8c6e8]">{payslip.payslip_id}</td>
                     <td className="px-4 py-3">{payslip.staff_name}</td>
                     <td className="px-4 py-3 text-[#d8c6e8]">
@@ -909,44 +1178,50 @@ function PayslipsView() {
 }
 
 function NotificationsView() {
-  const mockNotifications = [
-    {
-      notif_id: "N001",
-      type: "Payroll Alert",
-      message: "Payroll run PR002 has been initiated for February 2024",
-      timestamp: "2024-02-15 09:30:00",
-      read: false,
-      priority: "High"
-    },
-    {
-      notif_id: "N002",
-      type: "Staff Update",
-      message: "New staff member Jane Doe has been added to the system",
-      timestamp: "2024-02-14 14:20:00",
-      read: false,
-      priority: "Medium"
-    },
-    {
-      notif_id: "N003",
-      type: "System Info",
-      message: "Monthly audit report is ready for review",
-      timestamp: "2024-02-13 10:00:00",
-      read: true,
-      priority: "Low"
-    },
-    {
-      notif_id: "N004",
-      type: "Finance Alert",
-      message: "Invoice INV-2024-002 payment received",
-      timestamp: "2024-02-12 16:45:00",
-      read: true,
-      priority: "Low"
-    }
-  ];
+  const session = getStoredSession();
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(`${API_BASE_URL}/api/hr/notifications`, {
+          headers: {
+            ...getAuthHeaders(session?.token)
+          }
+        });
+
+        if (!response.ok) {
+          setNotifications([]);
+          return;
+        }
+
+        const data = await response.json();
+        setNotifications(Array.isArray(data) ? data : []);
+      } catch (_err) {
+        setNotifications([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchNotifications();
+  }, [session?.token]);
 
   return (
     <div className="space-y-5">
       <div className="neon-glass neon-border rounded-2xl overflow-hidden">
+        {loading ? (
+          <div className="flex items-center gap-3 p-6 text-[#d8c6e8]">
+            <Loader2 className="animate-spin" size={18} />
+            Loading notifications...
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="p-6 text-sm text-[#d8c6e8]">
+            Notifications will appear here once the notification system is set up.
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-white/10 bg-white/5 text-[#d8c6e8]">
@@ -959,7 +1234,7 @@ function NotificationsView() {
               </tr>
             </thead>
             <tbody>
-              {mockNotifications.map((notif) => (
+              {notifications.map((notif) => (
                 <tr key={notif.notif_id} className="border-b border-white/5 text-white">
                   <td className="px-4 py-3 text-[#d8c6e8]">{notif.type}</td>
                   <td className="px-4 py-3 text-white">{notif.message}</td>
@@ -985,6 +1260,7 @@ function NotificationsView() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   );
@@ -1023,6 +1299,7 @@ export default function HRPayrollPage() {
           <p className="text-sm font-semibold text-white">HR Dashboard</p>
           <p className="mt-1 break-all text-sm text-[#d8c6e8]">Welcome to the HR Payroll Module</p>
         </div>
+        <HRDashboardView />
       </div>
     );
   };

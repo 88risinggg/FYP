@@ -36,15 +36,25 @@ function calculatePayslipFromRow(row, staffProfile, rateConfig, payrollRunId, cr
   // Calculate SDL (Skills Development Levy - on employer contribution)
   const sdlAmount = cpfEmployerContribution * rateConfig.sdlRate;
 
-  // Total deductions from employee pay
-  const totalDeductions = cpfEmployeeDeduction + loanDeduction + otherDeduction;
+  // --- NEW: Automatic donation calculation based on staff religion ---
+  const religionKey = String(staffProfile.religion || '').toLowerCase().trim();
+  const donationConfig = rateConfig.donations && rateConfig.donations[religionKey];
+  let donationAmount = 0;
+  let donationFund = null;
+  if (donationConfig) {
+    donationFund = donationConfig.fund || null;
+    donationAmount = (basicSalary * (Number(donationConfig.rate) || 0)) + (Number(donationConfig.amount) || 0);
+  }
+
+  // Total deductions from employee pay (include donation)
+  const totalDeductions = cpfEmployeeDeduction + loanDeduction + otherDeduction + donationAmount;
 
   // Net pay after all deductions
   const netPay = grossSalary - totalDeductions;
 
   // Payslip ID generation (format: PS-YYYYMMDD-STAFFID-RUNID)
   const now_date = new Date().toISOString().split('T')[0].replace(/-/g, '');
-  const payslipId = `PS-${now_date}-${staffProfile.staff_id}-${payrollRunId.slice(-6)}`;
+  const payslipId = `PS-${now_date}-${staffProfile.employee_id}-${payrollRunId.slice(-6)}`;
 
   // Extract period from row if available, otherwise use current month
   const periodMonth = row.payroll_month || new Date().toLocaleString('en-US', { month: 'long' });
@@ -52,9 +62,9 @@ function calculatePayslipFromRow(row, staffProfile, rateConfig, payrollRunId, cr
 
   return {
     payslip_id: payslipId,
-    staff_id: staffProfile.staff_id,
+    employee_id: staffProfile.employee_id,
     staff_email: staffProfile.email || "",
-    staff_name: staffProfile.staff_name,
+    staff_name: staffProfile.name,
     payroll_run_id: payrollRunId,
     period_month: periodMonth,
     period_year: periodYear,
@@ -73,6 +83,8 @@ function calculatePayslipFromRow(row, staffProfile, rateConfig, payrollRunId, cr
     sdl: parseFloat(sdlAmount.toFixed(2)),
     loan_deduction: loanDeduction,
     other_deduction: otherDeduction,
+    donation_fund: donationFund,
+    donation_amount: parseFloat(donationAmount.toFixed(2)),
     total_deductions: parseFloat(totalDeductions.toFixed(2)),
     
     // Net pay
@@ -117,9 +129,9 @@ function calculatePayslipsFromRows(rows, staffProfiles, rateConfig, payrollRunId
   const skipped = [];
 
   rows.forEach((row) => {
-    // Match staff by email or staff_id
+    // Match staff by email or employee_id or name
     const staff = staffProfiles.find(
-      s => s.email === row.email || s.staff_id === row.staff_id || s.staff_name.toLowerCase() === row.staff_name?.toLowerCase()
+      s => s.email === row.email || s.employee_id === row.employee_id || (s.name && row.staff_name && s.name.toLowerCase() === row.staff_name.toLowerCase())
     );
 
     if (!staff) {

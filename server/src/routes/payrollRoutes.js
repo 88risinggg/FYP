@@ -100,6 +100,42 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("Admin
   res.json({ message: "Payslip sent to Finance", payslip });
 });
 
+// Bulk send payslips to Finance (accepts { payslip_ids: [...]} or { allDrafts: true })
+router.put("/payslips/bulk-send-to-finance", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
+  try {
+    const { payslip_ids, allDrafts } = req.body || {};
+
+    let targets = [];
+    if (allDrafts) {
+      targets = payslips.filter((p) => p.status === PAYSLIP_STATUSES.DRAFT);
+    } else {
+      if (!Array.isArray(payslip_ids) || payslip_ids.length === 0) {
+        return res.status(400).json({ message: "payslip_ids array is required unless allDrafts=true" });
+      }
+      targets = payslips.filter((p) => payslip_ids.includes(p.payslip_id));
+    }
+
+    const updated = [];
+    const skipped = [];
+
+    targets.forEach((p) => {
+      if (p.status !== PAYSLIP_STATUSES.DRAFT && p.status !== PAYSLIP_STATUSES.FINANCE_PENDING) {
+        skipped.push({ payslip_id: p.payslip_id, reason: `Invalid status ${p.status}` });
+        return;
+      }
+
+      p.status = PAYSLIP_STATUSES.FINANCE_PENDING;
+      p.updated_at = new Date().toISOString();
+      updated.push(p.payslip_id);
+      addAudit(req.user.email, `HR sent payslip ${p.payslip_id} to Finance (bulk)`, "Payroll");
+    });
+
+    res.json({ message: "Bulk send completed", updated_count: updated.length, updated_ids: updated, skipped });
+  } catch (err) {
+    res.status(500).json({ message: "Bulk send failed", error: err.message });
+  }
+});
+
 // Finance rejection
 router.put("/payslips/:id/finance-reject", authenticateToken, allowRoles("Admin", "Finance"), (req, res) => {
   const payslip = payslips.find((p) => p.payslip_id === req.params.id);

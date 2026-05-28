@@ -23,6 +23,7 @@ async function parseExcel(filePath) {
   await workbook.xlsx.readFile(filePath);
   const sheet = workbook.worksheets[0];
   if (!sheet) return [];
+  // Normalize header names for easier mapping to staff profile fields
   const headerRow = sheet.getRow(1).values.slice(1).map(v => String(v).trim());
   const rows = [];
   sheet.eachRow((row, rowNumber) => {
@@ -30,7 +31,36 @@ async function parseExcel(filePath) {
     const values = row.values.slice(1);
     const obj = {};
     for (let i = 0; i < headerRow.length; i++) {
-      obj[headerRow[i]] = values[i] ?? "";
+      const rawKey = headerRow[i] || "";
+      const key = rawKey
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '_');
+
+      // Map common header names to canonical staff profile fields
+      const headerMap = {
+        'employee_id': 'employee_id',
+        'staff_id': 'employee_id',
+        'name': 'name',
+        'staff_name': 'name',
+        'email': 'email',
+        'phone': 'phone',
+        'hire_date': 'hire_date',
+        'base_salary': 'base_salary',
+        'status': 'status',
+        'created_at': 'created_at',
+        'updated_at': 'updated_at',
+        'department_id': 'department_id',
+        'user_user_id': 'user_user_id',
+        'race': 'race',
+        'religion': 'religion',
+        'bank': 'bank',
+        'account_no': 'account_no',
+      };
+
+      const mappedKey = headerMap[key] || key;
+      obj[mappedKey] = values[i] ?? "";
     }
     rows.push(obj);
   });
