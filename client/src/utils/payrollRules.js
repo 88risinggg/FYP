@@ -1,9 +1,9 @@
 export const cpfAgeTierRows = [
   ["55 and below", "20.00", "17.00"],
-  ["Above 55 to 60", "19.00", "16.00"],
-  ["Above 60 to 65", "15.50", "13.00"],
-  ["Above 65 to 70", "12.00", "10.00"],
-  ["Above 70", "7.50", "7.50"]
+  ["Above 55 to 60", "18.00", "16.00"],
+  ["Above 60 to 65", "12.50", "12.50"],
+  ["Above 65 to 70", "7.50", "9.00"],
+  ["Above 70", "5.00", "7.50"]
 ].map(([ageGroup, employeeRate, employerRate]) => ({
   ageGroup,
   slug: slugify(ageGroup),
@@ -30,9 +30,9 @@ export const deductionComponentRows = [
   ["Employee CPF", "Statutory", "Yes", "No", "Employee CPF reduces net pay but does not reduce CPF wage base."],
   ["Loan", "Loan", "Yes", "No", "Loan repayment deduction."],
   ["MBMF", "Statutory", "Yes", "No", "Mosque Building and Mendaki Fund contribution. Applies only when staff religion is Muslim."],
-  ["CDAC", "Statutory", "Yes", "No", "Chinese Development Assistance Council contribution."],
-  ["SINDA", "Statutory", "Yes", "No", "Singapore Indian Development Association contribution."],
-  ["ECF", "Statutory", "Yes", "No", "Eurasian Community Fund contribution."],
+  ["CDAC", "Statutory", "Yes", "No", "Chinese Development Assistance Council contribution. Applies based on staff race being Chinese."],
+  ["SINDA", "Statutory", "Yes", "No", "Singapore Indian Development Association contribution. Applies based on staff race being Indian."],
+  ["ECF", "Statutory", "Yes", "No", "Eurasian Community Fund contribution. Applies based on staff race being Eurasian."],
   ["Salary advance", "Recovery", "Yes", "No", "Recovery of salary already advanced."],
   ["No-pay leave", "Recovery", "Yes", "Yes", "Reduces gross CPF-applicable wages for unpaid leave."]
 ].map(([deduction, type, affectsNetPay, affectsCpfWageBase, remarks]) => ({
@@ -46,7 +46,8 @@ export const deductionComponentRows = [
 
 export const employerContributionRows = [
   ["Employer CPF", "Statutory", "CPF-applicable wages", "Employer CPF cost based on Admin age-tier rate."],
-  ["SDL", "Statutory", "Gross monthly remuneration", "Skills Development Levy employer-side cost."],
+  ["SDL", "Statutory", "0.25% of monthly remuneration, minimum SGD 2 and capped at SGD 11.25", "Skills Development Levy employer-side cost."],
+  ["Foreign Worker Levy", "Statutory", "MOM sector, quota and worker type", "Applies to Work Permit and S Pass holders instead of CPF where required."],
   ["Other employer-side statutory cost", "Other", "Admin-defined", "Reserved for future employer statutory costs."]
 ].map(([item, type, basis, remarks]) => ({
   item,

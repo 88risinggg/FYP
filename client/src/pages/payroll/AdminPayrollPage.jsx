@@ -1,9 +1,11 @@
 import {
+  CalendarDays,
   CheckCircle2,
   ClipboardList,
   Eye,
   FileBarChart,
   FileText,
+  Filter,
   History,
   LayoutDashboard,
   Palette,
@@ -38,7 +40,8 @@ import {
   cpfCeilingSettings,
   deductionComponentRows,
   earningComponentRows,
-  employerContributionRows
+  employerContributionRows,
+  slugify
 } from "../../utils/payrollRules.js";
 
 const pageTitle = "Automated Payroll System - Admin Dashboard";
@@ -62,6 +65,11 @@ const payrollSidebarSections = [
         label: "Payroll Settings",
         icon: Settings,
         path: "/dashboard/payroll/admin/settings"
+      },
+      {
+        label: "Compliance Rules",
+        icon: ShieldCheck,
+        path: "/dashboard/payroll/admin/compliance-rules"
       },
       {
         label: "Payslip Layouts",
@@ -206,6 +214,82 @@ const mbmfDefaultSettings = {
   applicableReligion: "Muslim"
 };
 
+const selfHelpGroupConfigs = [
+  {
+    key: "mbmf",
+    label: "MBMF",
+    eligibilityField: "religion",
+    eligibilityValue: "Muslim",
+    description: "Mosque Building and Mendaki Fund contribution for Muslim employees."
+  },
+  {
+    key: "cdac",
+    label: "CDAC",
+    eligibilityField: "race",
+    eligibilityValue: "Chinese",
+    description: "Chinese Development Assistance Council contribution for Chinese employees."
+  },
+  {
+    key: "sinda",
+    label: "SINDA",
+    eligibilityField: "race",
+    eligibilityValue: "Indian",
+    description: "Singapore Indian Development Association contribution for Indian employees."
+  },
+  {
+    key: "ecf",
+    label: "ECF",
+    eligibilityField: "race",
+    eligibilityValue: "Eurasian",
+    description: "Eurasian Community Fund contribution for Eurasian employees."
+  }
+];
+
+const statutorySchemeSettings = [
+  {
+    key: "sdl_enabled",
+    label: "SDL Enabled",
+    description: "Enable Skills Development Levy tracking for employees working in Singapore.",
+    placeholder: "Enabled"
+  },
+  {
+    key: "sdl_rate_rule",
+    label: "SDL Rate Rule",
+    description: "SDL is employer-side and based on monthly remuneration.",
+    placeholder: "0.25%, minimum SGD 2, maximum SGD 11.25"
+  },
+  {
+    key: "foreign_worker_levy_enabled",
+    label: "Foreign Worker Levy Enabled",
+    description: "Track employer-side levy for Work Permit and S Pass holders where applicable.",
+    placeholder: "Enabled"
+  },
+  {
+    key: "foreign_worker_levy_basis",
+    label: "Foreign Worker Levy Basis",
+    description: "MOM levy depends on sector, quota, skill tier and pass type.",
+    placeholder: "MOM sector/quota/pass type"
+  },
+  {
+    key: "iras_ais_enabled",
+    label: "IRAS AIS Enabled",
+    description: "Enable annual employment income reporting preparation.",
+    placeholder: "Enabled"
+  },
+  {
+    key: "iras_ais_reporting_year",
+    label: "IRAS AIS Reporting Year",
+    description: "Year of Assessment or reporting cycle used for payroll reports.",
+    placeholder: "YA2027"
+  },
+  {
+    key: "ir21_tax_clearance_tracking",
+    label: "IR21 Tax Clearance",
+    description: "Track tax clearance requirement for foreign employees leaving employment or Singapore.",
+    placeholder: "Review required for foreign employees"
+  }
+];
+
 function ActionButton({ icon: Icon, children, variant = "primary", onClick, disabled = false }) {
   const className =
     variant === "secondary"
@@ -269,7 +353,7 @@ function EmptyState({ message }) {
   );
 }
 
-function PageShell({ heading, children, actions }) {
+function PageShell({ heading, children, actions, updatedAt }) {
   return (
     <section>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -278,6 +362,10 @@ function PageShell({ heading, children, actions }) {
             Admin Payroll Workflow
           </p>
           <h2 className="mt-2 text-2xl font-semibold text-white">{heading}</h2>
+          <p className="mt-2 flex items-center gap-2 text-sm text-[#d8c6e8]">
+            <CalendarDays size={15} className="text-[#C77DFF]" />
+            Last updated: {updatedAt ? formatDateTime(updatedAt) : "Not updated"}
+          </p>
         </div>
         {actions ? <div className="flex flex-wrap gap-3">{actions}</div> : null}
       </div>
@@ -331,6 +419,88 @@ function getStepMeta(step, data) {
     count: setting ? "Settings saved" : "No saved value",
     lastUpdated: setting?.updated_at
   };
+}
+
+function getPayrollRunDate(run) {
+  if (run?.payroll_year && run?.payroll_month) {
+    return new Date(run.payroll_year, run.payroll_month - 1, 1);
+  }
+
+  return run?.created_at ? new Date(run.created_at) : null;
+}
+
+function getDashboardUpdateSegments(data = {}) {
+  const source = data || {};
+
+  return [
+    {
+      label: "Compliance Rules",
+      records: `${source.settings?.length || 0} rule(s)`,
+      updatedAt: getLatestTimestamp(source.settings)
+    },
+    {
+      label: "Users & Roles",
+      records: `${source.users?.length || 0} user(s)`,
+      updatedAt: getLatestTimestamp(source.users)
+    },
+    {
+      label: "Payroll Monitor",
+      records: `${source.payrollRuns?.length || 0} run(s)`,
+      updatedAt: getLatestTimestamp(source.payrollRuns)
+    },
+    {
+      label: "Payslip Layouts",
+      records: `${source.layouts?.length || 0} layout(s)`,
+      updatedAt: getLatestTimestamp(source.layouts)
+    },
+    {
+      label: "Audit Trail",
+      records: `${source.auditLogs?.length || 0} event(s)`,
+      updatedAt: getLatestTimestamp(source.auditLogs)
+    }
+  ];
+}
+
+function getOverallUpdatedAt(data = {}) {
+  const source = data || {};
+
+  return getLatestTimestamp([
+    ...(source.settings || []),
+    ...(source.users || []),
+    ...(source.payrollRuns || []),
+    ...(source.layouts || []),
+    ...(source.auditLogs || [])
+  ]);
+}
+
+function parseCustomComplianceRule(setting) {
+  try {
+    const value = JSON.parse(setting.setting_value || "{}");
+
+    return {
+      category: value.category || "Payroll Compliance",
+      effectiveFrom: value.effectiveFrom || "",
+      ruleText: value.ruleText || "",
+      source: value.source || "",
+      status: value.status || "Active",
+      title: value.title || setting.setting_key.replace(/^custom_compliance_rule_/, "").replaceAll("_", " "),
+      updatedAt: setting.updated_at,
+      updatedByName: setting.updated_by_name,
+      settingKey: setting.setting_key
+    };
+  } catch {
+    return {
+      category: "Payroll Compliance",
+      effectiveFrom: "",
+      ruleText: setting.setting_value || "",
+      source: "",
+      status: "Active",
+      title: setting.setting_key.replace(/^custom_compliance_rule_/, "").replaceAll("_", " "),
+      updatedAt: setting.updated_at,
+      updatedByName: setting.updated_by_name,
+      settingKey: setting.setting_key
+    };
+  }
 }
 
 function getStatusBadgeClass(status) {
@@ -401,17 +571,19 @@ function WorkflowCard({ data, step }) {
 
 function DashboardView({ data, onImportLayout, onSetDefaultLayout }) {
   const stats = data?.stats || {};
+  const dashboardUpdates = getDashboardUpdateSegments(data);
   const dashboardStats = [
-    { label: "Active Users", value: stats.activeUsers ?? 0, tone: "text-[#C77DFF]" },
-    { label: "Payroll Rules", value: stats.payrollRules ?? 0, tone: "text-white" },
-    { label: "Payslip Layouts", value: stats.payslipLayouts ?? 0, tone: "text-[#7CFFB2]" },
-    { label: "Admin Logs", value: stats.adminLogs ?? 0, tone: "text-[#FFB86B]" }
+    { label: "Active Users", value: stats.activeUsers ?? 0, tone: "text-[#C77DFF]", updatedAt: getLatestTimestamp(data?.users) },
+    { label: "Payroll Rules", value: stats.payrollRules ?? 0, tone: "text-white", updatedAt: getLatestTimestamp(data?.settings) },
+    { label: "Payslip Layouts", value: stats.payslipLayouts ?? 0, tone: "text-[#7CFFB2]", updatedAt: getLatestTimestamp(data?.layouts) },
+    { label: "Admin Logs", value: stats.adminLogs ?? 0, tone: "text-[#FFB86B]", updatedAt: getLatestTimestamp(data?.auditLogs) }
   ];
   const defaultLayout = data?.layouts?.find((layout) => Number(layout.is_default) === 1);
 
   return (
     <PageShell
       heading="Dashboard"
+      updatedAt={getOverallUpdatedAt(data)}
       actions={
         <>
           <ActionButton icon={Plus}>Add Payroll Rule</ActionButton>
@@ -424,9 +596,36 @@ function DashboardView({ data, onImportLayout, onSetDefaultLayout }) {
           <div key={stat.label} className="neon-glass rounded-2xl p-5">
             <p className="text-sm text-[#d8c6e8]">{stat.label}</p>
             <p className={`mt-3 text-3xl font-semibold ${stat.tone}`}>{stat.value}</p>
+            <p className="mt-3 flex items-center gap-2 text-xs text-[#d8c6e8]/80">
+              <CalendarDays size={14} className="text-[#C77DFF]" />
+              {stat.updatedAt ? `Updated ${formatDateTime(stat.updatedAt)}` : "No update date"}
+            </p>
           </div>
         ))}
       </div>
+
+      <section className="mt-6 neon-glass neon-border rounded-2xl p-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Overall Update Timeline</h3>
+            <p className="mt-1 text-sm text-[#d8c6e8]">Last changed date for each admin payroll segment.</p>
+          </div>
+          <p className="text-sm font-semibold text-[#C77DFF]">
+            Latest: {formatDateTime(getLatestTimestamp(dashboardUpdates.map((item) => ({ updated_at: item.updatedAt }))))}
+          </p>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-5">
+          {dashboardUpdates.map((item) => (
+            <div key={item.label} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+              <p className="text-sm font-semibold text-white">{item.label}</p>
+              <p className="mt-1 text-xs text-[#d8c6e8]">{item.records}</p>
+              <p className="mt-3 text-xs font-semibold text-[#C77DFF]">
+                {item.updatedAt ? formatDateTime(item.updatedAt) : "Not updated"}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -504,6 +703,7 @@ function UsersRolesView({
   return (
     <PageShell
       heading="Users & Roles"
+      updatedAt={getLatestTimestamp(users)}
       actions={
         <>
           <ActionButton icon={Users}>Add User</ActionButton>
@@ -820,6 +1020,8 @@ function UserManagementModal({
               <ProfileField label="Employee Code" value={user.employee_code} />
               <ProfileField label="Phone" value={user.phone} />
               <ProfileField label="Department" value={user.department_name} />
+              <ProfileField label="Race" value={user.race} />
+              <ProfileField label="Religion" value={user.religion} />
               <ProfileField label="Hire Date" value={formatDate(user.hire_date)} />
               <ProfileField label="Base Salary" value={formatMoney(user.base_salary)} />
             </div>
@@ -834,6 +1036,7 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
   return (
     <PageShell
       heading="Payslip Layouts"
+      updatedAt={getLatestTimestamp(layouts)}
       actions={
         <>
           <ActionButton icon={Upload} onClick={onImportLayout}>Import Layout</ActionButton>
@@ -1437,6 +1640,16 @@ function getMbmfValue(settingsByKey, key, fallback) {
   return settingsByKey[key]?.setting_value || fallback;
 }
 
+function getSchemeValue(settingsByKey, schemeKey, field, fallback) {
+  return settingsByKey[`${schemeKey}_${field}`]?.setting_value || fallback;
+}
+
+function getEligibleUsers(users = [], field, value) {
+  const expectedValue = String(value || "").trim().toLowerCase();
+
+  return users.filter((user) => String(user?.[field] || "").trim().toLowerCase() === expectedValue);
+}
+
 function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
   const [form, setForm] = useState(() => ({
     enabled: getMbmfValue(settingsByKey, "mbmf_enabled", mbmfDefaultSettings.enabled),
@@ -1685,7 +1898,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
                 <span className="font-semibold text-white">{eligibility?.totalStaff ?? 0}</span>
               </div>
               <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                <span className="text-[#d8c6e8]">Eligible Muslim Staff</span>
+                <span className="text-[#d8c6e8]">Eligible {form.applicableReligion} Staff</span>
                 <span className="font-semibold text-[#7CFFB2]">{eligibility?.eligibleMuslimEmployees ?? 0}</span>
               </div>
               <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
@@ -1697,6 +1910,19 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
               <p className="mt-4 rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-3 text-sm text-[#FFE2B8]">
                 Add a religion column to the staff table so the system can identify Muslim employees.
               </p>
+            ) : null}
+            {eligibility?.sampleEmployees?.length ? (
+              <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
+                <p className="text-sm font-semibold text-white">Eligible Staff Preview</p>
+                <div className="mt-3 space-y-2 text-sm text-[#d8c6e8]">
+                  {eligibility.sampleEmployees.map((employee) => (
+                    <div key={employee.employee_id} className="flex items-center justify-between gap-3">
+                      <span>{employee.name || employee.employee_code || `Employee ${employee.employee_id}`}</span>
+                      <span className="font-semibold text-white">{employee.religion}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : null}
           </section>
 
@@ -1744,7 +1970,156 @@ function CpfCeilingPanel({ onSave, settingsByKey }) {
   );
 }
 
-function SettingsView({ mbmfEligibility, onUpdateSetting, settings = [] }) {
+function SelfHelpGroupRulesPanel({ onSave, settingsByKey, users = [] }) {
+  const communityFundConfigs = selfHelpGroupConfigs.filter((scheme) => scheme.key !== "mbmf");
+  const [rows, setRows] = useState(() =>
+    communityFundConfigs.map((scheme) => ({
+      ...scheme,
+      enabled: getSchemeValue(settingsByKey, scheme.key, "enabled", "Enabled"),
+      effectiveFrom: getSchemeValue(settingsByKey, scheme.key, "effective_from", "2026-01-01"),
+      eligibilityValue: getSchemeValue(settingsByKey, scheme.key, `applicable_${scheme.eligibilityField}`, scheme.eligibilityValue),
+      contributionRule: getSchemeValue(settingsByKey, scheme.key, "contribution_rule", "Apply current CPF Board contribution table"),
+      payableAccount: getSchemeValue(settingsByKey, scheme.key, "payable_account", `21${scheme.key.length}0 - ${scheme.label} Payable`)
+    }))
+  );
+  const [savingKey, setSavingKey] = useState("");
+
+  useEffect(() => {
+    setRows(
+      communityFundConfigs.map((scheme) => ({
+        ...scheme,
+        enabled: getSchemeValue(settingsByKey, scheme.key, "enabled", "Enabled"),
+        effectiveFrom: getSchemeValue(settingsByKey, scheme.key, "effective_from", "2026-01-01"),
+        eligibilityValue: getSchemeValue(settingsByKey, scheme.key, `applicable_${scheme.eligibilityField}`, scheme.eligibilityValue),
+        contributionRule: getSchemeValue(settingsByKey, scheme.key, "contribution_rule", "Apply current CPF Board contribution table"),
+        payableAccount: getSchemeValue(settingsByKey, scheme.key, "payable_account", `21${scheme.key.length}0 - ${scheme.label} Payable`)
+      }))
+    );
+  }, [settingsByKey]);
+
+  const updateRow = (schemeKey, field, value) => {
+    setRows((currentRows) =>
+      currentRows.map((row) => (row.key === schemeKey ? { ...row, [field]: value } : row))
+    );
+  };
+
+  const saveRow = async (row) => {
+    setSavingKey(row.key);
+
+    try {
+      await Promise.all([
+        onSave(`${row.key}_enabled`, {
+          settingValue: row.enabled,
+          description: `${row.label} contribution enabled setting.`
+        }),
+        onSave(`${row.key}_effective_from`, {
+          settingValue: row.effectiveFrom,
+          description: `${row.label} contribution effective date.`
+        }),
+        onSave(`${row.key}_applicable_${row.eligibilityField}`, {
+          settingValue: row.eligibilityValue,
+          description: `${row.label} eligibility ${row.eligibilityField}.`
+        }),
+        onSave(`${row.key}_contribution_rule`, {
+          settingValue: row.contributionRule,
+          description: `${row.label} contribution rule.`
+        }),
+        onSave(`${row.key}_payable_account`, {
+          settingValue: row.payableAccount,
+          description: `${row.label} payable account mapping.`
+        })
+      ]);
+    } finally {
+      setSavingKey("");
+    }
+  };
+
+  return (
+    <section className="neon-glass neon-border overflow-hidden rounded-2xl">
+      <div className="border-b border-white/10 px-5 py-4">
+        <h3 className="text-lg font-semibold text-white">Community Fund Contribution Rules</h3>
+        <p className="mt-1 text-sm text-[#d8c6e8]">Configure CDAC, SINDA and ECF using staff race fields. MBMF remains in its dedicated religion-based panel.</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-[82rem] w-full border-separate border-spacing-0 text-left text-sm">
+          <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
+            <tr>
+              <th className="border-b border-white/10 px-4 py-3">Scheme</th>
+              <th className="border-b border-white/10 px-4 py-3">Enabled</th>
+              <th className="border-b border-white/10 px-4 py-3">Effective From</th>
+              <th className="border-b border-white/10 px-4 py-3">Eligibility</th>
+              <th className="border-b border-white/10 px-4 py-3">Eligible Staff</th>
+              <th className="border-b border-white/10 px-4 py-3">Rule</th>
+              <th className="border-b border-white/10 px-4 py-3">Payable Account</th>
+              <th className="border-b border-white/10 px-4 py-3">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const eligibleUsers = getEligibleUsers(users, row.eligibilityField, row.eligibilityValue);
+
+              return (
+                <tr key={row.key}>
+                  <td className="border-b border-white/10 px-4 py-4">
+                    <p className="font-semibold text-white">{row.label}</p>
+                    <p className="mt-1 text-xs text-[#d8c6e8]">{row.description}</p>
+                  </td>
+                  <td className="border-b border-white/10 px-4 py-4">
+                    <select
+                      value={row.enabled}
+                      onChange={(event) => updateRow(row.key, "enabled", event.target.value)}
+                      className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                    >
+                      <option value="Enabled">Enabled</option>
+                      <option value="Disabled">Disabled</option>
+                    </select>
+                  </td>
+                  <td className="border-b border-white/10 px-4 py-4">
+                    <input
+                      type="date"
+                      value={row.effectiveFrom}
+                      onChange={(event) => updateRow(row.key, "effectiveFrom", event.target.value)}
+                      className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none"
+                    />
+                  </td>
+                  <td className="border-b border-white/10 px-4 py-4">
+                    <SettingInput
+                      value={row.eligibilityValue}
+                      onChange={(value) => updateRow(row.key, "eligibilityValue", value)}
+                      placeholder={row.eligibilityField}
+                    />
+                    <p className="mt-1 text-xs text-[#d8c6e8]/80">staff.{row.eligibilityField}</p>
+                  </td>
+                  <td className="border-b border-white/10 px-4 py-4 text-[#d8c6e8]">
+                    <span className="font-semibold text-white">{eligibleUsers.length}</span> staff
+                  </td>
+                  <td className="border-b border-white/10 px-4 py-4">
+                    <SettingInput value={row.contributionRule} onChange={(value) => updateRow(row.key, "contributionRule", value)} />
+                  </td>
+                  <td className="border-b border-white/10 px-4 py-4">
+                    <SettingInput value={row.payableAccount} onChange={(value) => updateRow(row.key, "payableAccount", value)} />
+                  </td>
+                  <td className="border-b border-white/10 px-4 py-4">
+                    <button
+                      type="button"
+                      className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() => saveRow(row)}
+                      disabled={savingKey === row.key}
+                    >
+                      {savingKey === row.key ? "Saving..." : "Save"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function SettingsView({ mbmfEligibility, onUpdateSetting, settings = [], users = [] }) {
   const settingsByKey = useMemo(
     () => buildSettingsByKey(settings),
     [settings]
@@ -1753,6 +2128,7 @@ function SettingsView({ mbmfEligibility, onUpdateSetting, settings = [] }) {
   return (
     <PageShell
       heading="Payroll Settings"
+      updatedAt={getLatestTimestamp(settings)}
       actions={
         <>
           <ActionButton icon={Settings}>Payroll Configurations</ActionButton>
@@ -1776,7 +2152,15 @@ function SettingsView({ mbmfEligibility, onUpdateSetting, settings = [] }) {
           settingsByKey={settingsByKey}
           onSave={onUpdateSetting}
         />
+        <SelfHelpGroupRulesPanel settingsByKey={settingsByKey} users={users} onSave={onUpdateSetting} />
         <EmployerContributionTable settingsByKey={settingsByKey} onSave={onUpdateSetting} />
+        <SettingsSection
+          definitions={statutorySchemeSettings}
+          settingsByKey={settingsByKey}
+          title="Singapore Statutory Scheme Settings"
+          subtitle="Configure SDL, Foreign Worker Levy, IRAS AIS and IR21 tracking settings for payroll administration."
+          onSave={onUpdateSetting}
+        />
         <CpfCeilingPanel settingsByKey={settingsByKey} onSave={onUpdateSetting} />
         <SettingsSection
           definitions={cpfAccountMappings}
@@ -1797,10 +2181,299 @@ function SettingsView({ mbmfEligibility, onUpdateSetting, settings = [] }) {
   );
 }
 
+function ComplianceRulesView({ mbmfEligibility, onUpdateSetting, settings = [], users = [] }) {
+  const settingsByKey = useMemo(
+    () => buildSettingsByKey(settings),
+    [settings]
+  );
+  const complianceUpdates = [
+    {
+      label: "CPF rates",
+      value: "SC/SPR 3rd year onward, effective 01 Jan 2026",
+      updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.startsWith("cpf_rate_")))
+    },
+    {
+      label: "CPF wage ceiling",
+      value: "Ordinary Wage ceiling SGD 8,000 from 01 Jan 2026",
+      updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.includes("cpf_wage_ceiling")))
+    },
+    {
+      label: "SDL",
+      value: "0.25% of remuneration, min SGD 2 and max SGD 11.25 monthly",
+      updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.includes("sdl") || setting.setting_key.includes("employer_contribution_sdl")))
+    },
+    {
+      label: "Foreign worker levy",
+      value: "Managed by MOM sector, quota and worker type",
+      updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.includes("foreign_worker_levy")))
+    },
+    {
+      label: "Self-help groups",
+      value: "MBMF, CDAC, SINDA and ECF by staff religion/race",
+      updatedAt: getLatestTimestamp(settings.filter((setting) => ["mbmf_", "cdac_", "sinda_", "ecf_"].some((prefix) => setting.setting_key.startsWith(prefix))))
+    },
+    {
+      label: "IRAS reporting",
+      value: "AIS employment income and IR21 tax clearance tracking",
+      updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.startsWith("iras_") || setting.setting_key.startsWith("ir21_")))
+    }
+  ];
+
+  return (
+    <PageShell
+      heading="Compliance Rules"
+      updatedAt={getLatestTimestamp(settings)}
+      actions={
+        <>
+          <ActionButton icon={ShieldCheck}>Singapore Rules</ActionButton>
+          <ActionButton icon={PlayCircle} variant="secondary">Test Rules</ActionButton>
+        </>
+      }
+    >
+      <div className="space-y-8">
+        <section className="neon-glass neon-border rounded-2xl p-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Singapore Payroll Compliance Baseline</h3>
+              <p className="mt-1 text-sm text-[#d8c6e8]">Editable defaults for CPF, SDL, levy treatment and contribution rules.</p>
+            </div>
+            <p className="text-sm font-semibold text-[#C77DFF]">Verified for 2026 payroll periods</p>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+            {complianceUpdates.map((item) => (
+              <div key={item.label} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+                <p className="text-sm font-semibold text-white">{item.label}</p>
+                <p className="mt-2 text-xs leading-5 text-[#d8c6e8]">{item.value}</p>
+                <p className="mt-3 text-xs font-semibold text-[#C77DFF]">
+                  {item.updatedAt ? `Edited ${formatDateTime(item.updatedAt)}` : "Using default rule"}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <CpfRateTable settingsByKey={settingsByKey} onSave={onUpdateSetting} />
+        <CpfCeilingPanel settingsByKey={settingsByKey} onSave={onUpdateSetting} />
+        <CustomComplianceRulesPanel settings={settings} onSave={onUpdateSetting} />
+        <SelfHelpGroupRulesPanel settingsByKey={settingsByKey} users={users} onSave={onUpdateSetting} />
+        <WageComponentTable settingsByKey={settingsByKey} onSave={onUpdateSetting} />
+        <DeductionComponentTable settingsByKey={settingsByKey} onSave={onUpdateSetting} />
+        <EmployerContributionTable settingsByKey={settingsByKey} onSave={onUpdateSetting} />
+        <SettingsSection
+          definitions={statutorySchemeSettings}
+          settingsByKey={settingsByKey}
+          title="Singapore Statutory Scheme Settings"
+          subtitle="Configure SDL, Foreign Worker Levy, IRAS AIS and IR21 tracking settings for payroll administration."
+          onSave={onUpdateSetting}
+        />
+        <MbmfContributionPanel
+          eligibility={mbmfEligibility}
+          settingsByKey={settingsByKey}
+          onSave={onUpdateSetting}
+        />
+      </div>
+    </PageShell>
+  );
+}
+
+function CustomComplianceRulesPanel({ onSave, settings = [] }) {
+  const emptyForm = {
+    category: "Payroll Compliance",
+    effectiveFrom: new Date().toISOString().slice(0, 10),
+    ruleText: "",
+    source: "",
+    status: "Active",
+    title: ""
+  };
+  const customRules = useMemo(
+    () =>
+      settings
+        .filter((setting) => setting.setting_key.startsWith("custom_compliance_rule_"))
+        .map(parseCustomComplianceRule)
+        .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)),
+    [settings]
+  );
+  const [form, setForm] = useState(emptyForm);
+  const [editingKey, setEditingKey] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const updateForm = (field, value) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const startEdit = (rule) => {
+    setEditingKey(rule.settingKey);
+    setForm({
+      category: rule.category,
+      effectiveFrom: rule.effectiveFrom || new Date().toISOString().slice(0, 10),
+      ruleText: rule.ruleText,
+      source: rule.source,
+      status: rule.status,
+      title: rule.title
+    });
+  };
+
+  const resetForm = () => {
+    setEditingKey("");
+    setForm(emptyForm);
+  };
+
+  const saveRule = async () => {
+    const title = form.title.trim();
+    const ruleText = form.ruleText.trim();
+
+    if (!title || !ruleText) return;
+
+    setIsSaving(true);
+
+    try {
+      const settingKey = editingKey || `custom_compliance_rule_${slugify(title)}_${Date.now()}`;
+
+      await onSave(settingKey, {
+        settingValue: JSON.stringify({
+          category: form.category.trim() || "Payroll Compliance",
+          effectiveFrom: form.effectiveFrom,
+          ruleText,
+          source: form.source.trim(),
+          status: form.status,
+          title
+        }),
+        description: `Custom compliance rule: ${title}`
+      });
+      resetForm();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <section className="neon-glass neon-border rounded-2xl p-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-white">Custom Compliance Rules</h3>
+          <p className="mt-1 text-sm text-[#d8c6e8]">Add company-specific payroll compliance rules and keep their effective dates visible.</p>
+        </div>
+        <p className="text-sm font-semibold text-[#C77DFF]">{customRules.length} custom rule(s)</p>
+      </div>
+
+      <div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
+          <h4 className="font-semibold text-white">{editingKey ? "Edit Rule" : "Add Rule"}</h4>
+          <div className="mt-4 grid gap-3">
+            <SettingInput value={form.title} onChange={(value) => updateForm("title", value)} placeholder="Rule title" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <SettingInput value={form.category} onChange={(value) => updateForm("category", value)} placeholder="Category" />
+              <input
+                type="date"
+                value={form.effectiveFrom}
+                onChange={(event) => updateForm("effectiveFrom", event.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#C77DFF]/50"
+              />
+            </div>
+            <textarea
+              value={form.ruleText}
+              onChange={(event) => updateForm("ruleText", event.target.value)}
+              placeholder="Rule details"
+              rows={5}
+              className="w-full resize-y rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none placeholder:text-[#d8c6e8]/50 focus:border-[#C77DFF]/50"
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <SettingInput value={form.source} onChange={(value) => updateForm("source", value)} placeholder="Source or reference" />
+              <select
+                value={form.status}
+                onChange={(event) => updateForm("status", event.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+              >
+                <option value="Active">Active</option>
+                <option value="Draft">Draft</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={saveRule}
+                disabled={isSaving || !form.title.trim() || !form.ruleText.trim()}
+              >
+                {isSaving ? "Saving..." : editingKey ? "Save Rule" : "Add Rule"}
+              </button>
+              {editingKey ? (
+                <button
+                  type="button"
+                  className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+                  onClick={resetForm}
+                >
+                  Cancel
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {customRules.length ? (
+            customRules.map((rule) => (
+              <article key={rule.settingKey} className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="font-semibold text-white">{rule.title}</h4>
+                      <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-[#d8c6e8]">
+                        {rule.status}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-[#d8c6e8]">{rule.ruleText}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+                    onClick={() => startEdit(rule)}
+                  >
+                    Edit
+                  </button>
+                </div>
+                <div className="mt-4 grid gap-3 text-xs text-[#d8c6e8] sm:grid-cols-3">
+                  <span>Category: <span className="font-semibold text-white">{rule.category}</span></span>
+                  <span>Effective: <span className="font-semibold text-white">{rule.effectiveFrom ? formatDate(rule.effectiveFrom) : "Not set"}</span></span>
+                  <span>Updated: <span className="font-semibold text-white">{formatDateTime(rule.updatedAt)}</span></span>
+                </div>
+                {rule.source ? <p className="mt-3 text-xs text-[#C77DFF]">Source: {rule.source}</p> : null}
+              </article>
+            ))
+          ) : (
+            <EmptyState message="No custom compliance rules added yet." />
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function PayrollMonitorView({ payrollRuns = [] }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [periodMode, setPeriodMode] = useState("all");
+  const [fromDate, setFromDate] = useState(today);
+  const [toDate, setToDate] = useState(today);
+  const filteredRuns = useMemo(() => {
+    if (periodMode === "all") return payrollRuns;
+
+    const startDate = new Date(`${fromDate}T00:00:00`);
+    const endDate = new Date(`${toDate || fromDate}T23:59:59`);
+
+    return payrollRuns.filter((run) => {
+      const runDate = getPayrollRunDate(run);
+
+      if (!runDate) return false;
+
+      return runDate >= startDate && runDate <= endDate;
+    });
+  }, [fromDate, payrollRuns, periodMode, toDate]);
+
   return (
     <PageShell
       heading="Payroll Monitor"
+      updatedAt={getLatestTimestamp(payrollRuns)}
       actions={
         <>
           <ActionButton icon={Eye}>View Finance Status</ActionButton>
@@ -1808,20 +2481,65 @@ function PayrollMonitorView({ payrollRuns = [] }) {
         </>
       }
     >
+      <div className="mb-5 grid gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 md:grid-cols-[1fr_1fr_1fr_auto]">
+        <label className="space-y-2">
+          <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">
+            <Filter size={14} />
+            Date Filter
+          </span>
+          <select
+            value={periodMode}
+            onChange={(event) => setPeriodMode(event.target.value)}
+            className="w-full rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+          >
+            <option value="all">All payroll periods</option>
+            <option value="range">From date to date</option>
+          </select>
+        </label>
+        <label className="space-y-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">From Date</span>
+          <input
+            type="date"
+            value={fromDate}
+            disabled={periodMode === "all"}
+            onChange={(event) => setFromDate(event.target.value)}
+            className="w-full rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none disabled:opacity-50"
+          />
+        </label>
+        <label className="space-y-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">To Date</span>
+          <input
+            type="date"
+            value={toDate}
+            min={fromDate}
+            disabled={periodMode === "all"}
+            onChange={(event) => setToDate(event.target.value)}
+            className="w-full rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none disabled:opacity-50"
+          />
+        </label>
+        <div className="flex items-end">
+          <div className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2.5 text-sm font-semibold text-white">
+            {filteredRuns.length} of {payrollRuns.length} run(s)
+          </div>
+        </div>
+      </div>
+
       <div className="neon-glass neon-border overflow-hidden rounded-2xl">
-        <div className="grid grid-cols-4 gap-4 border-b border-white/10 px-6 py-4 text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">
+        <div className="grid grid-cols-5 gap-4 border-b border-white/10 px-6 py-4 text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">
           <span>Pay Period</span>
+          <span>Updated</span>
           <span>Employees</span>
           <span>Status</span>
           <span>Action</span>
         </div>
-        {payrollRuns.length ? (
-          payrollRuns.map((run) => (
-            <div key={run.payroll_run_id} className="grid grid-cols-4 gap-4 border-b border-white/10 px-6 py-4 text-sm last:border-b-0">
+        {filteredRuns.length ? (
+          filteredRuns.map((run) => (
+            <div key={run.payroll_run_id} className="grid grid-cols-5 gap-4 border-b border-white/10 px-6 py-4 text-sm last:border-b-0">
               <div>
                 <p className="font-semibold text-white">{formatPayrollPeriod(run)}</p>
                 <p className="mt-1 text-[#d8c6e8]">Created by {run.created_by_name || "Unknown"}</p>
               </div>
+              <p className="text-[#d8c6e8]">{formatDateTime(run.updated_at || run.created_at)}</p>
               <p className="text-[#d8c6e8]">{run.employee_count}</p>
               <p className="text-white">{run.status}</p>
               <button type="button" className="justify-self-start rounded-xl bg-white/[0.06] px-4 py-2 font-semibold text-white hover:bg-white/10">
@@ -1831,7 +2549,7 @@ function PayrollMonitorView({ payrollRuns = [] }) {
           ))
         ) : (
           <div className="px-6 py-4">
-            <EmptyState message="No payroll runs found." />
+            <EmptyState message="No payroll runs match the selected date filter." />
           </div>
         )}
       </div>
@@ -1866,6 +2584,7 @@ function AuditLogsView({ auditLogs = [] }) {
   return (
     <PageShell
       heading="Audit Logs"
+      updatedAt={getLatestTimestamp(auditLogs)}
       actions={<ActionButton icon={FileBarChart} variant="secondary">Export Logs</ActionButton>}
     >
       <div className="space-y-5">
@@ -2259,6 +2978,7 @@ function ReportsView({ data }) {
   return (
     <PageShell
       heading="Reports"
+      updatedAt={getOverallUpdatedAt(data)}
       actions={
         <>
           <ActionButton icon={FileBarChart}>Generate Report</ActionButton>
@@ -2321,6 +3041,17 @@ function AdminPayrollContent({
       <SettingsView
         mbmfEligibility={data?.mbmfEligibility}
         settings={data?.settings}
+        users={data?.users}
+        onUpdateSetting={onUpdateSetting}
+      />
+    );
+  }
+  if (pathname.endsWith("/compliance-rules")) {
+    return (
+      <ComplianceRulesView
+        mbmfEligibility={data?.mbmfEligibility}
+        settings={data?.settings}
+        users={data?.users}
         onUpdateSetting={onUpdateSetting}
       />
     );
@@ -2460,6 +3191,7 @@ export default function AdminPayrollPage() {
       setDashboardData((current) => ({
         ...current,
         auditLogs: result.auditLogs,
+        mbmfEligibility: result.mbmfEligibility || current?.mbmfEligibility,
         settings: result.settings,
         stats: {
           ...(current?.stats || {}),

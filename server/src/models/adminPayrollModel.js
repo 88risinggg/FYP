@@ -113,6 +113,10 @@ async function listMbmfEligibilitySummary() {
   const [[staffCount]] = await pool.execute(
     "SELECT COUNT(*) AS total FROM staff"
   );
+  const [[setting]] = await pool.execute(
+    "SELECT setting_value FROM payroll_setting WHERE setting_key = 'mbmf_applicable_religion' LIMIT 1"
+  );
+  const applicableReligion = String(setting?.setting_value || "Muslim").trim();
   const [religionColumns] = await pool.execute(
     "SHOW COLUMNS FROM staff LIKE 'religion'"
   );
@@ -120,6 +124,7 @@ async function listMbmfEligibilitySummary() {
   if (!religionColumns.length) {
     return {
       hasReligionColumn: false,
+      applicableReligion,
       totalStaff: staffCount.total,
       eligibleMuslimEmployees: 0,
       nonEligibleEmployees: staffCount.total,
@@ -130,9 +135,10 @@ async function listMbmfEligibilitySummary() {
   const [[summary]] = await pool.execute(
     `SELECT
       COUNT(*) AS totalStaff,
-      SUM(CASE WHEN LOWER(TRIM(COALESCE(religion, ''))) = 'muslim' THEN 1 ELSE 0 END) AS eligibleMuslimEmployees,
-      SUM(CASE WHEN LOWER(TRIM(COALESCE(religion, ''))) <> 'muslim' THEN 1 ELSE 0 END) AS nonEligibleEmployees
-    FROM staff`
+      SUM(CASE WHEN LOWER(TRIM(COALESCE(religion, ''))) = LOWER(?) THEN 1 ELSE 0 END) AS eligibleMuslimEmployees,
+      SUM(CASE WHEN LOWER(TRIM(COALESCE(religion, ''))) <> LOWER(?) THEN 1 ELSE 0 END) AS nonEligibleEmployees
+    FROM staff`,
+    [applicableReligion, applicableReligion]
   );
   const [sampleEmployees] = await pool.execute(
     `SELECT
@@ -142,13 +148,15 @@ async function listMbmfEligibilitySummary() {
       user.name
     FROM staff
     LEFT JOIN user ON staff.user_user_id = user.user_id
-    WHERE LOWER(TRIM(COALESCE(staff.religion, ''))) = 'muslim'
+    WHERE LOWER(TRIM(COALESCE(staff.religion, ''))) = LOWER(?)
     ORDER BY user.name
-    LIMIT 5`
+    LIMIT 5`,
+    [applicableReligion]
   );
 
   return {
     hasReligionColumn: true,
+    applicableReligion,
     totalStaff: summary.totalStaff || 0,
     eligibleMuslimEmployees: summary.eligibleMuslimEmployees || 0,
     nonEligibleEmployees: summary.nonEligibleEmployees || 0,
@@ -254,6 +262,8 @@ async function listUsers() {
       staff.employee_id,
       staff.employee_code,
       staff.phone,
+      staff.race,
+      staff.religion,
       staff.hire_date,
       staff.base_salary,
       staff.status AS staff_status,

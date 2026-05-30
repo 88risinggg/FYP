@@ -304,16 +304,18 @@ async function updatePayrollSetting(req, res) {
       updatedBy: req.user?.userId
     });
 
-    const [stats, settings, auditLogs] = await Promise.all([
+    const [stats, settings, auditLogs, mbmfEligibility] = await Promise.all([
       getDashboardStats(),
       listPayrollSettings(),
-      listAuditLogs()
+      listAuditLogs(),
+      listMbmfEligibilitySummary()
     ]);
 
     res.json({
       stats,
       settings,
-      auditLogs
+      auditLogs,
+      mbmfEligibility
     });
   } catch (error) {
     res.status(500).json({
