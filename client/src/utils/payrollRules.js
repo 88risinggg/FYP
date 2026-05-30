@@ -70,6 +70,22 @@ export const mbmfDefaultSettings = {
   applicableReligion: "Muslim"
 };
 
+export const complianceDefaultSettings = {
+  cpfEnabled: "Enabled",
+  bankAccountEnabled: "Enabled",
+  departmentEnabled: "Enabled",
+  positiveNetPayEnabled: "Enabled",
+  sdlEnabled: "Enabled",
+  mbmfEnabled: "Enabled",
+  loanRecoveryEnabled: "Enabled",
+  grossIncreaseEnabled: "Enabled",
+  financeApprovalLockEnabled: "Enabled",
+  paymentDeadlineEnabled: "Enabled",
+  auditTrailEnabled: "Enabled",
+  maxOtherDeductionPercent: "30",
+  maxGrossIncreasePercent: "20"
+};
+
 export function slugify(value) {
   return String(value)
     .toLowerCase()
@@ -92,6 +108,10 @@ export function createDefaultFinancePayrollConfig() {
 
 export function resolveFinancePayrollConfig(settings = []) {
   const settingsByKey = buildSettingsByKey(settings);
+  const latestUpdatedAt = settings
+    .map((setting) => setting.updated_at)
+    .filter(Boolean)
+    .sort((first, second) => new Date(second) - new Date(first))[0] || "";
   const rateTiers = cpfAgeTierRows.map((row) => ({
     ageGroup: row.ageGroup,
     employeeOrdinaryRate: Number(getSettingValue(settingsByKey, `cpf_rate_${row.slug}_employee_percent`, row.employeeRate)),
@@ -134,6 +154,22 @@ export function resolveFinancePayrollConfig(settings = []) {
     monthlyWageCeiling: Number(getSettingValue(settingsByKey, "cpf_monthly_wage_ceiling", "8000")),
     effectiveFrom: getSettingValue(settingsByKey, "cpf_wage_ceiling_effective_from", "2026-01-01"),
     paymentDue: getSettingValue(settingsByKey, "cpf_payment_due_day", "14th of next month"),
+    updatedAt: latestUpdatedAt,
+    compliance: {
+      cpfEnabled: getSettingValue(settingsByKey, "compliance_cpf_enabled", complianceDefaultSettings.cpfEnabled) === "Enabled",
+      bankAccountEnabled: getSettingValue(settingsByKey, "compliance_bank_account_enabled", complianceDefaultSettings.bankAccountEnabled) === "Enabled",
+      departmentEnabled: getSettingValue(settingsByKey, "compliance_department_enabled", complianceDefaultSettings.departmentEnabled) === "Enabled",
+      positiveNetPayEnabled: getSettingValue(settingsByKey, "compliance_positive_net_pay_enabled", complianceDefaultSettings.positiveNetPayEnabled) === "Enabled",
+      sdlEnabled: getSettingValue(settingsByKey, "compliance_sdl_enabled", complianceDefaultSettings.sdlEnabled) === "Enabled",
+      mbmfEnabled: getSettingValue(settingsByKey, "compliance_mbmf_enabled", complianceDefaultSettings.mbmfEnabled) === "Enabled",
+      loanRecoveryEnabled: getSettingValue(settingsByKey, "compliance_loan_recovery_enabled", complianceDefaultSettings.loanRecoveryEnabled) === "Enabled",
+      grossIncreaseEnabled: getSettingValue(settingsByKey, "compliance_gross_increase_enabled", complianceDefaultSettings.grossIncreaseEnabled) === "Enabled",
+      financeApprovalLockEnabled: getSettingValue(settingsByKey, "compliance_finance_approval_lock_enabled", complianceDefaultSettings.financeApprovalLockEnabled) === "Enabled",
+      paymentDeadlineEnabled: getSettingValue(settingsByKey, "compliance_payment_deadline_enabled", complianceDefaultSettings.paymentDeadlineEnabled) === "Enabled",
+      auditTrailEnabled: getSettingValue(settingsByKey, "compliance_audit_trail_enabled", complianceDefaultSettings.auditTrailEnabled) === "Enabled",
+      maxOtherDeductionPercent: Number(getSettingValue(settingsByKey, "compliance_max_other_deduction_percent", complianceDefaultSettings.maxOtherDeductionPercent)),
+      maxGrossIncreasePercent: Number(getSettingValue(settingsByKey, "compliance_max_gross_increase_percent", complianceDefaultSettings.maxGrossIncreasePercent))
+    },
     rateTiers,
     componentRules,
     deductionRules,
@@ -142,9 +178,14 @@ export function resolveFinancePayrollConfig(settings = []) {
       enabled: getSettingValue(settingsByKey, "mbmf_enabled", mbmfDefaultSettings.enabled) === "Enabled",
       applicableReligion: getSettingValue(settingsByKey, "mbmf_applicable_religion", mbmfDefaultSettings.applicableReligion),
       effectiveFrom: getSettingValue(settingsByKey, "mbmf_effective_from", mbmfDefaultSettings.effectiveFrom),
+      rateType: getSettingValue(settingsByKey, "mbmf_rate_type", mbmfDefaultSettings.rateType),
       employeeRate: Number(getSettingValue(settingsByKey, "mbmf_employee_rate_percent", mbmfDefaultSettings.employeeRate)),
       employerRate: Number(getSettingValue(settingsByKey, "mbmf_employer_rate_percent", mbmfDefaultSettings.employerRate)),
-      monthlyWageCeiling: Number(getSettingValue(settingsByKey, "mbmf_monthly_wage_ceiling", mbmfDefaultSettings.monthlyWageCeiling))
+      monthlyWageCeiling: Number(getSettingValue(settingsByKey, "mbmf_monthly_wage_ceiling", mbmfDefaultSettings.monthlyWageCeiling)),
+      employerExpenseAccount: getSettingValue(settingsByKey, "mbmf_account_employer_expense", mbmfDefaultSettings.employerExpenseAccount),
+      employeePayableAccount: getSettingValue(settingsByKey, "mbmf_account_employee_payable", mbmfDefaultSettings.employeePayableAccount),
+      clearingAccount: getSettingValue(settingsByKey, "mbmf_account_clearing", mbmfDefaultSettings.clearingAccount),
+      paymentBankAccount: getSettingValue(settingsByKey, "mbmf_account_payment_bank", mbmfDefaultSettings.paymentBankAccount)
     }
   };
 }

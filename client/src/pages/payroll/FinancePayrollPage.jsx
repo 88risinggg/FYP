@@ -2,6 +2,7 @@ import {
   Banknote,
   Bell,
   Building2,
+  CalendarDays,
   CheckCircle2,
   ClipboardCheck,
   ClipboardList,
@@ -362,6 +363,126 @@ function formatPayrollPeriod(run) {
   }).format(new Date(run.year, run.month - 1, 1));
 }
 
+function padDatePart(value) {
+  return String(value).padStart(2, "0");
+}
+
+function getPayrollRunDate(run) {
+  return new Date(run?.submittedAt || run?.approvedAt || new Date(run?.year || 2026, (run?.month || 1) - 1, 1));
+}
+
+function getMonthFilterValue(date) {
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}`;
+}
+
+function getWeekFilterValue(date) {
+  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNumber = target.getUTCDay() || 7;
+  target.setUTCDate(target.getUTCDate() + 4 - dayNumber);
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+  const weekNumber = Math.ceil((((target - yearStart) / 86400000) + 1) / 7);
+
+  return `${target.getUTCFullYear()}-W${padDatePart(weekNumber)}`;
+}
+
+function getDefaultStatsFilter(run) {
+  return {
+    mode: "month",
+    value: getMonthFilterValue(getPayrollRunDate(run))
+  };
+}
+
+function isRunInStatsFilter(run, filter) {
+  const runDate = getPayrollRunDate(run);
+
+  if (filter.mode === "week") return getWeekFilterValue(runDate) === filter.value;
+  return getMonthFilterValue(runDate) === filter.value;
+}
+
+function getFilteredPayrollRuns(payrollRuns, filter) {
+  return payrollRuns.filter((run) => isRunInStatsFilter(run, filter));
+}
+
+function getAggregatePayrollStats(runs = []) {
+  return runs.reduce(
+    (result, run) => {
+      const totals = getRunTotals(run);
+      const complianceSummary = getComplianceSummary(run);
+      const approvedStaff = run.employees.filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length;
+
+      return {
+        approvedStaff: result.approvedStaff + approvedStaff,
+        compliancePassed: result.compliancePassed + complianceSummary.passed,
+        complianceTotal: result.complianceTotal + complianceSummary.total,
+        employees: result.employees + run.employees.length,
+        exceptions: result.exceptions + getRunExceptions(run).length,
+        netPay: result.netPay + totals.netPay,
+        pendingRuns: result.pendingRuns + (getCompletedSteps(run).reconciled ? 0 : 1),
+        runs: result.runs + 1,
+        totals: {
+          grossPay: result.totals.grossPay + totals.grossPay,
+          deductions: result.totals.deductions + totals.deductions,
+          employeeCpf: result.totals.employeeCpf + totals.employeeCpf,
+          employeeMbmf: result.totals.employeeMbmf + totals.employeeMbmf,
+          employerCpf: result.totals.employerCpf + totals.employerCpf,
+          employerMbmf: result.totals.employerMbmf + totals.employerMbmf,
+          netPay: result.totals.netPay + totals.netPay
+        }
+      };
+    },
+    {
+      approvedStaff: 0,
+      compliancePassed: 0,
+      complianceTotal: 0,
+      employees: 0,
+      exceptions: 0,
+      netPay: 0,
+      pendingRuns: 0,
+      runs: 0,
+      totals: {
+        grossPay: 0,
+        deductions: 0,
+        employeeCpf: 0,
+        employeeMbmf: 0,
+        employerCpf: 0,
+        employerMbmf: 0,
+        netPay: 0
+      }
+    }
+  );
+}
+
+function getAggregateAccountingTotals(runs = []) {
+  return runs.reduce(
+    (result, run) => {
+      const totals = getRunTotals(run);
+
+      return {
+        salaryExpense: result.salaryExpense + totals.salaryExpense,
+        netPay: result.netPay + totals.netPay,
+        employeeCpf: result.employeeCpf + totals.employeeCpf,
+        employerCpf: result.employerCpf + totals.employerCpf,
+        employeeMbmf: result.employeeMbmf + totals.employeeMbmf,
+        employerMbmf: result.employerMbmf + totals.employerMbmf,
+        otherDeductions: result.otherDeductions + totals.otherDeductions,
+        totalDebit: result.totalDebit + totals.totalDebit,
+        totalCredit: result.totalCredit + totals.totalCredit
+      };
+    },
+    {
+      salaryExpense: 0,
+      netPay: 0,
+      employeeCpf: 0,
+      employerCpf: 0,
+      employeeMbmf: 0,
+      employerMbmf: 0,
+      otherDeductions: 0,
+      totalDebit: 0,
+      totalCredit: 0
+    }
+  );
+}
+
 function sumPayrollItems(items = []) {
   return items.reduce((total, item) => total + Number(item.amount || 0), 0);
 }
@@ -419,14 +540,46 @@ function getMbmfWageBase(employee) {
   return Math.min(getEmployeeTotalEarnings(employee), Number(adminCpfConfiguration.mbmf?.monthlyWageCeiling || 0));
 }
 
+function getMbmfSkipReason(employee) {
+  const applicableReligion = adminCpfConfiguration.mbmf?.applicableReligion || "Muslim";
+  const staffReligion = String(employee.religion || "").trim();
+
+  if (!adminCpfConfiguration.mbmf?.enabled) return "MBMF is disabled in Admin settings";
+  if (!staffReligion) return "Religion is not recorded";
+  if (normalizePayrollLabel(staffReligion) !== normalizePayrollLabel(applicableReligion)) {
+    return `Religion is not ${applicableReligion}`;
+  }
+
+  return "";
+}
+
 function getExpectedMbmfEmployeeAmount(employee) {
   if (!isEmployeeMbmfEligible(employee)) return 0;
   return getMbmfWageBase(employee) * (Number(adminCpfConfiguration.mbmf?.employeeRate || 0) / 100);
 }
 
+function getExpectedMbmfEmployerAmount(employee) {
+  if (!isEmployeeMbmfEligible(employee)) return 0;
+  return getMbmfWageBase(employee) * (Number(adminCpfConfiguration.mbmf?.employerRate || 0) / 100);
+}
+
 function getMbmfDeductionAmount(employee) {
   const mbmfItem = getEmployeeDeductionItems(employee).find((item) => normalizePayrollLabel(item.label).includes("mbmf"));
   return Number(mbmfItem?.amount || 0);
+}
+
+function getMbmfReview(employee) {
+  const eligible = isEmployeeMbmfEligible(employee);
+
+  return {
+    eligible,
+    religionSource: employee.religion || "Not recorded",
+    skipReason: eligible ? "" : getMbmfSkipReason(employee),
+    wageBase: eligible ? getMbmfWageBase(employee) : 0,
+    employeeAmount: getExpectedMbmfEmployeeAmount(employee),
+    employerAmount: getExpectedMbmfEmployerAmount(employee),
+    uploadedEmployeeAmount: getMbmfDeductionAmount(employee)
+  };
 }
 
 function isCpfApplicableEarning(item) {
@@ -463,6 +616,23 @@ function getEmployeeDeductionItems(employee) {
   ];
 }
 
+function getEmployeeReviewDeductionItems(employee) {
+  const nonMbmfItems = getEmployeeDeductionItems(employee).filter((item) => !normalizePayrollLabel(item.label).includes("mbmf"));
+  const mbmfReview = getMbmfReview(employee);
+
+  if (!adminCpfConfiguration.mbmf?.enabled && !mbmfReview.uploadedEmployeeAmount) return nonMbmfItems;
+
+  return [
+    ...nonMbmfItems,
+    {
+      label: "Employee MBMF",
+      rate: mbmfReview.eligible ? `${adminCpfConfiguration.mbmf?.employeeRate ?? 0}%` : "Skipped",
+      amount: mbmfReview.employeeAmount,
+      calculated: true
+    }
+  ];
+}
+
 function getEmployeeEmployerItems(employee) {
   if (employee.employerItems?.length) return employee.employerItems;
 
@@ -471,12 +641,28 @@ function getEmployeeEmployerItems(employee) {
   ];
 }
 
+function getEmployeeReviewEmployerItems(employee) {
+  const mbmfReview = getMbmfReview(employee);
+
+  if (!adminCpfConfiguration.mbmf?.enabled && !mbmfReview.employerAmount) return getEmployeeEmployerItems(employee);
+
+  return [
+    ...getEmployeeEmployerItems(employee),
+    {
+      label: "Employer MBMF",
+      rate: mbmfReview.eligible ? `${adminCpfConfiguration.mbmf?.employerRate ?? 0}%` : "Skipped",
+      amount: mbmfReview.employerAmount,
+      calculated: true
+    }
+  ];
+}
+
 function getEmployeeTotalEarnings(employee) {
   return sumPayrollItems(getEmployeeEarningItems(employee));
 }
 
 function getEmployeeTotalDeductions(employee) {
-  return sumPayrollItems(getEmployeeDeductionItems(employee));
+  return sumPayrollItems(getEmployeeReviewDeductionItems(employee));
 }
 
 function getEmployeeCpfAmount(employee) {
@@ -490,7 +676,7 @@ function getEmployerCpfAmount(employee) {
 }
 
 function getEmployeeOtherDeductions(employee) {
-  return getEmployeeTotalDeductions(employee) - getEmployeeCpfAmount(employee);
+  return getEmployeeTotalDeductions(employee) - getEmployeeCpfAmount(employee) - getExpectedMbmfEmployeeAmount(employee);
 }
 
 function getRunTotals(run) {
@@ -504,7 +690,8 @@ function getRunTotals(run) {
       const totalDeductions = getEmployeeTotalDeductions(employee);
       const employeeCpf = getEmployeeCpfAmount(employee);
       const employerCpf = getEmployerCpfAmount(employee);
-      const employeeMbmf = getMbmfDeductionAmount(employee);
+      const employeeMbmf = getExpectedMbmfEmployeeAmount(employee);
+      const employerMbmf = getExpectedMbmfEmployerAmount(employee);
 
       return {
         grossPay: result.grossPay + basicPay,
@@ -513,6 +700,7 @@ function getRunTotals(run) {
         employeeCpf: result.employeeCpf + employeeCpf,
         employerCpf: result.employerCpf + employerCpf,
         employeeMbmf: result.employeeMbmf + employeeMbmf,
+        employerMbmf: result.employerMbmf + employerMbmf,
         netPay: result.netPay + netPay
       };
     },
@@ -523,15 +711,18 @@ function getRunTotals(run) {
       employeeCpf: 0,
       employerCpf: 0,
       employeeMbmf: 0,
+      employerMbmf: 0,
       netPay: 0
     }
   );
+  const otherDeductions = Math.max(0, totals.deductions - totals.employeeCpf - totals.employeeMbmf);
 
   return {
     ...totals,
+    otherDeductions,
     salaryExpense: totals.grossPay + totals.allowances,
-    totalDebit: totals.grossPay + totals.allowances + totals.employerCpf,
-    totalCredit: totals.employeeCpf + totals.employerCpf + totals.netPay + totals.deductions
+    totalDebit: totals.grossPay + totals.allowances + totals.employerCpf + totals.employerMbmf,
+    totalCredit: totals.netPay + totals.employeeCpf + totals.employerCpf + totals.employeeMbmf + totals.employerMbmf + otherDeductions
   };
 }
 
@@ -539,8 +730,28 @@ function getEmployeeNetPay(employee) {
   return getEmployeeTotalEarnings(employee) - getEmployeeTotalDeductions(employee);
 }
 
+function getComplianceRules() {
+  return {
+    cpfEnabled: true,
+    bankAccountEnabled: true,
+    departmentEnabled: true,
+    positiveNetPayEnabled: true,
+    sdlEnabled: true,
+    mbmfEnabled: true,
+    loanRecoveryEnabled: true,
+    grossIncreaseEnabled: true,
+    financeApprovalLockEnabled: true,
+    paymentDeadlineEnabled: true,
+    auditTrailEnabled: true,
+    maxOtherDeductionPercent: 30,
+    maxGrossIncreasePercent: 20,
+    ...(adminCpfConfiguration.compliance || {})
+  };
+}
+
 function getEmployeeExceptions(employee) {
   const exceptions = [];
+  const complianceRules = getComplianceRules();
   const netPay = getEmployeeNetPay(employee);
   const totalEarnings = getEmployeeTotalEarnings(employee);
   const cpfApplicableEarnings = getEmployeeCpfApplicableEarnings(employee);
@@ -555,29 +766,31 @@ function getEmployeeExceptions(employee) {
   const hasUnclassifiedEarnings = getEmployeeEarningItems(employee).some(
     (item) => getPayrollComponentRule(item.label).wageType === "Unclassified" && typeof item.cpfApplicable !== "boolean"
   );
+  const maxOtherDeductionRatio = Number(complianceRules.maxOtherDeductionPercent || 30) / 100;
+  const maxGrossIncreaseRatio = 1 + (Number(complianceRules.maxGrossIncreasePercent || 20) / 100);
 
-  if (!employee.bankAccount) exceptions.push("Missing bank account");
-  if (!employee.bankType) exceptions.push("Missing bank type");
-  if (!employee.department) exceptions.push("Missing department");
-  if (netPay <= 0) exceptions.push("Net pay is zero or negative");
-  if (hasUnclassifiedEarnings) exceptions.push("Earning component is missing Admin CPF classification");
-  if (getEmployeeOtherDeductions(employee) > totalEarnings * 0.3) {
-    exceptions.push("Other deductions exceed 30% of earnings");
+  if (complianceRules.bankAccountEnabled && !employee.bankAccount) exceptions.push("Missing bank account");
+  if (complianceRules.bankAccountEnabled && !employee.bankType) exceptions.push("Missing bank type");
+  if (complianceRules.departmentEnabled && !employee.department) exceptions.push("Missing department");
+  if (complianceRules.positiveNetPayEnabled && netPay <= 0) exceptions.push("Net pay is zero or negative");
+  if (complianceRules.cpfEnabled && hasUnclassifiedEarnings) exceptions.push("Earning component is missing Admin CPF classification");
+  if (complianceRules.loanRecoveryEnabled && getEmployeeOtherDeductions(employee) > totalEarnings * maxOtherDeductionRatio) {
+    exceptions.push(`Other deductions exceed ${complianceRules.maxOtherDeductionPercent}% of earnings`);
   }
-  if (Math.abs(employeeCpf - expectedEmployeeCpf) > 1) {
+  if (complianceRules.cpfEnabled && Math.abs(employeeCpf - expectedEmployeeCpf) > 1) {
     exceptions.push("Employee CPF does not match CPF-applicable wage calculation");
   }
-  if (Math.abs(employerCpf - expectedEmployerCpf) > 1) {
+  if (complianceRules.cpfEnabled && Math.abs(employerCpf - expectedEmployerCpf) > 1) {
     exceptions.push("Employer CPF does not match CPF-applicable wage calculation");
   }
-  if (!isEmployeeMbmfEligible(employee) && mbmfDeduction > 0) {
-    exceptions.push("MBMF should not apply because staff religion is not Muslim");
+  if (complianceRules.mbmfEnabled && !isEmployeeMbmfEligible(employee) && mbmfDeduction > 0) {
+    exceptions.push(`MBMF should not apply: ${getMbmfSkipReason(employee)}`);
   }
-  if (isEmployeeMbmfEligible(employee) && Math.abs(mbmfDeduction - expectedMbmf) > 1) {
-    exceptions.push("MBMF does not match Admin Muslim employee contribution rule");
+  if (complianceRules.mbmfEnabled && isEmployeeMbmfEligible(employee) && Math.abs(mbmfDeduction - expectedMbmf) > 1) {
+    exceptions.push(`MBMF does not match Admin ${adminCpfConfiguration.mbmf?.applicableReligion || "Muslim"} employee contribution rule`);
   }
-  if (employee.previousGrossPay && totalEarnings > employee.previousGrossPay * 1.2) {
-    exceptions.push("Gross pay increased by more than 20%");
+  if (complianceRules.grossIncreaseEnabled && employee.previousGrossPay && totalEarnings > employee.previousGrossPay * maxGrossIncreaseRatio) {
+    exceptions.push(`Gross pay increased by more than ${complianceRules.maxGrossIncreasePercent}%`);
   }
 
   return exceptions;
@@ -599,6 +812,7 @@ function getRunExceptions(run) {
 }
 
 function getComplianceChecks(run) {
+  const complianceRules = getComplianceRules();
   const exceptions = getRunExceptions(run);
   const hasException = (keyword) => exceptions.some((item) => item.message.toLowerCase().includes(keyword));
   const allEmployees = run?.employees || [];
@@ -608,33 +822,45 @@ function getComplianceChecks(run) {
   const hasLoanDeductions = allEmployees.some((employee) =>
     getEmployeeDeductionItems(employee).some((item) => item.label.toLowerCase().includes("loan"))
   );
+  const maxOtherDeductionRatio = Number(complianceRules.maxOtherDeductionPercent || 30) / 100;
   const allLoansWithinLimit = allEmployees.every((employee) =>
-    getEmployeeOtherDeductions(employee) <= getEmployeeTotalEarnings(employee) * 0.3
+    getEmployeeOtherDeductions(employee) <= getEmployeeTotalEarnings(employee) * maxOtherDeductionRatio
   );
 
   return [
     {
       label: "CPF rates and wage ceiling",
+      enabled: complianceRules.cpfEnabled,
       status: !hasException("cpf"),
       detail: `${adminCpfConfiguration.rateTiers.length} Admin age tier(s), applied by staff CPF age group`
     },
     {
       label: "Bank account completeness",
+      enabled: complianceRules.bankAccountEnabled,
       status: !hasException("missing bank account"),
       detail: "All approved staff must have a bank account before payment file generation"
     },
     {
+      label: "Department completeness",
+      enabled: complianceRules.departmentEnabled,
+      status: !hasException("missing department"),
+      detail: "Every staff payroll record must have a department"
+    },
+    {
       label: "Positive net pay",
+      enabled: complianceRules.positiveNetPayEnabled,
       status: !hasException("net pay"),
       detail: "No employee should have zero or negative payable amount"
     },
     {
       label: "SDL employer contribution",
+      enabled: complianceRules.sdlEnabled,
       status: allHaveSdl,
       detail: "Employer SDL item is available for every staff record"
     },
     {
-      label: "MBMF Muslim-only applicability",
+      label: "MBMF eligibility",
+      enabled: complianceRules.mbmfEnabled,
       status: !hasException("mbmf"),
       detail: adminCpfConfiguration.mbmf?.enabled
         ? `Applied only when staff religion is ${adminCpfConfiguration.mbmf.applicableReligion}`
@@ -642,25 +868,37 @@ function getComplianceChecks(run) {
     },
     {
       label: "Loan and recovery deductions",
+      enabled: complianceRules.loanRecoveryEnabled,
       status: !hasLoanDeductions || allLoansWithinLimit,
-      detail: hasLoanDeductions ? "Loan deductions are included and checked against payroll limits" : "No loan deductions in this pay run"
+      detail: hasLoanDeductions
+        ? `Loan deductions are checked against the Admin ${complianceRules.maxOtherDeductionPercent}% limit`
+        : "No loan deductions in this pay run"
+    },
+    {
+      label: "Gross pay variance",
+      enabled: complianceRules.grossIncreaseEnabled,
+      status: !hasException("gross pay increased"),
+      detail: `Gross pay increase threshold: ${complianceRules.maxGrossIncreasePercent}%`
     },
     {
       label: "Finance approval lock",
+      enabled: complianceRules.financeApprovalLockEnabled,
       status: Boolean(run?.approvedAt),
       detail: run?.approvedAt ? `Payroll locked on ${formatDateTime(run.approvedAt)}` : "Payroll is not locked until Finance approval"
     },
     {
       label: "Payment deadline readiness",
+      enabled: complianceRules.paymentDeadlineEnabled,
       status: Boolean(run?.paymentFileGeneratedAt || run?.paidAt),
       detail: `CPF/payment due reference: ${adminCpfConfiguration.paymentDue}`
     },
     {
       label: "Audit trail available",
+      enabled: complianceRules.auditTrailEnabled,
       status: Boolean(run?.timeline?.length),
       detail: `${run?.timeline?.length || 0} workflow event(s) captured`
     }
-  ];
+  ].filter((check) => check.enabled);
 }
 
 function getComplianceSummary(run) {
@@ -1025,13 +1263,15 @@ function ExceptionPanel({ run }) {
 }
 
 function AdminCpfConfigPanel() {
+  const updatedAt = adminCpfConfiguration.updatedAt;
+  const lastUpdatedLabel = updatedAt ? formatDateTime(updatedAt) : "Fallback defaults";
   const rows = [
     ["CPF Rate Tiers", `${adminCpfConfiguration.rateTiers.length} age group(s)`],
     ["Rate Source", adminCpfConfiguration.source],
     ["Monthly Wage Ceiling", formatMoney(adminCpfConfiguration.monthlyWageCeiling)],
     ["Effective From", adminCpfConfiguration.effectiveFrom],
     ["Payment Due", adminCpfConfiguration.paymentDue],
-    ["MBMF Rule", adminCpfConfiguration.mbmf?.enabled ? `${adminCpfConfiguration.mbmf.employeeRate}% Muslim employees only` : "Disabled"]
+    ["MBMF Rule", adminCpfConfiguration.mbmf?.enabled ? `${adminCpfConfiguration.mbmf.employeeRate}% ${adminCpfConfiguration.mbmf.applicableReligion} staff only` : "Disabled"]
   ];
   const componentRows = Object.entries(adminCpfConfiguration.componentRules);
   const deductionRows = Object.entries(adminCpfConfiguration.deductionRules || {});
@@ -1042,6 +1282,9 @@ function AdminCpfConfigPanel() {
         <div>
           <h3 className="text-lg font-semibold text-white">Admin Payroll Rules</h3>
           <p className="mt-1 text-sm text-[#d8c6e8]">Read-only CPF, component and statutory contribution rules from Admin.</p>
+          <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">
+            Last updated: <span className="normal-case tracking-normal text-white">{lastUpdatedLabel}</span>
+          </p>
         </div>
         <span className="w-fit rounded-full border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 px-3 py-1 text-xs font-semibold text-[#BAE6FD]">
           Admin controlled
@@ -1108,6 +1351,10 @@ function AdminCpfConfigPanel() {
           </p>
           <div className="mt-4 grid gap-2 text-sm text-[#d8c6e8]">
             <div className="flex justify-between gap-3">
+              <span>Rate type</span>
+              <span className="font-semibold text-white">{adminCpfConfiguration.mbmf?.rateType || "Not configured"}</span>
+            </div>
+            <div className="flex justify-between gap-3">
               <span>Employee rate</span>
               <span className="font-semibold text-white">{adminCpfConfiguration.mbmf?.employeeRate ?? 0}%</span>
             </div>
@@ -1119,6 +1366,14 @@ function AdminCpfConfigPanel() {
               <span>Wage ceiling</span>
               <span className="font-semibold text-white">{formatMoney(adminCpfConfiguration.mbmf?.monthlyWageCeiling)}</span>
             </div>
+            <div className="flex justify-between gap-3">
+              <span>Employee payable account</span>
+              <span className="text-right font-semibold text-white">{adminCpfConfiguration.mbmf?.employeePayableAccount || "Not configured"}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span>Employer expense account</span>
+              <span className="text-right font-semibold text-white">{adminCpfConfiguration.mbmf?.employerExpenseAccount || "Not configured"}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1128,13 +1383,18 @@ function AdminCpfConfigPanel() {
 
 function CompliancePanel({ run }) {
   const { checks, failed, passed, total } = getComplianceSummary(run);
+  const updatedAt = adminCpfConfiguration.updatedAt;
+  const lastUpdatedLabel = updatedAt ? formatDateTime(updatedAt) : "Fallback defaults";
 
   return (
     <div className="neon-glass neon-border rounded-2xl p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-white">Compliance Checklist</h3>
-          <p className="mt-1 text-sm text-[#d8c6e8]">Finance compliance checks before payment confirmation.</p>
+          <p className="mt-1 text-sm text-[#d8c6e8]">Finance compliance checks from Admin rules.</p>
+          <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">
+            Last updated: <span className="normal-case tracking-normal text-white">{lastUpdatedLabel}</span>
+          </p>
         </div>
         <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${failed ? "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]" : "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]"}`}>
           {passed}/{total} passed
@@ -1188,11 +1448,48 @@ function AuditTrailPanel({ run }) {
   );
 }
 
-function StatCard({ label, tone = "text-white", value }) {
+function StatCard({ detail, label, tone = "text-white", value }) {
   return (
     <div className="neon-glass rounded-2xl p-5">
       <p className="text-sm text-[#d8c6e8]">{label}</p>
       <p className={`mt-3 text-3xl font-semibold ${tone}`}>{value}</p>
+      {detail ? <p className="mt-2 text-xs font-semibold text-[#d8c6e8]">{detail}</p> : null}
+    </div>
+  );
+}
+
+function PayrollStatsFilter({ filter, onFilterChange, onModeChange, resultCount }) {
+  return (
+    <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#7B2FF7]/20 text-[#C77DFF]">
+          <CalendarDays size={18} />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-white">Payroll Statistics Filter</p>
+          <p className="text-xs text-[#d8c6e8]">{resultCount} payroll run(s) included</p>
+        </div>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="inline-flex rounded-xl border border-white/10 bg-[#140821] p-1">
+          {["month", "week"].map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition ${filter.mode === mode ? "bg-[#C77DFF] text-white" : "text-[#d8c6e8] hover:bg-white/[0.06]"}`}
+              onClick={() => onModeChange(mode)}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+        <input
+          type={filter.mode === "week" ? "week" : "month"}
+          value={filter.value}
+          onChange={(event) => onFilterChange({ ...filter, value: event.target.value })}
+          className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm font-semibold text-white outline-none"
+        />
+      </div>
     </div>
   );
 }
@@ -1216,12 +1513,27 @@ function RunSelector({ payrollRuns, selectedRunId, onSelectRun }) {
   );
 }
 
-function AccountingImpact({ run }) {
-  const totals = getRunTotals(run);
+function AccountingImpact({ payrollRuns = [], run }) {
+  const availableRuns = payrollRuns.length ? payrollRuns : [run].filter(Boolean);
+  const [accountingFilter, setAccountingFilter] = useState(() => getDefaultStatsFilter(run || availableRuns[0]));
+  const filteredRuns = getFilteredPayrollRuns(availableRuns, accountingFilter);
+  const totals = getAggregateAccountingTotals(filteredRuns);
+  const mbmf = adminCpfConfiguration.mbmf || {};
+  const postedRuns = filteredRuns.filter((payrollRun) => getCompletedSteps(payrollRun).ledgerRecorded).length;
+  const updateAccountingMode = (mode) => {
+    const runDate = getPayrollRunDate(run || availableRuns[0]);
+    setAccountingFilter({
+      mode,
+      value: mode === "week" ? getWeekFilterValue(runDate) : getMonthFilterValue(runDate)
+    });
+  };
   const rows = [
-    ["Salary Expense", totals.salaryExpense, "Salary Payable / Bank", totals.netPay + totals.deductions],
+    ["Salary Expense", totals.salaryExpense, "Salary Payable / Bank", totals.netPay],
     ["Employer CPF Expense", totals.employerCpf, "CPF Payable (Employee)", totals.employeeCpf],
-    ["Allowance / Commission Expense", totals.allowances, "CPF Payable (Employer)", totals.employerCpf]
+    [mbmf.employerExpenseAccount || "MBMF Employer Expense", totals.employerMbmf, "CPF Payable (Employer)", totals.employerCpf],
+    ["", 0, mbmf.employeePayableAccount || "MBMF Payable (Employee)", totals.employeeMbmf],
+    ["", 0, mbmf.clearingAccount || "MBMF Payable Clearing", totals.employerMbmf],
+    ["", 0, "Other Deduction Payable", totals.otherDeductions]
   ];
 
   return (
@@ -1229,11 +1541,19 @@ function AccountingImpact({ run }) {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-white">Accounting Impact in Internal Ledger</h3>
-          <p className="mt-1 text-sm text-[#d8c6e8]">Example journal entry for {formatPayrollPeriod(run)}.</p>
+          <p className="mt-1 text-sm text-[#d8c6e8]">Journal totals for the selected accounting period.</p>
         </div>
-        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${getCompletedSteps(run).ledgerRecorded ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-white/10 bg-white/[0.06] text-[#d8c6e8]"}`}>
-          {getCompletedSteps(run).ledgerRecorded ? "Posted" : "Not posted"}
+        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${postedRuns === filteredRuns.length && filteredRuns.length ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-white/10 bg-white/[0.06] text-[#d8c6e8]"}`}>
+          {postedRuns}/{filteredRuns.length} posted
         </span>
+      </div>
+      <div className="mt-5">
+        <PayrollStatsFilter
+          filter={accountingFilter}
+          resultCount={filteredRuns.length}
+          onFilterChange={setAccountingFilter}
+          onModeChange={updateAccountingMode}
+        />
       </div>
       <div className="mt-5 overflow-x-auto">
         <table className="min-w-full text-left text-sm text-[#d8c6e8]">
@@ -1248,10 +1568,10 @@ function AccountingImpact({ run }) {
           <tbody>
             {rows.map(([debitAccount, debit, creditAccount, credit]) => (
               <tr key={`${debitAccount}-${creditAccount}`}>
-                <td className="border-b border-white/10 px-4 py-3 font-semibold text-white">{debitAccount}</td>
-                <td className="border-b border-white/10 px-4 py-3">{formatMoney(debit)}</td>
+                <td className="border-b border-white/10 px-4 py-3 font-semibold text-white">{debitAccount || "-"}</td>
+                <td className="border-b border-white/10 px-4 py-3">{debit ? formatMoney(debit) : "-"}</td>
                 <td className="border-b border-white/10 px-4 py-3 font-semibold text-white">{creditAccount}</td>
-                <td className="border-b border-white/10 px-4 py-3">{formatMoney(credit)}</td>
+                <td className="border-b border-white/10 px-4 py-3">{credit ? formatMoney(credit) : "-"}</td>
               </tr>
             ))}
             <tr className="font-semibold text-white">
@@ -1268,20 +1588,39 @@ function AccountingImpact({ run }) {
 }
 
 function DashboardView({ onSelectRun, payrollRuns, selectedRun }) {
-  const totals = getRunTotals(selectedRun);
+  const [statsFilter, setStatsFilter] = useState(() => getDefaultStatsFilter(selectedRun));
+  const filteredRuns = getFilteredPayrollRuns(payrollRuns, statsFilter);
+  const stats = getAggregatePayrollStats(filteredRuns);
   const completedSteps = Object.values(getCompletedSteps(selectedRun)).filter(Boolean).length;
-  const pendingRuns = payrollRuns.filter((run) => !getCompletedSteps(run).reconciled).length;
-  const exceptionCount = getRunExceptions(selectedRun).length;
-  const approvedStaffCount = selectedRun.employees.filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length;
-  const complianceSummary = getComplianceSummary(selectedRun);
+  const complianceUpdatedAt = adminCpfConfiguration.updatedAt
+    ? formatDateTime(adminCpfConfiguration.updatedAt)
+    : "Fallback defaults";
+  const updateStatsMode = (mode) => {
+    const runDate = getPayrollRunDate(selectedRun);
+    setStatsFilter({
+      mode,
+      value: mode === "week" ? getWeekFilterValue(runDate) : getMonthFilterValue(runDate)
+    });
+  };
 
   return (
     <PageShell heading="Dashboard">
+      <PayrollStatsFilter
+        filter={statsFilter}
+        resultCount={filteredRuns.length}
+        onFilterChange={setStatsFilter}
+        onModeChange={updateStatsMode}
+      />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Pending Pay Runs" value={pendingRuns} tone="text-[#FFB86B]" />
-        <StatCard label="Staff Approved" value={`${approvedStaffCount}/${selectedRun?.employees?.length || 0}`} tone="text-white" />
-        <StatCard label="Net Pay" value={formatMoney(totals.netPay)} tone="text-[#7CFFB2]" />
-        <StatCard label="Compliance" value={`${complianceSummary.passed}/${complianceSummary.total}`} tone={complianceSummary.failed ? "text-[#FFB86B]" : "text-[#C77DFF]"} />
+        <StatCard label="Pending Pay Runs" value={stats.pendingRuns} tone="text-[#FFB86B]" />
+        <StatCard label="Staff Approved" value={`${stats.approvedStaff}/${stats.employees}`} tone="text-white" />
+        <StatCard label="Net Pay" value={formatMoney(stats.netPay)} tone="text-[#7CFFB2]" />
+        <StatCard
+          label="Compliance"
+          value={`${stats.compliancePassed}/${stats.complianceTotal}`}
+          detail={`Last updated: ${complianceUpdatedAt}`}
+          tone={stats.compliancePassed < stats.complianceTotal ? "text-[#FFB86B]" : "text-[#C77DFF]"}
+        />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -1340,7 +1679,7 @@ function DashboardView({ onSelectRun, payrollRuns, selectedRun }) {
       </div>
 
       <div className="mt-6">
-        <AccountingImpact run={selectedRun} />
+        <AccountingImpact payrollRuns={payrollRuns} run={selectedRun} />
       </div>
 
       <div className="mt-6">
@@ -1482,6 +1821,7 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
   const [draft, setDraft] = useState(employee);
   const exceptions = getEmployeeExceptions(draft);
   const cpfTier = getEmployeeCpfRateTier(draft);
+  const mbmfReview = getMbmfReview(draft);
   const numberFields = ["workingDays", "noPayLeave", "previousGrossPay"];
 
   const updateField = (field, value) => {
@@ -1541,6 +1881,42 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
           <StatCard label="Total Deductions" value={formatMoney(getEmployeeTotalDeductions(draft))} tone="text-[#FFB86B]" />
           <StatCard label="Net Pay" value={formatMoney(getEmployeeNetPay(draft))} tone="text-[#7CFFB2]" />
           <StatCard label="Other Deductions" value={formatMoney(getEmployeeOtherDeductions(draft))} tone="text-[#C77DFF]" />
+        </div>
+
+        <div className="mt-5 rounded-xl border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h4 className="text-sm font-semibold text-white">MBMF Review</h4>
+              <p className="mt-1 text-sm text-[#BAE6FD]">
+                Religion source: staff.religion = {mbmfReview.religionSource}
+              </p>
+            </div>
+            <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${mbmfReview.eligible ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
+              {mbmfReview.eligible ? "Eligible" : "Not Eligible"}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-5">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">Reason</p>
+              <p className="mt-1 font-semibold text-white">{mbmfReview.eligible ? "Religion matches Admin setting" : mbmfReview.skipReason}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">Wage Considered</p>
+              <p className="mt-1 font-semibold text-white">{formatMoney(mbmfReview.wageBase)}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">Employee Deduction</p>
+              <p className="mt-1 font-semibold text-white">{formatMoney(mbmfReview.employeeAmount)}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">Employer Contribution</p>
+              <p className="mt-1 font-semibold text-white">{formatMoney(mbmfReview.employerAmount)}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">Uploaded MBMF</p>
+              <p className="mt-1 font-semibold text-white">{formatMoney(mbmfReview.uploadedEmployeeAmount)}</p>
+            </div>
+          </div>
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -1609,8 +1985,8 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
 
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           <PayrollItemList title="Earnings" items={getEmployeeEarningItems(draft)} />
-          <PayrollItemList title="Deductions" items={getEmployeeDeductionItems(draft)} />
-          <PayrollItemList title="Employer Expenses" items={getEmployeeEmployerItems(draft)} />
+          <PayrollItemList title="Deductions" items={getEmployeeReviewDeductionItems(draft)} />
+          <PayrollItemList title="Employer Expenses" items={getEmployeeReviewEmployerItems(draft)} />
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3 border-t border-white/10 pt-5">
@@ -1646,19 +2022,34 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
   );
 }
 
-function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, selectedRun }) {
-  const totals = getRunTotals(selectedRun);
+function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, payrollRuns, selectedRun }) {
+  const [statsFilter, setStatsFilter] = useState(() => getDefaultStatsFilter(selectedRun));
+  const filteredRuns = getFilteredPayrollRuns(payrollRuns, statsFilter);
+  const stats = getAggregatePayrollStats(filteredRuns);
   const isLocked = getCompletedSteps(selectedRun).approved;
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const selectedEmployee = selectedRun.employees.find((employee) => employee.id === selectedEmployeeId);
+  const updateStatsMode = (mode) => {
+    const runDate = getPayrollRunDate(selectedRun);
+    setStatsFilter({
+      mode,
+      value: mode === "week" ? getWeekFilterValue(runDate) : getMonthFilterValue(runDate)
+    });
+  };
 
   return (
     <PageShell heading="Staff Payroll Details">
+      <PayrollStatsFilter
+        filter={statsFilter}
+        resultCount={filteredRuns.length}
+        onFilterChange={setStatsFilter}
+        onModeChange={updateStatsMode}
+      />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Gross Pay" value={formatMoney(totals.grossPay)} />
-        <StatCard label="Other Earnings" value={formatMoney(totals.allowances)} tone="text-[#7DD3FC]" />
-        <StatCard label="Employee CPF" value={formatMoney(totals.employeeCpf)} tone="text-[#FFB86B]" />
-        <StatCard label="Total Deductions" value={formatMoney(totals.deductions)} tone="text-[#C77DFF]" />
+        <StatCard label="Gross Pay" value={formatMoney(stats.totals.grossPay)} />
+        <StatCard label="Net Pay" value={formatMoney(stats.totals.netPay)} tone="text-[#7CFFB2]" />
+        <StatCard label="Employee CPF" value={formatMoney(stats.totals.employeeCpf)} tone="text-[#FFB86B]" />
+        <StatCard label="Total Deductions" value={formatMoney(stats.totals.deductions)} tone="text-[#C77DFF]" />
       </div>
       <div className="mt-6">
         <ExceptionPanel run={selectedRun} />
@@ -1681,10 +2072,11 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, select
           const netPay = getEmployeeNetPay(employee);
           const exceptions = getEmployeeExceptions(employee);
           const status = getEmployeeFinanceStatus(employee);
+          const mbmfReview = getMbmfReview(employee);
           const earningSummary = getEmployeeEarningItems(employee)
             .map((item) => `${item.label}: ${formatMoney(item.amount)}`)
             .join(", ");
-          const deductionSummary = getEmployeeDeductionItems(employee)
+          const deductionSummary = getEmployeeReviewDeductionItems(employee)
             .map((item) => `${item.label}: ${formatMoney(item.amount)}`)
             .join(", ");
 
@@ -1704,6 +2096,10 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, select
                 <span className="block">{employee.department}</span>
                 <span className="block text-xs">{employee.workLocation || "No location"}</span>
                 <span className="block text-xs">{employee.workingDays ?? "-"} days / NPL {employee.noPayLeave ?? 0}</span>
+                <span className="mt-1 block text-xs text-white">Religion: {mbmfReview.religionSource}</span>
+                <span className={mbmfReview.eligible ? "block text-xs text-[#7CFFB2]" : "block text-xs text-[#FFE2B8]"}>
+                  MBMF: {mbmfReview.eligible ? "Eligible" : `Not Eligible - ${mbmfReview.skipReason}`}
+                </span>
               </span>
               <span className="text-white">
                 <span className="block font-semibold">{formatMoney(getEmployeeTotalEarnings(employee))}</span>
@@ -1810,12 +2206,12 @@ function buildReportRows(selectedRun) {
     ["Pay Run Summary", selectedRun.status, formatPayrollPeriod(selectedRun)],
     ["Exception Summary", `${exceptionCount} system exception(s)`, `${approvedStaffCount}/${selectedRun.employees.length} staff approved`],
     ["CPF Summary", `Employee ${formatMoney(totals.employeeCpf)}`, `Employer ${formatMoney(totals.employerCpf)}`],
-    ["MBMF Summary", `Employee ${formatMoney(totals.employeeMbmf)}`, `${adminCpfConfiguration.mbmf?.applicableReligion || "Muslim"} staff only`],
+    ["MBMF Summary", `Employee ${formatMoney(totals.employeeMbmf)}`, `Employer ${formatMoney(totals.employerMbmf)}`],
     ["Deduction Summary", `Total ${formatMoney(totals.deductions)}`, "CPF, loans and funds"],
     ["Compliance Checklist", `${getComplianceSummary(selectedRun).passed}/${getComplianceSummary(selectedRun).total} passed`, `${getComplianceSummary(selectedRun).failed} issue(s)`],
     ["Audit Trail", `${getAuditEntries(selectedRun).length} event(s)`, "Workflow history"],
     ["Payment File", selectedRun.paymentFileGeneratedAt ? "Generated" : "Not generated", formatDateTime(selectedRun.paymentFileGeneratedAt)],
-    ["Cost to Company", formatMoney(totals.salaryExpense + totals.employerCpf), selectedRun.bankReference || "Pending bank reference"]
+    ["Cost to Company", formatMoney(totals.salaryExpense + totals.employerCpf + totals.employerMbmf), selectedRun.bankReference || "Pending bank reference"]
   ];
 }
 
@@ -1894,7 +2290,7 @@ function getDeductionReportRows(selectedRun) {
   return [
     ["Employee", "Deduction", "Rate", "Amount", "Net Pay"],
     ...selectedRun.employees.flatMap((employee) =>
-      getEmployeeDeductionItems(employee).map((item) => [
+      getEmployeeReviewDeductionItems(employee).map((item) => [
         employee.name,
         item.label,
         item.rate || "-",
@@ -1907,14 +2303,20 @@ function getDeductionReportRows(selectedRun) {
 
 function getMbmfReportRows(selectedRun) {
   return [
-    ["Employee", "Religion", "Eligible", "Expected MBMF", "Actual MBMF"],
-    ...selectedRun.employees.map((employee) => [
-      employee.name,
-      employee.religion || "Not recorded",
-      isEmployeeMbmfEligible(employee) ? "Yes" : "No",
-      formatMoney(getExpectedMbmfEmployeeAmount(employee)),
-      formatMoney(getMbmfDeductionAmount(employee))
-    ])
+    ["Employee", "Religion Source", "Eligible", "Employee MBMF", "Employer MBMF", "Reason", "Uploaded MBMF"],
+    ...selectedRun.employees.map((employee) => {
+      const review = getMbmfReview(employee);
+
+      return [
+        employee.name,
+        review.religionSource,
+        review.eligible ? "Eligible" : "Not Eligible",
+        formatMoney(review.employeeAmount),
+        formatMoney(review.employerAmount),
+        review.eligible ? "Religion matches Admin setting" : review.skipReason,
+        formatMoney(review.uploadedEmployeeAmount)
+      ];
+    })
   ];
 }
 
@@ -1942,7 +2344,7 @@ function getAuditReportRows(selectedRun) {
 
 function getCostReportRows(selectedRun) {
   return [
-    ["Department", "Gross Pay", "Allowances", "Employer CPF", "Cost"],
+    ["Department", "Gross Pay", "Allowances", "Employer CPF", "Employer MBMF", "Cost"],
     ...Object.values(
       selectedRun.employees.reduce((groups, employee) => {
         const key = employee.department || "Missing";
@@ -1950,7 +2352,8 @@ function getCostReportRows(selectedRun) {
           department: key,
           grossPay: 0,
           allowances: 0,
-          employerCpf: 0
+          employerCpf: 0,
+          employerMbmf: 0
         };
 
         const totalEarnings = getEmployeeTotalEarnings(employee);
@@ -1961,6 +2364,7 @@ function getCostReportRows(selectedRun) {
         current.grossPay += basicPay;
         current.allowances += totalEarnings - basicPay;
         current.employerCpf += getEmployerCpfAmount(employee);
+        current.employerMbmf += getExpectedMbmfEmployerAmount(employee);
         groups[key] = current;
         return groups;
       }, {})
@@ -1969,7 +2373,8 @@ function getCostReportRows(selectedRun) {
       formatMoney(department.grossPay),
       formatMoney(department.allowances),
       formatMoney(department.employerCpf),
-      formatMoney(department.grossPay + department.allowances + department.employerCpf)
+      formatMoney(department.employerMbmf),
+      formatMoney(department.grossPay + department.allowances + department.employerCpf + department.employerMbmf)
     ])
   ];
 }
@@ -2038,20 +2443,23 @@ function downloadReport(selectedRun, reportTitle) {
     "MBMF Summary": {
       filename: "mbmf-summary",
       summaryRows: [
-        ["Employee MBMF", formatMoney(totals.employeeMbmf), "Muslim employees only"],
+        ["Employee MBMF", formatMoney(totals.employeeMbmf), `${adminCpfConfiguration.mbmf?.applicableReligion || "Muslim"} staff only`],
+        ["Employer MBMF", formatMoney(totals.employerMbmf), "Employer contribution"],
         ["Applicable Religion", adminCpfConfiguration.mbmf?.applicableReligion || "Muslim", "Read from Admin settings"],
+        ["Rate Type", adminCpfConfiguration.mbmf?.rateType || "Not configured", "Read from Admin settings"],
         ["Employee Rate", `${adminCpfConfiguration.mbmf?.employeeRate ?? 0}%`, "Admin controlled"],
+        ["Employer Rate", `${adminCpfConfiguration.mbmf?.employerRate ?? 0}%`, "Admin controlled"],
         ["Wage Ceiling", formatMoney(adminCpfConfiguration.mbmf?.monthlyWageCeiling), adminCpfConfiguration.mbmf?.effectiveFrom || "Not configured"]
       ],
       tableRows: getMbmfReportRows(selectedRun),
-      footer: "MBMF validation applies only to staff records whose religion is Muslim."
+      footer: `MBMF validation applies only to staff records whose religion matches ${adminCpfConfiguration.mbmf?.applicableReligion || "Muslim"}.`
     },
     "Deduction Summary": {
       filename: "deduction-summary",
       summaryRows: [
         ["Total Deductions", formatMoney(totals.deductions), "CPF, loans and funds"],
         ["Employee CPF", formatMoney(totals.employeeCpf), "Admin CPF settings"],
-        ["Other Deductions", formatMoney(totals.deductions - totals.employeeCpf), "Loans, funds and recoveries"],
+        ["Other Deductions", formatMoney(totals.otherDeductions), "Loans and recoveries"],
         ["Net Pay After Deductions", formatMoney(totals.netPay), "Payment amount"]
       ],
       tableRows: getDeductionReportRows(selectedRun),
@@ -2095,7 +2503,7 @@ function downloadReport(selectedRun, reportTitle) {
       summaryRows: [
         ["Salary Expense", formatMoney(totals.salaryExpense), "Gross plus allowances"],
         ["Employer CPF", formatMoney(totals.employerCpf), "Company CPF cost"],
-        ["Total Cost", formatMoney(totals.salaryExpense + totals.employerCpf), formatPayrollPeriod(selectedRun)],
+        ["Total Cost", formatMoney(totals.salaryExpense + totals.employerCpf + totals.employerMbmf), formatPayrollPeriod(selectedRun)],
         ["Ledger Status", getCompletedSteps(selectedRun).ledgerRecorded ? "Posted" : "Pending", formatDateTime(selectedRun.ledgerRecordedAt)]
       ],
       tableRows: getCostReportRows(selectedRun),
@@ -2145,27 +2553,43 @@ function PayrollReportsView({ selectedRun }) {
   );
 }
 
-function PayrollSummariesView({ selectedRun }) {
-  const totals = getRunTotals(selectedRun);
+function PayrollSummariesView({ payrollRuns, selectedRun }) {
+  const [statsFilter, setStatsFilter] = useState(() => getDefaultStatsFilter(selectedRun));
+  const filteredRuns = getFilteredPayrollRuns(payrollRuns, statsFilter);
+  const stats = getAggregatePayrollStats(filteredRuns);
+  const totals = stats.totals;
+  const updateStatsMode = (mode) => {
+    const runDate = getPayrollRunDate(selectedRun);
+    setStatsFilter({
+      mode,
+      value: mode === "week" ? getWeekFilterValue(runDate) : getMonthFilterValue(runDate)
+    });
+  };
   const summaryRows = [
     ["Gross Pay", totals.grossPay],
-    ["Other Earnings", totals.allowances],
     ["Deductions", totals.deductions],
     ["Employee CPF", totals.employeeCpf],
     ["Employee MBMF", totals.employeeMbmf],
     ["Employer CPF", totals.employerCpf],
+    ["Employer MBMF", totals.employerMbmf],
     ["Net Pay", totals.netPay]
   ];
 
   return (
     <PageShell heading="Payroll Summaries">
+      <PayrollStatsFilter
+        filter={statsFilter}
+        resultCount={filteredRuns.length}
+        onFilterChange={setStatsFilter}
+        onModeChange={updateStatsMode}
+      />
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="neon-glass neon-border rounded-2xl p-6">
           <div className="flex items-center gap-3">
             <ReceiptText size={24} className="text-[#C77DFF]" />
             <div>
-              <h3 className="font-semibold text-white">{formatPayrollPeriod(selectedRun)}</h3>
-              <p className="text-sm text-[#d8c6e8]">{selectedRun.status}</p>
+              <h3 className="font-semibold text-white">Filtered Payroll Summary</h3>
+              <p className="text-sm text-[#d8c6e8]">{filteredRuns.length} run(s), {stats.employees} employee record(s)</p>
             </div>
           </div>
           <div className="mt-6 space-y-3">
@@ -2178,7 +2602,7 @@ function PayrollSummariesView({ selectedRun }) {
           </div>
         </div>
         <div className="lg:col-span-2">
-          <AccountingImpact run={selectedRun} />
+          <AccountingImpact payrollRuns={payrollRuns} run={selectedRun} />
         </div>
       </div>
     </PageShell>
@@ -2201,6 +2625,7 @@ function FinancePayrollContent({ onAdvanceRun, onGeneratePaymentFile, onSelectRu
   if (pathname.endsWith("/staff-payroll-details")) {
     return (
       <StaffPayrollDetailsView
+        payrollRuns={payrollRuns}
         selectedRun={selectedRun}
         onUpdateEmployee={onUpdateEmployee}
         onUpdateStaffStatus={onUpdateStaffStatus}
@@ -2209,7 +2634,7 @@ function FinancePayrollContent({ onAdvanceRun, onGeneratePaymentFile, onSelectRu
   }
   if (pathname.endsWith("/notification-records")) return <NotificationRecordsView selectedRun={selectedRun} />;
   if (pathname.endsWith("/payroll-reports")) return <PayrollReportsView selectedRun={selectedRun} />;
-  if (pathname.endsWith("/payroll-summaries")) return <PayrollSummariesView selectedRun={selectedRun} />;
+  if (pathname.endsWith("/payroll-summaries")) return <PayrollSummariesView payrollRuns={payrollRuns} selectedRun={selectedRun} />;
 
   return (
     <DashboardView
