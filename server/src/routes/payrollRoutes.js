@@ -119,7 +119,7 @@ router.put("/payslips/bulk-send-to-finance", authenticateToken, allowRoles("Admi
     const skipped = [];
 
     targets.forEach((p) => {
-      if (p.status !== PAYSLIP_STATUSES.DRAFT && p.status !== PAYSLIP_STATUSES.FINANCE_PENDING) {
+      if (p.status !== PAYSLIP_STATUSES.DRAFT) {
         skipped.push({ payslip_id: p.payslip_id, reason: `Invalid status ${p.status}` });
         return;
       }

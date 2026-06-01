@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Bell,
   FileBarChart,
@@ -15,6 +15,7 @@ import {
 import { NavLink, useNavigate } from "react-router-dom";
 import Sidebar from "./Sidebar.jsx";
 import { clearSession } from "../../services/sessionService.js";
+import { getStoredSession } from "../../services/sessionService.js";
 
 const defaultSidebarSections = [
   {
@@ -68,6 +69,7 @@ export default function DashboardLayout({
   sidebarSections = defaultSidebarSections,
   sidebarTitle,
   searchPlaceholder = "Search invoices, users, settings...",
+  searchEndpoint = "",
   profileName,
   profileRole
 }) {
@@ -75,10 +77,79 @@ export default function DashboardLayout({
   const displayName = profileName || user?.name || roleProfile?.name || "User";
   const displayRole = profileRole || roleProfile?.role || user?.role || "User";
   const navigate = useNavigate();
+  const session = getStoredSession();
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchWrapRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchWrapRef.current && !searchWrapRef.current.contains(event.target)) {
+        setSearchResults([]);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (!searchEndpoint || query.length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setSearchLoading(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`${searchEndpoint}?q=${encodeURIComponent(query)}`, {
+          headers: {
+            ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {})
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error("Search failed");
+        }
+
+        const data = await response.json();
+        if (cancelled) return;
+
+        setSearchResults(
+          Array.isArray(data)
+            ? data.map((item) => ({
+                id: item.employee_id || item.staff_id || item.name,
+                title: item.name || item.staff_name || item.employee_id || "Unknown",
+                subtitle: [item.employee_id || item.staff_id, item.email, item.department, item.work_location]
+                  .filter(Boolean)
+                  .join(" • "),
+                href: `/dashboard/payroll/hr/staff-records?highlight=${encodeURIComponent(item.employee_id || item.staff_id || item.name || "")}`
+              }))
+            : []
+        );
+      } catch (_err) {
+        if (!cancelled) setSearchResults([]);
+      } finally {
+        if (!cancelled) setSearchLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchEndpoint, searchQuery, session?.token]);
+
+  const hasSearchResults = searchQuery.trim().length >= 2 && searchResults.length > 0;
 
   const [notifications] = useState([
     { id: "N1", title: "Payslip generated", body: "9 payslips generated", unread: true },
@@ -105,13 +176,44 @@ export default function DashboardLayout({
             {pageTitle}
           </h1>
 
-          <div className="hidden w-full max-w-sm items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 shadow-lg shadow-[#9D4EDD]/10 backdrop-blur lg:flex">
-            <Search size={16} className="text-[#C77DFF]" />
-            <input
-              type="search"
-              placeholder={searchPlaceholder}
-              className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[#d8c6e8]/60"
-            />
+          <div ref={searchWrapRef} className="relative hidden w-full max-w-sm lg:block">
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 shadow-lg shadow-[#9D4EDD]/10 backdrop-blur">
+              <Search size={16} className="text-[#C77DFF]" />
+              <input
+                type="search"
+                aria-label="Global search"
+                placeholder={searchPlaceholder}
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[#d8c6e8]/60"
+              />
+            </div>
+
+            {(searchLoading || hasSearchResults || (searchQuery.trim().length >= 2 && !searchLoading)) && (
+              <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-white/10 bg-[#0b0710] shadow-2xl shadow-black/40">
+                {searchLoading ? (
+                  <div className="px-4 py-3 text-sm text-[#d8c6e8]">Searching...</div>
+                ) : hasSearchResults ? (
+                  searchResults.map((result) => (
+                    <button
+                      key={result.id}
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery(result.title);
+                        setSearchResults([]);
+                          navigate(result.href);
+                      }}
+                      className="block w-full border-t border-white/5 px-4 py-3 text-left hover:bg-white/5 first:border-t-0"
+                    >
+                      <div className="text-sm font-medium text-white">{result.title}</div>
+                      {result.subtitle ? <div className="mt-1 text-xs text-[#d8c6e8]">{result.subtitle}</div> : null}
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-4 py-3 text-sm text-[#d8c6e8]">No results for “{searchQuery.trim()}”.</div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="relative">

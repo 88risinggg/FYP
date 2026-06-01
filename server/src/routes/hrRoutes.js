@@ -47,6 +47,126 @@ function upsertStaffProfile(profile) {
   return normalized;
 }
 
+function matchesStaffSearch(record, query) {
+  if (!record || !query) return false;
+
+  const normalizedQuery = String(query).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (!normalizedQuery) return false;
+
+  const haystack = Object.values(record)
+    .filter((value) => value !== null && value !== undefined)
+    .map((value) => String(value).toLowerCase().replace(/[^a-z0-9]+/g, " "))
+    .join(" ");
+
+  return normalizedQuery
+    .split(/\s+/)
+    .filter(Boolean)
+    .some((token) => haystack.includes(token));
+}
+
+function buildSearchHaystack(record) {
+  return Object.values(record)
+    .filter((value) => value !== null && value !== undefined)
+    .map((value) => String(value).toLowerCase().replace(/[^a-z0-9]+/g, " "))
+    .join(" ");
+}
+
+function recordMatchesSearch(record, query) {
+  if (!record || !query) return false;
+
+  const normalizedQuery = String(query).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (!normalizedQuery) return false;
+
+  const haystack = buildSearchHaystack(record);
+  return normalizedQuery.split(/\s+/).filter(Boolean).some((token) => haystack.includes(token));
+}
+
+function normalizeSearchResult(staff) {
+  return {
+    employee_id: staff.employee_id || staff.staff_id || "",
+    name: staff.name || staff.staff_name || "",
+    email: staff.email || "",
+    phone: staff.phone || "",
+    hire_date: staff.hire_date || null,
+    department: staff.department || staff.department_id || "",
+    work_location: staff.work_location || "",
+    base_salary: staff.base_salary || 0,
+    status: staff.status || ""
+  };
+}
+
+function normalizePayrollRunResult(run) {
+  return {
+    type: "payroll_run",
+    id: run.payroll_run_id || run.id || "",
+    title: run.payroll_run_id ? `Payroll Run ${run.payroll_run_id}` : "Payroll Run",
+    subtitle: [run.period_month, run.period_year, run.status, run.total_payslips ? `${run.total_payslips} payslips` : null]
+      .filter(Boolean)
+      .join(" • "),
+    href: "/dashboard/payroll/hr/payroll-runs"
+  };
+}
+
+function normalizePayslipResult(payslip) {
+  return {
+    type: "payslip",
+    id: payslip.payslip_id || payslip.employee_id || "",
+    title: payslip.staff_name || payslip.employee_id || payslip.payslip_id || "Payslip",
+    subtitle: [payslip.employee_id, payslip.period_month, payslip.period_year, payslip.status]
+      .filter(Boolean)
+      .join(" • "),
+    href: "/dashboard/payroll/hr/payslips"
+  };
+}
+
+/**
+ * SECURITY NOTICE: Audit logs are append-only via the routes below.
+ * There are NO routes in the HR module that allow UPDATE or DELETE of the audit_log table,
+ * ensuring that the history remains tamper-proof as per NFR5 requirements.
+ */
+router.get("/search", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
+  const q = String(req.query.q || "").trim().toLowerCase();
+  if (!q) {
+    return res.json([]);
+  }
+
+  (async () => {
+    try {
+      const [rows] = await pool.query("SELECT * FROM staff LIMIT 1000");
+      const results = Array.isArray(rows)
+        ? rows.filter((row) => recordMatchesSearch(row, q)).map(normalizeSearchResult)
+        : [];
+
+      if (results.length > 0) {
+        const payrollRunResults = payrollRuns
+          .filter((run) => recordMatchesSearch(run, q))
+          .map(normalizePayrollRunResult);
+        const payslipResults = payslips
+          .filter((payslip) => recordMatchesSearch(payslip, q))
+          .map(normalizePayslipResult);
+
+        return res.json([...results, ...payrollRunResults, ...payslipResults].slice(0, 10));
+      }
+    } catch (_err) {
+      // fall through to in-memory search
+    }
+
+    const staffResults = staffProfiles
+      .filter((staff) => recordMatchesSearch(staff, q))
+      .map(normalizeSearchResult);
+
+    const payrollRunResults = payrollRuns
+      .filter((run) => recordMatchesSearch(run, q))
+      .map(normalizePayrollRunResult);
+
+    const payslipResults = payslips
+      .filter((payslip) => recordMatchesSearch(payslip, q))
+      .map(normalizePayslipResult);
+
+    return res.json([...staffResults, ...payrollRunResults, ...payslipResults].slice(0, 10));
+  })();
+});
+
 // ----- Parameterized routes (MUST come before generic /staff routes) -----
 router.get("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
   const { id } = req.params;
@@ -368,19 +488,34 @@ router.post(
           return normalizeCellValue(r[actual]);
         };
 
-        if (!get("employee_id") && !get("name")) {
+        const employeeId = get("employee_id");
+        const employeeName = get("name");
+
+        if (!employeeId && !employeeName) {
           rowErrors.push({ row: rowNum, error: "Missing employee_id and name" });
+        }
+        if (mapping.name && !String(employeeName || "").trim()) {
+          rowErrors.push({ row: rowNum, error: "employee name cannot be empty" });
         }
         if (!get("hire_date")) {
           rowErrors.push({ row: rowNum, error: "Missing hire_date" });
         }
         const bs = get("base_salary");
-        if (bs && isNaN(Number(bs))) {
+        const numericBaseSalary = bs === "" ? null : Number(bs);
+        if (bs && isNaN(numericBaseSalary)) {
           rowErrors.push({ row: rowNum, error: "base_salary is not numeric" });
+        } else if (bs && numericBaseSalary < 0) {
+          rowErrors.push({ row: rowNum, error: "base_salary cannot be negative" });
+        } else if (bs && (!Number.isFinite(numericBaseSalary) || numericBaseSalary > Number.MAX_SAFE_INTEGER)) {
+          rowErrors.push({ row: rowNum, error: "base_salary is too large" });
         }
         const email = get("email");
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           rowErrors.push({ row: rowNum, error: "email format looks invalid" });
+        }
+        const phoneVal = get("phone");
+        if (phoneVal && /[a-zA-Z]/.test(phoneVal)) {
+          rowErrors.push({ row: rowNum, error: "phone contains invalid characters" });
         }
       });
 
@@ -396,7 +531,7 @@ router.post(
       // If ?create=true, create staff records. Prefer DB-backed staff table, then fall back to in-memory.
       const doCreate = req.query.create === "true" || req.body?.create === true;
       const created = [];
-      if (doCreate) {
+      if (doCreate && rowErrors.length === 0 && missing.length === 0) {
         for (const r of rows) {
           const get = (canonical) => {
             const actual = mapping[canonical];
@@ -422,6 +557,15 @@ router.post(
 
           const staff_id = staff_id_candidate || generateStaffId();
           const profileName = name || "";
+          const numericBaseSalary = base_salary === "" ? 0 : Number(base_salary);
+
+          if (!String(profileName).trim()) {
+            continue;
+          }
+
+          if (!Number.isFinite(numericBaseSalary) || numericBaseSalary > Number.MAX_SAFE_INTEGER) {
+            continue;
+          }
           const createdAt = created_at || new Date().toISOString();
           const updatedAt = updated_at || new Date().toISOString();
 
@@ -445,7 +589,7 @@ router.post(
                 phone || null,
                 get("work_location") || null,
                 hire_date || null,
-                base_salary ? Number(base_salary) : 0,
+                base_salary ? numericBaseSalary : 0,
                 status || "Active",
                 createdAt,
                 updatedAt,
@@ -468,7 +612,7 @@ router.post(
                 phone: phone || "",
                 work_location: get("work_location") || "",
                 hire_date: hire_date || null,
-                base_salary: base_salary ? Number(base_salary) : 0,
+                base_salary: base_salary ? numericBaseSalary : 0,
                 status: status || "Active",
                 created_at: createdAt,
                 updated_at: updatedAt,
@@ -554,6 +698,12 @@ router.post("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), (req, 
     return res.status(400).json({ message: "period_month and period_year are required" });
   }
 
+  // FR1: Ensure same file/period upload doesn't create redundant runs
+  const existing = payrollRuns.find(r => r.period_month === period_month && r.period_year === period_year);
+  if (existing) {
+    return res.status(409).json({ message: `A payroll run already exists for ${period_month} ${period_year}`, run: existing });
+  }
+
   const payrollRunId = `PR-${period_year}-${String(period_month).padStart(2, "0")}-${Date.now().toString(36).toUpperCase()}`;
 
   const payrollRun = {
@@ -615,18 +765,34 @@ router.post(
         return res.status(400).json({ message: "Uploaded file has no data rows" });
       }
 
+      let staffForCalculation;
+      try {
+        const [staffFromDb] = await pool.query("SELECT * FROM staff WHERE status = 1 OR status = 'Active'");
+        staffForCalculation = staffFromDb;
+      } catch (_err) {
+        staffForCalculation = staffProfiles;
+      }
+
       // Use payroll calculation service to generate payslips
       const { created: generatedPayslips, skipped } = calculatePayslipsFromRows(
         rows,
-        staffProfiles,
+        staffForCalculation,
         payrollRateConfig,
         payroll_run_id,
         req.user.email
       );
 
-      // Save all generated payslips to in-memory array
+      // Save all generated payslips to in-memory array, but avoid duplicates for same payroll run + employee
       const savedPayslips = [];
+      const employeesSavedInThisUpload = new Set();
       generatedPayslips.forEach((slip) => {
+        const employeeRunKey = `${slip.payroll_run_id}:${slip.employee_id}`;
+        const exists = employeesSavedInThisUpload.has(employeeRunKey) || payslips.find(p => p.payslip_id === slip.payslip_id || (p.payroll_run_id === slip.payroll_run_id && p.employee_id === slip.employee_id));
+        if (exists) {
+          skipped.push({ row_identifier: slip.employee_id, reason: 'Duplicate payslip for run' });
+          return;
+        }
+        employeesSavedInThisUpload.add(employeeRunKey);
         payslips.push(slip);
         savedPayslips.push(slip);
       });
@@ -649,9 +815,9 @@ router.post(
         payslips: savedPayslips,
         skipped,
         summary: {
-          total_gross: generatedPayslips.reduce((sum, p) => sum + p.gross_salary, 0).toFixed(2),
-          total_deductions: generatedPayslips.reduce((sum, p) => sum + p.total_deductions, 0).toFixed(2),
-          total_net: generatedPayslips.reduce((sum, p) => sum + p.net_pay, 0).toFixed(2)
+          total_gross: savedPayslips.reduce((sum, p) => sum + p.gross_salary, 0).toFixed(2),
+          total_deductions: savedPayslips.reduce((sum, p) => sum + p.total_deductions, 0).toFixed(2),
+          total_net: savedPayslips.reduce((sum, p) => sum + p.net_pay, 0).toFixed(2)
         }
       });
     } catch (err) {
@@ -833,7 +999,7 @@ router.get("/payslips/:id", authenticateToken, allowRoles("Admin", "HR", "Financ
   res.json(payslip);
 });
 
-router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR", "Admin"), (req, res) => {
+router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR", "Admin"), async (req, res) => {
   const payslip = payslips.find(p => p.payslip_id === req.params.id);
   if (!payslip) return res.status(404).json({ message: "Payslip not found" });
   if (payslip.status !== PAYSLIP_STATUSES.DRAFT) {
@@ -842,10 +1008,27 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR", 
   payslip.status = PAYSLIP_STATUSES.FINANCE_PENDING;
   payslip.updated_at = new Date().toISOString();
   try {
-    pool.query('INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, ?, ?, ?)',
-      [`Sent payslip ${req.params.id} to Finance for approval`, 'HR', req.params.id, req.user.userId || null]);
+    await pool.query('INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, ?, ?, ?)',
+      [`Sent payslip ${req.params.id} to Finance for approval`, 'HR', null, req.user.userId || null]);
   } catch(e) {}
   return res.json({ message: "Payslip sent to Finance for approval", payslip });
+});
+
+router.put("/payslips/:id/send-to-staff", authenticateToken, allowRoles("HR", "Admin"), async (req, res) => {
+  const payslip = payslips.find(p => p.payslip_id === req.params.id);
+  if (!payslip) return res.status(404).json({ message: "Payslip not found" });
+  if (payslip.status !== PAYSLIP_STATUSES.ADMIN_APPROVED) {
+    return res.status(400).json({ message: "Only fully approved payslips can be sent to staff" });
+  }
+  payslip.status = PAYSLIP_STATUSES.SENT_TO_STAFF;
+  payslip.sent_to_staff_at = new Date().toISOString();
+  payslip.updated_at = new Date().toISOString();
+  try {
+    await pool.query('INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, ?, ?, ?)',
+      [`Sent payslip ${req.params.id} to staff`, 'HR', null, req.user.userId || null]);
+  } catch(e) {}
+  addAudit(req.user.email, `Sent payslip ${req.params.id} to staff`, "HR");
+  return res.json({ message: "Payslip sent to staff", payslip });
 });
 
 router.get("/notifications", authenticateToken, allowRoles("HR", "Admin"), (_req, res) => {
