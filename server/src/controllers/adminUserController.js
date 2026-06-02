@@ -11,6 +11,7 @@ const {
   updateUserPassword,
   updateUserStatus
 } = require("../models/adminUserModel");
+const { getClientIp, logAuditEvent } = require("../models/auditLogModel");
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -155,6 +156,16 @@ async function postUser(req, res) {
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await createUser({ name, email, passwordHash, roleId, status });
 
+    await logAuditEvent({
+      userId: req.user?.userId,
+      userName: req.user?.email || "Admin",
+      activityType: "User Management",
+      actionDescription: `Created user account ${user.email}`,
+      affectedRecord: String(user.userId),
+      status: "Success",
+      ipAddress: getClientIp(req)
+    });
+
     res.status(201).json({ user: formatUser(user) });
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
@@ -207,6 +218,16 @@ async function putUser(req, res) {
 
     const user = await updateUser(userId, { name, email, roleId, status });
 
+    await logAuditEvent({
+      userId: req.user?.userId,
+      userName: req.user?.email || "Admin",
+      activityType: "User Management",
+      actionDescription: `Updated user account ${user.email}`,
+      affectedRecord: String(user.userId),
+      status: "Success",
+      ipAddress: getClientIp(req)
+    });
+
     res.json({ user: formatUser(user) });
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
@@ -232,6 +253,16 @@ async function patchUserStatus(req, res) {
 
     const user = await updateUserStatus(req.params.id, status);
 
+    await logAuditEvent({
+      userId: req.user?.userId,
+      userName: req.user?.email || "Admin",
+      activityType: "User Management",
+      actionDescription: `${status === 1 ? "Enabled" : "Disabled"} user account ${user.email}`,
+      affectedRecord: String(user.userId),
+      status: "Success",
+      ipAddress: getClientIp(req)
+    });
+
     res.json({ user: formatUser(user) });
   } catch (error) {
     res.status(500).json({ message: "Unable to update user status." });
@@ -253,6 +284,16 @@ async function patchUserPassword(req, res) {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await updateUserPassword(req.params.id, passwordHash);
+
+    await logAuditEvent({
+      userId: req.user?.userId,
+      userName: req.user?.email || "Admin",
+      activityType: "User Management",
+      actionDescription: `Reset password for user account ${user.email}`,
+      affectedRecord: String(user.userId),
+      status: "Success",
+      ipAddress: getClientIp(req)
+    });
 
     res.json({
       message: "Password reset successfully.",

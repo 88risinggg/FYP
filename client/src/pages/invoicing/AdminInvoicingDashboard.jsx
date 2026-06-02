@@ -10,6 +10,10 @@ import { useLocation } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
+import AdminAuditLogsPage from "./AdminAuditLogsPage.jsx";
+import AdminDashboardHomePage from "./AdminDashboardHomePage.jsx";
+import AdminInvoiceSettingsPage from "./AdminInvoiceSettingsPage.jsx";
+import AdminReminderSettingsPage from "./AdminReminderSettingsPage.jsx";
 import AdminUserManagementPage from "./AdminUserManagementPage.jsx";
 
 const pageTitle = "Automated Invoicing System - Admin Dashboard";
@@ -88,17 +92,37 @@ export default function AdminInvoicingDashboard() {
   const location = useLocation();
   const heading = routeHeadings[location.pathname] || "Dashboard";
   const isUserManagement = location.pathname === "/dashboard/invoicing/admin/users";
+  const isInvoiceSettings = location.pathname === "/dashboard/invoicing/admin/invoice-settings";
+  const isReminderSettings = location.pathname === "/dashboard/invoicing/admin/reminder-settings";
+  const isAuditLogs = location.pathname === "/dashboard/invoicing/admin/audit-logs";
+  const currentPageTitle = isUserManagement
+    ? "Automated Invoicing System - User Management"
+    : isInvoiceSettings
+      ? "Automated Invoicing System - Invoice Settings"
+    : isReminderSettings
+      ? "Automated Invoicing System - Reminder Settings"
+      : isAuditLogs
+        ? "Automated Invoicing System - Audit Logs"
+      : pageTitle;
 
   return (
     <DashboardLayout
-      pageTitle={isUserManagement ? "Automated Invoicing System - User Management" : pageTitle}
+      pageTitle={currentPageTitle}
       user={session?.user}
       sidebarSections={invoicingSidebarSections}
       sidebarTitle="Automated Invoicing & Payroll System"
       searchPlaceholder="Search invoices, users, settings..."
     >
-      {isUserManagement ? (
+      {location.pathname === "/dashboard/invoicing/admin" ? (
+        <AdminDashboardHomePage />
+      ) : isUserManagement ? (
         <AdminUserManagementPage />
+      ) : isInvoiceSettings ? (
+        <AdminInvoiceSettingsPage />
+      ) : isReminderSettings ? (
+        <AdminReminderSettingsPage />
+      ) : isAuditLogs ? (
+        <AdminAuditLogsPage />
       ) : (
         <section>
           <h2 className="text-2xl font-semibold text-white">{heading}</h2>
