@@ -1058,6 +1058,8 @@ function PayrollUploadView() {
 
 function PayrollRunsView() {
   const session = getStoredSession();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [payrollRuns, setPayrollRuns] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
@@ -1066,6 +1068,12 @@ function PayrollRunsView() {
   const [yearFilter, setYearFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const rowRefs = useRef(new Map());
+
+  const handleUnauthorized = () => {
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("authUser");
+    navigate("/login", { state: { from: location, message: "Session expired." } });
+  };
 
   const getRowKey = (run) => run.payroll_run_id || run.run_id || run.id || "";
 
@@ -1079,9 +1087,7 @@ function PayrollRunsView() {
         }
       });
 
-      if (response.status === 401 || response.status === 403) {
-        return handleUnauthorized();
-      }
+      if (response.status === 401 || response.status === 403) return handleUnauthorized();
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -1306,6 +1312,12 @@ function PayslipsView() {
   const [actionInProgress, setActionInProgress] = useState(null);
   const rowRefs = useRef(new Map());
 
+  const handleUnauthorized = () => {
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("authUser");
+    navigate("/login", { state: { from: location, message: "Session expired." } });
+  };
+
   const getRowKey = (payslip) => payslip.payslip_id || payslip.employee_id || payslip.staff_name || "";
 
   const fetchPayslips = async () => {
@@ -1318,9 +1330,7 @@ function PayslipsView() {
         }
       });
 
-      if (response.status === 401 || response.status === 403) {
-        return handleUnauthorized();
-      }
+      if (response.status === 401 || response.status === 403) return handleUnauthorized();
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
