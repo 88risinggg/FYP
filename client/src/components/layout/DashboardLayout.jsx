@@ -7,8 +7,11 @@ import {
   Settings,
   Shield,
   UserCog,
-  Users
+  Users,
+  X
 } from "lucide-react";
+import { useState } from "react";
+import { NavLink } from "react-router-dom";
 
 import Sidebar from "./Sidebar.jsx";
 
@@ -67,6 +70,8 @@ export default function DashboardLayout({
   profileName,
   profileRole
 }) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const roleProfile = roleProfiles[user?.role];
   const displayName = profileName || user?.name || roleProfile?.name || "User";
   const displayRole = profileRole || roleProfile?.role || user?.role || "User";
@@ -82,6 +87,8 @@ export default function DashboardLayout({
             type="button"
             className="flex h-10 w-10 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-white/10 hover:text-white"
             aria-label="Open menu"
+            aria-expanded={isMenuOpen}
+            onClick={() => setIsMenuOpen(true)}
           >
             <Menu size={21} />
           </button>
@@ -103,10 +110,20 @@ export default function DashboardLayout({
             type="button"
             className="relative flex h-10 w-10 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-white/10 hover:text-white"
             aria-label="Notifications"
+            aria-expanded={isNotificationsOpen}
+            onClick={() => setIsNotificationsOpen((current) => !current)}
           >
             <Bell size={20} />
             <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#FF4DDB] ring-2 ring-[#090014]" />
           </button>
+          {isNotificationsOpen ? (
+            <div className="absolute right-4 top-16 w-80 rounded-2xl border border-white/10 bg-[#140821]/95 p-4 shadow-2xl shadow-purple-950/40 backdrop-blur-2xl sm:right-6">
+              <p className="text-sm font-semibold text-white">Notifications</p>
+              <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm text-[#d8c6e8]">
+                No unread payroll notifications.
+              </div>
+            </div>
+          ) : null}
 
           <div className="flex items-center gap-3 rounded-lg px-2 py-1.5">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#C77DFF]/15 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
@@ -123,6 +140,63 @@ export default function DashboardLayout({
           {children}
         </main>
       </div>
+
+      {isMenuOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-[#090014]/80"
+            aria-label="Close menu"
+            onClick={() => setIsMenuOpen(false)}
+          />
+          <aside className="relative flex h-full w-72 max-w-[86vw] flex-col border-r border-white/10 bg-[#090014] shadow-2xl shadow-purple-950/50">
+            <div className="flex h-20 items-center justify-between gap-3 border-b border-white/10 px-5">
+              <p className="text-sm font-semibold leading-5 text-white">{sidebarTitle || "Automated Invoicing & Payroll System"}</p>
+              <button
+                type="button"
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-white/10 hover:text-white"
+                aria-label="Close menu"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <nav className="flex-1 overflow-y-auto px-4 py-5">
+              {sidebarSections.map((section) => (
+                <div key={section.label} className="mb-7">
+                  <p className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wide text-[#C77DFF]/70">
+                    {section.label}
+                  </p>
+                  <div className="space-y-1">
+                    {section.items.map((item) => {
+                      const Icon = item.icon;
+
+                      return (
+                        <NavLink
+                          key={item.label}
+                          to={item.path}
+                          end={item.end}
+                          onClick={() => setIsMenuOpen(false)}
+                          className={({ isActive }) =>
+                            `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                              isActive
+                                ? "bg-gradient-to-r from-[#7B2FF7] to-[#FF4DDB] text-white shadow-lg shadow-[#9D4EDD]/30"
+                                : "text-[#d8c6e8] hover:bg-white/10 hover:text-white hover:shadow-lg hover:shadow-[#9D4EDD]/10"
+                            }`
+                          }
+                        >
+                          <Icon size={17} />
+                          {item.label}
+                        </NavLink>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </nav>
+          </aside>
+        </div>
+      ) : null}
     </div>
   );
 }

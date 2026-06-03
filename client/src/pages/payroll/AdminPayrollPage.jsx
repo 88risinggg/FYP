@@ -19,11 +19,12 @@ import {
   Users
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import {
   addPayslipLayout,
+  createUser,
   getAdminPayrollDashboard,
   resetUserPassword,
   setDefaultPayslipLayout,
@@ -103,7 +104,8 @@ const workflowSteps = [
     owner: "Admin",
     updatedKey: "default_pay_cycle",
     details: ["Employee master data", "Salary, pay type, allowance and deduction rules", "CPF, leave and overtime settings"],
-    action: "Open Rules"
+    action: "Open Rules",
+    path: "/dashboard/payroll/admin/settings"
   },
   {
     title: "Manage Users & Roles",
@@ -112,7 +114,8 @@ const workflowSteps = [
     owner: "Admin",
     updatedKey: "users",
     details: ["Admin, HR and Finance access", "Payroll module permissions", "Active and inactive user accounts"],
-    action: "Manage Access"
+    action: "Manage Access",
+    path: "/dashboard/payroll/admin/users-roles"
   },
   {
     title: "Import Payslip Layout",
@@ -121,7 +124,8 @@ const workflowSteps = [
     owner: "Admin",
     updatedKey: "layouts",
     details: ["Upload layout file", "Set default template", "Preview sample payslip output"],
-    action: "Import Design"
+    action: "Import Design",
+    path: "/dashboard/payroll/admin/payslip-layouts"
   },
   {
     title: "Maintain Staff Setup",
@@ -130,7 +134,8 @@ const workflowSteps = [
     owner: "Admin / HR",
     updatedKey: "users",
     details: ["Department assignment", "Base salary reference", "Employee account link"],
-    action: "View Staff Setup"
+    action: "View Staff Setup",
+    path: "/dashboard/payroll/admin/users-roles"
   },
   {
     title: "Monitor Payroll Status",
@@ -139,7 +144,8 @@ const workflowSteps = [
     owner: "Finance",
     updatedKey: "payrollRuns",
     details: ["Finance payroll progress", "Generated payslip status", "System exception visibility"],
-    action: "Open Monitor"
+    action: "Open Monitor",
+    path: "/dashboard/payroll/admin/payroll-monitor"
   },
   {
     title: "Audit & Reports",
@@ -148,7 +154,8 @@ const workflowSteps = [
     owner: "System",
     updatedKey: "auditLogs",
     details: ["Admin changes", "Template updates", "System access records"],
-    action: "View Logs"
+    action: "View Logs",
+    path: "/dashboard/payroll/admin/audit-logs"
   }
 ];
 
@@ -521,7 +528,7 @@ function getStatusBadgeClass(status) {
   return "border-white/10 bg-white/[0.06] text-[#d8c6e8]";
 }
 
-function WorkflowCard({ data, step }) {
+function WorkflowCard({ data, onNavigate, step }) {
   const Icon = step.icon;
   const meta = getStepMeta(step, data);
   const status = meta.status || step.status;
@@ -562,6 +569,7 @@ function WorkflowCard({ data, step }) {
       <button
         type="button"
         className="mt-5 w-full rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#C77DFF]/18"
+        onClick={() => onNavigate(step.path)}
       >
         {step.action}
       </button>
@@ -569,7 +577,7 @@ function WorkflowCard({ data, step }) {
   );
 }
 
-function DashboardView({ data, onImportLayout, onSetDefaultLayout }) {
+function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout }) {
   const stats = data?.stats || {};
   const dashboardUpdates = getDashboardUpdateSegments(data);
   const dashboardStats = [
@@ -586,7 +594,7 @@ function DashboardView({ data, onImportLayout, onSetDefaultLayout }) {
       updatedAt={getOverallUpdatedAt(data)}
       actions={
         <>
-          <ActionButton icon={Plus}>Add Payroll Rule</ActionButton>
+          <ActionButton icon={Plus} onClick={() => onNavigate("/dashboard/payroll/admin/settings")}>Add Payroll Rule</ActionButton>
           <ActionButton icon={Upload} variant="secondary" onClick={onImportLayout}>Import Payslip Design</ActionButton>
         </>
       }
@@ -631,7 +639,7 @@ function DashboardView({ data, onImportLayout, onSetDefaultLayout }) {
         <div className="lg:col-span-2">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {workflowSteps.map((step) => (
-              <WorkflowCard key={step.title} data={data} step={step} />
+              <WorkflowCard key={step.title} data={data} onNavigate={onNavigate} step={step} />
             ))}
           </div>
         </div>
@@ -665,6 +673,8 @@ function DashboardView({ data, onImportLayout, onSetDefaultLayout }) {
 }
 
 function UsersRolesView({
+  availableStaff = [],
+  onCreateUser,
   currentUserId,
   onResetPassword,
   onUpdateRole,
@@ -676,6 +686,7 @@ function UsersRolesView({
   const [roleFilter, setRoleFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [managedUser, setManagedUser] = useState(null);
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
 
   const roles = useMemo(
     () => ["All", ...roleSummary.map((role) => role.role_name)],
@@ -699,15 +710,19 @@ function UsersRolesView({
       return matchesSearch && matchesRole && matchesStatus;
     });
   }, [roleFilter, searchTerm, statusFilter, users]);
+  const openFirstManageableUser = () => {
+    const firstManageableUser = filteredUsers.find((user) => user.user_id !== currentUserId) || filteredUsers[0];
 
+    if (firstManageableUser) setManagedUser(firstManageableUser);
+  };
   return (
     <PageShell
       heading="Users & Roles"
       updatedAt={getLatestTimestamp(users)}
       actions={
         <>
-          <ActionButton icon={Users}>Add User</ActionButton>
-          <ActionButton icon={ShieldCheck} variant="secondary">Manage Role Access</ActionButton>
+          <ActionButton icon={Users} onClick={() => setIsAddUserOpen(true)}>Add User</ActionButton>
+          <ActionButton icon={ShieldCheck} variant="secondary" onClick={openFirstManageableUser} disabled={!filteredUsers.length}>Manage Role Access</ActionButton>
         </>
       }
     >
@@ -838,6 +853,14 @@ function UsersRolesView({
           onUpdateStatus={onUpdateStatus}
         />
       ) : null}
+      {isAddUserOpen ? (
+        <AddUserModal
+          availableStaff={availableStaff}
+          roles={roleSummary}
+          onClose={() => setIsAddUserOpen(false)}
+          onCreateUser={onCreateUser}
+        />
+      ) : null}
     </PageShell>
   );
 }
@@ -847,6 +870,176 @@ function ProfileField({ label, value }) {
     <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/75">{label}</p>
       <p className="mt-2 text-sm font-semibold text-white">{value || "Not linked"}</p>
+    </div>
+  );
+}
+
+function AddUserModal({ availableStaff = [], onClose, onCreateUser, roles = [] }) {
+  const [formData, setFormData] = useState({
+    email: "",
+    name: "",
+    roleId: String(roles[0]?.role_id || ""),
+    staffEmployeeId: "",
+    status: "1"
+  });
+  const [errorMessage, setErrorMessage] = useState("");
+  const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const updateField = (field, value) => {
+    setFormData((current) => ({
+      ...current,
+      [field]: value
+    }));
+  };
+
+  const handleStaffChange = (employeeId) => {
+    const selectedStaff = availableStaff.find((staff) => String(staff.employee_id) === String(employeeId));
+
+    setFormData((current) => ({
+      ...current,
+      staffEmployeeId: employeeId,
+      name: selectedStaff?.name || current.name,
+      email: selectedStaff?.email || current.email
+    }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setErrorMessage("");
+    setTemporaryPassword("");
+    setIsSubmitting(true);
+
+    try {
+      const result = await onCreateUser({
+        email: formData.email,
+        name: formData.name,
+        roleId: Number(formData.roleId),
+        staffEmployeeId: formData.staffEmployeeId ? Number(formData.staffEmployeeId) : null,
+        status: Number(formData.status)
+      });
+
+      setTemporaryPassword(result.temporaryPassword);
+    } catch (error) {
+      setErrorMessage(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#090014]/80 px-4 backdrop-blur-sm">
+      <section className="neon-glass neon-border max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl p-6">
+        <div className="flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#C77DFF]/80">Admin User Access</p>
+            <h3 className="mt-2 text-xl font-semibold text-white">Add New User</h3>
+            <p className="mt-1 text-sm text-[#d8c6e8]">Create a login account and link it to an existing staff profile when needed.</p>
+          </div>
+          <button
+            type="button"
+            className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+
+        <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
+          <label className="grid gap-2">
+            <span className="text-sm font-semibold text-white">Link Staff Profile</span>
+            <select
+              value={formData.staffEmployeeId}
+              onChange={(event) => handleStaffChange(event.target.value)}
+              className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+            >
+              <option value="">No staff link</option>
+              {availableStaff.map((staff) => (
+                <option key={staff.employee_id} value={staff.employee_id}>
+                  {staff.name} / {staff.email}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="grid gap-2">
+              <span className="text-sm font-semibold text-white">Name</span>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(event) => updateField("name", event.target.value)}
+                className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+                required
+              />
+            </label>
+            <label className="grid gap-2">
+              <span className="text-sm font-semibold text-white">Email</span>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(event) => updateField("email", event.target.value)}
+                className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+                required
+              />
+            </label>
+            <label className="grid gap-2">
+              <span className="text-sm font-semibold text-white">Role</span>
+              <select
+                value={formData.roleId}
+                onChange={(event) => updateField("roleId", event.target.value)}
+                className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+                required
+              >
+                {roles.map((role) => (
+                  <option key={role.role_id} value={role.role_id}>{role.role_name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-2">
+              <span className="text-sm font-semibold text-white">Status</span>
+              <select
+                value={formData.status}
+                onChange={(event) => updateField("status", event.target.value)}
+                className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+              >
+                <option value="1">Active</option>
+                <option value="0">Inactive</option>
+              </select>
+            </label>
+          </div>
+
+          {errorMessage ? (
+            <div className="rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-4 text-sm text-[#FFE2B8]">
+              {errorMessage}
+            </div>
+          ) : null}
+
+          {temporaryPassword ? (
+            <div className="rounded-xl border border-[#7CFFB2]/25 bg-[#7CFFB2]/10 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#7CFFB2]">Temporary Password</p>
+              <p className="mt-2 break-all font-mono text-sm text-white">{temporaryPassword}</p>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap justify-end gap-3 border-t border-white/10 pt-5">
+            <button
+              type="button"
+              className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+              onClick={onClose}
+            >
+              Done
+            </button>
+            <button
+              type="submit"
+              className="neon-button px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isSubmitting || !roles.length}
+            >
+              {isSubmitting ? "Creating..." : "Create User"}
+            </button>
+          </div>
+        </form>
+      </section>
     </div>
   );
 }
@@ -1024,6 +1217,10 @@ function UserManagementModal({
               <ProfileField label="Religion" value={user.religion} />
               <ProfileField label="Hire Date" value={formatDate(user.hire_date)} />
               <ProfileField label="Base Salary" value={formatMoney(user.base_salary)} />
+              <ProfileField label="Race" value={user.race} />
+              <ProfileField label="Religion" value={user.religion} />
+              <ProfileField label="Bank" value={user.bank} />
+              <ProfileField label="Account No." value={user.account_no} />
             </div>
           </div>
         </div>
@@ -1033,6 +1230,8 @@ function UserManagementModal({
 }
 
 function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }) {
+  const defaultLayout = layouts.find((layout) => Number(layout.is_default) === 1) || layouts[0];
+
   return (
     <PageShell
       heading="Payslip Layouts"
@@ -1040,7 +1239,14 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
       actions={
         <>
           <ActionButton icon={Upload} onClick={onImportLayout}>Import Layout</ActionButton>
-          <ActionButton icon={Eye} variant="secondary">Preview Sample</ActionButton>
+          <ActionButton
+            icon={Eye}
+            variant="secondary"
+            disabled={!defaultLayout?.file_path}
+            onClick={() => window.open(defaultLayout.file_path, "_blank")}
+          >
+            Preview Sample
+          </ActionButton>
         </>
       }
     >
@@ -2131,12 +2337,12 @@ function SettingsView({ mbmfEligibility, onUpdateSetting, settings = [], users =
       updatedAt={getLatestTimestamp(settings)}
       actions={
         <>
-          <ActionButton icon={Settings}>Payroll Configurations</ActionButton>
-          <ActionButton icon={PlayCircle} variant="secondary">Test Rules</ActionButton>
+          <ActionButton icon={Settings} onClick={() => document.getElementById("payroll-settings-start")?.scrollIntoView({ behavior: "smooth" })}>Payroll Configurations</ActionButton>
+          <ActionButton icon={PlayCircle} variant="secondary" onClick={() => window.alert(`${settings.length} payroll setting(s) loaded for rule testing.`)}>Test Rules</ActionButton>
         </>
       }
     >
-      <div className="space-y-8">
+      <div id="payroll-settings-start" className="space-y-8">
         <SettingsSection
           definitions={cpfCalculationSettings}
           settingsByKey={settingsByKey}
@@ -2455,6 +2661,7 @@ function PayrollMonitorView({ payrollRuns = [] }) {
   const [periodMode, setPeriodMode] = useState("all");
   const [fromDate, setFromDate] = useState(today);
   const [toDate, setToDate] = useState(today);
+  const [selectedRun, setSelectedRun] = useState(null);
   const filteredRuns = useMemo(() => {
     if (periodMode === "all") return payrollRuns;
 
@@ -2476,8 +2683,8 @@ function PayrollMonitorView({ payrollRuns = [] }) {
       updatedAt={getLatestTimestamp(payrollRuns)}
       actions={
         <>
-          <ActionButton icon={Eye}>View Finance Status</ActionButton>
-          <ActionButton icon={FileBarChart} variant="secondary">Export Status</ActionButton>
+          <ActionButton icon={Eye} onClick={() => setSelectedRun(payrollRuns[0] || null)} disabled={!payrollRuns.length}>View Finance Status</ActionButton>
+          <ActionButton icon={FileBarChart} variant="secondary" onClick={() => setSelectedRun(payrollRuns[0] || null)} disabled={!payrollRuns.length}>Export Status</ActionButton>
         </>
       }
     >
@@ -2542,7 +2749,7 @@ function PayrollMonitorView({ payrollRuns = [] }) {
               <p className="text-[#d8c6e8]">{formatDateTime(run.updated_at || run.created_at)}</p>
               <p className="text-[#d8c6e8]">{run.employee_count}</p>
               <p className="text-white">{run.status}</p>
-              <button type="button" className="justify-self-start rounded-xl bg-white/[0.06] px-4 py-2 font-semibold text-white hover:bg-white/10">
+              <button type="button" className="justify-self-start rounded-xl bg-white/[0.06] px-4 py-2 font-semibold text-white hover:bg-white/10" onClick={() => setSelectedRun(run)}>
                 Review
               </button>
             </div>
@@ -2553,6 +2760,23 @@ function PayrollMonitorView({ payrollRuns = [] }) {
           </div>
         )}
       </div>
+      {selectedRun ? (
+        <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-sm text-[#d8c6e8]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold text-white">{formatPayrollPeriod(selectedRun)}</p>
+              <p className="mt-1">Finance status: {selectedRun.status}</p>
+            </div>
+            <button
+              type="button"
+              className="w-fit rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 font-semibold text-white hover:bg-white/10"
+              onClick={() => setSelectedRun(null)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      ) : null}
     </PageShell>
   );
 }
@@ -2580,12 +2804,32 @@ function AuditLogsView({ auditLogs = [] }) {
       return matchesEntity && matchesSearch;
     });
   }, [auditLogs, entityFilter, searchTerm]);
+  const exportLogs = () => {
+    const periodLabel = auditLogs[0]?.created_at
+      ? `Latest export ${formatDate(auditLogs[0].created_at)}`
+      : "All available dates";
+    const rows = filteredLogs.map((log) => ({
+      columns: [
+        formatDateTime(log.created_at),
+        log.action || "System activity",
+        `${log.entity_type || "system"} #${log.entity_id || "-"}`,
+        log.user_name || "System"
+      ]
+    }));
+    const url = URL.createObjectURL(createPdfBlob("Audit Logs", rows, periodLabel));
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = "admin-payroll-audit-logs.pdf";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <PageShell
       heading="Audit Logs"
       updatedAt={getLatestTimestamp(auditLogs)}
-      actions={<ActionButton icon={FileBarChart} variant="secondary">Export Logs</ActionButton>}
+      actions={<ActionButton icon={FileBarChart} variant="secondary" onClick={exportLogs} disabled={!filteredLogs.length}>Export Logs</ActionButton>}
     >
       <div className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-3">
@@ -2860,6 +3104,16 @@ function getReportLines(report, data = {}, periodMode = "range", fromDate = "", 
       }));
   }
 
+  if (report === "Payslip Layout Report") {
+    return (data.layouts || []).map((layout) => ({
+      columns: [
+        layout.layout_name,
+        layout.file_type,
+        Number(layout.is_default) === 1 ? "Default layout" : layout.status || "Imported"
+      ]
+    }));
+  }
+
   return (data.auditLogs || []).map((log) =>
     log
   )
@@ -2981,8 +3235,8 @@ function ReportsView({ data }) {
       updatedAt={getOverallUpdatedAt(data)}
       actions={
         <>
-          <ActionButton icon={FileBarChart}>Generate Report</ActionButton>
-          <ActionButton icon={FileText} variant="secondary">Payslip Layout Report</ActionButton>
+          <ActionButton icon={FileBarChart} onClick={() => setSelectedReport(reportCards[0])}>Generate Report</ActionButton>
+          <ActionButton icon={FileText} variant="secondary" onClick={() => setSelectedReport("Payslip Layout Report")}>Payslip Layout Report</ActionButton>
         </>
       }
     >
@@ -3014,9 +3268,11 @@ function ReportsView({ data }) {
 }
 
 function AdminPayrollContent({
+  onCreateUser,
   currentUserId,
   data,
   onImportLayout,
+  onNavigate,
   onResetPassword,
   onSetDefaultLayout,
   onUpdateSetting,
@@ -3027,9 +3283,11 @@ function AdminPayrollContent({
   if (pathname.endsWith("/users-roles")) {
     return (
       <UsersRolesView
+        availableStaff={data?.availableStaff}
         currentUserId={currentUserId}
         roleSummary={data?.roleSummary}
         users={data?.users}
+        onCreateUser={onCreateUser}
         onResetPassword={onResetPassword}
         onUpdateRole={onUpdateRole}
         onUpdateStatus={onUpdateStatus}
@@ -3073,6 +3331,7 @@ function AdminPayrollContent({
     <DashboardView
       data={data}
       onImportLayout={onImportLayout}
+      onNavigate={onNavigate}
       onSetDefaultLayout={onSetDefaultLayout}
     />
   );
@@ -3081,6 +3340,7 @@ function AdminPayrollContent({
 export default function AdminPayrollPage() {
   const session = getStoredSession();
   const location = useLocation();
+  const navigate = useNavigate();
   const [dashboardData, setDashboardData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -3145,6 +3405,7 @@ export default function AdminPayrollPage() {
     setDashboardData((current) => ({
       ...current,
       auditLogs: result.auditLogs,
+      availableStaff: result.availableStaff,
       roleSummary: result.roleSummary,
       stats: {
         ...(current?.stats || {}),
@@ -3152,6 +3413,17 @@ export default function AdminPayrollPage() {
       },
       users: result.users
     }));
+  };
+
+  const handleCreateUser = async (payload) => {
+    try {
+      const result = await createUser(payload);
+      applyUserManagementResult(result);
+      return result;
+    } catch (error) {
+      setErrorMessage(error.message);
+      throw error;
+    }
   };
 
   const handleUpdateUserStatus = async (userId, status) => {
@@ -3227,7 +3499,9 @@ export default function AdminPayrollPage() {
           currentUserId={session?.user?.userId}
           pathname={location.pathname}
           data={dashboardData}
+          onCreateUser={handleCreateUser}
           onImportLayout={handleImportLayout}
+          onNavigate={navigate}
           onResetPassword={handleResetUserPassword}
           onSetDefaultLayout={handleSetDefaultLayout}
           onUpdateSetting={handleUpdatePayrollSetting}

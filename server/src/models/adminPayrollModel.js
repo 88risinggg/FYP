@@ -248,6 +248,27 @@ async function listUsersWithRoles() {
   return rows;
 }
 
+async function listAvailableStaffForUserCreation() {
+  const [rows] = await pool.execute(
+    `SELECT
+      staff.employee_id,
+      staff.name,
+      staff.email,
+      staff.phone,
+      staff.hire_date,
+      staff.base_salary,
+      staff.status,
+      department.department_id,
+      department.department_name
+    FROM staff
+    LEFT JOIN department ON staff.department_id = department.department_id
+    WHERE staff.user_user_id IS NULL
+    ORDER BY staff.name`
+  );
+
+  return rows;
+}
+
 async function listUsers() {
   const [rows] = await pool.execute(
     `SELECT
@@ -266,6 +287,10 @@ async function listUsers() {
       staff.religion,
       staff.hire_date,
       staff.base_salary,
+      staff.race,
+      staff.religion,
+      staff.bank,
+      staff.account_no,
       staff.status AS staff_status,
       department.department_id,
       department.department_name
@@ -277,6 +302,99 @@ async function listUsers() {
   );
 
   return rows;
+}
+
+async function createUserAccount({ email, name, passwordHash, roleId, status, staffEmployeeId, adminUserId }) {
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [[existingUser]] = await connection.execute(
+      "SELECT user_id FROM user WHERE email = ?",
+      [email]
+    );
+
+    if (existingUser) {
+      await connection.rollback();
+      return {
+        duplicateEmail: true
+      };
+    }
+
+    const [[role]] = await connection.execute(
+      "SELECT role_id FROM role WHERE role_id = ?",
+      [roleId]
+    );
+
+    if (!role) {
+      await connection.rollback();
+      return {
+        invalidRole: true
+      };
+    }
+
+    let staff = null;
+
+    if (staffEmployeeId) {
+      const [[selectedStaff]] = await connection.execute(
+        "SELECT employee_id, user_user_id FROM staff WHERE employee_id = ?",
+        [staffEmployeeId]
+      );
+
+      if (!selectedStaff) {
+        await connection.rollback();
+        return {
+          invalidStaff: true
+        };
+      }
+
+      if (selectedStaff.user_user_id) {
+        await connection.rollback();
+        return {
+          staffAlreadyLinked: true
+        };
+      }
+
+      staff = selectedStaff;
+    }
+
+    const [result] = await connection.execute(
+      `INSERT INTO user (email, name, password, status, role_id)
+      VALUES (?, ?, ?, ?, ?)`,
+      [email, name, passwordHash, status, roleId]
+    );
+    const userId = result.insertId;
+
+    if (staff) {
+      await connection.execute(
+        "UPDATE staff SET user_user_id = ? WHERE employee_id = ?",
+        [userId, staff.employee_id]
+      );
+    } else {
+      await connection.execute(
+        "UPDATE staff SET user_user_id = ? WHERE user_user_id IS NULL AND email = ?",
+        [userId, email]
+      );
+    }
+
+    await connection.execute(
+      `INSERT INTO audit_log (action, entity_type, entity_id, user_user_id)
+      VALUES (?, ?, ?, ?)`,
+      ["Created user account", "user", userId, adminUserId || null]
+    );
+
+    await connection.commit();
+
+    return {
+      userId
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 async function getUserById(userId) {
@@ -352,10 +470,12 @@ async function updateUserPassword({ userId, passwordHash, adminUserId }) {
 }
 
 module.exports = {
+  createUserAccount,
   createPayslipLayout,
   getUserById,
   getDashboardStats,
   listAuditLogs,
+  listAvailableStaffForUserCreation,
   listMbmfEligibilitySummary,
   listPayrollRuns,
   listPayrollSettings,
