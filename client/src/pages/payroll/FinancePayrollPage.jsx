@@ -329,7 +329,19 @@ const initialPayrollRuns = [
 function getInitialPayrollRuns() {
   try {
     const stored = localStorage.getItem(FINANCE_PAYROLL_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : initialPayrollRuns;
+    const parsedRuns = stored ? JSON.parse(stored) : initialPayrollRuns;
+
+    if (!Array.isArray(parsedRuns)) return initialPayrollRuns;
+
+    const normalizedRuns = parsedRuns
+      .filter((run) => run && run.id && run.month && run.year)
+      .map((run) => ({
+        ...run,
+        employees: Array.isArray(run.employees) ? run.employees : [],
+        timeline: Array.isArray(run.timeline) ? run.timeline : []
+      }));
+
+    return normalizedRuns.length ? normalizedRuns : initialPayrollRuns;
   } catch {
     return initialPayrollRuns;
   }
