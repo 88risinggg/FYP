@@ -126,7 +126,13 @@ function HRDashboardView() {
         if (!mounted) return;
         const total = Array.isArray(data) ? data.length : 0;
         const active = Array.isArray(data)
-          ? data.filter((staff) => staff.status === 1 || String(staff.status || "").toLowerCase() === "active").length
+          ? data.filter((staff) => {
+              const s = staff.status;
+              // DB may return integer 1/0 or string "Active"/"Inactive"/"active" etc.
+              if (s === 1 || s === "1") return true;
+              if (s === 0 || s === "0" || s === null || s === undefined) return false;
+              return String(s).toLowerCase() === "active";
+            }).length
           : 0;
         setCounts({ total, active });
       } catch (err) {
@@ -139,6 +145,7 @@ function HRDashboardView() {
   }, [session?.token]);
 
   const pct = counts.total ? Math.round((counts.active / counts.total) * 100) : 0;
+  const circleColor = pct >= 90 ? "#10b981" : pct >= 60 ? "#f59e0b" : "#ef4444";
 
   return (
     <div className="space-y-4">
@@ -160,8 +167,10 @@ function HRDashboardView() {
         <div className="neon-glass neon-border rounded-2xl p-4 flex items-center justify-center">
           <div className="text-center">
             <svg width="80" height="80" viewBox="0 0 36 36">
-              <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#1f2937" strokeWidth="4"/>
-              <path stroke="#10b981" strokeWidth="4" strokeDasharray={`${pct},100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none"/>
+              {/* Track — red to indicate inactive portion */}
+              <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#ef4444" strokeWidth="4" strokeOpacity="0.35"/>
+              {/* Active portion */}
+              <path stroke={circleColor} strokeWidth="4" strokeDasharray={`${pct},100`} strokeLinecap="round" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none"/>
             </svg>
             <div className="mt-2 text-sm text-[#d8c6e8]">Active %</div>
             <div className="text-lg font-semibold text-white">{pct}%</div>
@@ -205,7 +214,7 @@ function getStaffDisplayName(staff) {
 }
 
 function getStaffDisplayId(staff) {
-  return staff?.staff_id || staff?.employee_id || staff?.id || "-";
+  return staff?.employee_id || staff?.staff_id || staff?.id || "-";
 }
 
 function getStaffDisplayDepartment(staff) {
@@ -221,7 +230,7 @@ function getStaffDisplayHireDate(staff) {
 }
 
 function getStaffActionId(staff) {
-  return staff?.staff_id || staff?.employee_id || staff?.id || "";
+  return staff?.employee_id || staff?.staff_id || staff?.id || "";
 }
 
 function StaffRecordsView() {
@@ -266,7 +275,7 @@ function StaffRecordsView() {
     }
 };
 
-  const getRowKey = (staff) => staff.staff_id || staff.employee_id || staff.email || staff.staff_name || staff.name || "";
+  const getRowKey = (staff) => String(staff.employee_id || staff.staff_id || staff.email || staff.staff_name || staff.name || "");
 
   const filteredStaff = useMemo(() => {
     const query = searchTerm.trim();
@@ -361,13 +370,18 @@ function StaffRecordsView() {
 
   const handleEdit = (staff) => {
     setEditingStaff(staff);
+    // Normalize DB tinyint status (1/0) to string for the select
+    const rawStatus = staff.status;
+    let statusStr = "Active";
+    if (rawStatus === 0 || rawStatus === "0" || String(rawStatus).toLowerCase() === "inactive") statusStr = "Inactive";
+    else if (String(rawStatus).toLowerCase() === "leave") statusStr = "Leave";
     setEditFormData({
       email: staff.email || "",
       phone: staff.phone || "",
       address: staff.address || "",
-      department: staff.department || "",
+      department_id: staff.department_id || "",
       base_salary: staff.base_salary || "",
-      status: staff.status || "Active",
+      status: statusStr,
       staffRequestConfirmed: false
     });
     setIsEditModalOpen(true);
@@ -376,10 +390,11 @@ function StaffRecordsView() {
   const handleUpdateStaff = async () => {
     if (!editingStaff) return;
 
-    if ((editFormData.email !== (editingStaff.email || "") ||
-      editFormData.phone !== (editingStaff.phone || "") ||
-      editFormData.address !== (editingStaff.address || "")) &&
-      !editFormData.staffRequestConfirmed) {
+    const emailChanged  = editFormData.email   !== (editingStaff.email   || "");
+    const phoneChanged  = editFormData.phone   !== (editingStaff.phone   || "");
+    const addressChanged = editFormData.address !== (editingStaff.address || "");
+
+    if ((emailChanged || phoneChanged || addressChanged) && !editFormData.staffRequestConfirmed) {
       setFieldError("Confirm that personal field changes were requested by the staff member.");
       setError("Confirm that personal field changes were requested by the staff member.");
       return;
@@ -388,7 +403,38 @@ function StaffRecordsView() {
     try {
       setError("");
       setFieldError("");
-      const { staffRequestConfirmed, ...payload } = editFormData;
+
+      // Build payload carefully — never overwrite a DB value with an empty string.
+      // Each field is only included if it has a real value OR the form field changed.
+      const payload = {};
+
+      // status — always send, it's the main reason HR opens this modal
+      payload.status = editFormData.status;
+
+      // base_salary — only send if the form field has a numeric value
+      if (editFormData.base_salary !== "" && editFormData.base_salary !== null) {
+        payload.base_salary = editFormData.base_salary;
+      }
+
+      // department_id — only send if not empty
+      if (editFormData.department_id !== "" && editFormData.department_id !== null) {
+        payload.department_id = editFormData.department_id;
+      }
+
+      // email — send the new value if changed, or preserve existing if unchanged
+      if (emailChanged) {
+        payload.email = editFormData.email || null;
+      } else if (editingStaff.email) {
+        payload.email = editingStaff.email;
+      }
+
+      // phone — same logic
+      if (phoneChanged) {
+        payload.phone = editFormData.phone || null;
+      } else if (editingStaff.phone) {
+        payload.phone = editingStaff.phone;
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/hr/staff/${getStaffActionId(editingStaff)}`, {
         method: "PUT",
         headers: {
@@ -628,7 +674,21 @@ function StaffRecordsView() {
                     <td className="px-4 py-3 text-[#d8c6e8]">
                       ${staff.base_salary || "-"}</td>
                     <td className="px-4 py-3">
-                      <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs text-emerald-300"> {staff.status || "active"}</span></td>
+                      {(() => {
+                        const s = staff.status;
+                        const isActive = s === 1 || s === "1" || String(s || "").toLowerCase() === "active";
+                        const isInactive = s === 0 || s === "0" || String(s || "").toLowerCase() === "inactive";
+                        return (
+                          <span className={`rounded-full px-3 py-1 text-xs ${
+                            isActive ? "bg-emerald-500/20 text-emerald-300" :
+                            isInactive ? "bg-red-500/20 text-red-300" :
+                            "bg-yellow-500/20 text-yellow-300"
+                          }`}>
+                            {isActive ? "Active" : isInactive ? "Inactive" : String(s || "Unknown")}
+                          </span>
+                        );
+                      })()}
+                    </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
                             <button type="button" onClick={() => handleEdit(staff)} className="rounded-lg bg-blue-500/20 px-3 py-1 text-xs text-blue-300 hover:bg-blue-500/30">Edit</button>
@@ -713,12 +773,12 @@ function StaffRecordsView() {
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
                 <p className="text-sm font-semibold text-white">Employment Fields</p>
               <div>
-                <label htmlFor="staff-edit-department" className="block text-sm font-medium text-[#d8c6e8]">Department</label>
+                <label htmlFor="staff-edit-department" className="block text-sm font-medium text-[#d8c6e8]">Department ID</label>
                 <input
                   id="staff-edit-department"
                   type="text"
-                  value={editFormData.department || ""}
-                  onChange={(e) => setEditFormData({ ...editFormData, department: e.target.value })}
+                  value={editFormData.department_id || ""}
+                  onChange={(e) => setEditFormData({ ...editFormData, department_id: e.target.value })}
                   className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder-white/30"
                 />
               </div>

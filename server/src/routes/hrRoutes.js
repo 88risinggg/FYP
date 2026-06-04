@@ -188,54 +188,84 @@ router.get("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res
 router.put("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
   const { id } = req.params;
   const updates = req.body;
-  // Update in DB using `staff` table; fall back to in-memory
   (async () => {
     try {
-      const allowed = [
-        'name', 'staff_name', 'email', 'phone', 'work_location', 'department', 'base_salary', 'status',
-        'hire_date', 'department_id', 'user_user_id', 'race', 'religion', 'bank', 'account_no'
-      ];
+      // Only columns that actually exist in the DB staff table
+      const dbColumnMap = {
+        name:        'name',
+        staff_name:  'name',       // alias → name
+        email:       'email',
+        phone:       'phone',
+        hire_date:   'hire_date',
+        base_salary: 'base_salary',
+        status:      'status',
+        department_id: 'department_id',
+        user_user_id:  'user_user_id',
+        race:        'race',
+        religion:    'religion',
+        bank:        'bank',
+        account_no:  'account_no'
+      };
+
       const setParts = [];
       const values = [];
-      allowed.forEach((k) => {
-        if (updates[k] !== undefined) {
-          const col = k === 'staff_name' ? 'name' : k;
-          setParts.push(`\`${col}\` = ?`);
-          values.push(updates[k]);
+
+      Object.entries(dbColumnMap).forEach(([key, col]) => {
+        if (updates[key] === undefined) return;
+        // Skip if already added this column (e.g. staff_name after name)
+        if (setParts.some(p => p.startsWith(`\`${col}\``))) return;
+
+        let val = updates[key];
+
+        if (key === 'status') {
+          // DB is tinyint(1): 1 = active, 0 = inactive/leave/anything else
+          if (val === 1 || val === '1' || String(val).toLowerCase() === 'active') val = 1;
+          else val = 0;
         }
+
+        if (key === 'hire_date' && val) {
+          // DB column is date type — strip time portion if present
+          val = String(val).slice(0, 10);
+        }
+
+        if (key === 'base_salary' && val !== null && val !== '') {
+          val = parseFloat(val) || 0;
+        }
+
+        // Skip empty strings entirely — don't overwrite existing DB values with null
+        if (val === '') return;
+
+        setParts.push(`\`${col}\` = ?`);
+        values.push(val);
       });
-      if (setParts.length === 0) return res.status(400).json({ message: 'No valid fields to update' });
-      values.push(new Date().toISOString());
+
+      if (setParts.length === 0) {
+        return res.status(400).json({ message: 'No valid fields to update' });
+      }
+
+      values.push(new Date().toISOString().slice(0, 19).replace('T', ' '));
       values.push(id);
       const sql = `UPDATE staff SET ${setParts.join(', ')}, updated_at = ? WHERE employee_id = ?`;
+
       const [result] = await pool.query(sql, values);
+
       if (result.affectedRows === 0) {
-        // fallback to in-memory
-        const staff = staffProfiles.find(s => s.staff_id === id || s.employee_id === id);
-        if (!staff) return res.status(404).json({ message: 'Staff record not found' });
-        Object.keys(updates).forEach(k => { if (updates[k] !== undefined) staff[k] = updates[k]; });
-        staff.updated_at = new Date().toISOString();
-        addAudit(req.user.email, `Updated staff record ${id}`, "HR");
-        return res.json({ message: 'Staff record updated (in-memory)', staff });
+        return res.status(404).json({ message: 'Staff record not found' });
       }
-      // fetch updated row
+
       const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? LIMIT 1', [id]);
-      // write audit to audit_log table
+
       try {
-        await pool.query('INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, ?, ?, ?)',
-          [`Updated staff record ${id}`, 'HR', id, req.user.userId || null]);
-      } catch (e) {
-        // ignore audit insert errors
-      }
+        await pool.query(
+          'INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, ?, ?, ?)',
+          [`Updated staff record ${id}`, 'HR', String(id), req.user.userId || null]
+        );
+      } catch (_e) { /* ignore audit errors */ }
+
       return res.json({ message: 'Staff record updated successfully', staff: rows[0] });
     } catch (err) {
-      // fallback to in-memory
-      const staff = staffProfiles.find(s => s.staff_id === id || s.employee_id === id);
-      if (!staff) return res.status(404).json({ message: 'Staff record not found' });
-      Object.keys(updates).forEach(k => { if (updates[k] !== undefined) staff[k] = updates[k]; });
-      staff.updated_at = new Date().toISOString();
-      addAudit(req.user.email, `Updated staff record ${id}`, "HR");
-      return res.json({ message: 'Staff record updated (in-memory)', staff });
+      console.error('[PUT /staff/:id] DB error:', err.message);
+      return res.status(500).json({ message: 'Failed to update staff record', error: err.message });
     }
   })();
 });

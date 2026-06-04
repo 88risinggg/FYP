@@ -151,10 +151,22 @@ export default function DashboardLayout({
 
   const hasSearchResults = searchQuery.trim().length >= 2 && searchResults.length > 0;
 
-  const [notifications] = useState([
-    { id: "N1", title: "Payslip generated", body: "9 payslips generated", unread: true },
-    { id: "N2", title: "Payroll run created", body: "Payroll run PR-2026-05 created", unread: false }
-  ]);
+  const [notifications, setNotifications] = useState([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+
+  useEffect(() => {
+    if (!notifOpen || !session?.token) return;
+    let cancelled = false;
+    setNotifLoading(true);
+    fetch(`${window.__API_BASE_URL__ || (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000")}/api/hr/notifications`, {
+      headers: { Authorization: `Bearer ${session.token}` }
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => { if (!cancelled) setNotifications(Array.isArray(data) ? data : []); })
+      .catch(() => { if (!cancelled) setNotifications([]); })
+      .finally(() => { if (!cancelled) setNotifLoading(false); });
+    return () => { cancelled = true; };
+  }, [notifOpen, session?.token]);
 
   return (
     <div className="neon-page relative overflow-hidden">
@@ -233,12 +245,19 @@ export default function DashboardLayout({
                   <p className="text-sm font-semibold text-white">Notifications</p>
                 </div>
                 <div className="max-h-56 overflow-y-auto">
-                  {notifications.map(n => (
-                    <div key={n.id} className={`px-4 py-3 border-t border-white/5 ${n.unread ? 'bg-white/2' : ''}`}>
-                      <p className="text-sm text-white font-medium">{n.title}</p>
-                      <p className="text-xs text-[#d8c6e8]">{n.body}</p>
-                    </div>
-                  ))}
+                  {notifLoading ? (
+                    <div className="px-4 py-3 text-sm text-[#d8c6e8]">Loading…</div>
+                  ) : notifications.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-[#d8c6e8]">No notifications yet.</div>
+                  ) : (
+                    notifications.map((n) => (
+                      <div key={n.notif_id ?? n.id} className={`px-4 py-3 border-t border-white/5 ${!n.read ? "bg-white/[0.02]" : ""}`}>
+                        <p className="text-sm text-white font-medium">{n.title ?? n.type ?? "Notification"}</p>
+                        <p className="text-xs text-[#d8c6e8]">{n.message ?? n.body ?? ""}</p>
+                        {n.timestamp ? <p className="mt-1 text-xs text-[#d8c6e8]/50">{new Date(n.timestamp).toLocaleString()}</p> : null}
+                      </div>
+                    ))
+                  )}
                 </div>
                 <div className="p-3 border-t border-white/5 text-center">
                   <button className="text-sm text-[#C77DFF]">View all</button>
