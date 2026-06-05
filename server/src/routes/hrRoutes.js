@@ -865,7 +865,6 @@ router.get("/payslips", authenticateToken, allowRoles("Admin", "HR", "Finance", 
     filteredPayslips = payslips.filter(
       (p) =>
         p.status === PAYSLIP_STATUSES.FINANCE_PENDING ||
-        p.status === PAYSLIP_STATUSES.ADMIN_PENDING ||
         p.status === PAYSLIP_STATUSES.FINANCE_APPROVED
     );
   } else if (req.user.role === "Staff") {
@@ -1011,56 +1010,70 @@ router.put('/finance-requests/:id/approve', authenticateToken, allowRoles('Finan
   }
 });
 
-router.get("/payslips/:id", authenticateToken, allowRoles("Admin", "HR", "Finance", "Staff"), (req, res) => {
-  const payslip = payslips.find((p) => p.payslip_id === req.params.id);
-  if (!payslip) {
-    return res.status(404).json({ message: "Payslip not found" });
-  }
-
-  if (req.user.role === "Staff") {
-    if (!payslip.staff_email || payslip.staff_email.toLowerCase() !== req.user.email.toLowerCase()) {
-      return res.status(403).json({ message: "Not authorized to view this payslip" });
+router.get("/payslips/:id", authenticateToken, allowRoles("Admin", "HR", "Finance", "Staff"), async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM payslip WHERE payslip_id = ? LIMIT 1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ message: "Payslip not found" });
+    const payslip = rows[0];
+    if (req.user.role === "Staff") {
+      if (!payslip.staff_email || payslip.staff_email.toLowerCase() !== req.user.email.toLowerCase()) {
+        return res.status(403).json({ message: "Not authorized to view this payslip" });
+      }
+      if (payslip.status !== 'sent_to_staff') {
+        return res.status(400).json({ message: "Payslip not yet released to staff" });
+      }
     }
-    if (payslip.status !== PAYSLIP_STATUSES.SENT_TO_STAFF) {
-      return res.status(400).json({ message: "Payslip not yet released to staff" });
-    }
+    return res.json(payslip);
+  } catch (err) {
+    // fallback to memory
+    const payslip = payslips.find((p) => p.payslip_id === req.params.id);
+    if (!payslip) return res.status(404).json({ message: "Payslip not found" });
+    return res.json(payslip);
   }
-
-  res.json(payslip);
 });
 
 router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR", "Admin"), async (req, res) => {
-  const payslip = payslips.find(p => p.payslip_id === req.params.id);
-  if (!payslip) return res.status(404).json({ message: "Payslip not found" });
-  if (payslip.status !== PAYSLIP_STATUSES.DRAFT) {
-    return res.status(400).json({ message: "Only draft payslips can be sent to Finance" });
-  }
-  payslip.status = PAYSLIP_STATUSES.FINANCE_PENDING;
-  payslip.updated_at = new Date().toISOString();
   try {
-    await pool.query('INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, ?, ?, ?)',
-      [`Sent payslip ${req.params.id} to Finance for approval`, 'HR', null, req.user.userId || null]);
-  } catch(e) {}
-  return res.json({ message: "Payslip sent to Finance for approval", payslip });
+    const [rows] = await pool.query('SELECT * FROM payslip WHERE payslip_id = ? LIMIT 1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ message: "Payslip not found" });
+    const payslip = rows[0];
+    if (payslip.status !== 'draft') {
+      return res.status(400).json({ message: "Only draft payslips can be sent to Finance" });
+    }
+    await pool.query('UPDATE payslip SET status = ?, updated_at = NOW() WHERE payslip_id = ?',
+      ['finance_pending', req.params.id]);
+    try {
+      await pool.query('INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, ?, ?, ?)',
+        [`Sent payslip ${req.params.id} to Finance for approval`, 'HR', null, req.user.userId || null]);
+    } catch(e) {}
+    return res.json({ message: "Payslip sent to Finance for approval" });
+  } catch (err) {
+    return res.status(500).json({ message: "Server error", error: err.message });
+  }
 });
 
 router.put("/payslips/:id/send-to-staff", authenticateToken, allowRoles("HR", "Admin"), async (req, res) => {
-  const payslip = payslips.find(p => p.payslip_id === req.params.id);
-  if (!payslip) return res.status(404).json({ message: "Payslip not found" });
-  if (payslip.status !== PAYSLIP_STATUSES.ADMIN_APPROVED) {
-    return res.status(400).json({ message: "Only fully approved payslips can be sent to staff" });
-  }
-  payslip.status = PAYSLIP_STATUSES.SENT_TO_STAFF;
-  payslip.sent_to_staff_at = new Date().toISOString();
-  payslip.updated_at = new Date().toISOString();
   try {
-    await pool.query('INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, ?, ?, ?)',
-      [`Sent payslip ${req.params.id} to staff`, 'HR', null, req.user.userId || null]);
-  } catch(e) {}
-  addAudit(req.user.email, `Sent payslip ${req.params.id} to staff`, "HR");
-  return res.json({ message: "Payslip sent to staff", payslip });
+    const [rows] = await pool.query('SELECT * FROM payslip WHERE payslip_id = ? LIMIT 1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ message: "Payslip not found" });
+    const payslip = rows[0];
+    if (payslip.status !== 'finance_approved') {
+      return res.status(400).json({ message: "Payslip must be approved by Finance before sending to staff" });
+    }
+    await pool.query(
+      'UPDATE payslip SET status = ?, sent_to_staff_at = NOW(), updated_at = NOW() WHERE payslip_id = ?',
+      ['sent_to_staff', req.params.id]
+    );
+    try {
+      await pool.query('INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, ?, ?, ?)',
+        [`Sent payslip ${req.params.id} to staff`, 'HR', null, req.user.userId || null]);
+    } catch(e) {}
+    addAudit(req.user.email, `Sent payslip ${req.params.id} to staff`, "HR");
+    return res.json({ message: "Payslip sent to staff successfully" });
+  } catch (err) {
+    return res.status(500).json({ message: "Server error", error: err.message });
+  }
 });
-
 router.get("/notifications", authenticateToken, allowRoles("HR", "Admin"), (_req, res) => {
   res.json([]);
 });
