@@ -39,8 +39,6 @@ const PAYSLIP_STATUSES = {
   DRAFT: 'draft',
   FINANCE_PENDING: 'finance_pending',
   FINANCE_APPROVED: 'finance_approved',
-  ADMIN_PENDING: 'admin_pending',
-  ADMIN_APPROVED: 'admin_approved',
   SENT_TO_STAFF: 'sent_to_staff',
   REJECTED: 'rejected'
 };
