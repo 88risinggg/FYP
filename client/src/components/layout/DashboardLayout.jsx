@@ -129,10 +129,10 @@ export default function DashboardLayout({
             ? data.map((item) => ({
                 id: item.employee_id || item.staff_id || item.name,
                 title: item.name || item.staff_name || item.employee_id || "Unknown",
-                subtitle: [item.employee_id || item.staff_id, item.email, item.department, item.work_location]
+                subtitle: [item.employee_id || item.staff_id, item.email, item.department_id]
                   .filter(Boolean)
                   .join(" • "),
-                href: `/dashboard/payroll/hr/staff-records?highlight=${encodeURIComponent(item.employee_id || item.staff_id || item.name || "")}`
+                href: `/dashboard/payroll/hr/staff?highlight=${encodeURIComponent(item.employee_id || item.staff_id || item.name || "")}`
               }))
             : []
         );

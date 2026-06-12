@@ -84,12 +84,14 @@ function recordMatchesSearch(record, query) {
 function normalizeSearchResult(staff) {
   return {
     employee_id: staff.employee_id || staff.staff_id || "",
+    employee_code: staff.employee_code || "",
     name: staff.name || staff.staff_name || "",
+    date_of_birth: staff.date_of_birth || null,
     email: staff.email || "",
     phone: staff.phone || "",
+    address: staff.address || "",
     hire_date: staff.hire_date || null,
-    department: staff.department || staff.department_id || "",
-    work_location: staff.work_location || "",
+    department_id: staff.department_id || "",
     base_salary: staff.base_salary || 0,
     status: staff.status || ""
   };
@@ -192,19 +194,21 @@ router.put("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res
     try {
       // Only columns that actually exist in the DB staff table
       const dbColumnMap = {
-        name:        'name',
-        staff_name:  'name',       // alias → name
-        email:       'email',
-        phone:       'phone',
-        hire_date:   'hire_date',
-        base_salary: 'base_salary',
-        status:      'status',
+        name:          'name',
+        email:         'email',
+        phone:         'phone',
+        date_of_birth: 'date_of_birth',
+        address:       'address',
+        employee_code: 'employee_code',
+        hire_date:     'hire_date',
+        base_salary:   'base_salary',
+        status:        'status',
         department_id: 'department_id',
         user_user_id:  'user_user_id',
-        race:        'race',
-        religion:    'religion',
-        bank:        'bank',
-        account_no:  'account_no'
+        race:          'race',
+        religion:      'religion',
+        bank:          'bank',
+        account_no:    'account_no'
       };
 
       const setParts = [];
@@ -302,7 +306,9 @@ router.delete("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, 
 router.get("/staff", authenticateToken, allowRoles("Admin", "HR"), (_req, res) => {
   (async () => {
     try {
-      const [rows] = await pool.query('SELECT * FROM staff LIMIT 1000');
+      const [rows] = await pool.query(
+        'SELECT employee_id, employee_code, name, date_of_birth, email, phone, address, department_id, hire_date, status, race, religion, base_salary, bank, account_no, user_user_id, created_at, updated_at FROM staff LIMIT 1000'
+      );
       // If DB has rows, return them; otherwise fall back to in-memory staffProfiles
       if (Array.isArray(rows) && rows.length > 0) return res.json(rows);
       return res.json(staffProfiles);
@@ -319,21 +325,25 @@ router.post("/staff", authenticateToken, allowRoles("Admin", "HR"), (req, res) =
       const employee_id = body.employee_id || body.staff_id || generateStaffId();
       const now = new Date().toISOString();
       const insertCols = [
-        'employee_id','name','email','phone','work_location','department','hire_date','base_salary','status','created_at','updated_at','department_id','user_user_id','race','religion','bank','account_no'
+        'employee_id','employee_code','name','date_of_birth','email','phone','address',
+        'department_id','hire_date','base_salary','status',
+        'created_at','updated_at','user_user_id',
+        'race','religion','bank','account_no'
       ];
       const values = [
         employee_id,
+        body.employee_code || null,
         body.name || body.staff_name || '',
+        body.date_of_birth || null,
         body.email || '',
         body.phone || '',
-        body.work_location || '',
-        body.department || '',
+        body.address || null,
+        body.department_id || null,
         body.hire_date || null,
         body.base_salary ? Number(body.base_salary) : 0,
         body.status || 'Active',
         now,
         now,
-        body.department_id || null,
         body.user_user_id || null,
         body.race || null,
         body.religion || null,
@@ -360,8 +370,7 @@ router.post("/staff", authenticateToken, allowRoles("Admin", "HR"), (req, res) =
         staff_name: body.staff_name || body.name || "",
         email: body.email || "",
         phone: body.phone || "",
-        work_location: body.work_location || "",
-        department: body.department || ""
+        department_id: body.department_id || ""
       };
       staffProfiles.push(profile);
       addAudit(req.user.email, `Added staff record ${profile.staff_id}`, "HR");
@@ -374,8 +383,7 @@ router.post("/staff", authenticateToken, allowRoles("Admin", "HR"), (req, res) =
         staff_name: body.staff_name || body.name || "",
         email: body.email || "",
         phone: body.phone || "",
-        work_location: body.work_location || "",
-        department: body.department || ""
+        department_id: body.department_id || ""
       };
       staffProfiles.push(profile);
       addAudit(req.user.email, `Added staff record ${profile.staff_id}`, "HR");
@@ -403,8 +411,7 @@ router.post("/import-staff", authenticateToken, allowRoles("Admin", "HR"), uploa
         staff_name: name,
         email: `${name.toLowerCase().replace(/\s+/g, ".").replace(/[^a-z0-9.]/g, "")}@company.com`,
         phone: "",
-        work_location: "",
-        department: ""
+        department_id: ""
       };
       staffProfiles.push(newStaff);
       created.push(newStaff);
@@ -608,16 +615,17 @@ router.post(
 
             const [result] = await pool.query(
               `INSERT INTO staff (
-                employee_id, name, email, phone, work_location, hire_date, base_salary,
+                employee_id, name, email, phone, date_of_birth, address, hire_date, base_salary,
                 status, created_at, updated_at, department_id, user_user_id,
-                race, religion, bank, account_no
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                race, religion, bank, account_no, employee_code
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 staff_id,
                 profileName,
                 email || null,
                 phone || null,
-                get("work_location") || null,
+                get("date_of_birth") || null,
+                get("address") || null,
                 hire_date || null,
                 base_salary ? numericBaseSalary : 0,
                 status || "Active",
@@ -628,7 +636,8 @@ router.post(
                 race || null,
                 religion || null,
                 bank || null,
-                account_no || null
+                account_no || null,
+                get("employee_code") || null
               ]
             );
 
@@ -640,7 +649,8 @@ router.post(
                 staff_name: profileName,
                 email: email || "",
                 phone: phone || "",
-                work_location: get("work_location") || "",
+                date_of_birth: get("date_of_birth") || "",
+                address: get("address") || "",
                 hire_date: hire_date || null,
                 base_salary: base_salary ? numericBaseSalary : 0,
                 status: status || "Active",
@@ -651,7 +661,8 @@ router.post(
                 race: race || null,
                 religion: religion || null,
                 bank: bank || null,
-                account_no: account_no || null
+                account_no: account_no || null,
+                employee_code: get("employee_code") || null
               });
               created.push({
                 employee_id: staff_id,
@@ -677,19 +688,20 @@ router.post(
               name: profileName,
               email: email || "",
               phone: phone || "",
-              work_location: get("work_location") || "",
-              department: department_id || "",
+              date_of_birth: get("date_of_birth") || "",
+              address: get("address") || "",
+              department_id: department_id || "",
               hire_date: hire_date || "",
               base_salary: base_salary || "",
               status: status || "Active",
               created_at: createdAt,
               updated_at: updatedAt,
-              department_id: department_id || "",
               user_user_id: user_user_id || "",
               race: race || "",
               religion: religion || "",
               bank: bank || "",
-              account_no: account_no || ""
+              account_no: account_no || "",
+              employee_code: get("employee_code") || ""
             };
             staffProfiles.push(profile);
             created.push(profile);
@@ -1076,6 +1088,20 @@ router.put("/payslips/:id/send-to-staff", authenticateToken, allowRoles("HR", "A
 });
 router.get("/notifications", authenticateToken, allowRoles("HR", "Admin"), (_req, res) => {
   res.json([]);
+});
+
+router.get("/audit-log", authenticateToken, allowRoles("HR", "Admin"), async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT al.action, al.entity_type, al.created_at, u.name AS user_name
+       FROM audit_log al
+       LEFT JOIN user u ON al.user_user_id = u.user_id
+       ORDER BY al.created_at DESC LIMIT 5`
+    );
+    return res.json(rows);
+  } catch (err) {
+    return res.json([]);
+  }
 });
 
 module.exports = router;
