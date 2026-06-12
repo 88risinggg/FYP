@@ -251,30 +251,64 @@ function HRDashboardView() {
   const [staffList, setStaffList] = useState([]);
   const [payslipList, setPayslipList] = useState([]);
   const [auditLog, setAuditLog] = useState([]);
+  const [advanceRequests, setAdvanceRequests] = useState([]);
+  const [showRequests, setShowRequests] = useState(false);
+  const [processingId, setProcessingId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadDashboard() {
       setLoading(true);
       try {
-        const [staffData, payslipData, auditData] = await Promise.all([
+        const [staffData, payslipData, auditData, requestsData] = await Promise.all([
           fetch(`${API_BASE_URL}/api/hr/staff`, { headers: getAuthHeaders(session?.token) }).then(r => r.json()),
           fetch(`${API_BASE_URL}/api/hr/payslips`, { headers: getAuthHeaders(session?.token) }).then(r => r.json()),
-          fetch(`${API_BASE_URL}/api/hr/audit-log`, { headers: getAuthHeaders(session?.token) }).then(r => r.json())
+          fetch(`${API_BASE_URL}/api/hr/audit-log`, { headers: getAuthHeaders(session?.token) }).then(r => r.json()),
+          fetch(`${API_BASE_URL}/api/hr/advance-requests`, { headers: getAuthHeaders(session?.token) }).then(r => r.json())
         ]);
         setStaffList(Array.isArray(staffData) ? staffData : []);
         setPayslipList(Array.isArray(payslipData) ? payslipData : []);
         setAuditLog(Array.isArray(auditData) ? auditData : []);
+        setAdvanceRequests(Array.isArray(requestsData) ? requestsData : []);
       } catch {
         setStaffList([]);
         setPayslipList([]);
         setAuditLog([]);
+        setAdvanceRequests([]);
       } finally {
         setLoading(false);
       }
     }
     loadDashboard();
   }, [session?.token]);
+
+  const handleApproveRequest = async (requestId) => {
+    setProcessingId(requestId);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/hr/advance-requests/${requestId}/approve`, {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(session?.token), 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        setAdvanceRequests(prev => prev.map(r => r.request_id === requestId ? { ...r, status: 'hr_approved' } : r));
+      }
+    } catch {} finally { setProcessingId(null); }
+  };
+
+  const handleRejectRequest = async (requestId) => {
+    setProcessingId(requestId);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/hr/advance-requests/${requestId}/reject`, {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(session?.token), 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        setAdvanceRequests(prev => prev.map(r => r.request_id === requestId ? { ...r, status: 'hr_rejected' } : r));
+      }
+    } catch {} finally { setProcessingId(null); }
+  };
+
+  const pendingRequests = advanceRequests.filter(r => r.status === 'pending');
 
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -429,6 +463,59 @@ function HRDashboardView() {
           ))}
         </div>
       </div>
+
+      {/* Section 3.5 — Advance Pay Requests */}
+      {pendingRequests.length > 0 && (
+        <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
+          <button
+            type="button"
+            onClick={() => setShowRequests(!showRequests)}
+            className="w-full flex items-center justify-between"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🔔</span>
+              <span className="text-sm font-semibold text-white">
+                Pending Advance Requests ({pendingRequests.length})
+              </span>
+            </div>
+            <span className="text-xs text-white/50">{showRequests ? "▲ Hide" : "▼ View"}</span>
+          </button>
+
+          {showRequests && (
+            <div className="mt-4 space-y-3">
+              {pendingRequests.map(req => (
+                <div key={req.request_id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 p-3">
+                  <div>
+                    <p className="text-sm font-medium text-white">{req.staff_id}</p>
+                    <p className="text-xs text-[#d8c6e8]">
+                      ${Number(req.requested_amount).toLocaleString()} — {req.reason || "No reason provided"}
+                    </p>
+                    <p className="text-xs text-white/30 mt-1">{timeAgo(req.created_at)}</p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleApproveRequest(req.request_id)}
+                      disabled={processingId === req.request_id}
+                      className="rounded-lg bg-emerald-500/20 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRejectRequest(req.request_id)}
+                      disabled={processingId === req.request_id}
+                      className="rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Section 4 — Four Column Bottom Grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1929,9 +2016,8 @@ function PayslipsView() {
       const body = await response.json();
       const sent = body.updated_count ?? 0;
       const skipped = (body.skipped && body.skipped.length) ? body.skipped.length : 0;
-      setSuccessMessage(`${sent} sent. ${skipped} skipped.`);
-      // show toast
-      addToast('success', `${sent} sent. ${skipped} skipped.`);
+      setSuccessMessage(`${sent} sent to Finance. ${skipped} skipped.`);
+      addToast('success', `${sent} sent to Finance. ${skipped} skipped.`);
       setConfirmModalOpen(false);
       setConfirmPayload(null);
       await fetchPayslips();
@@ -1939,6 +2025,38 @@ function PayslipsView() {
     } catch (err) {
       setError(err.name === 'TypeError' ? "Network error: Server unreachable" : err.message || 'Bulk send failed');
       addToast('error', err.message || 'Bulk send failed');
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const performBulkSendToStaff = async () => {
+    const approvedIds = payslips
+      .filter(p => p.status === 'admin_approved' || p.status === 'finance_approved')
+      .map(p => p.payslip_id);
+    if (approvedIds.length === 0) {
+      setError('No approved payslips to send to staff');
+      return;
+    }
+    if (!window.confirm(`Send ${approvedIds.length} payslip(s) to staff?`)) return;
+    try {
+      setActionInProgress('bulk-staff');
+      setError("");
+      let sentCount = 0;
+      for (const id of approvedIds) {
+        const res = await fetch(`${API_BASE_URL}/api/hr/payslips/${id}/send-to-staff`, {
+          method: 'PUT',
+          headers: { ...getAuthHeaders(session?.token) }
+        });
+        if (res.ok) sentCount++;
+      }
+      setSuccessMessage(`${sentCount} payslip(s) sent to staff.`);
+      addToast('success', `${sentCount} payslip(s) sent to staff.`);
+      await fetchPayslips();
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (err) {
+      setError(err.message || 'Failed to send to staff');
+      addToast('error', err.message || 'Failed to send to staff');
     } finally {
       setActionInProgress(null);
     }
@@ -2259,29 +2377,19 @@ function PayslipsView() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={selectAllDrafts}
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white hover:bg-white/10"
+              onClick={() => openConfirmBulkSend({ allDrafts: true })}
+              disabled={actionInProgress === 'bulk' || payslips.filter(p => p.status === 'draft').length === 0}
+              className="rounded-lg bg-indigo-500/20 px-4 py-2 text-sm font-medium text-indigo-300 hover:bg-indigo-500/30 disabled:opacity-30 transition"
             >
-              {Array.from(selectedIds).length > 0 ? 'Clear selection' : 'Select Drafts'}
+              {actionInProgress === 'bulk' ? 'Sending...' : `📤 Send to Finance (${payslips.filter(p => p.status === 'draft').length})`}
             </button>
             <button
               type="button"
-              onClick={() => openConfirmBulkSend({ payslip_ids: Array.from(selectedIds) })}
-              disabled={actionInProgress === 'bulk' || selectedIds.size === 0}
-              title="Send selected to Finance"
-              aria-label="Send selected to Finance"
-              className="rounded-lg bg-indigo-500/20 p-2 text-indigo-300 hover:bg-indigo-500/30 disabled:opacity-50 relative"
+              onClick={performBulkSendToStaff}
+              disabled={actionInProgress === 'bulk-staff' || payslips.filter(p => p.status === 'admin_approved' || p.status === 'finance_approved').length === 0}
+              className="rounded-lg bg-emerald-500/20 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-30 transition"
             >
-              {actionInProgress === 'bulk' ? (
-                <span className="text-sm">Sending...</span>
-              ) : (
-                <div className="relative">
-                  <Send size={16} />
-                  {selectedIds.size > 0 && (
-                    <span className="absolute -top-2 -right-2 inline-flex items-center justify-center bg-red-600 text-white text-xs rounded-full w-5 h-5">{selectedIds.size}</span>
-                  )}
-                </div>
-              )}
+              {actionInProgress === 'bulk-staff' ? 'Sending...' : `📨 Send to Staff (${payslips.filter(p => p.status === 'admin_approved' || p.status === 'finance_approved').length})`}
             </button>
             <button
               type="button"
@@ -2311,7 +2419,6 @@ function PayslipsView() {
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-white/10 bg-white/5 text-[#d8c6e8]">
                   <tr>
-                    <th className="px-4 py-3 font-medium"><input type="checkbox" checked={payslips.filter(p=>p.status==='draft').length>0 && payslips.filter(p=>p.status==='draft').every(p=>selectedIds.has(p.payslip_id))} onChange={selectAllDrafts} /></th>
                     <th className="px-4 py-3 font-medium">Payslip ID</th>
                   <th className="px-4 py-3 font-medium">Staff Name</th>
                   <th className="px-4 py-3 font-medium">Period</th>
@@ -2339,14 +2446,6 @@ function PayslipsView() {
                       }}
                       className={`border-b border-white/5 text-white transition-colors duration-300 ${isSearchMatched ? "bg-amber-400/10" : ""}`}
                     >
-                      <td className="px-4 py-3 text-[#d8c6e8]">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(payslip.payslip_id)}
-                          onChange={() => toggleSelect(payslip.payslip_id)}
-                          disabled={payslip.status !== 'draft'}
-                        />
-                      </td>
                       <td className="px-4 py-3 text-[#d8c6e8]">{payslip.payslip_id}</td>
                       <td className="px-4 py-3">{payslip.staff_name}</td>
                       <td className="px-4 py-3 text-[#d8c6e8]">
@@ -2373,26 +2472,6 @@ function PayslipsView() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1">
-                          {payslip.status === 'draft' && (
-                            <button
-                              type="button"
-                              onClick={() => handleSendToFinance(payslip.payslip_id)}
-                              disabled={actionInProgress === payslip.payslip_id}
-                              className="rounded-lg bg-indigo-500/20 px-3 py-1 text-xs text-indigo-300 hover:bg-indigo-500/30 disabled:opacity-50"
-                            >
-                              {actionInProgress === payslip.payslip_id ? 'Sending...' : 'Send to Finance'}
-                            </button>
-                          )}
-                          {payslip.status === 'admin_approved' && (
-                            <button
-                              type="button"
-                              onClick={() => handleSendToStaff(payslip.payslip_id)}
-                              disabled={actionInProgress === payslip.payslip_id}
-                              className="rounded-lg bg-emerald-500/20 px-3 py-1 text-xs text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50"
-                            >
-                              {actionInProgress === payslip.payslip_id ? 'Sending...' : 'Send to Staff'}
-                            </button>
-                          )}
                           <button
                             type="button"
                             onClick={() => setPreviewPayslip(payslip)}
@@ -2400,74 +2479,7 @@ function PayslipsView() {
                           >
                             👁 Preview
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => printPayslip(payslip)}
-                            className="rounded-lg bg-blue-500/20 px-3 py-1 text-xs text-blue-300 hover:bg-blue-500/30"
-                          >
-                            🖨 Print
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setExpandedCpf(expandedCpf === payslip.payslip_id ? null : payslip.payslip_id)}
-                            className="rounded-lg bg-blue-500/20 px-3 py-1 text-xs text-blue-300 hover:bg-blue-500/30"
-                          >
-                            {expandedCpf === payslip.payslip_id ? "Hide CPF" : "CPF Details"}
-                          </button>
                         </div>
-                        {expandedCpf === payslip.payslip_id && (
-                          <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
-                            <p className="text-xs font-semibold uppercase tracking-wider text-blue-300 mb-3">
-                              CPF Contribution Breakdown
-                            </p>
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-sm">
-                                <thead>
-                                  <tr className="border-b border-white/10">
-                                    <th className="px-3 py-2 text-left text-xs text-white/30">Type</th>
-                                    <th className="px-3 py-2 text-right text-xs text-white/30">Rate</th>
-                                    <th className="px-3 py-2 text-right text-xs text-white/30">Amount</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  <tr className="border-b border-white/5">
-                                    <td className="px-3 py-2 text-white">Employee CPF</td>
-                                    <td className="px-3 py-2 text-right text-[#d8c6e8]">20%</td>
-                                    <td className="px-3 py-2 text-right text-red-300">
-                                      -${(Number(payslip.gross_salary || 0) * 0.20).toFixed(2)}
-                                    </td>
-                                  </tr>
-                                  <tr className="border-b border-white/5">
-                                    <td className="px-3 py-2 text-white">Employer CPF</td>
-                                    <td className="px-3 py-2 text-right text-[#d8c6e8]">17%</td>
-                                    <td className="px-3 py-2 text-right text-emerald-300">
-                                      ${(Number(payslip.gross_salary || 0) * 0.17).toFixed(2)}
-                                    </td>
-                                  </tr>
-                                  {payslip.donation_amount > 0 && (
-                                    <tr className="border-b border-white/5">
-                                      <td className="px-3 py-2 text-white">{payslip.donation_scheme || "Donation"}</td>
-                                      <td className="px-3 py-2 text-right text-[#d8c6e8]">Fixed</td>
-                                      <td className="px-3 py-2 text-right text-red-300">
-                                        -${Number(payslip.donation_amount).toFixed(2)}
-                                      </td>
-                                    </tr>
-                                  )}
-                                  <tr className="bg-blue-500/10">
-                                    <td className="px-3 py-2 font-semibold text-blue-300">Total CPF</td>
-                                    <td className="px-3 py-2 text-right font-semibold text-blue-300">37%</td>
-                                    <td className="px-3 py-2 text-right font-semibold text-blue-300">
-                                      ${(Number(payslip.gross_salary || 0) * 0.37).toFixed(2)}
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </div>
-                            <p className="text-xs text-white/20 mt-2">
-                              Employee CPF is deducted from gross salary. Employer CPF is paid by company on top of salary.
-                            </p>
-                          </div>
-                        )}
                       </td>
                     </tr>
                   );
