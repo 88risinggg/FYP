@@ -17,6 +17,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
+import * as XLSX from "xlsx";
 
 const pageTitle = "Automated Payroll System – HR Payroll Upload & Payslip Generation";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -795,19 +796,11 @@ function StaffRecordsView() {
       s.account_no || ""
     ]);
 
-    const csvContent = [headers, ...rows]
-      .map(row => row.map(cell =>
-        `"${String(cell).replace(/"/g, '""')}"`
-      ).join(","))
-      .join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `staff_records_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const wsData = [headers, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Staff Records");
+    XLSX.writeFile(wb, `staff_records_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   const registerRowRef = (key) => (node) => {
@@ -1129,7 +1122,7 @@ function StaffRecordsView() {
             onClick={exportStaffCSV}
             className="rounded-lg bg-emerald-500/20 px-3 py-2 text-sm text-emerald-300 hover:bg-emerald-500/40 flex items-center gap-2 shrink-0"
           >
-            ⬇ Export CSV
+            ⬇ Export XLSX
           </button>
           <div className="text-sm text-[#d8c6e8]">
             {getSearchCountLabel(filteredStaff.length, staffRecords.length, searchTerm.trim())}
