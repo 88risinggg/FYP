@@ -3,103 +3,235 @@ const {
   toCurrencyNumber,
   writeAuditLog
 } = require("./invoiceController");
+const { assessInvoiceRisk } = require("../services/fraudDetectionService");
 
-const VALID_STATUSES = new Set(["Draft", "Sent", "Viewed", "Paid", "Overdue"]);
+const EXCEL_FILE_ERROR = "Only Excel invoice files (.xlsx, .xls) are allowed.";
+const INVOICE_FILE_NAME_ERROR = 'Invoice upload file name or path must contain "invoice".';
+const ALLOWED_EXCEL_EXTENSIONS = new Set([".xlsx", ".xls"]);
+const ALLOWED_EXCEL_MIME_TYPES = new Set([
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel"
+]);
+const REQUIRED_TEMPLATE_COLUMNS = [
+  "Invoice Number",
+  "Customer Name",
+  "Invoice Date",
+  "Due Date",
+  "Amount"
+];
+
+function normalizeHeader(header) {
+  return String(header || "").trim().toLowerCase();
+}
+
+function getFileExtension(fileName) {
+  const match = String(fileName || "").toLowerCase().match(/\.[^.]+$/);
+  return match ? match[0] : "";
+}
+
+function getUploadFilePath(file = {}) {
+  return String(file.path || file.name || "");
+}
+
+function validateExcelFileMetadata(file = {}) {
+  const uploadPath = getUploadFilePath(file);
+  const extension = getFileExtension(uploadPath);
+  const mimeType = String(file.type || "").trim();
+
+  if (!ALLOWED_EXCEL_EXTENSIONS.has(extension)) {
+    return EXCEL_FILE_ERROR;
+  }
+
+  if (mimeType && !ALLOWED_EXCEL_MIME_TYPES.has(mimeType)) {
+    return EXCEL_FILE_ERROR;
+  }
+
+  if (!uploadPath.toLowerCase().includes("invoice")) {
+    return INVOICE_FILE_NAME_ERROR;
+  }
+
+  return "";
+}
+
+function getRowValue(row, columnName) {
+  const normalizedColumn = normalizeHeader(columnName);
+  const matchingKey = Object.keys(row || {}).find((key) => normalizeHeader(key) === normalizedColumn);
+  return matchingKey ? row[matchingKey] : "";
+}
 
 function normalizeDate(value) {
-  if (!value || Number.isNaN(Date.parse(value))) {
+  if (!value) {
     return null;
   }
 
-  return String(value).slice(0, 10);
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString().slice(0, 10);
 }
 
-function buildNextInvoiceNumber(lastInvoiceId, offset) {
-  const match = String(lastInvoiceId || "").match(/^INV-(\d+)$/i);
-  const baseNumber = match ? Number(match[1]) : 0;
-  return `INV-${String(baseNumber + offset).padStart(4, "0")}`;
-}
+function parseAmount(value) {
+  if (typeof value === "number") {
+    return value;
+  }
 
-function toDatabaseInvoiceStatus(status) {
-  return status === "Paid" ? "Paid" : "Pending";
+  return Number(String(value || "").replace(/[$,\s]/g, ""));
 }
 
 function normalizeImportedRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((row, index) => {
-    const quantity = Number(row.quantity);
-    const unitPrice = Number(row.unit_price);
-    const status = row.status || "Sent";
+    const amount = parseAmount(getRowValue(row, "Amount"));
 
     return {
       row_number: index + 1,
-      customer_id: Number(row.customer_id),
-      customer_name: String(row.customer_name || "").trim(),
-      customer_email: String(row.customer_email || "").trim(),
-      issue_date: normalizeDate(row.issue_date),
-      due_date: normalizeDate(row.due_date),
-      description: String(row.description || "").trim(),
-      quantity,
-      unit_price: toCurrencyNumber(unitPrice),
-      amount: toCurrencyNumber(quantity * unitPrice),
-      status,
+      invoice_number: String(getRowValue(row, "Invoice Number") || "").trim(),
+      customer_name: String(getRowValue(row, "Customer Name") || "").trim(),
+      issue_date: normalizeDate(getRowValue(row, "Invoice Date")),
+      due_date: normalizeDate(getRowValue(row, "Due Date")),
+      amount: toCurrencyNumber(amount),
+      vendor_name: String(getRowValue(row, "Vendor Name") || "").trim(),
+      bank_account: String(getRowValue(row, "Bank Account") || "").trim(),
+      status: "Draft",
       errors: []
     };
   });
 }
 
-async function validateBulkRows(req, res) {
-  try {
-    const rows = normalizeImportedRows(req.body.rows);
-    const customerIds = [...new Set(rows.map((row) => row.customer_id).filter(Boolean))];
-    const existingCustomerIds = new Set();
+function getMissingTemplateColumns(rows) {
+  const firstRow = Array.isArray(rows) && rows.length > 0 ? rows[0] : {};
+  const headers = new Set(Object.keys(firstRow).map(normalizeHeader));
 
-    if (customerIds.length > 0) {
-      const [customers] = await pool.query(
-        "SELECT customer_id FROM customer WHERE customer_id IN (?)",
-        [customerIds]
-      );
-      customers.forEach((customer) => existingCustomerIds.add(Number(customer.customer_id)));
+  return REQUIRED_TEMPLATE_COLUMNS.filter((column) => !headers.has(normalizeHeader(column)));
+}
+
+async function validateInvoiceImport(rows, file, connection = pool) {
+  const fileError = validateExcelFileMetadata(file);
+  if (fileError) {
+    return {
+      message: fileError,
+      rows: [],
+      validCount: 0,
+      invalidCount: 0,
+      missingColumns: []
+    };
+  }
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return {
+      message: "Invoice file does not contain any invoice rows.",
+      rows: [],
+      validCount: 0,
+      invalidCount: 0,
+      missingColumns: []
+    };
+  }
+
+  // The template check runs before row processing so malformed spreadsheets fail as a whole.
+  const missingColumns = getMissingTemplateColumns(rows);
+  if (missingColumns.length > 0) {
+    return {
+      message: `Missing required columns: ${missingColumns.join(", ")}`,
+      rows: [],
+      validCount: 0,
+      invalidCount: rows.length,
+      missingColumns
+    };
+  }
+
+  const normalizedRows = normalizeImportedRows(rows);
+  const customerNames = [...new Set(normalizedRows.map((row) => row.customer_name).filter(Boolean))];
+  const invoiceNumbers = normalizedRows.map((row) => row.invoice_number).filter(Boolean);
+  const customerIdsByName = new Map();
+  const existingInvoiceNumbers = new Set();
+
+  if (customerNames.length > 0) {
+    const [customers] = await connection.query(
+      "SELECT customer_id, name FROM customer WHERE name IN (?)",
+      [customerNames]
+    );
+    customers.forEach((customer) => {
+      customerIdsByName.set(String(customer.name).trim().toLowerCase(), Number(customer.customer_id));
+    });
+  }
+
+  if (invoiceNumbers.length > 0) {
+    const [existingInvoices] = await connection.query(
+      "SELECT invoiceId FROM invoice WHERE invoiceId IN (?)",
+      [invoiceNumbers]
+    );
+    existingInvoices.forEach((invoice) => existingInvoiceNumbers.add(String(invoice.invoiceId).trim()));
+  }
+
+  const seenInvoiceNumbers = new Set();
+  const duplicateInvoiceNumbers = new Set();
+  invoiceNumbers.forEach((invoiceNumber) => {
+    if (seenInvoiceNumbers.has(invoiceNumber)) {
+      duplicateInvoiceNumbers.add(invoiceNumber);
+    }
+    seenInvoiceNumbers.add(invoiceNumber);
+  });
+
+  // Each row is validated independently, but any invalid row blocks the later insert step.
+  const validatedRows = normalizedRows.map((row) => {
+    const errors = [];
+    const customerId = customerIdsByName.get(row.customer_name.toLowerCase()) || null;
+
+    if (!row.invoice_number) {
+      errors.push("Invoice Number is required");
     }
 
-    const validatedRows = rows.map((row) => {
-      const errors = [];
+    if (row.invoice_number && existingInvoiceNumbers.has(row.invoice_number)) {
+      errors.push(`Duplicate invoice number already exists: ${row.invoice_number}`);
+    }
 
-      if (!row.customer_id || !existingCustomerIds.has(row.customer_id)) {
-        errors.push("Valid customer_id is required");
-      }
+    if (row.invoice_number && duplicateInvoiceNumbers.has(row.invoice_number)) {
+      errors.push(`Duplicate invoice number in upload: ${row.invoice_number}`);
+    }
 
-      if (!row.issue_date || !row.due_date) {
-        errors.push("Valid issue_date and due_date are required");
-      }
+    if (!row.customer_name || !customerId) {
+      errors.push("Customer Name must match an existing customer");
+    }
 
-      if (!row.description) {
-        errors.push("Description is required");
-      }
+    if (!row.issue_date) {
+      errors.push("Invoice Date must be a valid date");
+    }
 
-      if (!Number.isInteger(row.quantity) || row.quantity <= 0) {
-        errors.push("Quantity must be a positive whole number");
-      }
+    if (!row.due_date) {
+      errors.push("Due Date must be a valid date");
+    }
 
-      if (!Number.isFinite(row.unit_price) || row.unit_price < 0) {
-        errors.push("Unit price must be zero or greater");
-      }
+    if (!Number.isFinite(row.amount) || row.amount <= 0) {
+      errors.push("Amount must be numeric and greater than 0");
+    }
 
-      if (!VALID_STATUSES.has(row.status)) {
-        errors.push("Status must be Draft, Sent, Viewed, Paid, or Overdue");
-      }
+    return {
+      ...row,
+      customer_id: customerId,
+      errors,
+      is_valid: errors.length === 0
+    };
+  });
 
-      return {
-        ...row,
-        errors,
-        is_valid: errors.length === 0
-      };
-    });
+  return {
+    message: "",
+    rows: validatedRows,
+    validCount: validatedRows.filter((row) => row.is_valid).length,
+    invalidCount: validatedRows.filter((row) => !row.is_valid).length,
+    missingColumns: []
+  };
+}
 
-    res.json({
-      rows: validatedRows,
-      validCount: validatedRows.filter((row) => row.is_valid).length,
-      invalidCount: validatedRows.filter((row) => !row.is_valid).length
-    });
+async function validateBulkRows(req, res) {
+  try {
+    const validation = await validateInvoiceImport(req.body.rows, req.body.file);
+
+    if (validation.message) {
+      return res.status(400).json(validation);
+    }
+
+    res.json(validation);
   } catch (error) {
     res.status(500).json({
       message: "Failed to validate imported rows.",
@@ -109,73 +241,29 @@ async function validateBulkRows(req, res) {
 }
 
 async function processBulkInvoices(req, res) {
-  const validationResponse = { body: req.body };
-  const rows = normalizeImportedRows(validationResponse.body.rows);
-
-  if (rows.length === 0) {
-    return res.status(400).json({ message: "No import rows were submitted." });
-  }
-
   const connection = await pool.getConnection();
 
   try {
     await connection.beginTransaction();
 
-    const customerIds = [...new Set(rows.map((row) => row.customer_id).filter(Boolean))];
-    const [customers] = customerIds.length > 0
-      ? await connection.query("SELECT customer_id FROM customer WHERE customer_id IN (?)", [customerIds])
-      : [[]];
-    const existingCustomerIds = new Set(customers.map((customer) => Number(customer.customer_id)));
-    const invalidRows = rows.filter((row) =>
-      !row.customer_id ||
-      !existingCustomerIds.has(row.customer_id) ||
-      !row.issue_date ||
-      !row.due_date ||
-      !row.description ||
-      !Number.isInteger(row.quantity) ||
-      row.quantity <= 0 ||
-      row.unit_price < 0 ||
-      !VALID_STATUSES.has(row.status)
-    );
+    const validation = await validateInvoiceImport(req.body.rows, req.body.file, connection);
 
-    if (invalidRows.length > 0) {
+    if (validation.message || validation.invalidCount > 0) {
       await connection.rollback();
       return res.status(400).json({
-        message: "Bulk upload contains invalid rows. Validate the file before processing.",
-        invalidRows: invalidRows.map((row) => row.row_number)
+        message: validation.message || "Bulk upload contains invalid rows. No invoices were saved.",
+        rows: validation.rows,
+        invalidRows: validation.rows.filter((row) => !row.is_valid).map((row) => row.row_number),
+        missingColumns: validation.missingColumns
       });
     }
 
-    const groupedRows = rows.reduce((acc, row) => {
-      const key = [row.customer_id, row.issue_date, row.due_date, row.status].join("|");
-      acc[key] = acc[key] || {
-        customer_id: row.customer_id,
-        issue_date: row.issue_date,
-        due_date: row.due_date,
-        status: row.status,
-        items: []
-      };
-      acc[key].items.push(row);
-      return acc;
-    }, {});
-
-    const invoices = Object.values(groupedRows);
-    const [lastInvoiceRows] = await connection.query(`
-      SELECT invoiceId
-      FROM invoice
-      WHERE invoiceId LIKE 'INV-%'
-      ORDER BY invoice_id DESC
-      LIMIT 1
-      FOR UPDATE
-    `);
+    const invoices = validation.rows;
 
     const createdInvoices = [];
 
-    for (let index = 0; index < invoices.length; index += 1) {
-      const invoice = invoices[index];
-      const invoiceId = buildNextInvoiceNumber(lastInvoiceRows[0]?.invoiceId, index + 1);
-      const totalAmount = toCurrencyNumber(invoice.items.reduce((sum, item) => sum + item.amount, 0));
-
+    // Inserts happen only after all validation passes, keeping invalid uploads out of the database.
+    for (const invoice of invoices) {
       const [invoiceResult] = await connection.query(
         `
           INSERT INTO invoice
@@ -183,11 +271,11 @@ async function processBulkInvoices(req, res) {
           VALUES (?, ?, ?, ?, ?, ?, NOW())
         `,
         [
-          toDatabaseInvoiceStatus(invoice.status),
+          "Draft",
           invoice.issue_date,
           invoice.due_date,
-          invoiceId,
-          totalAmount,
+          invoice.invoice_number,
+          invoice.amount,
           invoice.customer_id
         ]
       );
@@ -199,18 +287,18 @@ async function processBulkInvoices(req, res) {
             (description, quantity, unit_price, amount, invoice_invoice_id)
           VALUES ?
         `,
-        [invoice.items.map((item) => [
-          item.description,
-          item.quantity,
-          item.unit_price,
-          item.amount,
+        [[[
+          `Imported invoice ${invoice.invoice_number}`,
+          1,
+          invoice.amount,
+          invoice.amount,
           invoicePrimaryId
-        ])]
+        ]]]
       );
 
       await writeAuditLog(
         connection,
-        `invoice_status:${invoice.status}`,
+        "invoice_status:Draft",
         "invoice",
         invoicePrimaryId,
         req.user?.userId
@@ -222,8 +310,19 @@ async function processBulkInvoices(req, res) {
         invoicePrimaryId,
         req.user?.userId
       );
+      await writeAuditLog(connection, "invoice_uploaded", "invoice", invoicePrimaryId, req.user?.userId);
 
-      createdInvoices.push({ invoice_id: invoicePrimaryId, invoiceId, total_amount: totalAmount });
+      await assessInvoiceRisk(connection, invoicePrimaryId, {
+        vendor_name: invoice.vendor_name,
+        bank_account: invoice.bank_account,
+        source: "bulk_invoice"
+      });
+
+      createdInvoices.push({
+        invoice_id: invoicePrimaryId,
+        invoiceId: invoice.invoice_number,
+        total_amount: invoice.amount
+      });
     }
 
     await writeAuditLog(

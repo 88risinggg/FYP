@@ -4,7 +4,8 @@ const {
   getCustomers,
   getInvoices,
   getNextInvoiceNumber,
-  updateInvoiceStatus
+  scheduleInvoices,
+  sendInvoice
 } = require("../controllers/invoiceController");
 const { authenticateToken } = require("../middleware/authMiddleware");
 
@@ -16,6 +17,7 @@ router.get("/", getInvoices);
 router.get("/customers", getCustomers);
 router.get("/next-number", getNextInvoiceNumber);
 router.post("/", createInvoice);
-router.put("/:id/status", updateInvoiceStatus);
+router.post("/schedule", scheduleInvoices);
+router.post("/:id/send", sendInvoice);
 
 module.exports = router;

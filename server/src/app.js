@@ -9,6 +9,7 @@ const customerRoutes = require("./routes/customerRoutes");
 const bulkInvoiceRoutes = require("./routes/bulkInvoiceRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const reportRoutes = require("./routes/reportRoutes");
+const fraudRoutes = require("./routes/fraudRoutes");
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use("/api/customers", customerRoutes);
 app.use("/api/bulk-invoices", bulkInvoiceRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/fraud", fraudRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

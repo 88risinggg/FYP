@@ -1,6 +1,8 @@
 const { pool } = require("../config/db");
+const { assessInvoiceRisk } = require("../services/fraudDetectionService");
+const { sendInvoiceEmail } = require("../services/invoiceDeliveryService");
 
-const VALID_STATUSES = new Set(["Draft", "Sent", "Viewed", "Paid", "Overdue"]);
+const VALID_STATUSES = new Set(["Draft", "Scheduled", "Sent", "Paid", "Overdue"]);
 const STATUS_AUDIT_PREFIX = "invoice_status:";
 
 function toCurrencyNumber(value) {
@@ -15,7 +17,7 @@ function buildNextInvoiceNumber(lastInvoiceId) {
 }
 
 function toDatabaseInvoiceStatus(status) {
-  return status === "Paid" ? "Paid" : "Pending";
+  return VALID_STATUSES.has(status) ? status : "Draft";
 }
 
 function toOperationalInvoiceStatus(rowStatus, auditStatus) {
@@ -23,8 +25,8 @@ function toOperationalInvoiceStatus(rowStatus, auditStatus) {
     return auditStatus;
   }
 
-  if (rowStatus === "Paid") {
-    return "Paid";
+  if (VALID_STATUSES.has(rowStatus)) {
+    return rowStatus;
   }
 
   return "Draft";
@@ -52,7 +54,6 @@ function validateInvoicePayload(body) {
   const customerId = Number(body.customer_id);
   const issueDate = normalizeDate(body.issue_date);
   const dueDate = normalizeDate(body.due_date);
-  const status = body.status || "Draft";
   const items = Array.isArray(body.items) ? body.items : [];
 
   if (!customerId) {
@@ -61,10 +62,6 @@ function validateInvoicePayload(body) {
 
   if (!issueDate || !dueDate) {
     return { error: "Issue date and due date are required." };
-  }
-
-  if (!VALID_STATUSES.has(status)) {
-    return { error: "Invalid invoice status." };
   }
 
   if (items.length === 0) {
@@ -102,7 +99,7 @@ function validateInvoicePayload(body) {
       customer_id: customerId,
       issue_date: issueDate,
       due_date: dueDate,
-      status,
+      status: "Draft",
       items: normalizedItems,
       total_amount: toCurrencyNumber(
         normalizedItems.reduce((sum, item) => sum + item.amount, 0)
@@ -123,6 +120,7 @@ async function getInvoices(req, res) {
         i.total_amount,
         i.customer_id,
         i.created_at,
+        i.scheduled_at,
         c.name AS customer_name,
         c.email AS customer_email,
         c.address AS customer_address
@@ -266,7 +264,7 @@ async function createInvoice(req, res) {
         VALUES (?, ?, ?, ?, ?, ?, NOW())
       `,
       [
-        toDatabaseInvoiceStatus(invoice.status),
+        "Draft",
         invoice.issue_date,
         invoice.due_date,
         invoiceId,
@@ -295,11 +293,18 @@ async function createInvoice(req, res) {
 
     await writeAuditLog(
       connection,
-      `${STATUS_AUDIT_PREFIX}${invoice.status}`,
+      `${STATUS_AUDIT_PREFIX}Draft`,
       "invoice",
       invoicePrimaryId,
       req.user?.userId
     );
+    await writeAuditLog(connection, "invoice_created", "invoice", invoicePrimaryId, req.user?.userId);
+
+    await assessInvoiceRisk(connection, invoicePrimaryId, {
+      vendor_name: req.body.vendor_name,
+      bank_account: req.body.bank_account,
+      source: "single_invoice"
+    });
 
     await connection.commit();
 
@@ -308,7 +313,7 @@ async function createInvoice(req, res) {
       invoice: {
         invoice_id: invoicePrimaryId,
         invoiceId,
-        status: invoice.status,
+        status: "Draft",
         total_amount: invoice.total_amount
       }
     });
@@ -323,57 +328,159 @@ async function createInvoice(req, res) {
   }
 }
 
-async function updateInvoiceStatus(req, res) {
+async function sendInvoice(req, res) {
   const invoiceId = Number(req.params.id);
-  const status = req.body.status;
 
   if (!invoiceId) {
     return res.status(400).json({ message: "Invalid invoice id." });
   }
 
-  if (!VALID_STATUSES.has(status)) {
-    return res.status(400).json({ message: "Invalid invoice status." });
-  }
+  const connection = await pool.getConnection();
 
   try {
-    const connection = await pool.getConnection();
+    await connection.beginTransaction();
 
-    try {
-      await connection.beginTransaction();
+    const [rows] = await connection.query(
+      `
+        SELECT
+          i.invoice_id,
+          i.invoiceId,
+          i.status,
+          i.total_amount,
+          c.name AS customer_name,
+          c.email AS customer_email
+        FROM invoice i
+        INNER JOIN customer c ON c.customer_id = i.customer_id
+        WHERE i.invoice_id = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [invoiceId]
+    );
 
-      const [result] = await connection.query(
-        "UPDATE invoice SET status = ? WHERE invoice_id = ?",
-        [toDatabaseInvoiceStatus(status), invoiceId]
-      );
+    const invoice = rows[0];
+    if (!invoice) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Invoice not found." });
+    }
 
-      if (result.affectedRows === 0) {
-        await connection.rollback();
-        return res.status(404).json({ message: "Invoice not found." });
-      }
+    if (invoice.status === "Paid") {
+      await connection.rollback();
+      return res.status(400).json({ message: "Paid invoices cannot be sent again." });
+    }
 
+    await sendInvoiceEmail(invoice);
+
+    await connection.query(
+      "UPDATE invoice SET status = 'Sent', scheduled_at = NULL WHERE invoice_id = ?",
+      [invoiceId]
+    );
+    await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}Sent`, "invoice", invoiceId, req.user?.userId);
+    await writeAuditLog(connection, "invoice_sent", "invoice", invoiceId, req.user?.userId);
+
+    await connection.commit();
+
+    res.json({
+      message: "Invoice sent.",
+      invoice_id: invoiceId,
+      status: "Sent"
+    });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({
+      message: "Failed to send invoice.",
+      detail: error.message
+    });
+  } finally {
+    connection.release();
+  }
+}
+
+function normalizeScheduledAt(value) {
+  if (!value || Number.isNaN(Date.parse(value))) {
+    return null;
+  }
+
+  return new Date(value);
+}
+
+async function scheduleInvoices(req, res) {
+  const invoiceIds = Array.isArray(req.body.invoice_ids)
+    ? [...new Set(req.body.invoice_ids.map((id) => Number(id)).filter(Boolean))]
+    : [];
+  const scheduledAt = normalizeScheduledAt(req.body.scheduled_at);
+
+  if (invoiceIds.length === 0) {
+    return res.status(400).json({ message: "At least one invoice id is required." });
+  }
+
+  if (!scheduledAt) {
+    return res.status(400).json({ message: "A valid scheduled_at timestamp is required." });
+  }
+
+  if (scheduledAt.getTime() <= Date.now()) {
+    return res.status(400).json({ message: "Schedule time must be in the future." });
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [existingInvoices] = await connection.query(
+      "SELECT invoice_id, status FROM invoice WHERE invoice_id IN (?) FOR UPDATE",
+      [invoiceIds]
+    );
+    const existingIds = existingInvoices.map((invoice) => Number(invoice.invoice_id));
+
+    if (existingIds.length !== invoiceIds.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: "One or more invoices were not found." });
+    }
+
+    const unschedulableInvoice = existingInvoices.find((invoice) => invoice.status !== "Draft");
+    if (unschedulableInvoice) {
+      await connection.rollback();
+      return res.status(400).json({ message: "Only draft invoices can be scheduled." });
+    }
+
+    await connection.query(
+      "UPDATE invoice SET status = 'Scheduled', scheduled_at = ? WHERE invoice_id IN (?)",
+      [scheduledAt, invoiceIds]
+    );
+
+    for (const invoiceId of invoiceIds) {
       await writeAuditLog(
         connection,
-        `${STATUS_AUDIT_PREFIX}${status}`,
+        `${STATUS_AUDIT_PREFIX}Scheduled`,
         "invoice",
         invoiceId,
         req.user?.userId
       );
-
-      await connection.commit();
-    } finally {
-      connection.release();
+      await writeAuditLog(
+        connection,
+        `invoice_scheduled:${scheduledAt.toISOString()}`,
+        "invoice",
+        invoiceId,
+        req.user?.userId
+      );
     }
 
+    await connection.commit();
+
     res.json({
-      message: "Invoice status updated.",
-      invoice_id: invoiceId,
-      status
+      message: "Invoices scheduled successfully.",
+      scheduledCount: invoiceIds.length,
+      scheduled_at: scheduledAt.toISOString()
     });
   } catch (error) {
+    await connection.rollback();
     res.status(500).json({
-      message: "Failed to update invoice status.",
+      message: "Failed to schedule invoices.",
       detail: error.message
     });
+  } finally {
+    connection.release();
   }
 }
 
@@ -382,7 +489,10 @@ module.exports = {
   getCustomers,
   getInvoices,
   getNextInvoiceNumber,
-  updateInvoiceStatus,
+  scheduleInvoices,
+  sendInvoice,
   toCurrencyNumber,
+  STATUS_AUDIT_PREFIX,
+  toDatabaseInvoiceStatus,
   writeAuditLog
 };

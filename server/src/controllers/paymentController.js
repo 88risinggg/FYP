@@ -22,6 +22,28 @@ async function ensurePaymentMethod(connection, methodName) {
   return result.insertId;
 }
 
+async function ensureInvoiceCanBePaid(connection, invoiceId) {
+  const [rows] = await connection.query(
+    `
+      SELECT risk_score, risk_level, review_status
+      FROM invoice_fraud_assessment
+      WHERE invoice_id = ?
+      LIMIT 1
+    `,
+    [invoiceId]
+  );
+
+  const assessment = rows[0];
+  if (assessment?.risk_level === "High" && assessment.review_status !== "Approved") {
+    return {
+      allowed: false,
+      message: "High-risk invoices require manual fraud review before payment processing."
+    };
+  }
+
+  return { allowed: true };
+}
+
 async function getPaymentsWorkspace(req, res) {
   try {
     const [outstandingInvoices] = await pool.query(`
@@ -98,6 +120,12 @@ async function recordManualPayment(req, res) {
       return res.status(404).json({ message: "Invoice not found." });
     }
 
+    const paymentCheck = await ensureInvoiceCanBePaid(connection, invoiceId);
+    if (!paymentCheck.allowed) {
+      await connection.rollback();
+      return res.status(400).json({ message: paymentCheck.message });
+    }
+
     const paymentMethodId = await ensurePaymentMethod(connection, "Bank Transfer");
 
     const [paymentResult] = await connection.query(
@@ -158,6 +186,11 @@ async function createStripePaymentLink(req, res) {
     }
 
     const invoice = rows[0];
+    const paymentCheck = await ensureInvoiceCanBePaid(pool, invoiceId);
+    if (!paymentCheck.allowed) {
+      return res.status(400).json({ message: paymentCheck.message });
+    }
+
     const paymentUrl = `https://pay.stripe.com/test_${Buffer.from(`${invoice.invoiceId}:${invoice.invoice_id}`).toString("base64url")}`;
 
     res.json({

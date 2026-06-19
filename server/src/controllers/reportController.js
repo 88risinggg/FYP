@@ -16,6 +16,7 @@ async function getInvoiceReports(req, res) {
       SELECT
         DATE_FORMAT(issue_date, '%Y-%m') AS month,
         COALESCE(SUM(total_amount), 0) AS revenue,
+        COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS collected,
         COUNT(*) AS invoice_count
       FROM invoice
       GROUP BY DATE_FORMAT(issue_date, '%Y-%m')
@@ -57,7 +58,45 @@ async function getInvoiceReports(req, res) {
       LIMIT 8
     `);
 
+    // Financial Statement Data
+    const [paidInvoices] = await pool.query(`
+      SELECT
+        COUNT(*) AS paid_count,
+        COALESCE(SUM(total_amount), 0) AS total_collected,
+        COALESCE(AVG(total_amount), 0) AS avg_invoice_value
+      FROM invoice WHERE status = 'Paid'
+    `);
+
+    const [overdueInvoices] = await pool.query(`
+      SELECT
+        COUNT(*) AS overdue_count,
+        COALESCE(SUM(total_amount), 0) AS overdue_total
+      FROM invoice WHERE status = 'Overdue'
+    `);
+
+    const [thisMonthRevenue] = await pool.query(`
+      SELECT COALESCE(SUM(total_amount), 0) AS revenue
+      FROM invoice
+      WHERE DATE_FORMAT(issue_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')
+    `);
+
+    const [lastMonthRevenue] = await pool.query(`
+      SELECT COALESCE(SUM(total_amount), 0) AS revenue
+      FROM invoice
+      WHERE DATE_FORMAT(issue_date, '%Y-%m') = DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m')
+    `);
+
+    const [customerCount] = await pool.query(`SELECT COUNT(*) AS count FROM customer`);
+
     const summary = summaryRows[0] || {};
+    const paid = paidInvoices[0] || {};
+    const overdue = overdueInvoices[0] || {};
+    const totalRev = Number(summary.total_revenue || 0);
+    const paidRev = Number(summary.paid_revenue || 0);
+    const collectionRate = totalRev > 0 ? ((paidRev / totalRev) * 100) : 0;
+    const revenuePerCustomer = Number(customerCount[0]?.count || 1) > 0
+      ? totalRev / Number(customerCount[0].count)
+      : 0;
 
     res.json({
       summary: {
@@ -68,7 +107,8 @@ async function getInvoiceReports(req, res) {
       },
       monthlyRevenue: monthlyRows.map((row) => ({
         ...row,
-        revenue: toCurrencyNumber(row.revenue)
+        revenue: toCurrencyNumber(row.revenue),
+        collected: toCurrencyNumber(row.collected)
       })),
       statusDistribution: statusRows.map((row) => ({
         ...row,
@@ -81,7 +121,34 @@ async function getInvoiceReports(req, res) {
       topCustomers: customerRows.map((row) => ({
         ...row,
         total: toCurrencyNumber(row.total)
-      }))
+      })),
+      financialStatement: {
+        incomeStatement: {
+          grossRevenue: toCurrencyNumber(summary.total_revenue),
+          collections: toCurrencyNumber(paid.total_collected),
+          outstanding: toCurrencyNumber(summary.outstanding_revenue),
+          overdue: toCurrencyNumber(overdue.overdue_total),
+          netReceivable: toCurrencyNumber(Number(summary.total_revenue) - Number(paid.total_collected))
+        },
+        cashFlow: {
+          totalInflow: toCurrencyNumber(paid.total_collected),
+          pendingInflow: toCurrencyNumber(summary.outstanding_revenue),
+          overdueAmount: toCurrencyNumber(overdue.overdue_total),
+          thisMonthRevenue: toCurrencyNumber(thisMonthRevenue[0]?.revenue),
+          lastMonthRevenue: toCurrencyNumber(lastMonthRevenue[0]?.revenue),
+          monthOverMonthGrowth: Number(lastMonthRevenue[0]?.revenue) > 0
+            ? toCurrencyNumber(((Number(thisMonthRevenue[0]?.revenue) - Number(lastMonthRevenue[0]?.revenue)) / Number(lastMonthRevenue[0]?.revenue)) * 100)
+            : 0
+        },
+        ratios: {
+          collectionRate: toCurrencyNumber(collectionRate),
+          avgInvoiceValue: toCurrencyNumber(paid.avg_invoice_value),
+          revenuePerCustomer: toCurrencyNumber(revenuePerCustomer),
+          totalCustomers: Number(customerCount[0]?.count || 0),
+          paidInvoiceCount: Number(paid.paid_count || 0),
+          overdueInvoiceCount: Number(overdue.overdue_count || 0)
+        }
+      }
     });
   } catch (error) {
     res.status(500).json({
