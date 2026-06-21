@@ -1,13 +1,38 @@
+import { clearSession, getStoredSession } from "./sessionService.js";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
+function forceLogout() {
+  clearSession();
+  if (window.location.pathname !== "/login") {
+    window.location.replace("/login");
+  }
+}
+
 export async function apiRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers
-    },
-    ...options
-  });
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers
+      },
+      ...options
+    });
+  } catch (networkError) {
+    // Server is unreachable (Ctrl+C / crashed) — force logout
+    if (getStoredSession()) {
+      forceLogout();
+    }
+    throw new Error("Server is unavailable");
+  }
+
+  // 401 means token expired or invalid — also force logout
+  if (response.status === 401 && getStoredSession()) {
+    forceLogout();
+    throw new Error("Session expired");
+  }
 
   const data = await response.json().catch(() => ({}));
 
@@ -16,6 +41,34 @@ export async function apiRequest(path, options = {}) {
   }
 
   return data;
+}
+
+// Background health check — polls every 5 seconds while logged in.
+// If server goes down, immediately logs out.
+let healthCheckInterval = null;
+
+export function startHealthCheck() {
+  if (healthCheckInterval) return;
+
+  healthCheckInterval = setInterval(async () => {
+    if (!getStoredSession()) {
+      stopHealthCheck();
+      return;
+    }
+
+    try {
+      await fetch(`${API_BASE_URL}/api/health`, { method: "GET" });
+    } catch {
+      forceLogout();
+    }
+  }, 5000);
+}
+
+export function stopHealthCheck() {
+  if (healthCheckInterval) {
+    clearInterval(healthCheckInterval);
+    healthCheckInterval = null;
+  }
 }
 
 export function downloadBlob(blob, fileName) {
