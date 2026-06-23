@@ -1,3 +1,4 @@
+// [HR BRANCH - Steven] Added for HR role check — do not remove
 function allowRoles(...allowed) {
   return function (req, res, next) {
     if (!req.user) {

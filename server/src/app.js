@@ -17,6 +17,7 @@ app.use(express.json());
 
 app.use("/api/health", healthRoutes);
 app.use("/api/auth", authRoutes);
+// [HR BRANCH - Steven] HR module routes — payslip approval workflow, payroll management
 app.use("/api/hr", hrRoutes);
 app.use("/api/staff", staffRoutes);
 app.use("/api/payroll", payrollRoutes);

@@ -129,6 +129,7 @@ export default function DashboardLayout({
             ? data.map((item) => ({
                 id: item.employee_id || item.staff_id || item.name,
                 title: item.name || item.staff_name || item.employee_id || "Unknown",
+                // [HR BRANCH - Steven] HR-specific search result formatting — safe to keep for other roles (no visual impact)
                 subtitle: [item.employee_id || item.staff_id, item.email, item.department_id]
                   .filter(Boolean)
                   .join(" • "),

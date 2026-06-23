@@ -1,3 +1,6 @@
+// [HR BRANCH - Steven] HR module routes. Shared with payslipRoutes.js for cross-role payslip actions.
+// Payslip approval workflow: HR generates (draft) → Finance approves → HR sends to staff
+// Status flow: draft → finance_pending → finance_approved → sent_to_staff → rejected
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
