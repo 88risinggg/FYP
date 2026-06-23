@@ -50,6 +50,10 @@ const routeHeadings = {
   "/dashboard/payroll/staff/notifications": "Notifications"
 };
 
+const SkeletonBar = ({ width = "100%", height = "h-4" }) => (
+  <div className={`${height} rounded-lg bg-white/5 animate-pulse`} style={{ width }} />
+);
+
 export default function StaffPayrollPage() {
   const session = getStoredSession();
   const location = useLocation();
@@ -59,6 +63,8 @@ export default function StaffPayrollPage() {
   const [payslips, setPayslips] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -74,19 +80,23 @@ export default function StaffPayrollPage() {
 
     async function loadAll() {
       try {
-        const [profileData, payslipData, summaryData] = await Promise.all([
+        setError(null);
+        const [profileData, payslipData, summaryData, unreadData] = await Promise.all([
           apiRequest(`/api/profile/${userId}`, { headers }),
           apiRequest(`/api/payslips/user/${userId}`, { headers }).catch(() => []),
-          apiRequest(`/api/payslips/user/${userId}/summary`, { headers }).catch(() => null)
+          apiRequest(`/api/payslips/user/${userId}/summary`, { headers }).catch(() => null),
+          apiRequest(`/api/payslips/user/${userId}/unread-count`, { headers }).catch(() => ({ unread_count: 0 }))
         ]);
 
         if (mounted) {
           setProfile(profileData);
           setPayslips(payslipData);
           setSummary(summaryData);
+          setUnreadCount(Number(unreadData?.unread_count) || 0);
         }
-      } catch (error) {
-        console.error(error);
+      } catch (err) {
+        console.error(err);
+        if (mounted) setError("Failed to load payroll data. Please try again.");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -135,13 +145,60 @@ export default function StaffPayrollPage() {
       searchPlaceholder="Search payslips, payroll info..."
       profilePath="/dashboard/payroll/staff/profile"
       notificationsPath="/dashboard/payroll/staff/notifications"
+      notificationBadgeCount={unreadCount}
     >
       <section>
         <h2 className="text-2xl font-semibold text-white">{heading}</h2>
 
         <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl p-6">
-          {loading ? (
-            <p className="text-sm text-[#d8c6e8]">Loading staff payroll data...</p>
+          {error ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="rounded-xl border border-red-400/20 bg-red-400/5 px-6 py-5">
+                <p className="text-sm text-red-200">{error}</p>
+                <button
+                  type="button"
+                  onClick={() => { setLoading(true); setError(null); window.location.reload(); }}
+                  className="mt-3 rounded-lg bg-red-500/20 px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-500/30"
+                >
+                  Try Again
+                </button>
+              </div>
+            </div>
+          ) : loading ? (
+            <div className="space-y-6">
+              {/* Skeleton: stat cards */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {[1,2,3,4].map(i => (
+                  <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+                    <SkeletonBar width="60%" height="h-3" />
+                    <SkeletonBar width="80%" height="h-6" />
+                  </div>
+                ))}
+              </div>
+              {/* Skeleton: panels */}
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-3">
+                  <SkeletonBar width="40%" height="h-4" />
+                  <SkeletonBar width="100%" height="h-3" />
+                  <SkeletonBar width="70%" height="h-3" />
+                  <SkeletonBar width="30%" height="h-8" />
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-3">
+                  <SkeletonBar width="40%" height="h-4" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <SkeletonBar height="h-10" />
+                    <SkeletonBar height="h-10" />
+                    <SkeletonBar height="h-10" />
+                    <SkeletonBar height="h-10" />
+                  </div>
+                </div>
+              </div>
+              {/* Skeleton: recent payslips */}
+              <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-3">
+                <SkeletonBar width="30%" height="h-4" />
+                {[1,2,3].map(i => <SkeletonBar key={i} height="h-12" />)}
+              </div>
+            </div>
           ) : (
             <div className="space-y-6">
 
@@ -164,6 +221,8 @@ export default function StaffPayrollPage() {
                   formatCurrency={formatCurrency}
                   getMonthLabel={getMonthLabel}
                   downloadPayslip={downloadPayslip}
+                  setUnreadCount={setUnreadCount}
+                  session={session}
                 />
               )}
 
@@ -256,8 +315,8 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
       </div>
 
       {/* Recent payslips list */}
-      {payslips.length > 0 && (
-        <Panel title="Recent Payslips">
+      <Panel title="Recent Payslips">
+        {payslips.length > 0 ? (
           <div className="space-y-2">
             {payslips.slice(0, 3).map((p) => (
               <div key={p.payroll_id} className="flex items-center justify-between rounded-lg border border-white/10 bg-black/10 px-4 py-3">
@@ -269,14 +328,34 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
               </div>
             ))}
           </div>
-        </Panel>
-      )}
+        ) : (
+          <p className="text-sm text-[#d8c6e8]">No recent payslips</p>
+        )}
+      </Panel>
     </div>
   );
 }
 
 /* ─── Payslips ─── */
-function PayslipsView({ payslips, formatCurrency, getMonthLabel, downloadPayslip }) {
+function PayslipsView({ payslips, formatCurrency, getMonthLabel, downloadPayslip, setUnreadCount, session }) {
+  useEffect(() => {
+    const token = session?.token;
+    if (!token || !payslips.length) return;
+
+    const unreadPayslips = payslips.filter(p => p.is_read_by_staff === 0 && p.payslip_id);
+    if (unreadPayslips.length === 0) return;
+
+    const headers = { Authorization: `Bearer ${token}` };
+
+    Promise.allSettled(
+      unreadPayslips.map(p =>
+        apiRequest(`/api/payslips/${p.payslip_id}/read`, { method: 'PATCH', headers })
+      )
+    ).then(() => {
+      setUnreadCount(0);
+    }).catch(() => {});
+  }, [payslips, session?.token]);
+
   if (payslips.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -406,7 +485,11 @@ function NotificationsView({ payslips, getMonthLabel }) {
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  if (loading) return <p className="text-sm text-[#d8c6e8]">Loading notifications...</p>;
+  if (loading) return (
+    <div className="space-y-3">
+      {[1,2,3].map(i => <SkeletonBar key={i} height="h-14" />)}
+    </div>
+  );
 
   return (
     <div className="space-y-4">

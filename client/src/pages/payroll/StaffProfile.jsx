@@ -13,6 +13,7 @@ export default function StaffProfile() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [errors, setErrors] = useState({});
+  const [fetchError, setFetchError] = useState(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -21,6 +22,7 @@ export default function StaffProfile() {
 
     async function load() {
       try {
+        setFetchError(null);
         const data = await apiRequest(`/api/profile/${userId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -28,6 +30,7 @@ export default function StaffProfile() {
         if (mounted) setProfile(data);
       } catch (err) {
         console.error(err);
+        if (mounted) setFetchError("Failed to load profile. Please try again.");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -102,7 +105,45 @@ export default function StaffProfile() {
     }
   }
 
-  if (loading) return <div className="text-sm text-[#d8c6e8]">Loading profile…</div>;
+  if (loading) return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {[1,2].map(i => (
+          <div key={i} className="space-y-2">
+            <div className="h-3 w-16 rounded bg-white/5 animate-pulse" />
+            <div className="h-10 rounded-md bg-white/5 animate-pulse" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {[1,2].map(i => (
+          <div key={i} className="space-y-2">
+            <div className="h-3 w-16 rounded bg-white/5 animate-pulse" />
+            <div className="h-10 rounded-md bg-white/5 animate-pulse" />
+          </div>
+        ))}
+      </div>
+      <div className="space-y-2">
+        <div className="h-3 w-16 rounded bg-white/5 animate-pulse" />
+        <div className="h-10 rounded-md bg-white/5 animate-pulse" />
+      </div>
+    </div>
+  );
+
+  if (fetchError) return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <div className="rounded-xl border border-red-400/20 bg-red-400/5 px-6 py-5">
+        <p className="text-sm text-red-200">{fetchError}</p>
+        <button
+          type="button"
+          onClick={() => { setLoading(true); setFetchError(null); window.location.reload(); }}
+          className="mt-3 rounded-lg bg-red-500/20 px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-500/30"
+        >
+          Try Again
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-4">

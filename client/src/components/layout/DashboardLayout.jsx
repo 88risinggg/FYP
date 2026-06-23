@@ -73,6 +73,7 @@ export default function DashboardLayout({
   profileRole,
   profilePath,
   notificationsPath,
+  notificationBadgeCount,
   notificationItems = [
     "Your latest payslip is ready.",
     "Profile changes were saved successfully.",
@@ -144,7 +145,13 @@ export default function DashboardLayout({
             aria-expanded={notificationsOpen}
           >
             <Bell size={20} />
-            <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#FF4DDB] ring-2 ring-[#090014]" />
+            {notificationBadgeCount === undefined ? (
+              <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#FF4DDB] ring-2 ring-[#090014]" />
+            ) : notificationBadgeCount > 0 ? (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-[#090014]">
+                {notificationBadgeCount > 9 ? '9+' : notificationBadgeCount}
+              </span>
+            ) : null}
           </button>
 
           {notificationsOpen ? (
