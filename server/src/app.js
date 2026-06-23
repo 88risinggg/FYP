@@ -20,6 +20,7 @@ app.use(cors({
   origin: allowedOrigins
 }));
 app.use(express.json());
+// [STAFF BRANCH - Steven] Static file serving for payslip PDF downloads (FR4)
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 app.use("/api/health", healthRoutes);

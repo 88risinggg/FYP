@@ -210,6 +210,16 @@ async function updateProfileByUserId(req, res) {
       return res.status(400).json({ message: "No fields to update" });
     }
 
+    // [STAFF BRANCH - Steven] Fetch old values for audit trail comparison (staff_profile_audit_log)
+    const [existingRows] = await pool.query(
+      'SELECT employee_id, name, email, phone, address FROM staff WHERE user_user_id = ?',
+      [userId]
+    );
+    if (existingRows.length === 0) {
+      return res.status(404).json({ message: "Staff profile not found" });
+    }
+    const oldProfile = existingRows[0];
+
     values.push(userId);
     await pool.query(`UPDATE staff SET ${fields.join(', ')} WHERE user_user_id = ?`, values);
 
@@ -221,11 +231,30 @@ async function updateProfileByUserId(req, res) {
       );
     }
 
+    // [STAFF BRANCH - Steven] Audit trail — log changed fields to staff_profile_audit_log
+    // Fails silently — audit error must never block profile save response
+    try {
+      const auditFields = ['name', 'email', 'phone', 'address'];
+      const submitted = { name, email, phone, address };
+      for (const field of auditFields) {
+        if (typeof submitted[field] === 'undefined') continue;
+        const oldVal = oldProfile[field] || null;
+        const newVal = submitted[field] || null;
+        if (oldVal === newVal) continue;
+        await pool.query(
+          'INSERT INTO staff_profile_audit_log (employee_id, field_changed, old_value, new_value, changed_by) VALUES (?, ?, ?, ?, ?)',
+          [oldProfile.employee_id, field, oldVal, newVal, oldProfile.employee_id]
+        );
+      }
+    } catch (auditErr) {
+      console.error('Audit log error:', auditErr.message, auditErr.stack);
+    }
+
     // Return updated profile
     req.params.userId = userId;
     return getProfileByUserId(req, res);
   } catch (error) {
-    console.error(error);
+    console.error('UPDATE PROFILE ERROR:', error.message, error.code, error.stack);
     return res.status(500).json({ message: "Failed to update profile" });
   }
 }

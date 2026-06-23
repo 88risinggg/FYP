@@ -16,6 +16,7 @@ const router = express.Router();
 // Staff-facing read routes
 router.get("/user/:userId", authenticateToken, getPayslipsByUserId);
 router.get("/user/:userId/summary", authenticateToken, getPayrollSummary);
+// [STAFF BRANCH - Steven] New routes for notification badge (FR6)
 router.get("/user/:userId/unread-count", authenticateToken, getUnreadPayslipCount);
 router.patch("/:payslipId/read", authenticateToken, markPayslipAsRead);
 router.get("/:payslipId", authenticateToken, getPayslipById);

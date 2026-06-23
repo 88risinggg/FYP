@@ -14,6 +14,7 @@ export default function StaffProfile() {
   const [toast, setToast] = useState(null);
   const [errors, setErrors] = useState({});
   const [fetchError, setFetchError] = useState(null);
+  const [showHRContactModal, setShowHRContactModal] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -91,7 +92,7 @@ export default function StaffProfile() {
 
       const data = await apiRequest(`/api/profile/${userId}`, {
         method: "PUT",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
 
@@ -171,14 +172,14 @@ export default function StaffProfile() {
       <FieldInput label="Address" name="address" value={profile?.address || ""} onChange={handleChange} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <ReadOnlyField label="Department" value={profile?.department || "-"} />
-        <ReadOnlyField label="Base Salary" value={profile?.salary ? `$${Number(profile.salary).toFixed(2)}` : "-"} />
+        <ReadOnlyField label="Department" value={profile?.department || "-"} showRequestLink onRequestChange={() => setShowHRContactModal(true)} />
+        <ReadOnlyField label="Base Salary" value={profile?.salary ? `$${Number(profile.salary).toFixed(2)}` : "-"} showRequestLink onRequestChange={() => setShowHRContactModal(true)} />
         <ReadOnlyField label="Hire Date" value={profile?.hire_date ? new Date(profile.hire_date).toLocaleDateString() : "-"} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <ReadOnlyField label="Bank" value={profile?.bank || "-"} />
-        <ReadOnlyField label="Account No." value={profile?.account_no || "-"} />
+        <ReadOnlyField label="Bank" value={profile?.bank || "-"} showRequestLink onRequestChange={() => setShowHRContactModal(true)} />
+        <ReadOnlyField label="Account No." value={profile?.account_no || "-"} showRequestLink onRequestChange={() => setShowHRContactModal(true)} />
       </div>
 
       <div className="flex items-center gap-3">
@@ -187,6 +188,31 @@ export default function StaffProfile() {
         </button>
         <span className="text-xs text-[#d8c6e8]">Only name, email, phone, and address can be edited. Contact HR for other changes.</span>
       </div>
+
+      {/* HR Contact Modal */}
+      {showHRContactModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="rounded-2xl border border-white/10 bg-[#12071f] p-6 shadow-2xl w-full max-w-sm mx-4">
+            <p className="text-lg font-semibold text-white">Field Managed by HR</p>
+            <p className="mt-2 text-sm text-[#d8c6e8]">
+              This field can only be changed by HR. To request an update, please contact HR directly.
+            </p>
+            <a
+              href="mailto:hr@paynivo.com"
+              className="mt-3 inline-block text-sm font-medium text-[#C77DFF] hover:underline"
+            >
+              Email HR (hr@paynivo.com)
+            </a>
+            <button
+              type="button"
+              onClick={() => setShowHRContactModal(false)}
+              className="mt-4 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/10"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -209,10 +235,21 @@ function FieldInput({ label, name, type = "text", value, onChange, error }) {
   );
 }
 
-function ReadOnlyField({ label, value }) {
+function ReadOnlyField({ label, value, showRequestLink, onRequestChange }) {
   return (
     <label className="block">
-      <div className="text-xs text-[#d8c6e8]">{label}</div>
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-[#d8c6e8]">{label}</span>
+        {showRequestLink && (
+          <button
+            type="button"
+            onClick={onRequestChange}
+            className="text-xs text-[#C77DFF]/70 hover:text-[#C77DFF] cursor-pointer"
+          >
+            Request change
+          </button>
+        )}
+      </div>
       <input
         value={value}
         readOnly

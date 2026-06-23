@@ -145,6 +145,8 @@ export default function DashboardLayout({
             aria-expanded={notificationsOpen}
           >
             <Bell size={20} />
+            {/* [STAFF BRANCH - Steven] notificationBadgeCount prop added for Staff unread payslip badge (FR6) */}
+            {/* Other roles do not pass this prop — defaults to undefined, existing behavior unchanged */}
             {notificationBadgeCount === undefined ? (
               <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#FF4DDB] ring-2 ring-[#090014]" />
             ) : notificationBadgeCount > 0 ? (

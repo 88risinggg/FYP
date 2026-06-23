@@ -1,3 +1,7 @@
+// [STAFF BRANCH - Steven] This file is shared across roles.
+// getPayslipsByUserId, getPayslipById, getPayrollSummary, getUnreadPayslipCount, markPayslipAsRead
+// were rewritten to match the real DB schema (payroll + payroll_run + payslip tables).
+// createPayslip, updatePayslip, deletePayslip belong to HR/Admin — do not modify them here.
 const { pool } = require("../config/db");
 const { createNotificationInternal } = require("./notificationController");
 
