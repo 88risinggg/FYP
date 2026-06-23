@@ -1,3 +1,27 @@
+// ============================================================
+// MERGE INSTRUCTIONS — READ BEFORE RESOLVING ANY CONFLICT
+// ============================================================
+// This file is modified by ALL three branches:
+//   - feature/payroll-staff-steven (Steven — Staff module)
+//   - feature/payroll-hr-steven (Steven — HR module)
+//   - feature/payroll-admin-ray (Ray — Admin/Finance module)
+//
+// CRITICAL: Keep ALL route registrations from ALL branches.
+// Never drop an app.use() or route import line when resolving conflicts.
+//
+// Expected routes after merge:
+//   [STAFF BRANCH]  app.use('/api/payslips', ...)
+//   [STAFF BRANCH]  app.use('/api/profile', ...)
+//   [STAFF BRANCH]  app.use('/uploads', express.static(...))
+//   [HR BRANCH]     app.use('/api/hr', ...)
+//   [HR BRANCH]     app.use('/api/staff', ...)
+//   [HR BRANCH]     app.use('/api/payroll', ...)
+//   [ADMIN BRANCH]  app.use('/api/admin', ...) — or whatever Ray registered
+//
+// If you see a conflict on this file, KEEP ALL LINES FROM ALL BRANCHES.
+// Do not pick one side — merge all route registrations together.
+// ============================================================
+
 const cors = require("cors");
 const express = require("express");
 const path = require("path");
