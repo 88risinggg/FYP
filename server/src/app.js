@@ -31,6 +31,9 @@ const authRoutes = require("./routes/authRoutes");
 const hrRoutes = require("./routes/hrRoutes");
 const staffRoutes = require("./routes/staffRoutes");
 const payrollRoutes = require("./routes/payrollRoutes");
+const adminUserRoutes = require("./routes/adminUserRoutes");
+const adminReminderRoutes = require("./routes/adminReminderRoutes");
+const adminAuditLogRoutes = require("./routes/adminAuditLogRoutes");
 
 const app = express();
 
@@ -45,6 +48,9 @@ app.use("/api/auth", authRoutes);
 app.use("/api/hr", hrRoutes);
 app.use("/api/staff", staffRoutes);
 app.use("/api/payroll", payrollRoutes);
+app.use("/api/admin/users", adminUserRoutes);
+app.use("/api/admin/invoicing", adminReminderRoutes);
+app.use("/api/admin/invoicing/audit-logs", adminAuditLogRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
