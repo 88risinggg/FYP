@@ -28,6 +28,7 @@ require("dotenv").config();
 
 const healthRoutes = require("./routes/healthRoutes");
 const authRoutes = require("./routes/authRoutes");
+const adminPayrollRoutes = require("./routes/adminPayrollRoutes");
 const hrRoutes = require("./routes/hrRoutes");
 const staffRoutes = require("./routes/staffRoutes");
 const payrollRoutes = require("./routes/payrollRoutes");
@@ -36,14 +37,20 @@ const adminReminderRoutes = require("./routes/adminReminderRoutes");
 const adminAuditLogRoutes = require("./routes/adminAuditLogRoutes");
 
 const app = express();
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  "http://localhost:5173",
+  "http://127.0.0.1:5173"
+].filter(Boolean);
 
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173"
+  origin: allowedOrigins
 }));
 app.use(express.json());
 
 app.use("/api/health", healthRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/payroll/admin", adminPayrollRoutes);
 // [HR BRANCH - Steven] HR module routes — payslip approval workflow, payroll management
 app.use("/api/hr", hrRoutes);
 app.use("/api/staff", staffRoutes);
