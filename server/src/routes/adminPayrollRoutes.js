@@ -1,6 +1,7 @@
 const express = require("express");
 
 const {
+  addUser,
   addPayslipLayout,
   changeUserRole,
   changeUserStatus,
@@ -43,6 +44,7 @@ router.use(requireAdmin);
 
 router.get("/dashboard", getAdminPayrollDashboard);
 router.get("/payslip-layouts", getPayslipLayouts);
+router.post("/users", addUser);
 router.post("/payslip-layouts", addPayslipLayout);
 router.patch("/payslip-layouts/:layoutId/default", makeDefaultPayslipLayout);
 router.patch("/users/:userId/status", changeUserStatus);

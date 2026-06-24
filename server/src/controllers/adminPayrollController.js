@@ -2,10 +2,12 @@ const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 
 const {
+  createUserAccount,
   createPayslipLayout,
   getUserById,
   getDashboardStats,
   listAuditLogs,
+  listAvailableStaffForUserCreation,
   listMbmfEligibilitySummary,
   listPayrollRuns,
   listPayrollSettings,
@@ -25,14 +27,16 @@ function normalizeFileType(fileType) {
 
 async function getAdminPayrollDashboard(req, res) {
   try {
-    const [stats, layouts, settings, payrollRuns, auditLogs, roleSummary, users] = await Promise.all([
+    const [stats, layouts, settings, payrollRuns, auditLogs, roleSummary, users, mbmfEligibility, availableStaff] = await Promise.all([
       getDashboardStats(),
       listPayslipLayouts(),
       listPayrollSettings(),
       listPayrollRuns(),
       listAuditLogs(),
       listUsersWithRoles(),
-      listUsers()
+      listUsers(),
+      listMbmfEligibilitySummary(),
+      listAvailableStaffForUserCreation()
     ]);
 
     res.json({
@@ -42,7 +46,9 @@ async function getAdminPayrollDashboard(req, res) {
       payrollRuns,
       auditLogs,
       roleSummary,
-      users
+      users,
+      mbmfEligibility,
+      availableStaff
     });
   } catch (error) {
     res.status(500).json({
@@ -152,19 +158,95 @@ function generateTemporaryPassword() {
 }
 
 async function refreshUserManagementPayload() {
-  const [stats, roleSummary, users, auditLogs] = await Promise.all([
+  const [stats, roleSummary, users, auditLogs, availableStaff] = await Promise.all([
     getDashboardStats(),
     listUsersWithRoles(),
     listUsers(),
-    listAuditLogs()
+    listAuditLogs(),
+    listAvailableStaffForUserCreation()
   ]);
 
   return {
     stats,
     roleSummary,
     users,
-    auditLogs
+    auditLogs,
+    availableStaff
   };
+}
+
+async function addUser(req, res) {
+  try {
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const name = String(req.body.name || "").trim();
+    const roleId = Number(req.body.roleId);
+    const status = Number(req.body.status ?? 1);
+    const staffEmployeeId = req.body.staffEmployeeId ? Number(req.body.staffEmployeeId) : null;
+
+    if (!email || !name || !Number.isInteger(roleId) || roleId <= 0 || ![0, 1].includes(status)) {
+      return res.status(400).json({
+        message: "Name, email, role and account status are required."
+      });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({
+        message: "Enter a valid email address."
+      });
+    }
+
+    if (staffEmployeeId !== null && (!Number.isInteger(staffEmployeeId) || staffEmployeeId <= 0)) {
+      return res.status(400).json({
+        message: "Invalid staff record selected."
+      });
+    }
+
+    const temporaryPassword = generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+    const result = await createUserAccount({
+      email,
+      name,
+      passwordHash,
+      roleId,
+      status,
+      staffEmployeeId,
+      adminUserId: req.user?.userId
+    });
+
+    if (result.duplicateEmail) {
+      return res.status(409).json({
+        message: "A user with this email already exists."
+      });
+    }
+
+    if (result.invalidRole) {
+      return res.status(400).json({
+        message: "Selected role does not exist."
+      });
+    }
+
+    if (result.invalidStaff) {
+      return res.status(400).json({
+        message: "Selected staff record does not exist."
+      });
+    }
+
+    if (result.staffAlreadyLinked) {
+      return res.status(409).json({
+        message: "Selected staff record is already linked to a user."
+      });
+    }
+
+    res.status(201).json({
+      ...(await refreshUserManagementPayload()),
+      temporaryPassword,
+      userId: result.userId
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to add user."
+    });
+  }
 }
 
 async function changeUserStatus(req, res) {
@@ -302,16 +384,18 @@ async function updatePayrollSetting(req, res) {
       updatedBy: req.user?.userId
     });
 
-    const [stats, settings, auditLogs] = await Promise.all([
+    const [stats, settings, auditLogs, mbmfEligibility] = await Promise.all([
       getDashboardStats(),
       listPayrollSettings(),
-      listAuditLogs()
+      listAuditLogs(),
+      listMbmfEligibilitySummary()
     ]);
 
     res.json({
       stats,
       settings,
-      auditLogs
+      auditLogs,
+      mbmfEligibility
     });
   } catch (error) {
     res.status(500).json({
@@ -321,6 +405,7 @@ async function updatePayrollSetting(req, res) {
 }
 
 module.exports = {
+  addUser,
   addPayslipLayout,
   changeUserRole,
   changeUserStatus,
