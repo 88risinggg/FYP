@@ -135,6 +135,9 @@ async function listMbmfEligibilitySummary() {
   const [[summary]] = await pool.execute(
     `SELECT
       COUNT(*) AS totalStaff,
+      SUM(CASE WHEN LOWER(TRIM(COALESCE(religion, ''))) = 'muslim' THEN 1 ELSE 0 END) AS eligibleMuslimEmployees,
+      SUM(CASE WHEN LOWER(TRIM(COALESCE(religion, ''))) <> 'muslim' THEN 1 ELSE 0 END) AS nonEligibleEmployees
+    FROM staff`
       SUM(CASE WHEN LOWER(TRIM(COALESCE(religion, ''))) = LOWER(?) THEN 1 ELSE 0 END) AS eligibleMuslimEmployees,
       SUM(CASE WHEN LOWER(TRIM(COALESCE(religion, ''))) <> LOWER(?) THEN 1 ELSE 0 END) AS nonEligibleEmployees
     FROM staff`,
@@ -148,6 +151,9 @@ async function listMbmfEligibilitySummary() {
       user.name
     FROM staff
     LEFT JOIN user ON staff.user_user_id = user.user_id
+    WHERE LOWER(TRIM(COALESCE(staff.religion, ''))) = 'muslim'
+    ORDER BY user.name
+    LIMIT 5`
     WHERE LOWER(TRIM(COALESCE(staff.religion, ''))) = LOWER(?)
     ORDER BY user.name
     LIMIT 5`,
