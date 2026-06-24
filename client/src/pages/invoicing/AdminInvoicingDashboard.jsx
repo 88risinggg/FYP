@@ -13,7 +13,9 @@ import { getStoredSession } from "../../services/sessionService.js";
 import AdminAuditLogsPage from "./AdminAuditLogsPage.jsx";
 import AdminDashboardHomePage from "./AdminDashboardHomePage.jsx";
 import AdminInvoiceSettingsPage from "./AdminInvoiceSettingsPage.jsx";
+import AdminReportsDesignPage from "./AdminReportsDesignPage.jsx";
 import AdminReminderSettingsPage from "./AdminReminderSettingsPage.jsx";
+import AdminRolesDesignPage from "./AdminRolesDesignPage.jsx";
 import AdminUserManagementPage from "./AdminUserManagementPage.jsx";
 
 const pageTitle = "Automated Invoicing System - Admin Dashboard";
@@ -95,6 +97,8 @@ export default function AdminInvoicingDashboard() {
   const isInvoiceSettings = location.pathname === "/dashboard/invoicing/admin/invoice-settings";
   const isReminderSettings = location.pathname === "/dashboard/invoicing/admin/reminder-settings";
   const isAuditLogs = location.pathname === "/dashboard/invoicing/admin/audit-logs";
+  const isRoles = location.pathname === "/dashboard/invoicing/admin/roles";
+  const isReports = location.pathname === "/dashboard/invoicing/admin/reports";
   const currentPageTitle = isUserManagement
     ? "Automated Invoicing System - User Management"
     : isInvoiceSettings
@@ -103,6 +107,10 @@ export default function AdminInvoicingDashboard() {
       ? "Automated Invoicing System - Reminder Settings"
       : isAuditLogs
         ? "Automated Invoicing System - Audit Logs"
+        : isRoles
+          ? "Automated Invoicing System - Roles Design"
+          : isReports
+            ? "Automated Invoicing System - Reports Design"
       : pageTitle;
 
   return (
@@ -123,6 +131,10 @@ export default function AdminInvoicingDashboard() {
         <AdminReminderSettingsPage />
       ) : isAuditLogs ? (
         <AdminAuditLogsPage />
+      ) : isRoles ? (
+        <AdminRolesDesignPage />
+      ) : isReports ? (
+        <AdminReportsDesignPage />
       ) : (
         <section>
           <h2 className="text-2xl font-semibold text-white">{heading}</h2>

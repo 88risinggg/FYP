@@ -2798,9 +2798,10 @@ function AuditLogsView({ auditLogs = [] }) {
   const [entityFilter, setEntityFilter] = useState("All");
 
   const entityTypes = useMemo(
-    () => ["All", ...Array.from(new Set(auditLogs.map((log) => log.entity_type).filter(Boolean)))],
+    () => ["All", ...new Set(auditLogs.map((log) => log.entity_type).filter(Boolean))],
     [auditLogs]
   );
+
   const filteredLogs = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -2808,18 +2809,18 @@ function AuditLogsView({ auditLogs = [] }) {
       const matchesEntity = entityFilter === "All" || log.entity_type === entityFilter;
       const matchesSearch =
         !normalizedSearch ||
-        log.action?.toLowerCase().includes(normalizedSearch) ||
-        log.entity_type?.toLowerCase().includes(normalizedSearch) ||
-        String(log.entity_id || "").includes(normalizedSearch) ||
-        log.user_name?.toLowerCase().includes(normalizedSearch);
+        [log.action, log.entity_type, log.entity_id, log.user_name]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(normalizedSearch));
 
       return matchesEntity && matchesSearch;
     });
   }, [auditLogs, entityFilter, searchTerm]);
+
   const exportLogs = () => {
     const periodLabel = auditLogs[0]?.created_at
-      ? `Latest export ${formatDate(auditLogs[0].created_at)}`
-      : "All available dates";
+      ? `Latest activity: ${formatDateTime(auditLogs[0].created_at)}`
+      : "No activity yet";
     const rows = filteredLogs.map((log) => ({
       columns: [
         formatDateTime(log.created_at),
@@ -2830,9 +2831,8 @@ function AuditLogsView({ auditLogs = [] }) {
     }));
     const url = URL.createObjectURL(createPdfBlob("Audit Logs", rows, periodLabel));
     const link = document.createElement("a");
-
     link.href = url;
-    link.download = "admin-payroll-audit-logs.pdf";
+    link.download = "audit-logs.pdf";
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -2841,93 +2841,94 @@ function AuditLogsView({ auditLogs = [] }) {
     <PageShell
       heading="Audit Logs"
       updatedAt={getLatestTimestamp(auditLogs)}
-      actions={<ActionButton icon={FileBarChart} variant="secondary" onClick={exportLogs} disabled={!filteredLogs.length}>Export Logs</ActionButton>}
+      actions={<ActionButton icon={FileText} variant="secondary" onClick={exportLogs}>Export Logs</ActionButton>}
     >
-      <div className="space-y-5">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="neon-glass rounded-2xl p-5">
-            <p className="text-sm text-[#d8c6e8]">Total Events</p>
-            <p className="mt-3 text-3xl font-semibold text-white">{auditLogs.length}</p>
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="neon-glass rounded-2xl p-5">
+          <p className="text-sm text-[#d8c6e8]">Total Events</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{auditLogs.length}</p>
+        </div>
+        <div className="neon-glass rounded-2xl p-5">
+          <p className="text-sm text-[#d8c6e8]">Visible Events</p>
+          <p className="mt-3 text-3xl font-semibold text-[#C77DFF]">{filteredLogs.length}</p>
+        </div>
+        <div className="neon-glass rounded-2xl p-5">
+          <p className="text-sm text-[#d8c6e8]">Entity Types</p>
+          <p className="mt-3 text-3xl font-semibold text-[#7CFFB2]">{Math.max(entityTypes.length - 1, 0)}</p>
+        </div>
+      </div>
+
+      <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Activity Trail</h3>
+            <p className="mt-1 text-sm text-[#d8c6e8]">Search and filter admin changes with exact timestamps.</p>
           </div>
-          <div className="neon-glass rounded-2xl p-5">
-            <p className="text-sm text-[#d8c6e8]">Visible Events</p>
-            <p className="mt-3 text-3xl font-semibold text-[#C77DFF]">{filteredLogs.length}</p>
-          </div>
-          <div className="neon-glass rounded-2xl p-5">
-            <p className="text-sm text-[#d8c6e8]">Latest Timestamp</p>
-            <p className="mt-3 text-base font-semibold text-white">
-              {formatDateTime(auditLogs[0]?.created_at)}
-            </p>
+
+          <div className="grid gap-3 sm:grid-cols-[1fr_14rem] lg:w-[38rem]">
+            <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5">
+              <Search size={16} className="text-[#C77DFF]" />
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search action, user, entity..."
+                className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[#d8c6e8]/60"
+              />
+            </label>
+
+            <select
+              value={entityFilter}
+              onChange={(event) => setEntityFilter(event.target.value)}
+              className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+            >
+              {entityTypes.map((entityType) => (
+                <option key={entityType} value={entityType}>{entityType} entities</option>
+              ))}
+            </select>
           </div>
         </div>
 
-        <div className="neon-glass neon-border rounded-2xl p-6">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-white">Activity Trail</h3>
-              <p className="mt-1 text-sm text-[#d8c6e8]">Search and filter admin changes with exact timestamps.</p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-[1fr_14rem] lg:w-[38rem]">
-              <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5">
-                <Search size={16} className="text-[#C77DFF]" />
-                <input
-                  type="search"
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search action, user, entity..."
-                  className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[#d8c6e8]/60"
-                />
-              </label>
-
-              <select
-                value={entityFilter}
-                onChange={(event) => setEntityFilter(event.target.value)}
-                className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
-              >
-                {entityTypes.map((entityType) => (
-                  <option key={entityType} value={entityType}>{entityType} entities</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-5 overflow-x-auto">
-            <table className="min-w-[56rem] w-full border-separate border-spacing-0 text-left text-sm">
-              <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
-                <tr>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Timestamp</th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Action</th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Entity</th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Entity ID</th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Performed By</th>
+        <div className="mt-5 overflow-x-auto">
+          <table className="min-w-[56rem] w-full border-separate border-spacing-0 text-left text-sm">
+            <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
+              <tr>
+                <th className="border-b border-white/10 px-4 py-3 font-semibold">Timestamp</th>
+                <th className="border-b border-white/10 px-4 py-3 font-semibold">Action</th>
+                <th className="border-b border-white/10 px-4 py-3 font-semibold">Entity</th>
+                <th className="border-b border-white/10 px-4 py-3 font-semibold">Entity ID</th>
+                <th className="border-b border-white/10 px-4 py-3 font-semibold">Performed By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredLogs.map((log) => (
+                <tr key={log.log_id || `${log.entity_type}-${log.entity_id}-${log.created_at}`} className="text-[#d8c6e8] transition hover:bg-white/[0.04]">
+                  <td className="border-b border-white/10 px-4 py-4 font-semibold text-white">
+                    {formatDateTime(log.created_at)}
+                  </td>
+                  <td className="border-b border-white/10 px-4 py-4">{log.action || "System activity"}</td>
+                  <td className="border-b border-white/10 px-4 py-4">
+                    <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-[#d8c6e8]">
+                      {log.entity_type || "system"}
+                    </span>
+                  </td>
+                  <td className="border-b border-white/10 px-4 py-4">{log.entity_id || "-"}</td>
+                  <td className="border-b border-white/10 px-4 py-4">{log.user_name || "System"}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {filteredLogs.map((log) => (
-                  <tr key={log.log_id} className="text-[#d8c6e8] transition hover:bg-white/[0.04]">
-                    <td className="border-b border-white/10 px-4 py-4 font-semibold text-white">
-                      {formatDateTime(log.created_at)}
-                    </td>
-                    <td className="border-b border-white/10 px-4 py-4">{log.action || "System activity"}</td>
-                    <td className="border-b border-white/10 px-4 py-4">
-                      <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-[#d8c6e8]">
-                        {log.entity_type || "system"}
-                      </span>
-                    </td>
-                    <td className="border-b border-white/10 px-4 py-4">{log.entity_id || "-"}</td>
-                    <td className="border-b border-white/10 px-4 py-4">{log.user_name || "System"}</td>
-      }
-    ]
-  }
-];
+              ))}
+            </tbody>
+          </table>
 
-const routeHeadings = {
-  "/dashboard/payroll/admin": "Dashboard",
-  "/dashboard/payroll/admin/payslips-approval": "Payslips Final Approval",
-  "/dashboard/payroll/admin/staff-management": "Staff Management",
-  "/dashboard/payroll/admin/settings": "System Settings"
-};
+          {!filteredLogs.length ? (
+            <div className="mt-4">
+              <EmptyState message="No audit logs match the current filters." />
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </PageShell>
+  );
+}
 
 function getAuthHeaders(token) {
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -2948,9 +2949,7 @@ function PayslipsApprovalView() {
       setLoading(true);
       setError("");
       const response = await fetch(`${API_BASE_URL}/api/hr/payslips`, {
-        headers: {
-          ...getAuthHeaders(session?.token)
-        }
+        headers: getAuthHeaders(session?.token)
       });
 
       if (!response.ok) {
@@ -2959,9 +2958,7 @@ function PayslipsApprovalView() {
       }
 
       const data = await response.json();
-      // Filter to only show admin_pending payslips (awaiting final approval)
-      const filtered = data.filter(p => p.status === "admin_pending");
-      setPayslips(filtered);
+      setPayslips(Array.isArray(data) ? data.filter((payslip) => payslip.status === "admin_pending") : []);
     } catch (err) {
       setError(err.message || "Failed to load payslips");
       setPayslips([]);
@@ -2974,7 +2971,7 @@ function PayslipsApprovalView() {
     try {
       setActionInProgress(payslipId);
       setError("");
-      
+
       const response = await fetch(`${API_BASE_URL}/api/payroll/payslips/${payslipId}/admin-approve`, {
         method: "PUT",
         headers: {
@@ -3007,7 +3004,7 @@ function PayslipsApprovalView() {
     try {
       setActionInProgress(payslipId);
       setError("");
-      
+
       const response = await fetch(`${API_BASE_URL}/api/payroll/payslips/${payslipId}/admin-reject`, {
         method: "PUT",
         headers: {
@@ -3036,7 +3033,6 @@ function PayslipsApprovalView() {
 
   useEffect(() => {
     fetchPayslips();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.token]);
 
   return (
@@ -3059,19 +3055,19 @@ function PayslipsApprovalView() {
         </div>
       </div>
 
-      {error && (
+      {error ? (
         <div className="neon-glass neon-border rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
           {error}
         </div>
-      )}
+      ) : null}
 
-      {successMessage && (
+      {successMessage ? (
         <div className="neon-glass neon-border rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-200">
           {successMessage}
         </div>
-      )}
+      ) : null}
 
-      <div className="neon-glass neon-border rounded-2xl overflow-hidden">
+      <div className="neon-glass neon-border overflow-hidden rounded-2xl">
         {loading ? (
           <div className="flex items-center gap-3 p-6 text-[#d8c6e8]">
             <Loader2 className="animate-spin" size={18} />
@@ -3079,7 +3075,7 @@ function PayslipsApprovalView() {
           </div>
         ) : payslips.length === 0 ? (
           <div className="p-6 text-center">
-            <div className="inline-block rounded-full bg-emerald-500/10 p-3 mb-3">
+            <div className="mb-3 inline-block rounded-full bg-emerald-500/10 p-3">
               <CheckCircle2 className="text-emerald-300" size={24} />
             </div>
             <p className="text-sm text-[#d8c6e8]">No payslips pending final approval</p>
@@ -3101,16 +3097,16 @@ function PayslipsApprovalView() {
               <tbody>
                 {payslips.map((payslip) => (
                   <tr key={payslip.payslip_id} className="border-b border-white/5 text-white">
-                    <td className="px-4 py-3 text-[#d8c6e8] text-xs">{payslip.payslip_id}</td>
+                    <td className="px-4 py-3 text-xs text-[#d8c6e8]">{payslip.payslip_id}</td>
                     <td className="px-4 py-3">{payslip.staff_name}</td>
                     <td className="px-4 py-3 text-[#d8c6e8]">
                       {payslip.period_month} {payslip.period_year}
                     </td>
                     <td className="px-4 py-3 text-[#d8c6e8]">
-                      ${payslip.gross_salary?.toFixed(2) || "0.00"}
+                      ${Number(payslip.gross_salary || 0).toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-emerald-300">
-                      ${payslip.net_pay?.toFixed(2) || "0.00"}
+                      ${Number(payslip.net_pay || 0).toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-xs text-[#d8c6e8]">
                       {payslip.finance_approved_by || "-"}
@@ -3123,11 +3119,7 @@ function PayslipsApprovalView() {
                           disabled={actionInProgress === payslip.payslip_id}
                           className="rounded-lg bg-cyan-500/20 px-3 py-1 text-xs text-cyan-300 hover:bg-cyan-500/30 disabled:opacity-50"
                         >
-                          {actionInProgress === payslip.payslip_id ? (
-                            <Loader2 className="animate-spin inline" size={12} />
-                          ) : (
-                            "Send"
-                          )}
+                          {actionInProgress === payslip.payslip_id ? <Loader2 className="inline animate-spin" size={12} /> : "Send"}
                         </button>
                         <button
                           type="button"
@@ -3143,19 +3135,53 @@ function PayslipsApprovalView() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
 
-            {!filteredLogs.length ? (
-              <div className="mt-4">
-                <EmptyState message="No audit logs match the current filters." />
-              </div>
-            ) : null}
+      {rejectingPayslipId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="neon-glass neon-border m-4 w-full max-w-md rounded-2xl p-6">
+            <div className="mb-4 flex items-center gap-3">
+              <AlertCircle className="text-red-300" size={20} />
+              <h3 className="text-lg font-semibold text-white">Reject Payslip</h3>
+            </div>
+            <p className="mb-4 text-sm text-[#d8c6e8]">
+              Please provide a reason for rejecting this payslip.
+            </p>
+            <textarea
+              value={rejectReason}
+              onChange={(event) => setRejectReason(event.target.value)}
+              placeholder="Enter rejection reason..."
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30"
+              rows={4}
+            />
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => handleReject(rejectingPayslipId)}
+                disabled={actionInProgress === rejectingPayslipId}
+                className="flex-1 rounded-lg bg-red-500/20 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRejectingPayslipId(null);
+                  setRejectReason("");
+                }}
+                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </PageShell>
+      ) : null}
+    </div>
   );
 }
-
 function escapePdfText(value) {
   return String(value ?? "")
     .replaceAll("\\", "\\\\")
@@ -3450,55 +3476,9 @@ function ReportPreviewModal({ data, report, onClose }) {
           ) : null}
         </div>
       </section>
-          </div>
-        )}
-      </div>
-
-      {/* Rejection Modal */}
-      {rejectingPayslipId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="neon-glass neon-border rounded-2xl w-full max-w-md p-6 m-4">
-            <div className="flex items-center gap-3 mb-4">
-              <AlertCircle className="text-red-300" size={20} />
-              <h3 className="text-lg font-semibold text-white">Reject Payslip</h3>
-            </div>
-            <p className="text-sm text-[#d8c6e8] mb-4">
-              Please provide a reason for rejecting this payslip.
-            </p>
-            <textarea
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="Enter rejection reason..."
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder-white/30 text-sm"
-              rows={4}
-            />
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={() => handleReject(rejectingPayslipId)}
-                disabled={actionInProgress === rejectingPayslipId}
-                className="flex-1 rounded-lg bg-red-500/20 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/30 disabled:opacity-50"
-              >
-                Reject
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRejectingPayslipId(null);
-                  setRejectReason("");
-                }}
-                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
-
 function ReportsView({ data }) {
   const [selectedReport, setSelectedReport] = useState("");
   const reportCards = [

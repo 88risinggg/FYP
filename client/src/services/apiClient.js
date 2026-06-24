@@ -1,5 +1,4 @@
 import { clearSession, getStoredSession } from "./sessionService.js";
-import { clearSession } from "./sessionService.js";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const TOKEN_KEY = "authToken";
@@ -12,29 +11,6 @@ function forceLogout() {
 }
 
 export async function apiRequest(path, options = {}) {
-  let response;
-
-  try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers
-      },
-      ...options
-    });
-  } catch (networkError) {
-    // Server is unreachable (Ctrl+C / crashed) — force logout
-    if (getStoredSession()) {
-      forceLogout();
-    }
-    throw new Error("Server is unavailable");
-  }
-
-  // 401 means token expired or invalid — also force logout
-  if (response.status === 401 && getStoredSession()) {
-    forceLogout();
-    throw new Error("Session expired");
-  }
   const token = localStorage.getItem(TOKEN_KEY);
   const headers = {
     "Content-Type": "application/json",
@@ -45,36 +21,35 @@ export async function apiRequest(path, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if ((response.status === 401 || response.status === 403) && getStoredSession()) {
+      forceLogout();
+      throw new Error(data.message || "Session expired. Please log in again.");
     }
-  });
 
-  const data = await response.json().catch(() => ({}));
-
-  // Session expired or token invalid — clear session and redirect to login
-  // Skip redirect if already on the login page (e.g. bad credentials during login)
-  if (response.status === 401 || response.status === 403) {
-    if (window.location.pathname !== "/login") {
-      clearSession();
-      window.location.href = "/login";
+    if (!response.ok) {
+      throw new Error(data.message || "Request failed");
     }
-    throw new Error(data.message || "Session expired. Please log in again.");
-  }
 
-  if (!response.ok) {
-    throw new Error(data.message || "Request failed");
-  }
+    return data;
+  } catch (error) {
+    if (error instanceof Error && error.message !== "Failed to fetch") {
+      throw error;
+    }
 
-  return data;
+    if (getStoredSession()) {
+      forceLogout();
+    }
+    throw new Error("Server is unavailable");
+  }
 }
 
-// Background health check — polls every 5 seconds while logged in.
-// If server goes down, immediately logs out.
 let healthCheckInterval = null;
 
 export function startHealthCheck() {
@@ -132,7 +107,7 @@ export function createTextPdfBlob(lines, title = "Document") {
       return "BT /F1 12 Tf 72 730 Td ( ) Tj ET";
     }
 
-    const y = 710 - ((index - 2) * 18);
+    const y = 710 - (index - 2) * 18;
     return `BT /F1 12 Tf 72 ${y} Td (${line}) Tj ET`;
   });
 
@@ -174,4 +149,3 @@ export function createTextPdfBlob(lines, title = "Document") {
 export function downloadPdfLines(lines, fileName, title = "Document") {
   downloadBlob(createTextPdfBlob(lines, title), fileName);
 }
-
