@@ -6,4 +6,4 @@ coverage/
 generated/
 uploads/
 npm-debug.log*
-
+TEST_RESULTS/
