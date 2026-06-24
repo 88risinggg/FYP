@@ -13,3 +13,4 @@ npm-debug.log*
 Thumbs.db
 client/.vite/
 server/uploads/
+TEST_RESULTS/
