@@ -6,4 +6,11 @@ coverage/
 generated/
 uploads/
 npm-debug.log*
+.vscode/
+.kiro/
+*.log
+.DS_Store
+Thumbs.db
+client/.vite/
+server/uploads/
 TEST_RESULTS/

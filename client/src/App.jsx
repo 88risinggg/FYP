@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import LoginPage from "./pages/LoginPage.jsx";
@@ -8,6 +9,7 @@ import AdminPayrollPage from "./pages/payroll/AdminPayrollPage.jsx";
 import FinancePayrollPage from "./pages/payroll/FinancePayrollPage.jsx";
 import HRPayrollPage from "./pages/payroll/HRPayrollPage.jsx";
 import StaffPayrollPage from "./pages/payroll/StaffPayrollPage.jsx";
+import { startHealthCheck, stopHealthCheck } from "./services/apiClient.js";
 import { getStoredSession } from "./services/sessionService.js";
 
 function ProtectedRoute({ children }) {
@@ -118,6 +120,13 @@ function StaffPayrollRoute({ children }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    if (getStoredSession()) {
+      startHealthCheck();
+    }
+    return () => stopHealthCheck();
+  }, []);
+
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
