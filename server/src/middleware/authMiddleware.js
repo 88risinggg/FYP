@@ -1,8 +1,11 @@
 const jwt = require("jsonwebtoken");
-
-function authenticateToken(req, res, next) {
 const { pool } = require("../config/db");
 
+/**
+ * JWT authentication middleware.
+ * Verifies the Bearer token and attaches user info to req.user.
+ * Also validates user is still active in the database.
+ */
 async function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
@@ -14,7 +17,6 @@ async function authenticateToken(req, res, next) {
   }
 
   try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const [rows] = await pool.execute(
       `SELECT
@@ -49,16 +51,17 @@ async function authenticateToken(req, res, next) {
   }
 }
 
-module.exports = {
-  authenticateToken
+/**
+ * Role-based access control middleware.
+ * Restricts route access to specified roles.
+ */
 function requireRole(...allowedRoles) {
   return (req, res, next) => {
     if (!allowedRoles.includes(req.user?.role)) {
       return res.status(403).json({
-        message: "Admin access required"
+        message: "Access denied: insufficient permissions"
       });
     }
-
     next();
   };
 }
