@@ -1,7 +1,3 @@
-import {
-  Bell,
-  FileText,
-  LayoutDashboard,
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
