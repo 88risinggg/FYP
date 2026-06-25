@@ -1,6 +1,26 @@
+/**
+ * Payment Controller
+ *
+ * Handles payment processing including:
+ * - Outstanding invoices workspace view
+ * - Manual bank transfer payment recording
+ * - Stripe payment link generation
+ * - Stripe webhook handling
+ *
+ * Integrates with fraud detection to block high-risk payments.
+ */
+
 const { pool } = require("../config/db");
 const { toCurrencyNumber, writeAuditLog } = require("./invoiceController");
 
+/**
+ * Ensures a payment method exists in the database.
+ * Creates it if not found. Returns the payment_method_id.
+ *
+ * @param {Object} connection - MySQL connection (from pool.getConnection).
+ * @param {string} methodName - Name of the payment method (e.g. "Bank Transfer", "Stripe").
+ * @returns {number} The payment_method_id.
+ */
 async function ensurePaymentMethod(connection, methodName) {
   const [existingRows] = await connection.query(
     "SELECT payment_method_id FROM payment_method WHERE name = ? LIMIT 1",
@@ -22,6 +42,14 @@ async function ensurePaymentMethod(connection, methodName) {
   return result.insertId;
 }
 
+/**
+ * Checks if an invoice is eligible for payment based on fraud assessment.
+ * High-risk invoices that haven't been manually approved are blocked.
+ *
+ * @param {Object} connection - MySQL connection or pool.
+ * @param {number} invoiceId - The invoice primary key.
+ * @returns {Object} { allowed: boolean, message?: string }
+ */
 async function ensureInvoiceCanBePaid(connection, invoiceId) {
   const [rows] = await connection.query(
     `
@@ -44,8 +72,18 @@ async function ensureInvoiceCanBePaid(connection, invoiceId) {
   return { allowed: true };
 }
 
+/**
+ * GET /api/payments
+ *
+ * Returns the payment workspace data:
+ * - Outstanding (unpaid) invoices sorted by due date
+ * - Recent payment records (last 25)
+ *
+ * Used by the Finance Payments view to display pending and completed payments.
+ */
 async function getPaymentsWorkspace(req, res) {
   try {
+    // Fetch all unpaid invoices with customer details
     const [outstandingInvoices] = await pool.query(`
       SELECT
         i.invoice_id,
@@ -62,6 +100,7 @@ async function getPaymentsWorkspace(req, res) {
       ORDER BY i.due_date ASC, i.invoice_id DESC
     `);
 
+    // Fetch recent payments with method and invoice details
     const [payments] = await pool.query(`
       SELECT
         p.payment_id,
@@ -96,11 +135,23 @@ async function getPaymentsWorkspace(req, res) {
   }
 }
 
+/**
+ * POST /api/payments/manual
+ *
+ * Records a manual bank transfer payment for an invoice.
+ * Updates the invoice status to "Paid" and creates audit log entries.
+ * Validates against fraud assessment before allowing payment.
+ *
+ * Request body: { invoice_id: number, amount: number, transaction_id?: string }
+ * Success response: 201 with payment_id.
+ * Error responses: 400 (validation), 404 (invoice not found), 500 (server error).
+ */
 async function recordManualPayment(req, res) {
   const invoiceId = Number(req.body.invoice_id);
   const amount = toCurrencyNumber(req.body.amount);
   const transactionId = String(req.body.transaction_id || "").trim() || `MANUAL-${Date.now()}`;
 
+  // Validate required fields
   if (!invoiceId || amount <= 0) {
     return res.status(400).json({ message: "Invoice and positive payment amount are required." });
   }
@@ -110,6 +161,7 @@ async function recordManualPayment(req, res) {
   try {
     await connection.beginTransaction();
 
+    // Lock invoice row to prevent concurrent payment
     const [invoiceRows] = await connection.query(
       "SELECT invoice_id, total_amount FROM invoice WHERE invoice_id = ? LIMIT 1 FOR UPDATE",
       [invoiceId]
@@ -120,14 +172,17 @@ async function recordManualPayment(req, res) {
       return res.status(404).json({ message: "Invoice not found." });
     }
 
+    // Check fraud assessment allows payment
     const paymentCheck = await ensureInvoiceCanBePaid(connection, invoiceId);
     if (!paymentCheck.allowed) {
       await connection.rollback();
       return res.status(400).json({ message: paymentCheck.message });
     }
 
+    // Get or create payment method record
     const paymentMethodId = await ensurePaymentMethod(connection, "Bank Transfer");
 
+    // Insert payment record
     const [paymentResult] = await connection.query(
       `
         INSERT INTO payment
@@ -137,11 +192,13 @@ async function recordManualPayment(req, res) {
       [String(amount), transactionId, invoiceId, paymentMethodId]
     );
 
+    // Update invoice status to Paid
     await connection.query(
       "UPDATE invoice SET status = 'Paid' WHERE invoice_id = ?",
       [invoiceId]
     );
 
+    // Write audit logs for payment and status change
     await writeAuditLog(connection, "manual_payment_recorded", "payment", paymentResult.insertId, req.user?.userId);
     await writeAuditLog(connection, "invoice_status:Paid", "invoice", invoiceId, req.user?.userId);
 
@@ -162,6 +219,16 @@ async function recordManualPayment(req, res) {
   }
 }
 
+/**
+ * POST /api/payments/stripe-link
+ *
+ * Generates a Stripe payment link for an invoice.
+ * Validates against fraud assessment before generating link.
+ * Currently returns a mock/test Stripe URL (production would use Stripe SDK).
+ *
+ * Request body: { invoice_id: number }
+ * Success response: { paymentUrl: string, invoice_id, invoiceId }
+ */
 async function createStripePaymentLink(req, res) {
   const invoiceId = Number(req.body.invoice_id);
 
@@ -170,6 +237,7 @@ async function createStripePaymentLink(req, res) {
   }
 
   try {
+    // Fetch invoice with customer email for Stripe
     const [rows] = await pool.query(
       `
         SELECT i.invoice_id, i.invoiceId, i.total_amount, c.email
@@ -186,11 +254,14 @@ async function createStripePaymentLink(req, res) {
     }
 
     const invoice = rows[0];
+
+    // Validate against fraud rules
     const paymentCheck = await ensureInvoiceCanBePaid(pool, invoiceId);
     if (!paymentCheck.allowed) {
       return res.status(400).json({ message: paymentCheck.message });
     }
 
+    // Generate test payment URL (replace with real Stripe SDK in production)
     const paymentUrl = `https://pay.stripe.com/test_${Buffer.from(`${invoice.invoiceId}:${invoice.invoice_id}`).toString("base64url")}`;
 
     res.json({
@@ -207,6 +278,15 @@ async function createStripePaymentLink(req, res) {
   }
 }
 
+/**
+ * POST /api/payments/stripe/webhook
+ *
+ * Handles incoming Stripe webhook events.
+ * Processes successful payment notifications by recording the payment.
+ * In production, would verify Stripe webhook signatures.
+ *
+ * Request body: { invoice_id: number, amount?: number, transaction_id?: string }
+ */
 async function stripeWebhook(req, res) {
   const invoiceId = Number(req.body.invoice_id);
 
@@ -214,6 +294,7 @@ async function stripeWebhook(req, res) {
     return res.status(400).json({ message: "invoice_id is required." });
   }
 
+  // Set defaults and delegate to manual payment recording
   req.body.amount = req.body.amount || 0.01;
   req.body.transaction_id = req.body.transaction_id || `STRIPE-${Date.now()}`;
   return recordManualPayment(req, res);

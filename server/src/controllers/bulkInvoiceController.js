@@ -1,3 +1,16 @@
+/**
+ * Bulk Invoice Controller
+ *
+ * Handles mass invoice import from Excel/CSV files.
+ * Provides two-step workflow:
+ * 1. Validate - Parse and validate uploaded rows, return errors per row.
+ * 2. Process - Insert all valid rows as invoices in a single transaction.
+ *
+ * Enforces file format validation (must be .xlsx/.xls with "invoice" in filename).
+ * Validates against existing customers and duplicate invoice numbers.
+ * Triggers fraud risk assessment on each created invoice.
+ */
+
 const { pool } = require("../config/db");
 const {
   toCurrencyNumber,
@@ -5,8 +18,13 @@ const {
 } = require("./invoiceController");
 const { assessInvoiceRisk } = require("../services/fraudDetectionService");
 
+/** Error message when file is not an Excel format. */
 const EXCEL_FILE_ERROR = "Only Excel invoice files (.xlsx, .xls) are allowed.";
+
+/** Error message when file name doesn't contain "invoice". */
 const INVOICE_FILE_NAME_ERROR = 'Invoice upload file name or path must contain "invoice".';
+
+/** Accepted Excel file extensions. */
 const ALLOWED_EXCEL_EXTENSIONS = new Set([".xlsx", ".xls"]);
 const ALLOWED_EXCEL_MIME_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -352,6 +370,10 @@ async function processBulkInvoices(req, res) {
 }
 
 module.exports = {
+  getMissingTemplateColumns,
+  normalizeImportedRows,
   processBulkInvoices,
-  validateBulkRows
+  validateBulkRows,
+  validateExcelFileMetadata,
+  validateInvoiceImport
 };

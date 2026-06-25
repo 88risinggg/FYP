@@ -424,5 +424,7 @@ module.exports = {
   assessInvoiceRisk,
   getRiskLevel,
   hashBankAccount,
+  recordApprovalActivity,
+  toCurrencyNumber,
   recordApprovalActivity
 };

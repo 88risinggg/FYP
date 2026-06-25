@@ -1,5 +1,21 @@
+/**
+ * Customer Controller
+ *
+ * Handles customer directory operations.
+ * Provides customer listing with aggregated invoice statistics.
+ */
+
 const { pool } = require("../config/db");
 
+/**
+ * GET /api/customers
+ *
+ * Retrieves all customers with their invoice count and total invoiced amount.
+ * Results are sorted by creation date (newest first).
+ *
+ * Success response: { customers: [{ customer_id, name, email, address, created_at, invoice_count, total_invoiced }] }
+ * Error response: 500 with error detail.
+ */
 async function getCustomers(req, res) {
   try {
     const [rows] = await pool.query(`

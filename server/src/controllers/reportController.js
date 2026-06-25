@@ -1,8 +1,36 @@
+/**
+ * Report Controller
+ *
+ * Generates financial reports and analytics for the Finance dashboard.
+ * Provides:
+ * - Revenue summary metrics
+ * - Monthly revenue trends
+ * - Invoice status distribution
+ * - Aging receivables analysis
+ * - Top customer revenue breakdown
+ * - Financial statements (Income Statement, Cash Flow, Ratios)
+ */
+
 const { pool } = require("../config/db");
 const { toCurrencyNumber } = require("./invoiceController");
 
+/**
+ * GET /api/reports/invoices
+ *
+ * Returns comprehensive invoice analytics and financial statement data.
+ * All monetary values are normalized to 2 decimal places.
+ *
+ * Response includes:
+ * - summary: Total revenue, paid, outstanding, invoice count
+ * - monthlyRevenue: Revenue and collections per month
+ * - statusDistribution: Count and total per invoice status
+ * - agingReceivables: Outstanding amounts by age bucket (Current, 1-30, 31-60, 60+)
+ * - topCustomers: Top 8 customers by revenue
+ * - financialStatement: Income Statement, Cash Flow Summary, Financial Ratios
+ */
 async function getInvoiceReports(req, res) {
   try {
+    // Overall revenue summary
     const [summaryRows] = await pool.query(`
       SELECT
         COALESCE(SUM(total_amount), 0) AS total_revenue,
@@ -12,6 +40,7 @@ async function getInvoiceReports(req, res) {
       FROM invoice
     `);
 
+    // Monthly revenue breakdown with collections
     const [monthlyRows] = await pool.query(`
       SELECT
         DATE_FORMAT(issue_date, '%Y-%m') AS month,
@@ -23,12 +52,14 @@ async function getInvoiceReports(req, res) {
       ORDER BY month ASC
     `);
 
+    // Invoice count and total grouped by status
     const [statusRows] = await pool.query(`
       SELECT status, COUNT(*) AS count, COALESCE(SUM(total_amount), 0) AS total
       FROM invoice
       GROUP BY status
     `);
 
+    // Aging receivables: categorize unpaid invoices by days overdue
     const [agingRows] = await pool.query(`
       SELECT
         CASE
@@ -45,6 +76,7 @@ async function getInvoiceReports(req, res) {
       ORDER BY FIELD(bucket, 'Current', '1-30 Days', '31-60 Days', '60+ Days')
     `);
 
+    // Top 8 customers by total revenue
     const [customerRows] = await pool.query(`
       SELECT
         c.customer_id,
@@ -58,7 +90,7 @@ async function getInvoiceReports(req, res) {
       LIMIT 8
     `);
 
-    // Financial Statement Data
+    // Financial Statement: Paid invoices aggregates
     const [paidInvoices] = await pool.query(`
       SELECT
         COUNT(*) AS paid_count,
@@ -67,6 +99,7 @@ async function getInvoiceReports(req, res) {
       FROM invoice WHERE status = 'Paid'
     `);
 
+    // Financial Statement: Overdue invoices
     const [overdueInvoices] = await pool.query(`
       SELECT
         COUNT(*) AS overdue_count,
@@ -74,20 +107,24 @@ async function getInvoiceReports(req, res) {
       FROM invoice WHERE status = 'Overdue'
     `);
 
+    // Cash Flow: Current month revenue
     const [thisMonthRevenue] = await pool.query(`
       SELECT COALESCE(SUM(total_amount), 0) AS revenue
       FROM invoice
       WHERE DATE_FORMAT(issue_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')
     `);
 
+    // Cash Flow: Previous month revenue for growth calculation
     const [lastMonthRevenue] = await pool.query(`
       SELECT COALESCE(SUM(total_amount), 0) AS revenue
       FROM invoice
       WHERE DATE_FORMAT(issue_date, '%Y-%m') = DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m')
     `);
 
+    // Total customer count for per-customer calculations
     const [customerCount] = await pool.query(`SELECT COUNT(*) AS count FROM customer`);
 
+    // Calculate financial ratios
     const summary = summaryRows[0] || {};
     const paid = paidInvoices[0] || {};
     const overdue = overdueInvoices[0] || {};
@@ -96,6 +133,13 @@ async function getInvoiceReports(req, res) {
     const collectionRate = totalRev > 0 ? ((paidRev / totalRev) * 100) : 0;
     const revenuePerCustomer = Number(customerCount[0]?.count || 1) > 0
       ? totalRev / Number(customerCount[0].count)
+      : 0;
+
+    // Month-over-month growth percentage
+    const thisMonth = Number(thisMonthRevenue[0]?.revenue || 0);
+    const lastMonth = Number(lastMonthRevenue[0]?.revenue || 0);
+    const momGrowth = lastMonth > 0
+      ? toCurrencyNumber(((thisMonth - lastMonth) / lastMonth) * 100)
       : 0;
 
     res.json({
@@ -128,17 +172,15 @@ async function getInvoiceReports(req, res) {
           collections: toCurrencyNumber(paid.total_collected),
           outstanding: toCurrencyNumber(summary.outstanding_revenue),
           overdue: toCurrencyNumber(overdue.overdue_total),
-          netReceivable: toCurrencyNumber(Number(summary.total_revenue) - Number(paid.total_collected))
+          netReceivable: toCurrencyNumber(totalRev - Number(paid.total_collected))
         },
         cashFlow: {
           totalInflow: toCurrencyNumber(paid.total_collected),
           pendingInflow: toCurrencyNumber(summary.outstanding_revenue),
           overdueAmount: toCurrencyNumber(overdue.overdue_total),
-          thisMonthRevenue: toCurrencyNumber(thisMonthRevenue[0]?.revenue),
-          lastMonthRevenue: toCurrencyNumber(lastMonthRevenue[0]?.revenue),
-          monthOverMonthGrowth: Number(lastMonthRevenue[0]?.revenue) > 0
-            ? toCurrencyNumber(((Number(thisMonthRevenue[0]?.revenue) - Number(lastMonthRevenue[0]?.revenue)) / Number(lastMonthRevenue[0]?.revenue)) * 100)
-            : 0
+          thisMonthRevenue: toCurrencyNumber(thisMonth),
+          lastMonthRevenue: toCurrencyNumber(lastMonth),
+          monthOverMonthGrowth: momGrowth
         },
         ratios: {
           collectionRate: toCurrencyNumber(collectionRate),

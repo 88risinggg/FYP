@@ -1,25 +1,67 @@
+/**
+ * Invoice Controller
+ *
+ * Core controller for invoice CRUD operations.
+ * Handles invoice creation, retrieval, status management, scheduling, and sending.
+ * All database operations use transactions for data integrity.
+ * Integrates with fraud detection service on invoice creation.
+ */
+
 const { pool } = require("../config/db");
 const { assessInvoiceRisk } = require("../services/fraudDetectionService");
 const { sendInvoiceEmail } = require("../services/invoiceDeliveryService");
 
+/** Set of valid invoice statuses used throughout the application. */
 const VALID_STATUSES = new Set(["Draft", "Scheduled", "Sent", "Paid", "Overdue"]);
+
+/** Prefix used in audit_log entries for status change tracking. */
 const STATUS_AUDIT_PREFIX = "invoice_status:";
 
+/**
+ * Convert any value to a safe 2-decimal currency number.
+ * Returns 0 if the value is not a finite number.
+ *
+ * @param {*} value - The value to convert.
+ * @returns {number} Rounded to 2 decimal places.
+ */
 function toCurrencyNumber(value) {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? Number(numberValue.toFixed(2)) : 0;
 }
 
+/**
+ * Generate the next sequential invoice number (INV-0001, INV-0002, etc.).
+ * Parses the last used invoice ID and increments by 1.
+ *
+ * @param {string|null} lastInvoiceId - The most recent invoiceId from the database.
+ * @returns {string} Next invoice number in INV-XXXX format.
+ */
 function buildNextInvoiceNumber(lastInvoiceId) {
   const match = String(lastInvoiceId || "").match(/^INV-(\d+)$/i);
   const nextNumber = match ? Number(match[1]) + 1 : 1;
   return `INV-${String(nextNumber).padStart(4, "0")}`;
 }
 
+/**
+ * Normalize a status string to a valid database ENUM value.
+ * Falls back to "Draft" if the status is not recognized.
+ *
+ * @param {string} status - The status to normalize.
+ * @returns {string} A valid invoice status.
+ */
 function toDatabaseInvoiceStatus(status) {
   return VALID_STATUSES.has(status) ? status : "Draft";
 }
 
+/**
+ * Determine the operational status of an invoice.
+ * Prefers the latest audit log status over the raw database column,
+ * ensuring the UI reflects the most recent status transition.
+ *
+ * @param {string} rowStatus - The status column from the invoice table.
+ * @param {string|undefined} auditStatus - The latest status from the audit_log.
+ * @returns {string} The effective operational status.
+ */
 function toOperationalInvoiceStatus(rowStatus, auditStatus) {
   if (auditStatus && VALID_STATUSES.has(auditStatus)) {
     return auditStatus;
@@ -32,6 +74,16 @@ function toOperationalInvoiceStatus(rowStatus, auditStatus) {
   return "Draft";
 }
 
+/**
+ * Insert a record into the audit_log table.
+ * Used to track all invoice operations for compliance and debugging.
+ *
+ * @param {Object} connection - MySQL connection (from pool.getConnection).
+ * @param {string} action - The action performed (e.g. "invoice_created", "invoice_status:Sent").
+ * @param {string} entityType - The entity type (e.g. "invoice", "payment").
+ * @param {number|null} entityId - The primary key of the affected entity.
+ * @param {number|null} userId - The user who performed the action.
+ */
 async function writeAuditLog(connection, action, entityType, entityId, userId) {
   await connection.query(
     `
@@ -42,6 +94,13 @@ async function writeAuditLog(connection, action, entityType, entityId, userId) {
   );
 }
 
+/**
+ * Validate and normalize a date value.
+ * Returns null if the value is not a parseable date.
+ *
+ * @param {*} value - The date value to normalize.
+ * @returns {string|null} The normalized date string or null.
+ */
 function normalizeDate(value) {
   if (!value || Number.isNaN(Date.parse(value))) {
     return null;
@@ -50,6 +109,14 @@ function normalizeDate(value) {
   return value;
 }
 
+/**
+ * Validate the invoice creation/update payload.
+ * Checks for required fields: customer_id, dates, and at least one valid line item.
+ * Returns either an error message or the normalized invoice value.
+ *
+ * @param {Object} body - The request body.
+ * @returns {Object} { error: string } on failure, { value: Object } on success.
+ */
 function validateInvoicePayload(body) {
   const customerId = Number(body.customer_id);
   const issueDate = normalizeDate(body.issue_date);
@@ -68,6 +135,7 @@ function validateInvoicePayload(body) {
     return { error: "At least one invoice item is required." };
   }
 
+  // Normalize line items: calculate amounts and validate fields
   const normalizedItems = items.map((item) => {
     const quantity = Number(item.quantity);
     const unitPrice = Number(item.unit_price);
@@ -108,8 +176,18 @@ function validateInvoicePayload(body) {
   };
 }
 
+/**
+ * GET /api/invoices
+ *
+ * Retrieves all invoices with their line items and customer details.
+ * Resolves the operational status from the audit log for accurate display.
+ * Results sorted by creation date (newest first).
+ *
+ * Response: { invoices: [{ invoice_id, invoiceId, status, issue_date, due_date, total_amount, customer_name, items, ... }] }
+ */
 async function getInvoices(req, res) {
   try {
+    // Fetch all invoices joined with customer data
     const [rows] = await pool.query(`
       SELECT
         i.invoice_id,
@@ -134,6 +212,7 @@ async function getInvoices(req, res) {
     let statusByInvoiceId = {};
 
     if (invoiceIds.length > 0) {
+      // Batch-load all line items for the fetched invoices
       const [itemRows] = await pool.query(
         `
           SELECT
@@ -150,6 +229,7 @@ async function getInvoices(req, res) {
         [invoiceIds]
       );
 
+      // Group items by invoice ID for O(1) lookup
       itemsByInvoiceId = itemRows.reduce((acc, item) => {
         const invoiceId = item.invoice_invoice_id;
         acc[invoiceId] = acc[invoiceId] || [];
@@ -157,6 +237,7 @@ async function getInvoices(req, res) {
         return acc;
       }, {});
 
+      // Resolve the latest operational status from audit logs
       const [statusRows] = await pool.query(
         `
           SELECT al.entity_id, al.action
@@ -179,6 +260,7 @@ async function getInvoices(req, res) {
       }, {});
     }
 
+    // Map results with resolved status and attached items
     res.json({
       invoices: rows.map((row) => ({
         ...row,
@@ -196,6 +278,12 @@ async function getInvoices(req, res) {
   }
 }
 
+/**
+ * GET /api/invoices/customers
+ *
+ * Retrieves all customers for the invoice creation dropdown.
+ * Lightweight query returning only id, name, email, address.
+ */
 async function getCustomers(req, res) {
   try {
     const [rows] = await pool.query(`
@@ -213,6 +301,14 @@ async function getCustomers(req, res) {
   }
 }
 
+/**
+ * GET /api/invoices/next-number
+ *
+ * Calculates and returns the next available invoice number.
+ * Looks at the highest existing INV-XXXX number and increments.
+ *
+ * Response: { invoiceId: "INV-0033" }
+ */
 async function getNextInvoiceNumber(req, res) {
   try {
     const [rows] = await pool.query(`
@@ -234,6 +330,18 @@ async function getNextInvoiceNumber(req, res) {
   }
 }
 
+/**
+ * POST /api/invoices
+ *
+ * Creates a new invoice with line items.
+ * Uses a database transaction to ensure atomicity.
+ * Generates a sequential invoice number (INV-XXXX) using row-level locking.
+ * Triggers fraud risk assessment after creation.
+ * Writes audit logs for creation and initial status.
+ *
+ * Request body: { customer_id, issue_date, due_date, items: [{ description, quantity, unit_price }] }
+ * Success response: 201 with { invoice: { invoice_id, invoiceId, status, total_amount } }
+ */
 async function createInvoice(req, res) {
   const validation = validateInvoicePayload(req.body);
 
@@ -247,6 +355,7 @@ async function createInvoice(req, res) {
   try {
     await connection.beginTransaction();
 
+    // Lock last invoice row to prevent duplicate numbers under concurrency
     const [lastInvoiceRows] = await connection.query(`
       SELECT invoiceId
       FROM invoice
@@ -257,6 +366,7 @@ async function createInvoice(req, res) {
     `);
     const invoiceId = buildNextInvoiceNumber(lastInvoiceRows[0]?.invoiceId);
 
+    // Insert invoice header
     const [invoiceResult] = await connection.query(
       `
         INSERT INTO invoice
@@ -274,6 +384,8 @@ async function createInvoice(req, res) {
     );
 
     const invoicePrimaryId = invoiceResult.insertId;
+
+    // Batch-insert line items
     const itemValues = invoice.items.map((item) => [
       item.description,
       item.quantity,
@@ -291,6 +403,7 @@ async function createInvoice(req, res) {
       [itemValues]
     );
 
+    // Audit trail: record creation and initial status
     await writeAuditLog(
       connection,
       `${STATUS_AUDIT_PREFIX}Draft`,
@@ -300,6 +413,7 @@ async function createInvoice(req, res) {
     );
     await writeAuditLog(connection, "invoice_created", "invoice", invoicePrimaryId, req.user?.userId);
 
+    // Run fraud risk assessment on the new invoice
     await assessInvoiceRisk(connection, invoicePrimaryId, {
       vendor_name: req.body.vendor_name,
       bank_account: req.body.bank_account,
@@ -328,6 +442,17 @@ async function createInvoice(req, res) {
   }
 }
 
+/**
+ * POST /api/invoices/:id/send
+ *
+ * Sends an invoice to the customer via email.
+ * Updates the invoice status from Draft/Scheduled to "Sent".
+ * Clears any scheduled_at timestamp.
+ * Prevents re-sending of already-paid invoices.
+ *
+ * URL param: id (invoice primary key)
+ * Success response: { message, invoice_id, status: "Sent" }
+ */
 async function sendInvoice(req, res) {
   const invoiceId = Number(req.params.id);
 
@@ -340,6 +465,7 @@ async function sendInvoice(req, res) {
   try {
     await connection.beginTransaction();
 
+    // Lock invoice row and fetch details for email
     const [rows] = await connection.query(
       `
         SELECT
@@ -369,8 +495,10 @@ async function sendInvoice(req, res) {
       return res.status(400).json({ message: "Paid invoices cannot be sent again." });
     }
 
+    // Send invoice via email service
     await sendInvoiceEmail(invoice);
 
+    // Update status to Sent and clear schedule
     await connection.query(
       "UPDATE invoice SET status = 'Sent', scheduled_at = NULL WHERE invoice_id = ?",
       [invoiceId]
@@ -396,6 +524,13 @@ async function sendInvoice(req, res) {
   }
 }
 
+/**
+ * Validate and parse a scheduled_at timestamp.
+ * Returns null if the value is not a valid date.
+ *
+ * @param {*} value - The timestamp value.
+ * @returns {Date|null} Parsed Date object or null.
+ */
 function normalizeScheduledAt(value) {
   if (!value || Number.isNaN(Date.parse(value))) {
     return null;
@@ -404,6 +539,17 @@ function normalizeScheduledAt(value) {
   return new Date(value);
 }
 
+/**
+ * POST /api/invoices/schedule
+ *
+ * Schedules one or more Draft invoices for automatic future sending.
+ * The background invoice scheduler worker picks these up when the time arrives.
+ * Only Draft invoices can be scheduled.
+ *
+ * Request body: { invoice_ids: number[], scheduled_at: string (ISO datetime) }
+ * Validation: scheduled_at must be in the future; all IDs must exist and be Draft.
+ * Success response: { message, scheduledCount, scheduled_at }
+ */
 async function scheduleInvoices(req, res) {
   const invoiceIds = Array.isArray(req.body.invoice_ids)
     ? [...new Set(req.body.invoice_ids.map((id) => Number(id)).filter(Boolean))]
@@ -427,6 +573,7 @@ async function scheduleInvoices(req, res) {
   try {
     await connection.beginTransaction();
 
+    // Lock all target invoices and verify they exist
     const [existingInvoices] = await connection.query(
       "SELECT invoice_id, status FROM invoice WHERE invoice_id IN (?) FOR UPDATE",
       [invoiceIds]
@@ -438,17 +585,20 @@ async function scheduleInvoices(req, res) {
       return res.status(404).json({ message: "One or more invoices were not found." });
     }
 
+    // Ensure all invoices are in Draft status
     const unschedulableInvoice = existingInvoices.find((invoice) => invoice.status !== "Draft");
     if (unschedulableInvoice) {
       await connection.rollback();
       return res.status(400).json({ message: "Only draft invoices can be scheduled." });
     }
 
+    // Batch-update status and scheduled_at
     await connection.query(
       "UPDATE invoice SET status = 'Scheduled', scheduled_at = ? WHERE invoice_id IN (?)",
       [scheduledAt, invoiceIds]
     );
 
+    // Write audit logs for each scheduled invoice
     for (const invoiceId of invoiceIds) {
       await writeAuditLog(
         connection,
@@ -485,6 +635,7 @@ async function scheduleInvoices(req, res) {
 }
 
 module.exports = {
+  buildNextInvoiceNumber,
   createInvoice,
   getCustomers,
   getInvoices,
@@ -494,5 +645,7 @@ module.exports = {
   toCurrencyNumber,
   STATUS_AUDIT_PREFIX,
   toDatabaseInvoiceStatus,
+  toOperationalInvoiceStatus,
+  validateInvoicePayload,
   writeAuditLog
 };

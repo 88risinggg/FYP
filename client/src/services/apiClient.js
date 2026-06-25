@@ -6,12 +6,12 @@ export async function apiRequest(path, options = {}) {
   const session = getStoredSession();
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
     headers: {
       "Content-Type": "application/json",
       ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
       ...options.headers
-    },
-    ...options
+    }
   });
 
   const data = await response.json().catch(() => ({}));

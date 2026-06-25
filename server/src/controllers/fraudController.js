@@ -1,3 +1,16 @@
+/**
+ * Fraud Detection Controller
+ *
+ * Provides fraud risk monitoring and review workflow.
+ * Features:
+ * - Dashboard with risk score distribution, trends, and flagged invoices
+ * - Reassess individual invoices for updated risk scores
+ * - Review workflow (Approve/Reject) for high-risk invoices
+ *
+ * Integrates with the fraudDetectionService for risk scoring
+ * and the invoiceController for audit logging.
+ */
+
 const { pool } = require("../config/db");
 const { writeAuditLog } = require("./invoiceController");
 const {
@@ -5,6 +18,12 @@ const {
   recordApprovalActivity
 } = require("../services/fraudDetectionService");
 
+/**
+ * Parse a date string, returning null if invalid.
+ *
+ * @param {*} value - Date string to parse.
+ * @returns {string|null} Date string (YYYY-MM-DD) or null.
+ */
 function parseDate(value) {
   if (!value || Number.isNaN(Date.parse(value))) {
     return null;
@@ -13,11 +32,25 @@ function parseDate(value) {
   return String(value).slice(0, 10);
 }
 
+/**
+ * Parse a numeric score value with a fallback default.
+ *
+ * @param {*} value - Score value to parse.
+ * @param {number|null} fallback - Default if value is not finite.
+ * @returns {number|null}
+ */
 function parseScore(value, fallback) {
   const score = Number(value);
   return Number.isFinite(score) ? score : fallback;
 }
 
+/**
+ * Build SQL WHERE clause and parameters from query string filters.
+ * Supports filtering by: date range, vendor, customer, risk level, score range.
+ *
+ * @param {Object} query - Express req.query object.
+ * @returns {Object} { whereSql: string, params: array }
+ */
 function buildFilteredWhere(query) {
   const clauses = ["1 = 1"];
   const params = [];
@@ -67,6 +100,12 @@ function buildFilteredWhere(query) {
   };
 }
 
+/**
+ * Parse the JSON details stored in a fraud indicator record.
+ *
+ * @param {Object} indicator - Raw indicator row from database.
+ * @returns {Object} Indicator with parsed details object.
+ */
 function parseIndicatorDetails(indicator) {
   return {
     ...indicator,
@@ -74,6 +113,17 @@ function parseIndicatorDetails(indicator) {
   };
 }
 
+/**
+ * GET /api/fraud/dashboard
+ *
+ * Returns the fraud detection dashboard data:
+ * - Summary counts (assessed, flagged, high/medium/low risk, average score)
+ * - Risk distribution breakdown
+ * - Daily assessment trends (last 30 days)
+ * - Flagged invoices with their fraud indicators
+ *
+ * Supports query string filters: from, to, vendor, customer, riskLevel, minScore, maxScore.
+ */
 async function getFraudDashboard(req, res) {
   const { whereSql, params } = buildFilteredWhere(req.query);
 
@@ -201,6 +251,16 @@ async function getFraudDashboard(req, res) {
   }
 }
 
+/**
+ * POST /api/fraud/:id/reassess
+ *
+ * Triggers a fresh fraud risk assessment for a specific invoice.
+ * Recalculates the risk score based on current rules and metadata.
+ * Writes an audit log entry for the reassessment.
+ *
+ * URL param: id (invoice primary key)
+ * Request body: { metadata?: Object } - Optional additional metadata for assessment.
+ */
 async function reassessInvoice(req, res) {
   const invoiceId = Number(req.params.id);
 
@@ -231,6 +291,16 @@ async function reassessInvoice(req, res) {
   }
 }
 
+/**
+ * POST /api/fraud/:id/review
+ *
+ * Records a fraud review decision (Approved or Rejected) for a flagged invoice.
+ * Only invoices with fraud assessments can be reviewed.
+ * Writes audit log with the decision and optional notes.
+ *
+ * URL param: id (invoice primary key)
+ * Request body: { decision: "Approved"|"Rejected", notes?: string }
+ */
 async function reviewInvoice(req, res) {
   const invoiceId = Number(req.params.id);
   const decision = req.body.decision;
@@ -284,7 +354,9 @@ async function reviewInvoice(req, res) {
 }
 
 module.exports = {
+  buildFilteredWhere,
   getFraudDashboard,
+  parseIndicatorDetails,
   reassessInvoice,
   reviewInvoice
 };
