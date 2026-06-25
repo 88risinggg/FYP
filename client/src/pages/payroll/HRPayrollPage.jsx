@@ -19,8 +19,6 @@ import * as XLSX from "xlsx";
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
 
-const pageTitle = "Automated Payroll System – HR Payroll Upload & Payslip Generation";
-
 const payrollSidebarSections = [
   {
     label: "HR",
