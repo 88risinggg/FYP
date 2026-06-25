@@ -19,45 +19,6 @@ import * as XLSX from "xlsx";
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
 
-const payrollSidebarSections = [
-  {
-    label: "HR",
-    items: [
-      {
-        label: "Dashboard",
-        icon: LayoutDashboard,
-        path: "/dashboard/payroll/hr",
-        end: true
-      },
-      {
-        label: "Staff Records",
-        icon: Users,
-        path: "/dashboard/payroll/hr/staff-records"
-      },
-      {
-        label: "Payroll Upload",
-        icon: Upload,
-        path: "/dashboard/payroll/hr/payroll-upload"
-      },
-      {
-        label: "Payroll Runs",
-        icon: ClipboardList,
-        path: "/dashboard/payroll/hr/payroll-runs"
-      },
-      {
-        label: "Payslips",
-        icon: FileText,
-        path: "/dashboard/payroll/hr/payslips"
-      },
-      {
-        label: "Notifications",
-        icon: Bell,
-        path: "/dashboard/payroll/hr/notifications"
-      }
-    ]
-  }
-];
-
 const pageTitle = "Automated Payroll System – HR Payroll Upload & Payslip Generation";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
