@@ -22,6 +22,7 @@ const payrollRoutes = require("./routes/payrollRoutes");
 const adminUserRoutes = require("./routes/adminUserRoutes");
 const adminReminderRoutes = require("./routes/adminReminderRoutes");
 const adminAuditLogRoutes = require("./routes/adminAuditLogRoutes");
+const publicRoutes = require("./routes/publicRoutes");
 
 const app = express();
 
@@ -41,6 +42,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Routes — Invoicing module
 app.use("/api/health", healthRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/public", publicRoutes);
 app.use("/api/invoices", invoiceRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/bulk-invoices", bulkInvoiceRoutes);

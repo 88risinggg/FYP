@@ -12,7 +12,7 @@ const { assessInvoiceRisk } = require("../services/fraudDetectionService");
 const { sendInvoiceEmail } = require("../services/invoiceDeliveryService");
 
 /** Set of valid invoice statuses used throughout the application. */
-const VALID_STATUSES = new Set(["Draft", "Scheduled", "Sent", "Paid", "Overdue"]);
+const VALID_STATUSES = new Set(["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdue"]);
 
 /** Prefix used in audit_log entries for status change tracking. */
 const STATUS_AUDIT_PREFIX = "invoice_status:";

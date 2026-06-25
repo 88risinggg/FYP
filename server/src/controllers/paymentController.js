@@ -261,14 +261,22 @@ async function createStripePaymentLink(req, res) {
       return res.status(400).json({ message: paymentCheck.message });
     }
 
-    // Generate test payment URL (replace with real Stripe SDK in production)
-    const paymentUrl = `https://pay.stripe.com/test_${Buffer.from(`${invoice.invoiceId}:${invoice.invoice_id}`).toString("base64url")}`;
+    // Generate Stripe checkout session (real or mock depending on config)
+    const { createCheckoutSession } = require("../services/stripeService");
+    const checkoutResult = await createCheckoutSession({
+      invoice_id: invoice.invoice_id,
+      invoiceId: invoice.invoiceId,
+      total_amount: invoice.total_amount,
+      customer_email: invoice.email
+    });
 
     res.json({
       message: "Stripe payment link generated.",
       invoice_id: invoice.invoice_id,
       invoiceId: invoice.invoiceId,
-      paymentUrl
+      paymentUrl: checkoutResult.paymentUrl,
+      sessionId: checkoutResult.sessionId,
+      provider: checkoutResult.provider
     });
   } catch (error) {
     res.status(500).json({
@@ -282,22 +290,106 @@ async function createStripePaymentLink(req, res) {
  * POST /api/payments/stripe/webhook
  *
  * Handles incoming Stripe webhook events.
- * Processes successful payment notifications by recording the payment.
- * In production, would verify Stripe webhook signatures.
+ * Verifies webhook signature (when configured) and processes payment events:
+ * - checkout.session.completed: Records payment, marks invoice as Paid
+ * - payment_intent.succeeded: Alternative payment confirmation
+ * - payment_intent.payment_failed: Logs failed payment attempt
  *
- * Request body: { invoice_id: number, amount?: number, transaction_id?: string }
+ * In demo mode (no STRIPE_SECRET_KEY), accepts raw JSON body.
  */
 async function stripeWebhook(req, res) {
-  const invoiceId = Number(req.body.invoice_id);
+  const { verifyWebhookEvent } = require("../services/stripeService");
 
-  if (!invoiceId) {
-    return res.status(400).json({ message: "invoice_id is required." });
+  let event;
+  try {
+    const signature = req.headers["stripe-signature"] || "";
+    const rawBody = req.rawBody || JSON.stringify(req.body);
+    event = verifyWebhookEvent(rawBody, signature);
+
+    if (!event) {
+      return res.status(400).json({ message: "Webhook verification failed." });
+    }
+  } catch (error) {
+    console.error("[STRIPE WEBHOOK] Verification error:", error.message);
+    return res.status(400).json({ message: "Webhook signature verification failed." });
   }
 
-  // Set defaults and delegate to manual payment recording
-  req.body.amount = req.body.amount || 0.01;
-  req.body.transaction_id = req.body.transaction_id || `STRIPE-${Date.now()}`;
-  return recordManualPayment(req, res);
+  const eventType = event.type || event.eventType || "unknown";
+  console.log(`[STRIPE WEBHOOK] Received event: ${eventType}`);
+
+  try {
+    if (eventType === "checkout.session.completed") {
+      const session = event.data?.object || event;
+      const invoiceId = Number(session.metadata?.invoice_id || session.invoice_id);
+      const amount = session.amount_total ? session.amount_total / 100 : Number(session.amount || 0);
+      const transactionId = session.payment_intent || session.id || `STRIPE-${Date.now()}`;
+
+      if (!invoiceId) {
+        return res.status(400).json({ message: "Missing invoice_id in session metadata." });
+      }
+
+      const connection = await pool.getConnection();
+      try {
+        await connection.beginTransaction();
+
+        // Check invoice exists and is payable
+        const [invoiceRows] = await connection.query(
+          "SELECT invoice_id, status, total_amount FROM invoice WHERE invoice_id = ? LIMIT 1",
+          [invoiceId]
+        );
+
+        if (invoiceRows.length === 0) {
+          await connection.rollback();
+          return res.status(404).json({ message: "Invoice not found." });
+        }
+
+        if (invoiceRows[0].status === "Paid") {
+          await connection.rollback();
+          return res.json({ message: "Invoice already paid.", received: true });
+        }
+
+        const paymentAmount = amount || Number(invoiceRows[0].total_amount);
+        const paymentMethodId = await ensurePaymentMethod(connection, "Stripe");
+
+        await connection.query(
+          `INSERT INTO payment (payment_date, amount, status, transaction_id, invoice_invoice_id, payment_method_id)
+           VALUES (NOW(), ?, 'Completed', ?, ?, ?)`,
+          [String(paymentAmount), transactionId, invoiceId, paymentMethodId]
+        );
+
+        await connection.query(
+          "UPDATE invoice SET status = 'Paid' WHERE invoice_id = ?",
+          [invoiceId]
+        );
+
+        await writeAuditLog(connection, "stripe_payment_completed", "payment", invoiceId, null);
+        await writeAuditLog(connection, "invoice_status:Paid", "invoice", invoiceId, null);
+
+        await connection.commit();
+        console.log(`[STRIPE WEBHOOK] Payment recorded for invoice ${invoiceId}, txn: ${transactionId}`);
+      } catch (dbError) {
+        await connection.rollback();
+        throw dbError;
+      } finally {
+        connection.release();
+      }
+    } else if (eventType === "payment_intent.succeeded") {
+      const intent = event.data?.object || event;
+      console.log(`[STRIPE WEBHOOK] Payment intent succeeded: ${intent.id}`);
+      // Payment intent success is typically handled via checkout.session.completed
+    } else if (eventType === "payment_intent.payment_failed") {
+      const intent = event.data?.object || event;
+      const failureMessage = intent.last_payment_error?.message || "Unknown failure";
+      console.log(`[STRIPE WEBHOOK] Payment failed: ${intent.id} - ${failureMessage}`);
+    } else {
+      console.log(`[STRIPE WEBHOOK] Unhandled event type: ${eventType}`);
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error("[STRIPE WEBHOOK] Processing error:", error.message);
+    res.status(500).json({ message: "Webhook processing failed.", detail: error.message });
+  }
 }
 
 module.exports = {

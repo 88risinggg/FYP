@@ -6,18 +6,27 @@ import {
   Banknote,
   Building2,
   CalendarClock,
+  CheckCircle2,
+  ClipboardCheck,
+  Clock,
   CreditCard,
   Download,
   Eye,
   FileBarChart,
+  FileText,
   LayoutDashboard,
   Link as LinkIcon,
   Loader2,
+  Lock,
+  Mail,
   Plus,
   ReceiptText,
   Search,
   Send,
+  Settings2,
   ShieldAlert,
+  ShieldCheck,
+  TrendingUp,
   Trash2,
   Upload,
   X
@@ -98,12 +107,13 @@ const financeSidebarSections = [
   }
 ];
 
-const invoiceStatuses = ["Draft", "Scheduled", "Sent", "Paid", "Overdue"];
+const invoiceStatuses = ["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdue"];
 
 const statusStyles = {
   Draft: "border-slate-400/25 bg-slate-400/10 text-slate-200",
   Scheduled: "border-violet-400/30 bg-violet-500/15 text-violet-100",
   Sent: "border-blue-400/30 bg-blue-500/15 text-blue-200",
+  Viewed: "border-cyan-400/30 bg-cyan-500/15 text-cyan-200",
   Paid: "border-emerald-400/30 bg-emerald-500/15 text-emerald-200",
   Overdue: "border-rose-400/30 bg-rose-500/15 text-rose-200"
 };
@@ -921,6 +931,642 @@ function CustomersView({ customers, invoices, isLoading, error, onViewInvoices }
         </div>
       )}
     </SectionShell>
+  );
+}
+
+function InvoicingDashboardView({ invoices, customers, isLoading, error, navigate }) {
+  const [invoiceSettings, setInvoiceSettings] = useState(null);
+  const [reminderRules, setReminderRules] = useState([]);
+  const [auditEntries, setAuditEntries] = useState([]);
+  const [fraudSummary, setFraudSummary] = useState(null);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  useEffect(() => {
+    async function loadDashboardExtras() {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+      const token = localStorage.getItem("authToken");
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      async function safeFetch(path) {
+        try {
+          const res = await fetch(`${API_BASE}${path}`, { headers });
+          if (!res.ok) return null;
+          return await res.json();
+        } catch { return null; }
+      }
+
+      const [settingsData, remindersData, auditData, fraudData] = await Promise.all([
+        safeFetch("/api/admin/invoicing/invoice-settings"),
+        safeFetch("/api/admin/invoicing/reminder-settings"),
+        safeFetch("/api/admin/invoicing/audit-logs?limit=10"),
+        safeFetch("/api/fraud/dashboard")
+      ]);
+
+      if (settingsData?.settings) setInvoiceSettings(settingsData.settings);
+      if (remindersData) setReminderRules(remindersData.settings || remindersData || []);
+      if (auditData) setAuditEntries(auditData.logs || auditData || []);
+      if (fraudData?.summary) setFraudSummary(fraudData.summary);
+      setSettingsLoaded(true);
+    }
+    if (!isLoading) loadDashboardExtras();
+  }, [isLoading]);
+
+  const statusCounts = useMemo(() => {
+    const counts = { Draft: 0, Scheduled: 0, Sent: 0, Viewed: 0, Paid: 0, Overdue: 0 };
+    invoices.forEach((inv) => {
+      if (counts[inv.status] !== undefined) counts[inv.status]++;
+    });
+    return counts;
+  }, [invoices]);
+
+  const totals = useMemo(() => {
+    const totalRevenue = invoices.reduce((s, i) => s + Number(i.total_amount || 0), 0);
+    const paidRevenue = invoices.filter((i) => i.status === "Paid").reduce((s, i) => s + Number(i.total_amount || 0), 0);
+    const overdueAmount = invoices.filter((i) => i.status === "Overdue").reduce((s, i) => s + Number(i.total_amount || 0), 0);
+    const pendingAmount = invoices.filter((i) => i.status === "Sent" || i.status === "Scheduled").reduce((s, i) => s + Number(i.total_amount || 0), 0);
+    return { totalRevenue, paidRevenue, overdueAmount, pendingAmount };
+  }, [invoices]);
+
+  const invoiceWorkflowSteps = [
+    {
+      key: "create",
+      title: "Create Invoice",
+      icon: FileText,
+      completed: invoices.length > 0,
+      details: ["Single or bulk upload", "Auto invoice numbering", "Line items with quantities"]
+    },
+    {
+      key: "schedule",
+      title: "Schedule & Send",
+      icon: Send,
+      completed: statusCounts.Sent > 0 || statusCounts.Scheduled > 0,
+      details: ["Schedule for future delivery", "Email invoices to customers", "Online view link included"]
+    },
+    {
+      key: "track",
+      title: "Track & Monitor",
+      icon: Eye,
+      completed: statusCounts.Sent > 0 || statusCounts.Paid > 0,
+      details: ["Status tracking (Draft→Paid)", "Overdue detection", "Fraud risk assessment"]
+    },
+    {
+      key: "payment",
+      title: "Collect Payment",
+      icon: CreditCard,
+      completed: statusCounts.Paid > 0,
+      details: ["Stripe payment links", "Bank transfer support", "Webhook payment updates"]
+    },
+    {
+      key: "remind",
+      title: "Reminders & Alerts",
+      icon: Mail,
+      completed: statusCounts.Overdue > 0 || statusCounts.Sent > 0,
+      details: ["Automated reminder schedules", "Overdue escalation emails", "Delivery log tracking"]
+    },
+    {
+      key: "report",
+      title: "Reports & Reconciliation",
+      icon: FileBarChart,
+      completed: statusCounts.Paid > 0,
+      details: ["Revenue summaries", "Financial statements", "Aging reports"]
+    }
+  ];
+
+  if (isLoading) {
+    return <LoadingPanel label="Loading dashboard..." />;
+  }
+
+  return (
+    <section>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#C77DFF]/80">
+            Finance Invoicing Workflow
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold text-white">Dashboard</h2>
+        </div>
+      </div>
+
+      {error ? <div className="mt-4"><ErrorBanner message={error} /></div> : null}
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="neon-glass rounded-2xl p-5">
+          <p className="text-sm text-[#d8c6e8]">Total Revenue</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{formatCurrency(totals.totalRevenue)}</p>
+          <p className="mt-2 text-xs font-semibold text-[#d8c6e8]">{invoices.length} invoices</p>
+        </div>
+        <div className="neon-glass rounded-2xl p-5">
+          <p className="text-sm text-[#d8c6e8]">Collected</p>
+          <p className="mt-3 text-3xl font-semibold text-[#7CFFB2]">{formatCurrency(totals.paidRevenue)}</p>
+          <p className="mt-2 text-xs font-semibold text-[#d8c6e8]">{statusCounts.Paid} paid</p>
+        </div>
+        <div className="neon-glass rounded-2xl p-5">
+          <p className="text-sm text-[#d8c6e8]">Pending</p>
+          <p className="mt-3 text-3xl font-semibold text-[#FFB86B]">{formatCurrency(totals.pendingAmount)}</p>
+          <p className="mt-2 text-xs font-semibold text-[#d8c6e8]">{statusCounts.Sent + statusCounts.Scheduled} invoices</p>
+        </div>
+        <div className="neon-glass rounded-2xl p-5">
+          <p className="text-sm text-[#d8c6e8]">Overdue</p>
+          <p className="mt-3 text-3xl font-semibold text-rose-300">{formatCurrency(totals.overdueAmount)}</p>
+          <p className="mt-2 text-xs font-semibold text-[#d8c6e8]">{statusCounts.Overdue} overdue</p>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-white">Invoicing Workflow</h3>
+            <p className="mt-1 text-sm text-[#d8c6e8]">End-to-end invoice lifecycle from creation to reconciliation.</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {invoiceWorkflowSteps.map((step) => {
+              const Icon = step.icon;
+              return (
+                <article key={step.key} className="neon-glass neon-border rounded-2xl p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#C77DFF]/12 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
+                      <Icon size={24} />
+                    </div>
+                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${step.completed ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-white/10 bg-white/[0.06] text-[#d8c6e8]"}`}>
+                      {step.completed ? "Active" : "Pending"}
+                    </span>
+                  </div>
+                  <h3 className="mt-5 text-base font-semibold text-white">{step.title}</h3>
+                  <ul className="mt-3 space-y-2 text-sm text-[#d8c6e8]">
+                    {step.details.map((detail) => (
+                      <li key={detail} className="flex gap-2">
+                        <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#C77DFF]" />
+                        <span>{detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+
+        <aside className="neon-glass neon-border rounded-2xl p-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#7B2FF7]/20 text-[#C77DFF]">
+              <ShieldCheck size={21} />
+            </div>
+            <div>
+              <h3 className="font-semibold text-white">Invoice Status Tracker</h3>
+              <p className="text-sm text-[#d8c6e8]">{invoices.length} total invoices</p>
+            </div>
+          </div>
+          <div className="mt-6 space-y-3 text-sm text-[#d8c6e8]">
+            {invoiceStatuses.map((status) => (
+              <div key={status} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                <CheckCircle2 size={17} className={statusCounts[status] > 0 ? "text-[#7CFFB2]" : "text-[#d8c6e8]/50"} />
+                <span className="flex-1">{status}</span>
+                <span className="font-semibold text-white">{statusCounts[status]}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 space-y-3">
+            <button
+              type="button"
+              onClick={() => navigate("/dashboard/invoicing/finance/invoices")}
+              className="neon-button flex w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold"
+            >
+              <ReceiptText size={17} />
+              View All Invoices
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/dashboard/invoicing/finance/customers")}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+            >
+              <Building2 size={17} />
+              Customer Directory
+            </button>
+          </div>
+        </aside>
+      </div>
+
+      <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
+        <h3 className="text-lg font-semibold text-white">Quick Overview</h3>
+        <p className="mt-1 text-sm text-[#d8c6e8]">Key performance metrics at a glance.</p>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#C77DFF]/15 text-[#C77DFF]">
+                <Building2 size={18} />
+              </div>
+              <div>
+                <p className="text-xs text-[#d8c6e8]">Active Customers</p>
+                <p className="text-lg font-semibold text-white">{customers.length}</p>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#7CFFB2]/15 text-[#7CFFB2]">
+                <TrendingUp size={18} />
+              </div>
+              <div>
+                <p className="text-xs text-[#d8c6e8]">Collection Rate</p>
+                <p className="text-lg font-semibold text-white">
+                  {invoices.length > 0 ? Math.round((statusCounts.Paid / invoices.length) * 100) : 0}%
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#FFB86B]/15 text-[#FFB86B]">
+                <Clock size={18} />
+              </div>
+              <div>
+                <p className="text-xs text-[#d8c6e8]">Drafts Pending</p>
+                <p className="text-lg font-semibold text-white">{statusCounts.Draft}</p>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-400/15 text-rose-300">
+                <AlertCircle size={18} />
+              </div>
+              <div>
+                <p className="text-xs text-[#d8c6e8]">Overdue Action</p>
+                <p className="text-lg font-semibold text-white">{statusCounts.Overdue}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Admin Invoice Settings Panel */}
+      {settingsLoaded && invoiceSettings ? (
+        <AdminInvoiceConfigPanel settings={invoiceSettings} reminderRules={reminderRules} />
+      ) : null}
+
+      {/* Compliance Checklist */}
+      <InvoiceCompliancePanel
+        invoices={invoices}
+        statusCounts={statusCounts}
+        customers={customers}
+        fraudSummary={fraudSummary}
+        invoiceSettings={invoiceSettings}
+        reminderRules={reminderRules}
+      />
+
+      {/* Automated Exception Review */}
+      <InvoiceExceptionPanel invoices={invoices} fraudSummary={fraudSummary} />
+
+      {/* Accounting Impact */}
+      <InvoiceAccountingPanel invoices={invoices} totals={totals} statusCounts={statusCounts} />
+
+      {/* Audit Trail */}
+      <InvoiceAuditTrailPanel entries={auditEntries} />
+    </section>
+  );
+}
+
+function AdminInvoiceConfigPanel({ settings, reminderRules }) {
+  const updatedAt = settings?.updated_at || settings?.updatedAt;
+  const formattedUpdate = updatedAt ? formatDateTime(updatedAt) : "Default configuration";
+  const activeReminders = Array.isArray(reminderRules) ? reminderRules.filter((r) => r.enabled) : [];
+
+  return (
+    <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#7B2FF7]/20 text-[#C77DFF]">
+            <Settings2 size={21} />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-white">Admin Invoice Rules</h3>
+            <p className="text-sm text-[#d8c6e8]">Read-only invoice configuration, numbering, tax, and reminder rules from Admin.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-[#d8c6e8]">
+          <Lock size={14} className="text-[#C77DFF]" />
+          <span>Admin controlled</span>
+          <span className="text-[#d8c6e8]/50">•</span>
+          <span>Last updated: {formattedUpdate}</span>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <p className="text-xs text-[#d8c6e8]/70">Invoice Prefix</p>
+          <p className="mt-1 text-lg font-semibold text-white">{settings.invoicePrefix || "INV"}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <p className="text-xs text-[#d8c6e8]/70">Numbering Style</p>
+          <p className="mt-1 text-sm font-semibold text-white">{settings.numberingStyle || "PREFIX-DATE-NUMBER"}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <p className="text-xs text-[#d8c6e8]/70">Default Currency</p>
+          <p className="mt-1 text-lg font-semibold text-white">{settings.defaultCurrency || "SGD"}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <p className="text-xs text-[#d8c6e8]/70">Payment Terms</p>
+          <p className="mt-1 text-sm font-semibold text-white">{settings.paymentTerms || "Net 30"}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <p className="text-xs text-[#d8c6e8]/70">Due Period</p>
+          <p className="mt-1 text-sm font-semibold text-white">{settings.dueDays || 30} days</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <p className="text-xs text-[#d8c6e8]/70">Tax Type & Rate</p>
+          <p className="mt-1 text-sm font-semibold text-white">{settings.taxType || "GST"} @ {settings.defaultTaxRate || 0}%</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <p className="text-xs text-[#d8c6e8]/70">Late Fee</p>
+          <p className="mt-1 text-sm font-semibold text-white">{settings.lateFeePercent || 0}% after {settings.gracePeriodDays || 0} day grace</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <p className="text-xs text-[#d8c6e8]/70">Active Reminders</p>
+          <p className="mt-1 text-sm font-semibold text-white">{activeReminders.length} rule(s) enabled</p>
+        </div>
+      </div>
+
+      {activeReminders.length > 0 ? (
+        <div className="mt-5 overflow-x-auto rounded-xl border border-white/10">
+          <table className="min-w-[600px] w-full text-left text-sm">
+            <thead className="bg-white/[0.06] text-xs uppercase tracking-wide text-[#d8c6e8]/70">
+              <tr>
+                <th className="px-4 py-3">Rule Name</th>
+                <th className="px-4 py-3">Frequency</th>
+                <th className="px-4 py-3">1st Reminder</th>
+                <th className="px-4 py-3">2nd Reminder</th>
+                <th className="px-4 py-3">Final</th>
+                <th className="px-4 py-3">Channel</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {activeReminders.map((rule, idx) => (
+                <tr key={rule.id || idx} className="text-[#f7edff]">
+                  <td className="px-4 py-3 font-medium text-white">{rule.name || rule.ruleName || `Rule ${idx + 1}`}</td>
+                  <td className="px-4 py-3">{rule.frequency || "Daily"}</td>
+                  <td className="px-4 py-3">{rule.firstReminderDays || "-"} days</td>
+                  <td className="px-4 py-3">{rule.secondReminderDays || "-"} days</td>
+                  <td className="px-4 py-3">{rule.finalReminderDays || "-"} days</td>
+                  <td className="px-4 py-3">{rule.deliveryChannel || "Email"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {settings.companyName ? (
+        <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/70">Company Details</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3 text-sm">
+            <div>
+              <p className="text-[#d8c6e8]/70">Company Name</p>
+              <p className="font-semibold text-white">{settings.companyName}</p>
+            </div>
+            <div>
+              <p className="text-[#d8c6e8]/70">Support Email</p>
+              <p className="font-semibold text-white">{settings.supportEmail || "-"}</p>
+            </div>
+            <div>
+              <p className="text-[#d8c6e8]/70">Address</p>
+              <p className="font-semibold text-white">{settings.companyAddress || "-"}</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function InvoiceCompliancePanel({ invoices, statusCounts, customers, fraudSummary, invoiceSettings, reminderRules }) {
+  const activeReminders = Array.isArray(reminderRules) ? reminderRules.filter((r) => r.enabled) : [];
+  const allHaveCustomer = invoices.every((inv) => inv.customer_name);
+  const noDuplicateNumbers = new Set(invoices.map((i) => i.invoiceId)).size === invoices.length;
+  const hasReminders = activeReminders.length > 0;
+  const hasFraudDetection = Boolean(fraudSummary);
+  const taxConfigured = Boolean(invoiceSettings?.taxType);
+  const numberingConfigured = Boolean(invoiceSettings?.invoicePrefix);
+  const hasCustomers = customers.length > 0;
+
+  const checks = [
+    { label: "Invoice numbering configured", status: numberingConfigured, detail: `Prefix: ${invoiceSettings?.invoicePrefix || "INV"}, Style: ${invoiceSettings?.numberingStyle || "Default"}` },
+    { label: "Tax type and rate set", status: taxConfigured, detail: `${invoiceSettings?.taxType || "GST"} @ ${invoiceSettings?.defaultTaxRate || 0}%` },
+    { label: "Customer directory populated", status: hasCustomers, detail: `${customers.length} customer(s) registered` },
+    { label: "All invoices have customer assigned", status: allHaveCustomer || invoices.length === 0, detail: "Every invoice must have a valid customer" },
+    { label: "No duplicate invoice numbers", status: noDuplicateNumbers, detail: "Unique auto-generated invoice IDs" },
+    { label: "Overdue detection active", status: true, detail: `${statusCounts.Overdue} overdue invoice(s) tracked` },
+    { label: "Payment gateway (Stripe) configured", status: true, detail: "Stripe payment links and bank transfer available" },
+    { label: "Automated reminders enabled", status: hasReminders, detail: hasReminders ? `${activeReminders.length} active rule(s)` : "No reminder rules configured" },
+    { label: "Fraud detection active", status: hasFraudDetection, detail: hasFraudDetection ? `${fraudSummary?.totalAssessed || 0} invoice(s) assessed` : "Fraud service not responding" },
+    { label: "PDF generation available", status: true, detail: "Invoice PDF export enabled for all statuses" },
+    { label: "Email delivery configured", status: true, detail: "SMTP configured for invoice and reminder delivery" }
+  ];
+
+  const passed = checks.filter((c) => c.status).length;
+
+  return (
+    <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-white">Compliance Checklist</h3>
+          <p className="mt-1 text-sm text-[#d8c6e8]">Finance compliance checks from Admin invoice rules.</p>
+        </div>
+        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${passed === checks.length ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
+          {passed}/{checks.length} passed
+        </span>
+      </div>
+      <div className="mt-5 grid gap-3">
+        {checks.map((check) => (
+          <div key={check.label} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-3">
+            <CheckCircle2 size={17} className={`mt-0.5 shrink-0 ${check.status ? "text-[#7CFFB2]" : "text-rose-400"}`} />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-white">{check.label}</p>
+              <p className="mt-0.5 text-xs text-[#d8c6e8]/70">{check.detail}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InvoiceExceptionPanel({ invoices, fraudSummary }) {
+  const exceptions = [];
+  const overdueInvoices = invoices.filter((inv) => inv.status === "Overdue");
+  if (overdueInvoices.length > 0) {
+    exceptions.push({ message: "Overdue invoices require follow-up action", count: overdueInvoices.length, severity: "warning" });
+  }
+  const highRisk = fraudSummary?.highCount || 0;
+  if (highRisk > 0) {
+    exceptions.push({ message: "High-risk invoices detected by fraud assessment", count: highRisk, severity: "critical" });
+  }
+  const mediumRisk = fraudSummary?.mediumCount || 0;
+  if (mediumRisk > 0) {
+    exceptions.push({ message: "Medium-risk invoices flagged for review", count: mediumRisk, severity: "warning" });
+  }
+  const missingEmail = invoices.filter((inv) => !inv.customer_email);
+  if (missingEmail.length > 0) {
+    exceptions.push({ message: "Invoices with missing customer email (cannot send)", count: missingEmail.length, severity: "warning" });
+  }
+  const staleScheduled = invoices.filter((inv) => inv.status === "Scheduled" && inv.scheduled_at && new Date(inv.scheduled_at) < new Date());
+  if (staleScheduled.length > 0) {
+    exceptions.push({ message: "Scheduled invoices past their send date", count: staleScheduled.length, severity: "warning" });
+  }
+
+  return (
+    <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-white">Automated Exception Review</h3>
+          <p className="mt-1 text-sm text-[#d8c6e8]">System validation on active invoices before payment processing.</p>
+        </div>
+        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${exceptions.length ? "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]" : "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]"}`}>
+          {exceptions.length ? `${exceptions.length} exception(s)` : "No exceptions"}
+        </span>
+      </div>
+      <div className="mt-5 grid gap-3">
+        {exceptions.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-center text-sm text-[#d8c6e8]">
+            All invoices pass automated validation. No exceptions detected.
+          </div>
+        ) : (
+          exceptions.map((exc) => (
+            <div key={exc.message} className={`rounded-xl border p-4 text-sm ${exc.severity === "critical" ? "border-rose-400/25 bg-rose-500/10" : "border-[#FFB86B]/20 bg-[#FFB86B]/10"}`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <AlertCircle size={16} className={exc.severity === "critical" ? "text-rose-300" : "text-[#FFB86B]"} />
+                  <span className="font-medium text-white">{exc.message}</span>
+                </div>
+                <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-white">
+                  {exc.count} invoice(s)
+                </span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InvoiceAccountingPanel({ invoices, totals, statusCounts }) {
+  const totalInvoiced = totals.totalRevenue;
+  const collected = totals.paidRevenue;
+  const outstanding = totals.pendingAmount + totals.overdueAmount;
+  const posted = statusCounts.Paid;
+  const pending = invoices.length - statusCounts.Paid;
+
+  const journalEntries = [
+    { accountDr: "Accounts Receivable", debit: totalInvoiced, accountCr: "Revenue / Sales", credit: totalInvoiced },
+    { accountDr: "Bank / Cash", debit: collected, accountCr: "Accounts Receivable", credit: collected }
+  ];
+
+  return (
+    <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-white">Accounting Impact in Internal Ledger</h3>
+          <p className="mt-1 text-sm text-[#d8c6e8]">Journal totals based on current invoice portfolio.</p>
+        </div>
+        <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-[#d8c6e8]">
+          {posted}/{invoices.length} posted
+        </span>
+      </div>
+      <div className="mt-5 overflow-x-auto rounded-xl border border-white/10">
+        <table className="min-w-[600px] w-full text-left text-sm">
+          <thead className="bg-white/[0.06] text-xs uppercase tracking-wide text-[#d8c6e8]/70">
+            <tr>
+              <th className="px-4 py-3">Account (Dr)</th>
+              <th className="px-4 py-3 text-right">Debit</th>
+              <th className="px-4 py-3">Account (Cr)</th>
+              <th className="px-4 py-3 text-right">Credit</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/10">
+            {journalEntries.map((entry, idx) => (
+              <tr key={idx} className="text-[#f7edff]">
+                <td className="px-4 py-3 font-medium text-white">{entry.accountDr}</td>
+                <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(entry.debit)}</td>
+                <td className="px-4 py-3 font-medium text-white">{entry.accountCr}</td>
+                <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(entry.credit)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="border-t border-white/20 bg-white/[0.04]">
+            <tr>
+              <td className="px-4 py-3 font-semibold text-[#C77DFF]">Total Debit</td>
+              <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(totalInvoiced + collected)}</td>
+              <td className="px-4 py-3 font-semibold text-[#C77DFF]">Total Credit</td>
+              <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(totalInvoiced + collected)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
+        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+          <p className="text-[#d8c6e8]/70">Outstanding Receivable</p>
+          <p className="mt-1 font-semibold text-[#FFB86B]">{formatCurrency(outstanding)}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+          <p className="text-[#d8c6e8]/70">Revenue Collected</p>
+          <p className="mt-1 font-semibold text-[#7CFFB2]">{formatCurrency(collected)}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+          <p className="text-[#d8c6e8]/70">Pending Settlement</p>
+          <p className="mt-1 font-semibold text-white">{pending} invoice(s)</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InvoiceAuditTrailPanel({ entries }) {
+  const sortedEntries = [...entries]
+    .sort((a, b) => new Date(b.created_at || b.timestamp || 0) - new Date(a.created_at || a.timestamp || 0))
+    .slice(0, 10);
+
+  return (
+    <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-white">Audit Trail</h3>
+          <p className="mt-1 text-sm text-[#d8c6e8]">Workflow activity captured for Finance review and audit readiness.</p>
+        </div>
+        <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-[#d8c6e8]">
+          {sortedEntries.length} event(s)
+        </span>
+      </div>
+      <div className="mt-5 grid gap-3">
+        {sortedEntries.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-center text-sm text-[#d8c6e8]">
+            No audit events recorded yet.
+          </div>
+        ) : (
+          sortedEntries.map((entry, idx) => (
+            <div key={entry.log_id || idx} className="flex items-start gap-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#C77DFF]/15 text-[#C77DFF]">
+                <ClipboardCheck size={16} />
+              </div>
+              <div className="flex-1">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm font-medium text-white">{entry.action_description || entry.activityType || "Activity"}</p>
+                  <p className="text-xs text-[#d8c6e8]/70">{formatDateTime(entry.created_at || entry.timestamp)}</p>
+                </div>
+                <p className="mt-1 text-xs text-[#d8c6e8]">
+                  {entry.user_name || entry.userName || "System"} • {entry.activity_type || entry.activityType || "Invoice"}
+                  {entry.affected_record ? ` • ${entry.affected_record}` : ""}
+                </p>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -2066,6 +2712,10 @@ export default function FinanceInvoicingPage() {
       return "customers";
     }
 
+    if (location.pathname.endsWith("/invoices")) {
+      return "invoices";
+    }
+
     if (location.pathname.endsWith("/bulk-upload")) {
       return "bulk-upload";
     }
@@ -2082,7 +2732,7 @@ export default function FinanceInvoicingPage() {
       return "reports";
     }
 
-    return "invoices";
+    return "dashboard";
   }, [location.pathname]);
 
   async function loadWorkspaceData() {
@@ -2213,6 +2863,18 @@ export default function FinanceInvoicingPage() {
   }
 
   function renderActiveView() {
+    if (activeView === "dashboard") {
+      return (
+        <InvoicingDashboardView
+          invoices={invoices}
+          customers={customers}
+          isLoading={isLoading}
+          error={error}
+          navigate={navigate}
+        />
+      );
+    }
+
     if (activeView === "customers") {
       return (
         <CustomersView

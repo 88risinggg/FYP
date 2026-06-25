@@ -7,6 +7,7 @@ const {
   scheduleInvoices,
   sendInvoice
 } = require("../controllers/invoiceController");
+const { exportInvoicesExcel } = require("../controllers/exportController");
 const { authenticateToken } = require("../middleware/authMiddleware");
 const { generateInvoicePDF } = require("../services/pdfService");
 const { sendWhatsAppReminder } = require("../services/whatsappService");
@@ -19,6 +20,7 @@ router.use(authenticateToken);
 router.get("/", getInvoices);
 router.get("/customers", getCustomers);
 router.get("/next-number", getNextInvoiceNumber);
+router.get("/export/excel", exportInvoicesExcel);
 router.post("/", createInvoice);
 router.post("/schedule", scheduleInvoices);
 router.post("/:id/send", sendInvoice);
