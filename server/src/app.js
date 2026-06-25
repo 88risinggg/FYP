@@ -1,3 +1,5 @@
+const cors = require("cors");
+const express = require("express");
 // ============================================================
 // MERGE INSTRUCTIONS — READ BEFORE RESOLVING ANY CONFLICT
 // ============================================================
@@ -29,6 +31,28 @@ require("dotenv").config();
 
 const healthRoutes = require("./routes/healthRoutes");
 const authRoutes = require("./routes/authRoutes");
+const invoiceRoutes = require("./routes/invoiceRoutes");
+const customerRoutes = require("./routes/customerRoutes");
+const bulkInvoiceRoutes = require("./routes/bulkInvoiceRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const reportRoutes = require("./routes/reportRoutes");
+const fraudRoutes = require("./routes/fraudRoutes");
+
+const app = express();
+
+app.use(cors({
+  origin: process.env.CLIENT_URL || "http://localhost:5173"
+}));
+app.use(express.json());
+
+app.use("/api/health", healthRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/invoices", invoiceRoutes);
+app.use("/api/customers", customerRoutes);
+app.use("/api/bulk-invoices", bulkInvoiceRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/reports", reportRoutes);
+app.use("/api/fraud", fraudRoutes);
 const profileRoutes = require("./routes/profileRoutes");
 const payslipRoutes = require("./routes/payslipRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");

@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 
+function authenticateToken(req, res, next) {
 const { pool } = require("../config/db");
 
 async function authenticateToken(req, res, next) {
@@ -13,6 +14,7 @@ async function authenticateToken(req, res, next) {
   }
 
   try {
+    req.user = jwt.verify(token, process.env.JWT_SECRET);
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const [rows] = await pool.execute(
       `SELECT
@@ -47,6 +49,8 @@ async function authenticateToken(req, res, next) {
   }
 }
 
+module.exports = {
+  authenticateToken
 function requireRole(...allowedRoles) {
   return (req, res, next) => {
     if (!allowedRoles.includes(req.user?.role)) {

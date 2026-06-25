@@ -1,4 +1,53 @@
 import {
+  Bell,
+  ClipboardList,
+  FileText,
+  LayoutDashboard,
+  Upload,
+  Users
+} from "lucide-react";
+import { useLocation } from "react-router-dom";
+
+import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
+import { getStoredSession } from "../../services/sessionService.js";
+
+const pageTitle = "Automated Payroll System – HR Payroll Upload & Payslip Generation";
+
+const payrollSidebarSections = [
+  {
+    label: "HR",
+    items: [
+      {
+        label: "Dashboard",
+        icon: LayoutDashboard,
+        path: "/dashboard/payroll/hr",
+        end: true
+      },
+      {
+        label: "Staff Records",
+        icon: Users,
+        path: "/dashboard/payroll/hr/staff-records"
+      },
+      {
+        label: "Payroll Upload",
+        icon: Upload,
+        path: "/dashboard/payroll/hr/payroll-upload"
+      },
+      {
+        label: "Payroll Runs",
+        icon: ClipboardList,
+        path: "/dashboard/payroll/hr/payroll-runs"
+      },
+      {
+        label: "Payslips",
+        icon: FileText,
+        path: "/dashboard/payroll/hr/payslips"
+      },
+      {
+        label: "Notifications",
+        icon: Bell,
+        path: "/dashboard/payroll/hr/notifications"
+      }
   AlertCircle,
   Bell,
   CheckCircle2,
@@ -182,6 +231,8 @@ const payrollSidebarSections = [
 
 const routeHeadings = {
   "/dashboard/payroll/hr": "Dashboard",
+  "/dashboard/payroll/hr/staff-records": "Staff Records",
+  "/dashboard/payroll/hr/payroll-upload": "Payroll Upload",
   "/dashboard/payroll/hr/staff": "Staff Records",
   "/dashboard/payroll/hr/upload": "Payroll Upload",
   "/dashboard/payroll/hr/payroll-runs": "Payroll Runs",
@@ -2749,6 +2800,18 @@ export default function HRPayrollPage() {
       sidebarSections={payrollSidebarSections}
       sidebarTitle="Automated Invoicing & Payroll System"
       searchPlaceholder="Search staff, payroll runs, payslips..."
+    >
+      <section>
+        <h2 className="text-2xl font-semibold text-white">{heading}</h2>
+        <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl border-dashed p-8">
+          <p className="text-sm text-[#d8c6e8]">
+            This page is reserved for module development.
+          </p>
+        </div>
+      </section>
+    </DashboardLayout>
+  );
+}
       searchEndpoint={headerSearchEndpoint}
     >
       <section>

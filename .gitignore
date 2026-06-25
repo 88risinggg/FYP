@@ -6,6 +6,7 @@ coverage/
 generated/
 uploads/
 npm-debug.log*
+
 .vscode/
 .kiro/
 *.log

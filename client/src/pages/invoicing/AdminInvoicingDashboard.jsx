@@ -10,6 +10,8 @@ import { useLocation } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
+
+const pageTitle = "Automated Invoicing System – Admin Dashboard";
 import AdminAuditLogsPage from "./AdminAuditLogsPage.jsx";
 import AdminDashboardHomePage from "./AdminDashboardHomePage.jsx";
 import AdminInvoiceSettingsPage from "./AdminInvoiceSettingsPage.jsx";
@@ -93,6 +95,10 @@ export default function AdminInvoicingDashboard() {
   const session = getStoredSession();
   const location = useLocation();
   const heading = routeHeadings[location.pathname] || "Dashboard";
+
+  return (
+    <DashboardLayout
+      pageTitle={pageTitle}
   const isUserManagement = location.pathname === "/dashboard/invoicing/admin/users";
   const isInvoiceSettings = location.pathname === "/dashboard/invoicing/admin/invoice-settings";
   const isReminderSettings = location.pathname === "/dashboard/invoicing/admin/reminder-settings";
@@ -121,6 +127,14 @@ export default function AdminInvoicingDashboard() {
       sidebarTitle="Automated Invoicing & Payroll System"
       searchPlaceholder="Search invoices, users, settings..."
     >
+      <section>
+        <h2 className="text-2xl font-semibold text-white">{heading}</h2>
+        <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl border-dashed p-8">
+          <p className="text-sm text-[#d8c6e8]">
+            This page is reserved for module development.
+          </p>
+        </div>
+      </section>
       {location.pathname === "/dashboard/invoicing/admin" ? (
         <AdminDashboardHomePage />
       ) : isUserManagement ? (

@@ -1,4 +1,17 @@
 import {
+  Bell,
+  ClipboardList,
+  FileBarChart,
+  LayoutDashboard,
+  ListChecks,
+  Users
+} from "lucide-react";
+import { useLocation } from "react-router-dom";
+
+import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
+import { getStoredSession } from "../../services/sessionService.js";
+
+const pageTitle = "Automated Payroll System – Finance Payroll Dashboard";
   Banknote,
   Bell,
   Building2,
@@ -3094,6 +3107,14 @@ export default function FinancePayrollPage() {
       sidebarTitle="Automated Invoicing & Payroll System"
       searchPlaceholder="Search payroll runs, staff, reports..."
     >
+      <section>
+        <h2 className="text-2xl font-semibold text-white">{heading}</h2>
+        <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl border-dashed p-8">
+          <p className="text-sm text-[#d8c6e8]">
+            This page is reserved for module development.
+          </p>
+        </div>
+      </section>
       {configError ? (
         <div className="mb-4 rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-4 text-sm text-[#FFE2B8]">
           Admin payroll settings could not be loaded. Finance is using fallback payroll rules. {configError}
