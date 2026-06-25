@@ -1,12 +1,20 @@
 import {
+  AlertCircle,
   Bell,
+  CheckCircle2,
   ClipboardList,
+  FileUp,
   FileText,
+  Send,
+  Loader2,
   LayoutDashboard,
+  PlayCircle,
   Upload,
   Users
 } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import * as XLSX from "xlsx";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
@@ -48,25 +56,9 @@ const payrollSidebarSections = [
         icon: Bell,
         path: "/dashboard/payroll/hr/notifications"
       }
-  AlertCircle,
-  Bell,
-  CheckCircle2,
-  ClipboardList,
-  FileUp,
-  FileText,
-  Send,
-  Loader2,
-  LayoutDashboard,
-  PlayCircle,
-  Upload,
-  Users
-} from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-
-import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
-import { getStoredSession } from "../../services/sessionService.js";
-import * as XLSX from "xlsx";
+    ]
+  }
+];
 
 const pageTitle = "Automated Payroll System – HR Payroll Upload & Payslip Generation";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
