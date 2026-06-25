@@ -14,10 +14,10 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import * as XLSX from "xlsx";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
+import * as XLSX from "xlsx";
 
 const pageTitle = "Automated Payroll System – HR Payroll Upload & Payslip Generation";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -182,8 +182,6 @@ const payrollSidebarSections = [
 
 const routeHeadings = {
   "/dashboard/payroll/hr": "Dashboard",
-  "/dashboard/payroll/hr/staff-records": "Staff Records",
-  "/dashboard/payroll/hr/payroll-upload": "Payroll Upload",
   "/dashboard/payroll/hr/staff": "Staff Records",
   "/dashboard/payroll/hr/upload": "Payroll Upload",
   "/dashboard/payroll/hr/payroll-runs": "Payroll Runs",
@@ -2751,18 +2749,6 @@ export default function HRPayrollPage() {
       sidebarSections={payrollSidebarSections}
       sidebarTitle="Automated Invoicing & Payroll System"
       searchPlaceholder="Search staff, payroll runs, payslips..."
-    >
-      <section>
-        <h2 className="text-2xl font-semibold text-white">{heading}</h2>
-        <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl border-dashed p-8">
-          <p className="text-sm text-[#d8c6e8]">
-            This page is reserved for module development.
-          </p>
-        </div>
-      </section>
-    </DashboardLayout>
-  );
-}
       searchEndpoint={headerSearchEndpoint}
     >
       <section>
