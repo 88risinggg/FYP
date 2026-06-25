@@ -42,6 +42,16 @@ import {
   sendInvoice,
   validateBulkInvoiceRows
 } from "../../services/invoiceService.js";
+import {
+  Building2,
+  CreditCard,
+  FileBarChart,
+  LayoutDashboard,
+  ReceiptText,
+  Upload
+} from "lucide-react";
+
+import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
 
 const financeSidebarSections = [
@@ -2258,6 +2268,8 @@ export default function FinanceInvoicingPage() {
       />
     );
   }
+export default function FinanceInvoicingPage() {
+  const session = getStoredSession();
 
   return (
     <DashboardLayout
@@ -2286,6 +2298,12 @@ export default function FinanceInvoicingPage() {
         invoice={selectedInvoice}
         onClose={() => setSelectedInvoice(null)}
       />
+    >
+      <div className="neon-glass neon-border min-h-[calc(100vh-8rem)] rounded-2xl border-dashed p-8">
+        <p className="text-sm text-[#d8c6e8]">
+          This page is reserved for module development.
+        </p>
+      </div>
     </DashboardLayout>
   );
 }

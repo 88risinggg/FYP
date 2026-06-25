@@ -1,6 +1,9 @@
 const jwt = require("jsonwebtoken");
 
 function authenticateToken(req, res, next) {
+const { pool } = require("../config/db");
+
+async function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
 
@@ -12,6 +15,32 @@ function authenticateToken(req, res, next) {
 
   try {
     req.user = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const [rows] = await pool.execute(
+      `SELECT
+        user.user_id AS userId,
+        user.email,
+        user.status,
+        role.role_name AS role
+      FROM user
+      JOIN role ON user.role_id = role.role_id
+      WHERE user.user_id = ?`,
+      [payload.userId]
+    );
+
+    const user = rows[0];
+
+    if (!user || Number(user.status) !== 1) {
+      return res.status(403).json({
+        message: "Account is disabled or no longer available"
+      });
+    }
+
+    req.user = {
+      ...payload,
+      email: user.email,
+      role: user.role
+    };
     next();
   } catch (error) {
     res.status(403).json({
@@ -22,4 +51,19 @@ function authenticateToken(req, res, next) {
 
 module.exports = {
   authenticateToken
+function requireRole(...allowedRoles) {
+  return (req, res, next) => {
+    if (!allowedRoles.includes(req.user?.role)) {
+      return res.status(403).json({
+        message: "Admin access required"
+      });
+    }
+
+    next();
+  };
+}
+
+module.exports = {
+  authenticateToken,
+  requireRole
 };

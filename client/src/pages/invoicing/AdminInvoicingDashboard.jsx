@@ -12,6 +12,15 @@ import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
 
 const pageTitle = "Automated Invoicing System – Admin Dashboard";
+import AdminAuditLogsPage from "./AdminAuditLogsPage.jsx";
+import AdminDashboardHomePage from "./AdminDashboardHomePage.jsx";
+import AdminInvoiceSettingsPage from "./AdminInvoiceSettingsPage.jsx";
+import AdminReportsDesignPage from "./AdminReportsDesignPage.jsx";
+import AdminReminderSettingsPage from "./AdminReminderSettingsPage.jsx";
+import AdminRolesDesignPage from "./AdminRolesDesignPage.jsx";
+import AdminUserManagementPage from "./AdminUserManagementPage.jsx";
+
+const pageTitle = "Automated Invoicing System - Admin Dashboard";
 
 const invoicingSidebarSections = [
   {
@@ -90,6 +99,29 @@ export default function AdminInvoicingDashboard() {
   return (
     <DashboardLayout
       pageTitle={pageTitle}
+  const isUserManagement = location.pathname === "/dashboard/invoicing/admin/users";
+  const isInvoiceSettings = location.pathname === "/dashboard/invoicing/admin/invoice-settings";
+  const isReminderSettings = location.pathname === "/dashboard/invoicing/admin/reminder-settings";
+  const isAuditLogs = location.pathname === "/dashboard/invoicing/admin/audit-logs";
+  const isRoles = location.pathname === "/dashboard/invoicing/admin/roles";
+  const isReports = location.pathname === "/dashboard/invoicing/admin/reports";
+  const currentPageTitle = isUserManagement
+    ? "Automated Invoicing System - User Management"
+    : isInvoiceSettings
+      ? "Automated Invoicing System - Invoice Settings"
+    : isReminderSettings
+      ? "Automated Invoicing System - Reminder Settings"
+      : isAuditLogs
+        ? "Automated Invoicing System - Audit Logs"
+        : isRoles
+          ? "Automated Invoicing System - Roles Design"
+          : isReports
+            ? "Automated Invoicing System - Reports Design"
+      : pageTitle;
+
+  return (
+    <DashboardLayout
+      pageTitle={currentPageTitle}
       user={session?.user}
       sidebarSections={invoicingSidebarSections}
       sidebarTitle="Automated Invoicing & Payroll System"
@@ -103,6 +135,30 @@ export default function AdminInvoicingDashboard() {
           </p>
         </div>
       </section>
+      {location.pathname === "/dashboard/invoicing/admin" ? (
+        <AdminDashboardHomePage />
+      ) : isUserManagement ? (
+        <AdminUserManagementPage />
+      ) : isInvoiceSettings ? (
+        <AdminInvoiceSettingsPage />
+      ) : isReminderSettings ? (
+        <AdminReminderSettingsPage />
+      ) : isAuditLogs ? (
+        <AdminAuditLogsPage />
+      ) : isRoles ? (
+        <AdminRolesDesignPage />
+      ) : isReports ? (
+        <AdminReportsDesignPage />
+      ) : (
+        <section>
+          <h2 className="text-2xl font-semibold text-white">{heading}</h2>
+          <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl border-dashed p-8">
+            <p className="text-sm text-[#d8c6e8]">
+              This page is reserved for module development.
+            </p>
+          </div>
+        </section>
+      )}
     </DashboardLayout>
   );
 }

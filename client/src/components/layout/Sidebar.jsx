@@ -7,6 +7,18 @@ export default function Sidebar({
 }) {
   return (
     <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-white/10 bg-[#090014]/80 shadow-2xl shadow-purple-950/40 backdrop-blur-2xl lg:flex lg:flex-col">
+import { ClipboardList, X } from "lucide-react";
+
+export default function Sidebar({
+  sections,
+  title = "Automated Invoicing & Payroll System",
+  mobileOpen = false,
+  onClose
+}) {
+  return (
+    <aside
+      className={`fixed inset-y-0 left-0 z-30 w-64 border-r border-white/10 bg-[#090014]/95 shadow-2xl shadow-purple-950/40 backdrop-blur-2xl transition-transform duration-300 lg:flex lg:flex-col ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
+    >
       <div className="flex h-20 items-center gap-3 border-b border-white/10 px-5">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#C77DFF]/10 text-[#C77DFF] ring-1 ring-[#C77DFF]/25 shadow-lg shadow-[#9D4EDD]/20">
           <ClipboardList size={23} strokeWidth={2.2} />
@@ -14,6 +26,17 @@ export default function Sidebar({
         <p className="text-sm font-semibold leading-5 text-white">
           {title}
         </p>
+        <p className="text-sm font-semibold leading-5 text-white">{title}</p>
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-white/10 hover:text-white lg:hidden"
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
+        ) : null}
       </div>
 
       <nav className="flex-1 overflow-y-auto px-4 py-5">
@@ -31,6 +54,7 @@ export default function Sidebar({
                     key={item.label}
                     to={item.path}
                     end={item.end}
+                    onClick={onClose}
                     className={({ isActive }) =>
                       `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                         isActive

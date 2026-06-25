@@ -1,0 +1,5 @@
+
+> fyp-server@1.0.0 start
+> node src/server.js
+
+Server running on http://localhost:5000

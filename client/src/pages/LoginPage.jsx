@@ -20,6 +20,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 
 import { login } from "../services/authService.js";
+import { startHealthCheck } from "../services/apiClient.js";
 import { saveSession } from "../services/sessionService.js";
 
 const features = [
@@ -73,6 +74,7 @@ export default function LoginPage() {
     try {
       const data = await login(email, password);
       saveSession(data.token, data.user, rememberMe);
+      startHealthCheck();
       navigate("/module-selection", { replace: true });
     } catch (requestError) {
       setError("Invalid email or password");
