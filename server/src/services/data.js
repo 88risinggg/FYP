@@ -7,12 +7,6 @@ const payslips = [];
 // In-memory audit log for development/testing
 const auditLogs = [];
 
-// Advance pay requests created by staff (or HR on behalf). HR approves, then finance is notified.
-const advanceRequests = [];
-
-// Queue of requests for finance to process (created when HR approves)
-const financeRequests = [];
-
 // Payroll rate configuration (HR keeps CPF/SDL rates only)
 const payrollRateConfig = {
   employeeCpfRate: 0.2,
@@ -49,7 +43,5 @@ module.exports = {
   payslips,       // temporary until DB is connected
   payrollRateConfig, // CPF and SDL rates only
   PAYSLIP_STATUSES,
-  auditLogs,
-  advanceRequests,
-  financeRequests
+  auditLogs
 };
