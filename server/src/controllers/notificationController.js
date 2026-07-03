@@ -1,7 +1,7 @@
 const { pool } = require("../config/db");
 
 /**
- * Ensures the notification table exists.
+ * Ensures the notification table exists and has up-to-date schema.
  */
 async function ensureNotificationTable() {
   await pool.query(`
@@ -16,6 +16,16 @@ async function ensureNotificationTable() {
       FOREIGN KEY (user_id) REFERENCES user(user_id) ON DELETE CASCADE
     )
   `);
+
+  // Ensure 'profile_updated' exists in the ENUM (handles tables created before this type was added)
+  try {
+    await pool.query(`
+      ALTER TABLE notification MODIFY COLUMN type
+      ENUM('payslip_available', 'payslip_approved', 'profile_updated', 'system') DEFAULT 'system'
+    `);
+  } catch (e) {
+    // Ignore if already correct
+  }
 }
 
 /**
@@ -31,13 +41,13 @@ async function getNotificationsByUserId(req, res) {
   }
 
   try {
-    await ensureNotificationTable();
-
     const [rows] = await pool.query(
-      `SELECT notification_id, type, title, message, is_read, created_at
+      `SELECT notification_id, type, subject AS title, message, 
+              CASE WHEN status = 'Unread' THEN 0 ELSE 1 END AS is_read, 
+              sent_at AS created_at
        FROM notification
-       WHERE user_id = ?
-       ORDER BY created_at DESC
+       WHERE user_user_id = ?
+       ORDER BY sent_at DESC
        LIMIT 50`,
       [userId]
     );
@@ -58,7 +68,7 @@ async function markAsRead(req, res) {
 
   try {
     const [result] = await pool.query(
-      "UPDATE notification SET is_read = 1 WHERE notification_id = ? AND user_id = ?",
+      "UPDATE notification SET status = 'Read' WHERE notification_id = ? AND user_user_id = ?",
       [notificationId, req.user.userId]
     );
 
@@ -86,7 +96,7 @@ async function markAllAsRead(req, res) {
 
   try {
     await pool.query(
-      "UPDATE notification SET is_read = 1 WHERE user_id = ? AND is_read = 0",
+      "UPDATE notification SET status = 'Read' WHERE user_user_id = ? AND status = 'Unread'",
       [userId]
     );
 
@@ -115,10 +125,8 @@ async function createNotification(req, res) {
   }
 
   try {
-    await ensureNotificationTable();
-
     const [result] = await pool.query(
-      "INSERT INTO notification (user_id, type, title, message) VALUES (?, ?, ?, ?)",
+      "INSERT INTO notification (user_user_id, type, subject, message, status, sent_at) VALUES (?, ?, ?, ?, 'Unread', NOW())",
       [user_id, type || "system", title, message || null]
     );
 
@@ -134,9 +142,8 @@ async function createNotification(req, res) {
  */
 async function createNotificationInternal(userId, type, title, message) {
   try {
-    await ensureNotificationTable();
     await pool.query(
-      "INSERT INTO notification (user_id, type, title, message) VALUES (?, ?, ?, ?)",
+      "INSERT INTO notification (user_user_id, type, subject, message, status, sent_at) VALUES (?, ?, ?, ?, 'Unread', NOW())",
       [userId, type, title, message || null]
     );
   } catch (error) {

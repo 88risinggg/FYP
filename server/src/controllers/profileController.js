@@ -1,4 +1,5 @@
 const { pool } = require("../config/db");
+const { createNotificationInternal } = require("./notificationController");
 
 /* ─── CREATE ─── */
 
@@ -192,17 +193,17 @@ async function updateProfileByUserId(req, res) {
     const fields = [];
     const values = [];
 
-    // Staff can only edit: name, email, phone, address
+    // Staff can edit: name, email, phone, address, bank, account_no
     if (typeof name !== 'undefined') { fields.push('name = ?'); values.push(name); }
     if (typeof email !== 'undefined') { fields.push('email = ?'); values.push(email); }
     if (typeof phone !== 'undefined') { fields.push('phone = ?'); values.push(phone); }
     if (typeof address !== 'undefined') { fields.push('address = ?'); values.push(address); }
+    if (typeof bank !== 'undefined') { fields.push('bank = ?'); values.push(bank); }
+    if (typeof account_no !== 'undefined') { fields.push('account_no = ?'); values.push(account_no); }
 
     // Protected fields — only Admin/HR can change these
     if (userRole === "Admin" || userRole === "HR") {
       if (typeof base_salary !== 'undefined') { fields.push('base_salary = ?'); values.push(base_salary); }
-      if (typeof bank !== 'undefined') { fields.push('bank = ?'); values.push(bank); }
-      if (typeof account_no !== 'undefined') { fields.push('account_no = ?'); values.push(account_no); }
       if (typeof department_id !== 'undefined') { fields.push('department_id = ?'); values.push(department_id); }
     }
 
@@ -212,7 +213,7 @@ async function updateProfileByUserId(req, res) {
 
     // [STAFF BRANCH - Steven] Fetch old values for audit trail comparison (staff_profile_audit_log)
     const [existingRows] = await pool.query(
-      'SELECT employee_id, name, email, phone, address FROM staff WHERE user_user_id = ?',
+      'SELECT employee_id, name, email, phone, address, bank, account_no FROM staff WHERE user_user_id = ?',
       [userId]
     );
     if (existingRows.length === 0) {
@@ -234,8 +235,8 @@ async function updateProfileByUserId(req, res) {
     // [STAFF BRANCH - Steven] Audit trail — log changed fields to staff_profile_audit_log
     // Fails silently — audit error must never block profile save response
     try {
-      const auditFields = ['name', 'email', 'phone', 'address'];
-      const submitted = { name, email, phone, address };
+      const auditFields = ['name', 'email', 'phone', 'address', 'bank', 'account_no'];
+      const submitted = { name, email, phone, address, bank, account_no };
       for (const field of auditFields) {
         if (typeof submitted[field] === 'undefined') continue;
         const oldVal = oldProfile[field] || null;
@@ -248,6 +249,57 @@ async function updateProfileByUserId(req, res) {
       }
     } catch (auditErr) {
       console.error('Audit log error:', auditErr.message, auditErr.stack);
+    }
+
+    // Notify Finance/HR when staff updates their bank details
+    if (userRole === "Staff") {
+      try {
+        const bankChanged = (typeof bank !== 'undefined' && bank !== (oldProfile.bank || '')) ||
+                            (typeof account_no !== 'undefined' && account_no !== (oldProfile.account_no || ''));
+
+        if (bankChanged) {
+          const staffName = name || oldProfile.name || 'A staff member';
+          const maskedAccount = account_no ? '****' + String(account_no).slice(-4) : null;
+          const notifTitle = `${staffName} updated bank details`;
+          const notifMessage = maskedAccount
+            ? `Bank account updated (ending ${maskedAccount}). Please verify before next payroll run.`
+            : `Bank details updated. Please verify before next payroll run.`;
+
+          // Send notification to all Finance and HR users
+          const [finHrUsers] = await pool.query(
+            "SELECT u.user_id FROM user u JOIN role r ON u.role_id = r.role_id WHERE r.role_name IN ('Finance', 'HR')"
+          );
+          for (const u of finHrUsers) {
+            await createNotificationInternal(u.user_id, 'profile_updated', notifTitle, notifMessage);
+          }
+
+          // Notify the staff member themselves
+          await createNotificationInternal(
+            userId,
+            'profile_updated',
+            'Bank details updated',
+            'Your bank details have been updated successfully. Your next pay will be sent to the new account.'
+          );
+        }
+
+        // Notify staff when personal info changes
+        const changedFields = [];
+        if (typeof name !== 'undefined' && name !== (oldProfile.name || '')) changedFields.push('name');
+        if (typeof email !== 'undefined' && email !== (oldProfile.email || '')) changedFields.push('email');
+        if (typeof phone !== 'undefined' && phone !== (oldProfile.phone || '')) changedFields.push('phone');
+        if (typeof address !== 'undefined' && address !== (oldProfile.address || '')) changedFields.push('address');
+
+        if (changedFields.length > 0) {
+          await createNotificationInternal(
+            userId,
+            'profile_updated',
+            'Profile updated',
+            `You updated your ${changedFields.join(', ')}.`
+          );
+        }
+      } catch (notifErr) {
+        console.error('Profile notification error:', notifErr.message);
+      }
     }
 
     // Return updated profile

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -16,7 +16,8 @@ import {
 } from "lucide-react";
 
 import Sidebar from "./Sidebar.jsx";
-import { clearSession } from "../../services/sessionService.js";
+import { clearSession, getStoredSession } from "../../services/sessionService.js";
+import { apiRequest } from "../../services/apiClient.js";
 
 const defaultSidebarSections = [
   {
@@ -74,6 +75,9 @@ export default function DashboardLayout({
   profileRole,
   onSearch,
   notifications = [],
+  notificationBadgeCount,
+  notificationsPath,
+  profilePath,
   onMarkNotificationRead
 }) {
   const navigate = useNavigate();
@@ -82,8 +86,45 @@ export default function DashboardLayout({
   const displayRole = profileRole || roleProfile?.role || user?.role || "User";
   const [searchQuery, setSearchQuery] = useState("");
   const [showNotifications, setShowNotifications] = useState(false);
+  const [fetchedNotifications, setFetchedNotifications] = useState(null);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  // Use notificationBadgeCount prop if provided, otherwise compute from notifications array
+  const unreadCount = typeof notificationBadgeCount === 'number'
+    ? notificationBadgeCount
+    : notifications.filter((n) => !n.read).length;
+
+  // Fetch notifications from API when dropdown is opened
+  async function handleBellClick() {
+    const newShow = !showNotifications;
+    setShowNotifications(newShow);
+
+    if (newShow && fetchedNotifications === null) {
+      const session = getStoredSession();
+      const userId = session?.user?.userId;
+      const token = session?.token;
+      if (!userId || !token) return;
+
+      setLoadingNotifications(true);
+      try {
+        const data = await apiRequest(`/api/notifications/user/${userId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setFetchedNotifications(Array.isArray(data) ? data : []);
+      } catch {
+        setFetchedNotifications([]);
+      } finally {
+        setLoadingNotifications(false);
+      }
+    }
+  }
+
+  // Re-fetch when badge count changes (new notification arrived)
+  useEffect(() => {
+    setFetchedNotifications(null);
+  }, [notificationBadgeCount]);
+
+  const displayNotifications = fetchedNotifications || notifications;
 
   function handleSearchKeyDown(event) {
     if (event.key === "Enter" && onSearch) {
@@ -97,6 +138,18 @@ export default function DashboardLayout({
   }
 
   function handleMarkAllRead() {
+    const session = getStoredSession();
+    const userId = session?.user?.userId;
+    const token = session?.token;
+    if (!userId || !token) return;
+
+    apiRequest(`/api/notifications/user/${userId}/read-all`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` }
+    }).then(() => {
+      setFetchedNotifications(prev => prev ? prev.map(n => ({ ...n, is_read: 1 })) : []);
+    }).catch(() => {});
+
     if (onMarkNotificationRead) {
       notifications.forEach((n) => {
         if (!n.read) onMarkNotificationRead(n.id);
@@ -148,7 +201,7 @@ export default function DashboardLayout({
           <div className="relative">
             <button
               type="button"
-              onClick={() => setShowNotifications(!showNotifications)}
+              onClick={handleBellClick}
               className="relative flex h-10 w-10 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-white/10 hover:text-white"
               aria-label="Notifications"
             >
@@ -182,39 +235,38 @@ export default function DashboardLayout({
                     </div>
                   </div>
                   <div className="max-h-80 overflow-y-auto">
-                    {notifications.length === 0 ? (
+                    {loadingNotifications ? (
+                      <div className="px-4 py-8 text-center text-sm text-[#d8c6e8]/60">
+                        Loading...
+                      </div>
+                    ) : displayNotifications.length === 0 ? (
                       <div className="px-4 py-8 text-center text-sm text-[#d8c6e8]/60">
                         No notifications yet
                       </div>
                     ) : (
-                      notifications.slice(0, 10).map((notif, index) => (
-                        <div
-                          key={notif.id || index}
-                          className={`border-b border-white/5 px-4 py-3 transition hover:bg-white/[0.04] ${!notif.read ? "bg-[#C77DFF]/5" : ""}`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
+                      displayNotifications.slice(0, 10).map((notif, index) => {
+                        const isRead = notif.is_read === 1 || notif.is_read === true || notif.read;
+                        return (
+                          <div
+                            key={notif.notification_id || notif.id || index}
+                            className={`border-b border-white/5 px-4 py-3 transition hover:bg-white/[0.04] ${!isRead ? "bg-[#C77DFF]/5" : ""}`}
+                          >
                             <div className="min-w-0 flex-1">
-                              <p className={`text-sm ${!notif.read ? "font-semibold text-white" : "text-[#d8c6e8]/80"}`}>
+                              <p className={`text-sm ${!isRead ? "font-semibold text-white" : "text-[#d8c6e8]/80"}`}>
                                 {notif.title || notif.message}
                               </p>
-                              {notif.description && (
-                                <p className="mt-0.5 text-xs text-[#d8c6e8]/60">{notif.description}</p>
+                              {notif.message && notif.title && (
+                                <p className="mt-0.5 text-xs text-[#d8c6e8]/60">{notif.message}</p>
                               )}
-                              <p className="mt-1 text-xs text-[#d8c6e8]/40">{notif.time || "Just now"}</p>
+                              {notif.created_at && (
+                                <p className="mt-1 text-xs text-[#d8c6e8]/40">
+                                  {new Date(notif.created_at).toLocaleDateString("en-SG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                                </p>
+                              )}
                             </div>
-                            {!notif.read && onMarkNotificationRead && (
-                              <button
-                                type="button"
-                                onClick={() => onMarkNotificationRead(notif.id)}
-                                className="mt-0.5 shrink-0 rounded p-1 text-[#d8c6e8]/50 hover:bg-white/10 hover:text-[#C77DFF]"
-                                aria-label="Mark as read"
-                              >
-                                <Check size={14} />
-                              </button>
-                            )}
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>

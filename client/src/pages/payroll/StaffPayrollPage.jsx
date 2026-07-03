@@ -11,7 +11,7 @@ import {
   UserCog,
   Wallet
 } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { apiRequest } from "../../services/apiClient.js";
@@ -32,7 +32,8 @@ const payrollSidebarSections = [
     label: "Pay",
     items: [
       { label: "Payslips", icon: FileText, path: "/dashboard/payroll/staff/payslips" },
-      { label: "Payroll Info", icon: Wallet, path: "/dashboard/payroll/staff/payroll-info" }
+      { label: "Payroll Info", icon: Wallet, path: "/dashboard/payroll/staff/payroll-info" },
+      { label: "Advance Payment", icon: DollarSign, path: "/dashboard/payroll/staff/advance-payment" }
     ]
   },
   {
@@ -58,6 +59,7 @@ export default function StaffPayrollPage() {
   const headingMap = {
     "/dashboard/payroll/staff/payslips": "Payslips",
     "/dashboard/payroll/staff/payroll-info": "Payroll Info",
+    "/dashboard/payroll/staff/advance-payment": "Advance Payment",
     "/dashboard/payroll/staff/profile": "Profile",
     "/dashboard/payroll/staff/notifications": "Notifications"
   };
@@ -133,14 +135,16 @@ export default function StaffPayrollPage() {
           apiRequest(`/api/profile/${userId}`, { headers }),
           apiRequest(`/api/payslips/user/${userId}`, { headers }).catch(() => []),
           apiRequest(`/api/payslips/user/${userId}/summary`, { headers }).catch(() => null),
-          apiRequest(`/api/payslips/user/${userId}/unread-count`, { headers }).catch(() => ({ unread_count: 0 }))
+          apiRequest(`/api/notifications/user/${userId}`, { headers }).catch(() => [])
         ]);
 
         if (mounted) {
           setProfile(profileData);
           setPayslips(payslipData);
           setSummary(summaryData);
-          setUnreadCount(Number(unreadData?.unread_count) || 0);
+          // Count unread notifications from the notification table
+          const unread = Array.isArray(unreadData) ? unreadData.filter(n => !n.is_read).length : 0;
+          setUnreadCount(unread);
         }
       } catch (err) {
         console.error(err);
@@ -311,7 +315,11 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
                 <PayrollInfoView payrollInfo={payrollInfo} formatCurrency={formatCurrency} />
               )}
 
-              {heading === "Profile" && <StaffProfile />}
+              {heading === "Advance Payment" && (
+                <AdvancePaymentView session={session} payrollInfo={payrollInfo} profile={profile} formatCurrency={formatCurrency} />
+              )}
+
+              {heading === "Profile" && <StaffProfile onProfileSaved={() => setUnreadCount(prev => prev + 1)} />}
 
               {heading === "Notifications" && (
                 <NotificationsView payslips={payslips} getMonthLabel={getMonthLabel} />
@@ -349,6 +357,7 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
 
 /* ─── Dashboard ─── */
 function DashboardView({ profile, session, payrollInfo, summary, payslips, formatCurrency, downloadPayslip, getMonthLabel }) {
+  const navigate = useNavigate();
   const ytd = summary?.ytd;
   const latest = summary?.latest;
 
@@ -367,12 +376,49 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
       {/* Key stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={DollarSign} label="Base Salary" value={formatCurrency(payrollInfo.salary)} accent="text-emerald-400" />
-        <StatCard icon={TrendingUp} label="YTD Net Pay" value={formatCurrency(ytd?.ytd_net_pay)} accent="text-cyan-400" />
+        <StatCard icon={TrendingUp} label="Year-To-Date Net Pay" value={formatCurrency(ytd?.ytd_net_pay)} accent="text-cyan-400" />
         <StatCard icon={FileText} label="Payslips This Year" value={ytd?.total_payslips ?? 0} accent="text-[#C77DFF]" />
         <StatCard icon={Briefcase} label="Hire Date" value={payrollInfo.hireDate} accent="text-amber-400" />
       </div>
 
-      {/* Latest payslip + Quick info */}
+      {/* Quick Actions */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <button
+          type="button"
+          onClick={() => navigate("/dashboard/payroll/staff/payslips")}
+          className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:bg-white/10"
+        >
+          <FileText size={20} className="text-[#C77DFF]" />
+          <div>
+            <p className="text-sm font-medium text-white">View Payslips</p>
+            <p className="text-xs text-[#d8c6e8]/60">Download your pay history</p>
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate("/dashboard/payroll/staff/advance-payment")}
+          className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:bg-white/10"
+        >
+          <DollarSign size={20} className="text-emerald-400" />
+          <div>
+            <p className="text-sm font-medium text-white">Request Advance</p>
+            <p className="text-xs text-[#d8c6e8]/60">Apply for salary advance</p>
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate("/dashboard/payroll/staff/profile")}
+          className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:bg-white/10"
+        >
+          <UserCog size={20} className="text-amber-400" />
+          <div>
+            <p className="text-sm font-medium text-white">Edit Profile</p>
+            <p className="text-xs text-[#d8c6e8]/60">Update personal & bank details</p>
+          </div>
+        </button>
+      </div>
+
+      {/* Latest payslip + Year-To-Date Breakdown */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Latest Payslip">
           {latest ? (
@@ -382,7 +428,8 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
                 <StatusBadge status={latest.run_status} />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <MiniStat label="Gross" value={formatCurrency(latest.base_salary)} />
+                <MiniStat label="Base Salary" value={formatCurrency(latest.base_salary)} />
+                <MiniStat label="Allowances" value={`+${formatCurrency(latest.total_allowances)}`} />
                 <MiniStat label="Deductions" value={`-${formatCurrency(latest.total_deductions)}`} />
                 <MiniStat label="Net Pay" value={formatCurrency(latest.net_salary)} highlight />
               </div>
@@ -404,7 +451,7 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
           )}
         </Panel>
 
-        <Panel title="YTD Breakdown">
+        <Panel title="Year-To-Date Breakdown">
           {ytd && ytd.total_payslips > 0 ? (
             <div className="grid grid-cols-2 gap-3">
               <MiniStat label="Gross Earned" value={formatCurrency(ytd.ytd_gross)} />
@@ -418,7 +465,7 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
         </Panel>
       </div>
 
-      {/* Recent payslips list */}
+      {/* Recent payslips — view only with download */}
       <Panel title="Recent Payslips">
         {payslips.length > 0 ? (
           <div className="space-y-2">
@@ -428,7 +475,19 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
                   <p className="text-sm font-medium text-white">{getMonthLabel(p.payroll_month, p.payroll_year)}</p>
                   <p className="text-xs text-[#d8c6e8]">Net: {formatCurrency(p.net_salary)}</p>
                 </div>
-                <StatusBadge status={p.run_status} />
+                <div className="flex items-center gap-3">
+                  <StatusBadge status={p.run_status} />
+                  {p.file_path && (
+                    <button
+                      type="button"
+                      onClick={() => downloadPayslip(p)}
+                      className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10"
+                    >
+                      <Download size={14} />
+                      PDF
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -525,19 +584,228 @@ function PayrollInfoView({ payrollInfo, formatCurrency }) {
         </div>
       </Panel>
 
-      <Panel title="Bank Details">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <InfoRow label="Bank" value={payrollInfo.bank} />
-          <InfoRow label="Account No." value={payrollInfo.accountNo} />
-        </div>
-      </Panel>
-
       <Panel title="Personal">
         <div className="grid gap-3 sm:grid-cols-2">
           <InfoRow label="Date of Birth" value={payrollInfo.dob} />
           <InfoRow label="Phone" value={payrollInfo.phone} />
           <InfoRow label="Address" value={payrollInfo.address} />
         </div>
+      </Panel>
+    </div>
+  );
+}
+
+/* ─── Advance Payment ─── */
+function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
+  const token = session?.token;
+  const [requests, setRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(true);
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const maxAdvance = Math.floor((payrollInfo.salary || 0) * 0.5);
+  const salaryAvailable = payrollInfo.salary > 0;
+
+  useEffect(() => {
+    fetchRequests();
+  }, [token]);
+
+  async function fetchRequests() {
+    if (!token) return;
+    setLoadingRequests(true);
+    try {
+      const data = await apiRequest("/api/hr/advance-requests", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setRequests(Array.isArray(data) ? data : []);
+    } catch {
+      setRequests([]);
+    } finally {
+      setLoadingRequests(false);
+    }
+  }
+
+  function showToast(message, type = "success") {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  }
+
+  function validate() {
+    const newErrors = {};
+    const numAmount = Number(amount);
+
+    if (!amount) {
+      newErrors.amount = "Amount is required";
+    } else if (numAmount < 100) {
+      newErrors.amount = "Minimum amount is $100";
+    } else if (numAmount > maxAdvance) {
+      newErrors.amount = `Maximum amount is ${formatCurrency(maxAdvance)} (50% of base salary)`;
+    }
+
+    if (!reason?.trim()) {
+      newErrors.reason = "Reason is required";
+    } else if (reason.trim().length < 10) {
+      newErrors.reason = "Please provide a more detailed reason (at least 10 characters)";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }
+
+  async function handleSubmit() {
+    if (!validate()) return;
+
+    setSubmitting(true);
+    try {
+      await apiRequest("/api/hr/advance-requests", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          staff_id: profile?.employee_id,
+          requested_amount: Number(amount),
+          reason: reason.trim()
+        })
+      });
+
+      showToast("Advance payment request submitted successfully");
+      setAmount("");
+      setReason("");
+      setErrors({});
+      fetchRequests();
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to submit request. Please try again.", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const advanceStatusStyles = {
+    pending: "border-amber-300/30 bg-amber-300/10 text-amber-200",
+    hr_approved: "border-cyan-300/30 bg-cyan-300/10 text-cyan-200",
+    hr_rejected: "border-red-300/30 bg-red-300/10 text-red-200",
+    finance_approved: "border-emerald-300/30 bg-emerald-300/10 text-emerald-200"
+  };
+
+  const statusLabels = {
+    pending: "Pending",
+    hr_approved: "HR Approved",
+    hr_rejected: "HR Rejected",
+    finance_approved: "Finance Approved"
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[70] w-full max-w-md rounded-xl border px-5 py-4 shadow-2xl backdrop-blur-sm animate-[slideDown_0.3s_ease-out] ${
+          toast.type === "error"
+            ? "border-red-400/30 bg-red-950/90 text-red-100"
+            : "border-emerald-400/30 bg-emerald-950/90 text-emerald-100"
+        }`}>
+          <div className="flex items-center gap-3">
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+              toast.type === "error" ? "bg-red-500/20 text-red-300" : "bg-emerald-500/20 text-emerald-300"
+            }`}>
+              {toast.type === "error" ? "✕" : "✓"}
+            </span>
+            <p className="text-sm font-medium">{toast.message}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Request Form */}
+      <Panel title="Request Advance Payment">
+        {!salaryAvailable ? (
+          <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 p-4">
+            <p className="text-sm text-amber-200">Salary information not available. Please contact HR before requesting an advance.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs text-[#d8c6e8]">Amount ($)</label>
+              <input
+                type="number"
+                min="100"
+                max={maxAdvance}
+                value={amount}
+                onChange={(e) => { setAmount(e.target.value); if (errors.amount) setErrors(prev => ({ ...prev, amount: undefined })); }}
+                placeholder={`Min $100 — Max ${formatCurrency(maxAdvance)}`}
+                className={`mt-1 w-full rounded-md border px-3 py-2 text-white bg-transparent placeholder:text-white/20 ${
+                  errors.amount ? "border-red-400/60" : "border-white/10"
+                }`}
+              />
+              <p className="mt-1 text-xs text-[#d8c6e8]/60">Maximum: {formatCurrency(maxAdvance)} (50% of base salary)</p>
+              {errors.amount && <p className="mt-1 text-xs text-red-400">{errors.amount}</p>}
+            </div>
+
+            <div>
+              <label className="block text-xs text-[#d8c6e8]">Reason</label>
+              <textarea
+                value={reason}
+                onChange={(e) => { setReason(e.target.value); if (errors.reason) setErrors(prev => ({ ...prev, reason: undefined })); }}
+                placeholder="Explain why you need an advance payment..."
+                rows={3}
+                className={`mt-1 w-full resize-none rounded-md border px-3 py-2 text-white bg-transparent placeholder:text-white/20 ${
+                  errors.reason ? "border-red-400/60" : "border-white/10"
+                }`}
+              />
+              {errors.reason && <p className="mt-1 text-xs text-red-400">{errors.reason}</p>}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="rounded-lg bg-[#7B2FF7] px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
+            >
+              {submitting ? "Submitting…" : "Submit Request"}
+            </button>
+          </div>
+        )}
+      </Panel>
+
+      {/* Request History */}
+      <Panel title="Your Requests">
+        {loadingRequests ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => <SkeletonBar key={i} height="h-14" />)}
+          </div>
+        ) : requests.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <DollarSign size={48} className="text-[#C77DFF]/30" />
+            <p className="mt-4 text-sm text-[#d8c6e8]">No advance payment requests yet</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {requests.map((r) => (
+              <div key={r.request_id} className="rounded-xl border border-white/10 bg-black/10 p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-3">
+                      <p className="text-sm font-semibold text-white">{formatCurrency(r.requested_amount)}</p>
+                      <span className={`rounded-full border px-3 py-0.5 text-xs font-semibold whitespace-nowrap ${advanceStatusStyles[r.status] || "border-gray-300/30 bg-gray-300/10 text-gray-200"}`}>
+                        {statusLabels[r.status] || r.status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-[#d8c6e8] line-clamp-1">{r.reason || "—"}</p>
+                  </div>
+                  <p className="text-xs text-white/30 whitespace-nowrap">
+                    {r.created_at ? new Date(r.created_at).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                  </p>
+                </div>
+                {r.hr_comments && (
+                  <div className="mt-2 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+                    <p className="text-xs text-[#d8c6e8]/70"><span className="font-medium text-[#d8c6e8]">HR:</span> {r.hr_comments}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </Panel>
     </div>
   );
