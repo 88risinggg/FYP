@@ -11,7 +11,7 @@ import {
   Users,
   XCircle
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   createAdminUser,
@@ -64,6 +64,7 @@ export default function AdminUserManagementPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const latestRequestId = useRef(0);
 
   const selectedRole = useMemo(
     () => roles.find((role) => String(role.roleId) === String(form.roleId)),
@@ -71,11 +72,17 @@ export default function AdminUserManagementPage() {
   );
 
   async function loadUsers(nextFilters = filters) {
+    const requestId = latestRequestId.current + 1;
+    latestRequestId.current = requestId;
     setLoading(true);
     setError("");
 
     try {
       const data = await fetchAdminUsers(nextFilters);
+      if (requestId !== latestRequestId.current) {
+        return;
+      }
+
       setUsers(data.users || []);
       setRoles(data.roles || []);
       setSummary(data.summary || summary);
@@ -85,21 +92,30 @@ export default function AdminUserManagementPage() {
         setSelectedUser(refreshed || null);
       }
     } catch (requestError) {
+      if (requestId !== latestRequestId.current) {
+        return;
+      }
+
       setError(requestError.message);
     } finally {
-      setLoading(false);
+      if (requestId === latestRequestId.current) {
+        setLoading(false);
+      }
     }
   }
 
   useEffect(() => {
-    loadUsers();
+    const timeoutId = window.setTimeout(() => {
+      loadUsers(filters);
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [filters]);
 
   function handleFilterChange(key, value) {
     const nextFilters = { ...filters, [key]: value };
     setFilters(nextFilters);
-    loadUsers(nextFilters);
   }
 
   function openCreateForm() {
@@ -273,7 +289,7 @@ export default function AdminUserManagementPage() {
                 type="search"
                 value={filters.search}
                 onChange={(event) => handleFilterChange("search", event.target.value)}
-                placeholder="Search by name or email"
+                placeholder="Search by email"
                 className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[#d8c6e8]/60"
               />
             </label>

@@ -49,10 +49,11 @@ async function findUserByEmail(email) {
 async function listUsers({ search, roleId, status }) {
   const where = [];
   const params = [];
+  const hasSearch = Boolean(search);
 
-  if (search) {
-    where.push("(user.name LIKE ? OR user.email LIKE ?)");
-    params.push(`%${search}%`, `%${search}%`);
+  if (hasSearch) {
+    where.push("LOWER(user.email) LIKE LOWER(?)");
+    params.push(`${search}%`);
   }
 
   if (roleId) {
@@ -66,8 +67,11 @@ async function listUsers({ search, roleId, status }) {
   }
 
   const whereSql = where.length ? ` WHERE ${where.join(" AND ")}` : "";
+  const orderSql = hasSearch
+    ? "ORDER BY LOWER(user.name) ASC, LOWER(user.email) ASC, user.user_id DESC"
+    : "ORDER BY user.created_at DESC, user.user_id DESC";
   const [rows] = await pool.execute(
-    `${userSelect}${whereSql} ORDER BY user.created_at DESC, user.user_id DESC`,
+    `${userSelect}${whereSql} ${orderSql}`,
     params
   );
 
