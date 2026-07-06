@@ -692,6 +692,8 @@ function UsersRolesView({
   const [roleFilter, setRoleFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [managedUser, setManagedUser] = useState(null);
+  const [isBulkAccessOpen, setIsBulkAccessOpen] = useState(false);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
 
   const roles = useMemo(
@@ -716,10 +718,24 @@ function UsersRolesView({
       return matchesSearch && matchesRole && matchesStatus;
     });
   }, [roleFilter, searchTerm, statusFilter, users]);
-  const openFirstManageableUser = () => {
-    const firstManageableUser = filteredUsers.find((user) => user.user_id !== currentUserId) || filteredUsers[0];
+  const manageableFilteredUsers = filteredUsers.filter((user) => Number(user.user_id) !== Number(currentUserId));
+  const selectedUsers = users.filter((user) => selectedUserIds.includes(user.user_id));
+  const toggleUserSelection = (userId) => {
+    setSelectedUserIds((currentIds) =>
+      currentIds.includes(userId)
+        ? currentIds.filter((id) => id !== userId)
+        : [...currentIds, userId]
+    );
+  };
+  const toggleFilteredSelection = () => {
+    const manageableIds = manageableFilteredUsers.map((user) => user.user_id);
+    const allSelected = manageableIds.length > 0 && manageableIds.every((id) => selectedUserIds.includes(id));
 
-    if (firstManageableUser) setManagedUser(firstManageableUser);
+    setSelectedUserIds((currentIds) =>
+      allSelected
+        ? currentIds.filter((id) => !manageableIds.includes(id))
+        : Array.from(new Set([...currentIds, ...manageableIds]))
+    );
   };
   return (
     <PageShell
@@ -728,7 +744,7 @@ function UsersRolesView({
       actions={
         <>
           <ActionButton icon={Users} onClick={() => setIsAddUserOpen(true)}>Add User</ActionButton>
-          <ActionButton icon={ShieldCheck} variant="secondary" onClick={openFirstManageableUser} disabled={!filteredUsers.length}>Manage Role Access</ActionButton>
+          <ActionButton icon={ShieldCheck} variant="secondary" onClick={() => setIsBulkAccessOpen(true)} disabled={!users.length}>Bulk Access Settings</ActionButton>
         </>
       }
     >
@@ -790,6 +806,14 @@ function UsersRolesView({
             <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
               <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
                 <tr>
+                  <th className="border-b border-white/10 px-4 py-3 font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={manageableFilteredUsers.length > 0 && manageableFilteredUsers.every((user) => selectedUserIds.includes(user.user_id))}
+                      onChange={toggleFilteredSelection}
+                      aria-label="Select visible users"
+                    />
+                  </th>
                   <th className="border-b border-white/10 px-4 py-3 font-semibold">User</th>
                   <th className="border-b border-white/10 px-4 py-3 font-semibold">Role</th>
                   <th className="border-b border-white/10 px-4 py-3 font-semibold">Employee Code</th>
@@ -801,6 +825,7 @@ function UsersRolesView({
               <tbody>
                 {filteredUsers.map((user) => {
                   const isActive = Number(user.status) === 1;
+                  const isCurrentUser = Number(user.user_id) === Number(currentUserId);
 
                   return (
                     <tr
@@ -808,6 +833,15 @@ function UsersRolesView({
                       className="cursor-pointer text-[#d8c6e8] transition hover:bg-white/[0.04]"
                       onClick={() => setManagedUser(user)}
                     >
+                      <td className="border-b border-white/10 px-4 py-4" onClick={(event) => event.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedUserIds.includes(user.user_id)}
+                          onChange={() => toggleUserSelection(user.user_id)}
+                          disabled={isCurrentUser}
+                          aria-label={`Select ${user.name}`}
+                        />
+                      </td>
                       <td className="border-b border-white/10 px-4 py-4">
                         <p className="font-semibold text-white">{user.name}</p>
                         <p className="mt-1 text-xs text-[#d8c6e8]/75">{user.email}</p>
@@ -857,6 +891,19 @@ function UsersRolesView({
           onUpdateStatus={onUpdateStatus}
         />
       ) : null}
+      {isBulkAccessOpen ? (
+        <BulkAccessModal
+          currentUserId={currentUserId}
+          filteredUsers={manageableFilteredUsers}
+          onClose={() => setIsBulkAccessOpen(false)}
+          onSelectionChange={setSelectedUserIds}
+          onUpdateRole={onUpdateRole}
+          onUpdateStatus={onUpdateStatus}
+          roles={roleSummary}
+          selectedUserIds={selectedUserIds}
+          selectedUsers={selectedUsers}
+        />
+      ) : null}
       {isAddUserOpen ? (
         <AddUserModal
           availableStaff={availableStaff}
@@ -866,6 +913,186 @@ function UsersRolesView({
         />
       ) : null}
     </PageShell>
+  );
+}
+
+function BulkAccessModal({
+  filteredUsers,
+  onClose,
+  onSelectionChange,
+  onUpdateRole,
+  onUpdateStatus,
+  roles,
+  selectedUserIds,
+  selectedUsers
+}) {
+  const [selectedRoleId, setSelectedRoleId] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const selectedCount = selectedUsers.length;
+  const activeCount = selectedUsers.filter((user) => Number(user.status) === 1).length;
+  const inactiveCount = selectedUsers.filter((user) => Number(user.status) !== 1).length;
+  const filteredIds = filteredUsers.map((user) => user.user_id);
+
+  const applyBulkRole = async () => {
+    if (!selectedRoleId || !selectedCount) return;
+
+    setIsSubmitting(true);
+
+    try {
+      for (const user of selectedUsers) {
+        if (Number(user.role_id) !== Number(selectedRoleId)) {
+          await onUpdateRole(user.user_id, Number(selectedRoleId));
+        }
+      }
+      onSelectionChange([]);
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const applyBulkStatus = async (status) => {
+    if (!selectedCount) return;
+
+    setIsSubmitting(true);
+
+    try {
+      for (const user of selectedUsers) {
+        if (Number(user.status) !== status) {
+          await onUpdateStatus(user.user_id, status);
+        }
+      }
+      onSelectionChange([]);
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#090014]/80 px-4 backdrop-blur-sm">
+      <section className="neon-glass neon-border max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl p-6">
+        <div className="flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#C77DFF]/15 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
+              <ShieldCheck size={26} />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold text-white">Bulk Access Settings</h3>
+              <p className="mt-1 text-sm text-[#d8c6e8]">Update role or account status for selected users.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+            <p className="text-sm text-[#d8c6e8]">Selected Users</p>
+            <p className="mt-2 text-3xl font-semibold text-white">{selectedCount}</p>
+            <p className="mt-2 text-xs text-[#d8c6e8]/75">{activeCount} active / {inactiveCount} inactive</p>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 md:col-span-2">
+            <p className="text-sm font-semibold text-white">Selection</p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+                onClick={() => onSelectionChange(filteredIds)}
+                disabled={!filteredIds.length}
+              >
+                Select Visible Users
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+                onClick={() => onSelectionChange([])}
+                disabled={!selectedCount}
+              >
+                Clear Selection
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+            <p className="text-sm font-semibold text-white">Apply Role</p>
+            <p className="mt-2 text-sm text-[#d8c6e8]">Assign one role to every selected user.</p>
+            <div className="mt-4 flex gap-2">
+              <select
+                value={selectedRoleId}
+                onChange={(event) => setSelectedRoleId(event.target.value)}
+                className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm font-semibold text-white outline-none"
+              >
+                <option value="">Choose role</option>
+                {roles.map((role) => (
+                  <option key={role.role_id} value={role.role_id}>{role.role_name}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={applyBulkRole}
+                disabled={isSubmitting || !selectedRoleId || !selectedCount}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+            <p className="text-sm font-semibold text-white">Account Status</p>
+            <p className="mt-2 text-sm text-[#d8c6e8]">Activate or deactivate all selected user accounts.</p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="rounded-xl border border-[#7CFFB2]/25 bg-[#7CFFB2]/10 px-4 py-2 text-sm font-semibold text-[#D8FFE6] hover:bg-[#7CFFB2]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => applyBulkStatus(1)}
+                disabled={isSubmitting || !selectedCount}
+              >
+                Activate
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 px-4 py-2 text-sm font-semibold text-[#FFE2B8] hover:bg-[#FFB86B]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => applyBulkStatus(0)}
+                disabled={isSubmitting || !selectedCount}
+              >
+                Deactivate
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <p className="text-sm font-semibold text-white">Selected Users Preview</p>
+          <div className="mt-3 max-h-56 overflow-y-auto">
+            {selectedUsers.length ? (
+              <div className="divide-y divide-white/10">
+                {selectedUsers.map((user) => (
+                  <div key={user.user_id} className="flex flex-col gap-1 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-semibold text-white">{user.name}</p>
+                      <p className="text-xs text-[#d8c6e8]/75">{user.email}</p>
+                    </div>
+                    <p className="text-[#d8c6e8]">{user.role_name} / {Number(user.status) === 1 ? "Active" : "Inactive"}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState message="Select users from the directory table before applying bulk changes." />
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -2342,31 +2569,12 @@ function SettingsView({ mbmfEligibility, onUpdateSetting, settings = [], users =
       }
     >
       <div id="payroll-settings-start" className="space-y-8">
-        <SettingsSection
-          definitions={cpfCalculationSettings}
-          settingsByKey={settingsByKey}
-          title="CPF Calculation Basis"
-          subtitle="Choose the basis for CPF calculation and how CPF rates are viewed."
-          onSave={onUpdateSetting}
-        />
-        <CpfRateTable settingsByKey={settingsByKey} onSave={onUpdateSetting} />
-        <WageComponentTable settingsByKey={settingsByKey} onSave={onUpdateSetting} />
-        <DeductionComponentTable settingsByKey={settingsByKey} onSave={onUpdateSetting} />
-        <MbmfContributionPanel
-          eligibility={mbmfEligibility}
-          settingsByKey={settingsByKey}
-          onSave={onUpdateSetting}
-        />
-        <SelfHelpGroupRulesPanel settingsByKey={settingsByKey} users={users} onSave={onUpdateSetting} />
-        <EmployerContributionTable settingsByKey={settingsByKey} onSave={onUpdateSetting} />
-        <SettingsSection
-          definitions={statutorySchemeSettings}
-          settingsByKey={settingsByKey}
-          title="Singapore Statutory Scheme Settings"
-          subtitle="Configure SDL, Foreign Worker Levy, IRAS AIS and IR21 tracking settings for payroll administration."
-          onSave={onUpdateSetting}
-        />
-        <CpfCeilingPanel settingsByKey={settingsByKey} onSave={onUpdateSetting} />
+        <section className="neon-glass neon-border rounded-2xl p-5">
+          <h3 className="text-lg font-semibold text-white">Operational Payroll Settings</h3>
+          <p className="mt-1 text-sm text-[#d8c6e8]">
+            CPF rates, wage ceilings, SDL and self-help fund rules are managed in Compliance Rules.
+          </p>
+        </section>
         <SettingsSection
           definitions={cpfAccountMappings}
           settingsByKey={settingsByKey}
@@ -2774,6 +2982,19 @@ function PayrollMonitorView({ payrollRuns = [] }) {
   );
 }
 
+function formatAuditArea(entityType) {
+  const areaLabels = {
+    payroll_setting: "Payroll Setting",
+    payslip_layout: "Payslip Layout",
+    user: "User Account",
+    payroll_run: "Payroll Run",
+    payslip: "Payslip",
+    system: "System"
+  };
+
+  return areaLabels[entityType] || String(entityType || "system").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function AuditLogsView({ auditLogs = [] }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [recordTypeFilter, setRecordTypeFilter] = useState("All");
@@ -2805,7 +3026,7 @@ function AuditLogsView({ auditLogs = [] }) {
       columns: [
         formatDateTime(log.created_at),
         log.action || "System activity",
-        `${log.entity_type || "system"} #${log.entity_id || "-"}`,
+        formatAuditArea(log.entity_type),
         log.user_name || "System"
       ]
     }));
@@ -2876,8 +3097,7 @@ function AuditLogsView({ auditLogs = [] }) {
                 <tr>
                   <th className="border-b border-white/10 px-4 py-3 font-semibold">Timestamp</th>
                   <th className="border-b border-white/10 px-4 py-3 font-semibold">Action</th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Record Type</th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Record</th>
+                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Area</th>
                   <th className="border-b border-white/10 px-4 py-3 font-semibold">Performed By</th>
                 </tr>
               </thead>
@@ -2890,10 +3110,9 @@ function AuditLogsView({ auditLogs = [] }) {
                     <td className="border-b border-white/10 px-4 py-4">{log.action || "System activity"}</td>
                     <td className="border-b border-white/10 px-4 py-4">
                       <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-[#d8c6e8]">
-                        {log.entity_type || "system"}
+                        {formatAuditArea(log.entity_type)}
                       </span>
                     </td>
-                    <td className="border-b border-white/10 px-4 py-4">{log.entity_id ? `#${log.entity_id}` : "-"}</td>
                     <td className="border-b border-white/10 px-4 py-4">{log.user_name || "System"}</td>
                   </tr>
                 ))}
@@ -3344,31 +3563,34 @@ function getPeriodLabel(periodMode, fromDate, toDate) {
 function getReportLines(report, data = {}, periodMode = "range", fromDate = "", toDate = "") {
   const stats = data.stats || {};
 
-  if (report === "Payroll Summary") {
+  if (report === "Payroll Control Summary") {
     return [
       { summary: `Active users: ${stats.activeUsers ?? 0}`, columns: ["Active users", String(stats.activeUsers ?? 0)] },
-      { summary: `Payroll rules: ${stats.payrollRules ?? 0}`, columns: ["Payroll rules configured", String(stats.payrollRules ?? 0)] },
-      { summary: `Payroll runs: ${data.payrollRuns?.length || 0}`, columns: ["Payroll runs visible to Admin", String(data.payrollRuns?.length || 0)] },
-      { summary: `Payslip layouts: ${stats.payslipLayouts ?? 0}`, columns: ["Payslip layouts configured", String(stats.payslipLayouts ?? 0)] },
-      { columns: ["Audit events recorded", String(stats.adminLogs ?? 0)] }
+      { summary: `Pending approvals: ${data.pendingApprovalCount ?? 0}`, columns: ["Pending admin approvals", String(data.pendingApprovalCount ?? 0)] },
+      { summary: `Payroll runs: ${data.payrollRuns?.length || 0}`, columns: ["Payroll runs monitored", String(data.payrollRuns?.length || 0)] },
+      { summary: `Payslip layouts: ${stats.payslipLayouts ?? 0}`, columns: ["Active payslip layouts", String(stats.payslipLayouts ?? 0)] }
     ];
   }
 
-  if (report === "User & Staff Summary") {
+  if (report === "Access Control Report") {
     return (data.users || []).map((user) =>
       ({
         columns: [
           user.name,
           user.role_name,
-          `${user.email} / ${user.department_name || "No department"} / ${user.employee_code || "No employee code"}`
+          `${Number(user.status) === 1 ? "Active" : "Inactive"} / ${user.department_name || "No department"} / ${user.employee_code || "No linked staff"}`
         ]
       })
     );
   }
 
-  if (report === "CPF Configuration Report") {
+  if (report === "Compliance Configuration Report") {
     return (data.settings || [])
-      .filter((setting) => setting.setting_key.startsWith("cpf_"))
+      .filter((setting) =>
+        ["cpf_", "sdl_", "mbmf_", "cdac_", "sinda_", "ecf_", "iras_", "ir21_", "foreign_worker_levy_"].some((prefix) =>
+          setting.setting_key.startsWith(prefix)
+        )
+      )
       .map((setting) => ({
         summary: `${setting.setting_key}: ${setting.setting_value}`,
         columns: [setting.setting_key, setting.setting_value, setting.description || "No description"]
@@ -3394,7 +3616,7 @@ function getReportLines(report, data = {}, periodMode = "range", fromDate = "", 
       columns: [
         formatDateTime(log.created_at),
         log.action || "System activity",
-        `${log.entity_type || "system"} #${log.entity_id || "-"}`,
+        formatAuditArea(log.entity_type),
         log.user_name || "System"
       ]
     })
@@ -3495,20 +3717,24 @@ function ReportsView({ data }) {
   const [selectedReport, setSelectedReport] = useState("");
   const reportCards = [
     {
-      title: "Payroll Summary",
-      description: "High-level payroll setup, layouts and payroll run counts."
+      title: "Payroll Control Summary",
+      description: "Active users, pending approvals, monitored runs and active layouts."
     },
     {
-      title: "User & Staff Summary",
-      description: "User access, role assignment and linked staff records."
+      title: "Access Control Report",
+      description: "Admin, HR, Finance and Staff access with account status."
     },
     {
-      title: "CPF Configuration Report",
-      description: "CPF settings currently configured for payroll calculation."
+      title: "Compliance Configuration Report",
+      description: "CPF, SDL, self-help fund, IRAS and statutory rule settings."
+    },
+    {
+      title: "Payslip Layout Report",
+      description: "Imported payslip templates and the current default layout."
     },
     {
       title: "Audit Activity Report",
-      description: "Recent admin changes with timestamp and performer."
+      description: "Recent admin payroll changes with timestamp and performer."
     }
   ];
 
@@ -3519,11 +3745,10 @@ function ReportsView({ data }) {
       actions={
         <>
           <ActionButton icon={FileBarChart} onClick={() => setSelectedReport(reportCards[0].title)}>Generate Report</ActionButton>
-          <ActionButton icon={FileText} variant="secondary" onClick={() => setSelectedReport("Payslip Layout Report")}>Payslip Layout Report</ActionButton>
         </>
       }
     >
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {reportCards.map((report) => (
           <div key={report.title} className="neon-glass neon-border rounded-2xl p-6">
             <FileBarChart size={24} className="text-[#C77DFF]" />
