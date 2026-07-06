@@ -70,9 +70,9 @@ const payrollSidebarSections = [
         path: "/dashboard/payroll/admin/payslips-approval"
       },
       {
-        label: "Staff Management",
+        label: "Users & Roles",
         icon: Users,
-        path: "/dashboard/payroll/admin/staff-management"
+        path: "/dashboard/payroll/admin/users-roles"
       },
       {
         label: "System Settings",
@@ -591,12 +591,17 @@ function WorkflowCard({ data, onNavigate, step }) {
 
 function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout }) {
   const stats = data?.stats || {};
-  const dashboardUpdates = getDashboardUpdateSegments(data);
   const dashboardStats = [
     { label: "Active Users", value: stats.activeUsers ?? 0, tone: "text-[#C77DFF]", updatedAt: getLatestTimestamp(data?.users) },
-    { label: "Payroll Rules", value: stats.payrollRules ?? 0, tone: "text-white", updatedAt: getLatestTimestamp(data?.settings) },
-    { label: "Payslip Layouts", value: stats.payslipLayouts ?? 0, tone: "text-[#7CFFB2]", updatedAt: getLatestTimestamp(data?.layouts) },
-    { label: "Admin Logs", value: stats.adminLogs ?? 0, tone: "text-[#FFB86B]", updatedAt: getLatestTimestamp(data?.auditLogs) }
+    {
+      label: "Pending Approvals",
+      value: data?.pendingApprovalCount ?? 0,
+      tone: "text-[#FFB86B]",
+      footer: data?.pendingApprovalCount ? "Review required" : "No pending payslips",
+      path: "/dashboard/payroll/admin/payslips-approval"
+    },
+    { label: "Payroll Runs", value: data?.payrollRuns?.length || 0, tone: "text-white", updatedAt: getLatestTimestamp(data?.payrollRuns) },
+    { label: "Payslip Layouts", value: stats.payslipLayouts ?? 0, tone: "text-[#7CFFB2]", updatedAt: getLatestTimestamp(data?.layouts) }
   ];
   const defaultLayout = data?.layouts?.find((layout) => Number(layout.is_default) === 1);
 
@@ -613,39 +618,28 @@ function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout })
     >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {dashboardStats.map((stat) => (
-          <div key={stat.label} className="neon-glass rounded-2xl p-5">
+          <div
+            key={stat.label}
+            className={`neon-glass rounded-2xl p-5 ${stat.path ? "cursor-pointer transition hover:bg-white/[0.04]" : ""}`}
+            role={stat.path ? "button" : undefined}
+            tabIndex={stat.path ? 0 : undefined}
+            onClick={() => stat.path && onNavigate(stat.path)}
+            onKeyDown={(event) => {
+              if (stat.path && (event.key === "Enter" || event.key === " ")) {
+                event.preventDefault();
+                onNavigate(stat.path);
+              }
+            }}
+          >
             <p className="text-sm text-[#d8c6e8]">{stat.label}</p>
             <p className={`mt-3 text-3xl font-semibold ${stat.tone}`}>{stat.value}</p>
             <p className="mt-3 flex items-center gap-2 text-xs text-[#d8c6e8]/80">
               <CalendarDays size={14} className="text-[#C77DFF]" />
-              {stat.updatedAt ? `Updated ${formatDateTime(stat.updatedAt)}` : "No update date"}
+              {stat.footer || (stat.updatedAt ? `Updated ${formatDateTime(stat.updatedAt)}` : "No update date")}
             </p>
           </div>
         ))}
       </div>
-
-      <section className="mt-6 neon-glass neon-border rounded-2xl p-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-white">Overall Update Timeline</h3>
-            <p className="mt-1 text-sm text-[#d8c6e8]">Last changed date for each admin payroll segment.</p>
-          </div>
-          <p className="text-sm font-semibold text-[#C77DFF]">
-            Latest: {formatDateTime(getLatestTimestamp(dashboardUpdates.map((item) => ({ updated_at: item.updatedAt }))))}
-          </p>
-        </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-5">
-          {dashboardUpdates.map((item) => (
-            <div key={item.label} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-              <p className="text-sm font-semibold text-white">{item.label}</p>
-              <p className="mt-1 text-xs text-[#d8c6e8]">{item.records}</p>
-              <p className="mt-3 text-xs font-semibold text-[#C77DFF]">
-                {item.updatedAt ? formatDateTime(item.updatedAt) : "Not updated"}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -800,7 +794,6 @@ function UsersRolesView({
                   <th className="border-b border-white/10 px-4 py-3 font-semibold">Role</th>
                   <th className="border-b border-white/10 px-4 py-3 font-semibold">Employee Code</th>
                   <th className="border-b border-white/10 px-4 py-3 font-semibold">Department</th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Base Salary</th>
                   <th className="border-b border-white/10 px-4 py-3 font-semibold">Status</th>
                   <th className="border-b border-white/10 px-4 py-3 font-semibold">Action</th>
                 </tr>
@@ -822,7 +815,6 @@ function UsersRolesView({
                       <td className="border-b border-white/10 px-4 py-4">{user.role_name}</td>
                       <td className="border-b border-white/10 px-4 py-4">{user.employee_code || "Not linked"}</td>
                       <td className="border-b border-white/10 px-4 py-4">{user.department_name || "Not linked"}</td>
-                      <td className="border-b border-white/10 px-4 py-4">{formatMoney(user.base_salary)}</td>
                       <td className="border-b border-white/10 px-4 py-4">
                         <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isActive ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
                           {isActive ? "Active" : "Inactive"}
@@ -1228,11 +1220,6 @@ function UserManagementModal({
               <ProfileField label="Race" value={user.race} />
               <ProfileField label="Religion" value={user.religion} />
               <ProfileField label="Hire Date" value={formatDate(user.hire_date)} />
-              <ProfileField label="Base Salary" value={formatMoney(user.base_salary)} />
-              <ProfileField label="Race" value={user.race} />
-              <ProfileField label="Religion" value={user.religion} />
-              <ProfileField label="Bank" value={user.bank} />
-              <ProfileField label="Account No." value={user.account_no} />
             </div>
           </div>
         </div>
@@ -2693,12 +2680,6 @@ function PayrollMonitorView({ payrollRuns = [] }) {
     <PageShell
       heading="Payroll Monitor"
       updatedAt={getLatestTimestamp(payrollRuns)}
-      actions={
-        <>
-          <ActionButton icon={Eye} onClick={() => setSelectedRun(payrollRuns[0] || null)} disabled={!payrollRuns.length}>View Finance Status</ActionButton>
-          <ActionButton icon={FileBarChart} variant="secondary" onClick={() => setSelectedRun(payrollRuns[0] || null)} disabled={!payrollRuns.length}>Export Status</ActionButton>
-        </>
-      }
     >
       <div className="mb-5 grid gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 md:grid-cols-[1fr_1fr_1fr_auto]">
         <label className="space-y-2">
@@ -2738,7 +2719,7 @@ function PayrollMonitorView({ payrollRuns = [] }) {
         </label>
         <div className="flex items-end">
           <div className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2.5 text-sm font-semibold text-white">
-            {filteredRuns.length} of {payrollRuns.length} run(s)
+            {periodMode === "all" ? `${payrollRuns.length} run(s)` : `${filteredRuns.length} of ${payrollRuns.length} run(s)`}
           </div>
         </div>
       </div>
@@ -2795,9 +2776,9 @@ function PayrollMonitorView({ payrollRuns = [] }) {
 
 function AuditLogsView({ auditLogs = [] }) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [entityFilter, setEntityFilter] = useState("All");
+  const [recordTypeFilter, setRecordTypeFilter] = useState("All");
 
-  const entityTypes = useMemo(
+  const recordTypes = useMemo(
     () => ["All", ...Array.from(new Set(auditLogs.map((log) => log.entity_type).filter(Boolean)))],
     [auditLogs]
   );
@@ -2805,7 +2786,7 @@ function AuditLogsView({ auditLogs = [] }) {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
     return auditLogs.filter((log) => {
-      const matchesEntity = entityFilter === "All" || log.entity_type === entityFilter;
+      const matchesRecordType = recordTypeFilter === "All" || log.entity_type === recordTypeFilter;
       const matchesSearch =
         !normalizedSearch ||
         log.action?.toLowerCase().includes(normalizedSearch) ||
@@ -2813,9 +2794,9 @@ function AuditLogsView({ auditLogs = [] }) {
         String(log.entity_id || "").includes(normalizedSearch) ||
         log.user_name?.toLowerCase().includes(normalizedSearch);
 
-      return matchesEntity && matchesSearch;
+      return matchesRecordType && matchesSearch;
     });
-  }, [auditLogs, entityFilter, searchTerm]);
+  }, [auditLogs, recordTypeFilter, searchTerm]);
   const exportLogs = () => {
     const periodLabel = auditLogs[0]?.created_at
       ? `Latest export ${formatDate(auditLogs[0].created_at)}`
@@ -2844,17 +2825,14 @@ function AuditLogsView({ auditLogs = [] }) {
       actions={<ActionButton icon={FileBarChart} variant="secondary" onClick={exportLogs} disabled={!filteredLogs.length}>Export Logs</ActionButton>}
     >
       <div className="space-y-5">
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="neon-glass rounded-2xl p-5">
-            <p className="text-sm text-[#d8c6e8]">Total Events</p>
-            <p className="mt-3 text-3xl font-semibold text-white">{auditLogs.length}</p>
-          </div>
-          <div className="neon-glass rounded-2xl p-5">
-            <p className="text-sm text-[#d8c6e8]">Visible Events</p>
+            <p className="text-sm text-[#d8c6e8]">Logs Shown</p>
             <p className="mt-3 text-3xl font-semibold text-[#C77DFF]">{filteredLogs.length}</p>
+            <p className="mt-2 text-xs text-[#d8c6e8]/75">From the latest {auditLogs.length} loaded log(s)</p>
           </div>
           <div className="neon-glass rounded-2xl p-5">
-            <p className="text-sm text-[#d8c6e8]">Latest Timestamp</p>
+            <p className="text-sm text-[#d8c6e8]">Latest Activity</p>
             <p className="mt-3 text-base font-semibold text-white">
               {formatDateTime(auditLogs[0]?.created_at)}
             </p>
@@ -2875,18 +2853,18 @@ function AuditLogsView({ auditLogs = [] }) {
                   type="search"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search action, user, entity..."
+                  placeholder="Search action, user, record..."
                   className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[#d8c6e8]/60"
                 />
               </label>
 
               <select
-                value={entityFilter}
-                onChange={(event) => setEntityFilter(event.target.value)}
+                value={recordTypeFilter}
+                onChange={(event) => setRecordTypeFilter(event.target.value)}
                 className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
               >
-                {entityTypes.map((entityType) => (
-                  <option key={entityType} value={entityType}>{entityType} entities</option>
+                {recordTypes.map((recordType) => (
+                  <option key={recordType} value={recordType}>{recordType === "All" ? "All record types" : recordType}</option>
                 ))}
               </select>
             </div>
@@ -2898,8 +2876,8 @@ function AuditLogsView({ auditLogs = [] }) {
                 <tr>
                   <th className="border-b border-white/10 px-4 py-3 font-semibold">Timestamp</th>
                   <th className="border-b border-white/10 px-4 py-3 font-semibold">Action</th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Entity</th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Entity ID</th>
+                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Record Type</th>
+                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Record</th>
                   <th className="border-b border-white/10 px-4 py-3 font-semibold">Performed By</th>
                 </tr>
               </thead>
@@ -2915,22 +2893,46 @@ function AuditLogsView({ auditLogs = [] }) {
                         {log.entity_type || "system"}
                       </span>
                     </td>
-                    <td className="border-b border-white/10 px-4 py-4">{log.entity_id || "-"}</td>
+                    <td className="border-b border-white/10 px-4 py-4">{log.entity_id ? `#${log.entity_id}` : "-"}</td>
                     <td className="border-b border-white/10 px-4 py-4">{log.user_name || "System"}</td>
-      }
-    ]
-  }
-];
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-const routeHeadings = {
-  "/dashboard/payroll/admin": "Dashboard",
-  "/dashboard/payroll/admin/payslips-approval": "Payslips Final Approval",
-  "/dashboard/payroll/admin/staff-management": "Staff Management",
-  "/dashboard/payroll/admin/settings": "System Settings"
-};
+            {!filteredLogs.length ? (
+              <div className="mt-4">
+                <EmptyState message="No audit logs match the current filters." />
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </PageShell>
+  );
+}
 
 function getAuthHeaders(token) {
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function fetchAdminPendingApprovalCount(token) {
+  const response = await fetch(`${API_BASE_URL}/api/hr/payslips`, {
+    headers: {
+      ...getAuthHeaders(token)
+    }
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.message || "Failed to load pending approvals");
+  }
+
+  const payslips = await response.json();
+
+  return Array.isArray(payslips)
+    ? payslips.filter((payslip) => payslip.status === "admin_pending").length
+    : 0;
 }
 
 function PayslipsApprovalView() {
@@ -3126,7 +3128,7 @@ function PayslipsApprovalView() {
                           {actionInProgress === payslip.payslip_id ? (
                             <Loader2 className="animate-spin inline" size={12} />
                           ) : (
-                            "Send"
+                            "Approve & Send"
                           )}
                         </button>
                         <button
@@ -3143,16 +3145,51 @@ function PayslipsApprovalView() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
 
-            {!filteredLogs.length ? (
-              <div className="mt-4">
-                <EmptyState message="No audit logs match the current filters." />
-              </div>
-            ) : null}
+      {rejectingPayslipId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="neon-glass neon-border m-4 w-full max-w-md rounded-2xl p-6">
+            <div className="mb-4 flex items-center gap-3">
+              <AlertCircle className="text-red-300" size={20} />
+              <h3 className="text-lg font-semibold text-white">Reject Payslip</h3>
+            </div>
+            <p className="mb-4 text-sm text-[#d8c6e8]">
+              Please provide a reason for rejecting this payslip.
+            </p>
+            <textarea
+              value={rejectReason}
+              onChange={(event) => setRejectReason(event.target.value)}
+              placeholder="Enter rejection reason..."
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30"
+              rows={4}
+            />
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => handleReject(rejectingPayslipId)}
+                disabled={actionInProgress === rejectingPayslipId}
+                className="flex-1 rounded-lg bg-red-500/20 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRejectingPayslipId(null);
+                  setRejectReason("");
+                }}
+                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </PageShell>
+      ) : null}
+    </div>
   );
 }
 
@@ -3231,7 +3268,7 @@ function createPdfBlob(title, rows, periodLabel = "All available dates") {
           : [82];
     const labels =
       columns.length === 4
-        ? ["Time", "Action", "Entity", "User"]
+        ? ["Time", "Action", "Record", "User"]
         : columns.length === 3
           ? ["Name", "Role", "Details"]
           : columns.length === 2
@@ -3450,51 +3487,6 @@ function ReportPreviewModal({ data, report, onClose }) {
           ) : null}
         </div>
       </section>
-          </div>
-        )}
-      </div>
-
-      {/* Rejection Modal */}
-      {rejectingPayslipId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="neon-glass neon-border rounded-2xl w-full max-w-md p-6 m-4">
-            <div className="flex items-center gap-3 mb-4">
-              <AlertCircle className="text-red-300" size={20} />
-              <h3 className="text-lg font-semibold text-white">Reject Payslip</h3>
-            </div>
-            <p className="text-sm text-[#d8c6e8] mb-4">
-              Please provide a reason for rejecting this payslip.
-            </p>
-            <textarea
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="Enter rejection reason..."
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder-white/30 text-sm"
-              rows={4}
-            />
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={() => handleReject(rejectingPayslipId)}
-                disabled={actionInProgress === rejectingPayslipId}
-                className="flex-1 rounded-lg bg-red-500/20 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/30 disabled:opacity-50"
-              >
-                Reject
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRejectingPayslipId(null);
-                  setRejectReason("");
-                }}
-                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -3502,10 +3494,22 @@ function ReportPreviewModal({ data, report, onClose }) {
 function ReportsView({ data }) {
   const [selectedReport, setSelectedReport] = useState("");
   const reportCards = [
-    "Payroll Summary",
-    "User & Staff Summary",
-    "CPF Configuration Report",
-    "Audit Activity Report"
+    {
+      title: "Payroll Summary",
+      description: "High-level payroll setup, layouts and payroll run counts."
+    },
+    {
+      title: "User & Staff Summary",
+      description: "User access, role assignment and linked staff records."
+    },
+    {
+      title: "CPF Configuration Report",
+      description: "CPF settings currently configured for payroll calculation."
+    },
+    {
+      title: "Audit Activity Report",
+      description: "Recent admin changes with timestamp and performer."
+    }
   ];
 
   return (
@@ -3514,21 +3518,21 @@ function ReportsView({ data }) {
       updatedAt={getOverallUpdatedAt(data)}
       actions={
         <>
-          <ActionButton icon={FileBarChart} onClick={() => setSelectedReport(reportCards[0])}>Generate Report</ActionButton>
+          <ActionButton icon={FileBarChart} onClick={() => setSelectedReport(reportCards[0].title)}>Generate Report</ActionButton>
           <ActionButton icon={FileText} variant="secondary" onClick={() => setSelectedReport("Payslip Layout Report")}>Payslip Layout Report</ActionButton>
         </>
       }
     >
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {reportCards.map((report) => (
-          <div key={report} className="neon-glass neon-border rounded-2xl p-6">
+          <div key={report.title} className="neon-glass neon-border rounded-2xl p-6">
             <FileBarChart size={24} className="text-[#C77DFF]" />
-            <h3 className="mt-4 font-semibold text-white">{report}</h3>
-            <p className="mt-2 text-sm text-[#d8c6e8]">Preview the generated PDF and download it when ready.</p>
+            <h3 className="mt-4 font-semibold text-white">{report.title}</h3>
+            <p className="mt-2 text-sm text-[#d8c6e8]">{report.description}</p>
             <button
               type="button"
               className="mt-5 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
-              onClick={() => setSelectedReport(report)}
+              onClick={() => setSelectedReport(report.title)}
             >
               Open
             </button>
@@ -3559,7 +3563,7 @@ function AdminPayrollContent({
   onUpdateStatus,
   pathname
 }) {
-  if (pathname.endsWith("/users-roles")) {
+  if (pathname.endsWith("/users-roles") || pathname.endsWith("/staff-management")) {
     return (
       <UsersRolesView
         availableStaff={data?.availableStaff}
@@ -3628,7 +3632,18 @@ export default function AdminPayrollPage() {
     try {
       setErrorMessage("");
       const data = await getAdminPayrollDashboard();
-      setDashboardData(data);
+      let pendingApprovalCount = 0;
+
+      try {
+        pendingApprovalCount = await fetchAdminPendingApprovalCount(session?.token);
+      } catch {
+        pendingApprovalCount = 0;
+      }
+
+      setDashboardData({
+        ...data,
+        pendingApprovalCount
+      });
     } catch (error) {
       setErrorMessage(error.message);
     } finally {

@@ -11,13 +11,9 @@ import {
   Users,
   X
 } from "lucide-react";
-import { useState } from "react";
-import { NavLink } from "react-router-dom";
-
 import { NavLink, useNavigate } from "react-router-dom";
 import Sidebar from "./Sidebar.jsx";
-import { clearSession } from "../../services/sessionService.js";
-import { getStoredSession } from "../../services/sessionService.js";
+import { clearSession, getStoredSession } from "../../services/sessionService.js";
 
 const defaultSidebarSections = [
   {
@@ -83,7 +79,6 @@ export default function DashboardLayout({
   const navigate = useNavigate();
   const session = getStoredSession();
 
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -182,11 +177,10 @@ export default function DashboardLayout({
         <header className="sticky top-0 z-10 flex h-20 items-center gap-4 border-b border-white/10 bg-[#090014]/70 px-4 shadow-xl shadow-purple-950/20 backdrop-blur-2xl sm:px-6">
           <button
             type="button"
-            onClick={() => setMobileOpen(true)}
+            onClick={() => setIsMenuOpen(true)}
             className="flex h-10 w-10 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-white/10 hover:text-white lg:hidden"
             aria-label="Open menu"
             aria-expanded={isMenuOpen}
-            onClick={() => setIsMenuOpen(true)}
           >
             <Menu size={21} />
           </button>
@@ -304,34 +298,6 @@ export default function DashboardLayout({
           </div>
         </header>
         
-        {/* Mobile drawer */}
-        {mobileOpen && (
-          <div className="lg:hidden fixed inset-0 z-40">
-            <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
-            <div className="relative h-full w-64 bg-[#090014]/95 border-r border-white/10">
-              <div className="flex items-center justify-between p-4">
-                <div className="text-white font-semibold">{sidebarTitle}</div>
-                <button className="p-2 text-[#d8c6e8]" onClick={() => setMobileOpen(false)} aria-label="Close">
-                  <X />
-                </button>
-              </div>
-              <nav className="px-3 py-4">
-                {sidebarSections.map((section) => (
-                  <div key={section.label} className="mb-4">
-                    <p className="mb-2 px-2 text-xs uppercase text-[#C77DFF]/70">{section.label}</p>
-                    <div className="space-y-1">
-                      {section.items.map((item) => (
-                        <NavLink key={item.label} to={item.path} onClick={() => setMobileOpen(false)} className="block rounded px-3 py-2 text-sm text-[#d8c6e8] hover:bg-white/5">
-                          <div className="flex items-center gap-3"><item.icon size={16} />{item.label}</div>
-                        </NavLink>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </nav>
-            </div>
-          </div>
-        )}
         <main className="px-4 py-6 sm:px-6">
           {children}
         </main>
