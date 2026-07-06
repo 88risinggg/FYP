@@ -1,11 +1,11 @@
 import {
+  AlertCircle,
   Banknote,
   Bell,
   Building2,
   CalendarDays,
   CheckCircle2,
   ClipboardCheck,
-  CheckCircle2,
   ClipboardList,
   Download,
   Edit3,
@@ -22,15 +22,10 @@ import {
   Send,
   ShieldCheck,
   Users,
+  Loader2,
   X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-  Users,
-  X,
-  AlertCircle,
-  Loader2
-} from "lucide-react";
-import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
@@ -43,7 +38,6 @@ import {
 
 const pageTitle = "Automated Payroll System - Finance Payroll Dashboard";
 const FINANCE_PAYROLL_STORAGE_KEY = "financePayrollWorkflowStateV3";
-const pageTitle = "Automated Payroll System – Finance Payroll Dashboard";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 const payrollSidebarSections = [
@@ -72,17 +66,17 @@ const payrollSidebarSections = [
         path: "/dashboard/payroll/finance/staff-payroll-details"
       },
       {
-        label: "Notification Records",
+        label: "Payslip Notifications",
         icon: Bell,
         path: "/dashboard/payroll/finance/notification-records"
       },
       {
-        label: "Payroll Reports",
+        label: "Finance Reports",
         icon: FileBarChart,
         path: "/dashboard/payroll/finance/payroll-reports"
       },
       {
-        label: "Payroll Summaries",
+        label: "Finance Summary",
         icon: ListChecks,
         path: "/dashboard/payroll/finance/payroll-summaries"
       }
@@ -95,9 +89,9 @@ const routeHeadings = {
   "/dashboard/payroll/finance/payroll-runs": "Payroll Runs",
   "/dashboard/payroll/finance/payslips-approval": "Payslips Approval",
   "/dashboard/payroll/finance/staff-payroll-details": "Staff Payroll Details",
-  "/dashboard/payroll/finance/notification-records": "Notification Records",
-  "/dashboard/payroll/finance/payroll-reports": "Payroll Reports",
-  "/dashboard/payroll/finance/payroll-summaries": "Payroll Summaries"
+  "/dashboard/payroll/finance/notification-records": "Payslip Notifications",
+  "/dashboard/payroll/finance/payroll-reports": "Finance Reports",
+  "/dashboard/payroll/finance/payroll-summaries": "Finance Summary"
 };
 
 let adminCpfConfiguration = createDefaultFinancePayrollConfig();
@@ -1618,10 +1612,10 @@ function DashboardView({ onSelectRun, payrollRuns, selectedRun }) {
   const [statsFilter, setStatsFilter] = useState(() => getDefaultStatsFilter(selectedRun));
   const filteredRuns = getFilteredPayrollRuns(payrollRuns, statsFilter);
   const stats = getAggregatePayrollStats(filteredRuns);
+  const selectedTotals = getRunTotals(selectedRun);
+  const selectedApprovedStaff = selectedRun.employees.filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length;
+  const selectedExceptionCount = getRunExceptions(selectedRun).length;
   const completedSteps = Object.values(getCompletedSteps(selectedRun)).filter(Boolean).length;
-  const complianceUpdatedAt = adminCpfConfiguration.updatedAt
-    ? formatDateTime(adminCpfConfiguration.updatedAt)
-    : "Fallback defaults";
   const updateStatsMode = (mode) => {
     const runDate = getPayrollRunDate(selectedRun);
     setStatsFilter({
@@ -1639,14 +1633,14 @@ function DashboardView({ onSelectRun, payrollRuns, selectedRun }) {
         onModeChange={updateStatsMode}
       />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Pending Pay Runs" value={stats.pendingRuns} tone="text-[#FFB86B]" />
-        <StatCard label="Staff Approved" value={`${stats.approvedStaff}/${stats.employees}`} tone="text-white" />
-        <StatCard label="Net Pay" value={formatMoney(stats.netPay)} tone="text-[#7CFFB2]" />
+        <StatCard label="Pending Approval" value={selectedRun.employees.length - selectedApprovedStaff} detail={`${selectedApprovedStaff}/${selectedRun.employees.length} staff approved`} tone="text-[#FFB86B]" />
+        <StatCard label="Net Pay To Process" value={formatMoney(selectedTotals.netPay)} tone="text-[#7CFFB2]" />
+        <StatCard label="Payment File" value={selectedRun.paymentFileGeneratedAt ? "Generated" : "Pending"} detail={selectedRun.bankReference || "No bank reference yet"} tone={selectedRun.paymentFileGeneratedAt ? "text-[#C77DFF]" : "text-[#FFB86B]"} />
         <StatCard
-          label="Compliance"
-          value={`${stats.compliancePassed}/${stats.complianceTotal}`}
-          detail={`Last updated: ${complianceUpdatedAt}`}
-          tone={stats.compliancePassed < stats.complianceTotal ? "text-[#FFB86B]" : "text-[#C77DFF]"}
+          label="Exceptions"
+          value={selectedExceptionCount}
+          detail={`${stats.pendingRuns} pending run(s) in filter`}
+          tone={selectedExceptionCount ? "text-[#FFB86B]" : "text-[#7CFFB2]"}
         />
       </div>
 
@@ -1694,10 +1688,6 @@ function DashboardView({ onSelectRun, payrollRuns, selectedRun }) {
       </div>
 
       <div className="mt-6">
-        <AdminCpfConfigPanel />
-      </div>
-
-      <div className="mt-6">
         <CompliancePanel run={selectedRun} />
       </div>
 
@@ -1707,10 +1697,6 @@ function DashboardView({ onSelectRun, payrollRuns, selectedRun }) {
 
       <div className="mt-6">
         <AccountingImpact payrollRuns={payrollRuns} run={selectedRun} />
-      </div>
-
-      <div className="mt-6">
-        <AuditTrailPanel run={selectedRun} />
       </div>
     </PageShell>
   );
@@ -1867,14 +1853,7 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
 
     setDraft((current) => ({
       ...current,
-      [collection]: [
-        ...(current[collection] || []),
-        {
-          label: itemLabel,
-          rate,
-          amount
-        }
-      ]
+      [collection]: [...(current[collection] || []), { label: itemLabel, rate, amount }]
     }));
   };
 
@@ -1892,124 +1871,6 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
             <h3 className="mt-2 text-xl font-semibold text-white">{draft.name}</h3>
             <p className="mt-1 text-sm text-[#d8c6e8]">
               {draft.department || "Missing department"} / {draft.workLocation || "No work location"} / CPF tier: {cpfTier.ageGroup}
-function getAuthHeaders(token) {
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-function PayslipsApprovalView() {
-  const session = getStoredSession();
-  const [payslips, setPayslips] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-  const [actionInProgress, setActionInProgress] = useState(null);
-  const [rejectingPayslipId, setRejectingPayslipId] = useState(null);
-  const [rejectReason, setRejectReason] = useState("");
-
-  const fetchPayslips = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const response = await fetch(`${API_BASE_URL}/api/hr/payslips`, {
-        headers: {
-          ...getAuthHeaders(session?.token)
-        }
-      });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.message || "Failed to load payslips");
-      }
-
-      const data = await response.json();
-      // Filter to only show draft and finance_pending payslips for approval
-      const filtered = data.filter(p => ["draft", "finance_pending"].includes(p.status));
-      setPayslips(filtered);
-    } catch (err) {
-      setError(err.message || "Failed to load payslips");
-      setPayslips([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleApprove = async (payslipId) => {
-    try {
-      setActionInProgress(payslipId);
-      setError("");
-      
-      const response = await fetch(`${API_BASE_URL}/api/payroll/payslips/${payslipId}/finance-approve`, {
-        method: "PUT",
-        headers: {
-          ...getAuthHeaders(session?.token),
-          "Content-Type": "application/json"
-        }
-      });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.message || "Failed to approve payslip");
-      }
-
-      setSuccessMessage("Payslip approved successfully");
-      await fetchPayslips();
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (err) {
-      setError(err.message || "Failed to approve payslip");
-    } finally {
-      setActionInProgress(null);
-    }
-  };
-
-  const handleReject = async (payslipId) => {
-    if (!rejectReason.trim()) {
-      setError("Please enter a rejection reason");
-      return;
-    }
-
-    try {
-      setActionInProgress(payslipId);
-      setError("");
-      
-      const response = await fetch(`${API_BASE_URL}/api/payroll/payslips/${payslipId}/finance-reject`, {
-        method: "PUT",
-        headers: {
-          ...getAuthHeaders(session?.token),
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ reason: rejectReason })
-      });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.message || "Failed to reject payslip");
-      }
-
-      setSuccessMessage("Payslip rejected successfully");
-      setRejectingPayslipId(null);
-      setRejectReason("");
-      await fetchPayslips();
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (err) {
-      setError(err.message || "Failed to reject payslip");
-    } finally {
-      setActionInProgress(null);
-    }
-  };
-
-  useEffect(() => {
-    fetchPayslips();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.token]);
-
-  return (
-    <div className="space-y-5">
-      <div className="neon-glass neon-border rounded-2xl p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-semibold text-white">Payslips Pending Approval</h3>
-            <p className="mt-1 text-sm text-[#d8c6e8]">
-              Review and approve payslips before they go to Admin for final approval.
             </p>
           </div>
           <button
@@ -2028,49 +1889,12 @@ function PayslipsApprovalView() {
           <StatCard label="Other Deductions" value={formatMoney(getEmployeeOtherDeductions(draft))} tone="text-[#C77DFF]" />
         </div>
 
-        <div className="mt-5 rounded-xl border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 p-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h4 className="text-sm font-semibold text-white">MBMF Review</h4>
-              <p className="mt-1 text-sm text-[#BAE6FD]">
-                Religion source: staff.religion = {mbmfReview.religionSource}
-              </p>
-            </div>
-            <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${mbmfReview.eligible ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
-              {mbmfReview.eligible ? "Eligible" : "Not Eligible"}
-            </span>
-          </div>
-          <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-5">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">Reason</p>
-              <p className="mt-1 font-semibold text-white">{mbmfReview.eligible ? "Religion matches Admin setting" : mbmfReview.skipReason}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">Wage Considered</p>
-              <p className="mt-1 font-semibold text-white">{formatMoney(mbmfReview.wageBase)}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">Employee Deduction</p>
-              <p className="mt-1 font-semibold text-white">{formatMoney(mbmfReview.employeeAmount)}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">Employer Contribution</p>
-              <p className="mt-1 font-semibold text-white">{formatMoney(mbmfReview.employerAmount)}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">Uploaded MBMF</p>
-              <p className="mt-1 font-semibold text-white">{formatMoney(mbmfReview.uploadedEmployeeAmount)}</p>
-            </div>
-          </div>
-        </div>
-
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
             <h4 className="text-sm font-semibold text-white">Employee & Payment Details</h4>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {[
                 ["department", "Department"],
-                ["religion", "Religion"],
                 ["workLocation", "Work Location"],
                 ["bankType", "Bank Type"],
                 ["bankAccount", "Bank Account"],
@@ -2111,7 +1935,7 @@ function PayslipsApprovalView() {
           </div>
 
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-            <h4 className="text-sm font-semibold text-white">Automated Checks</h4>
+            <h4 className="text-sm font-semibold text-white">Finance Checks</h4>
             <div className="mt-4 grid gap-2">
               {exceptions.length ? (
                 exceptions.map((exception) => (
@@ -2121,9 +1945,12 @@ function PayslipsApprovalView() {
                 ))
               ) : (
                 <div className="rounded-lg border border-[#7CFFB2]/20 bg-[#7CFFB2]/10 p-3 text-sm text-[#7CFFB2]">
-                  No exceptions detected for this staff payroll record.
+                  No payment exceptions detected.
                 </div>
               )}
+            </div>
+            <div className="mt-4 rounded-lg border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 p-3 text-sm text-[#BAE6FD]">
+              MBMF: {mbmfReview.eligible ? "Applied" : "Skipped"} / Employee {formatMoney(mbmfReview.employeeAmount)} / Employer {formatMoney(mbmfReview.employerAmount)}
             </div>
           </div>
         </div>
@@ -2149,10 +1976,14 @@ function PayslipsApprovalView() {
               <ActionButton icon={ShieldCheck} onClick={handleSave}>
                 Save Changes
               </ActionButton>
-              <ActionButton icon={X} variant="secondary" onClick={() => {
-                setDraft(employee);
-                setIsEditing(false);
-              }}>
+              <ActionButton
+                icon={X}
+                variant="secondary"
+                onClick={() => {
+                  setDraft(employee);
+                  setIsEditing(false);
+                }}
+              >
                 Cancel
               </ActionButton>
             </>
@@ -2164,6 +1995,253 @@ function PayslipsApprovalView() {
         </div>
       </section>
     </div>
+  );
+}
+
+function getAuthHeaders(token) {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function formatPayslipMoney(value) {
+  return formatMoney(Number(value || 0));
+}
+
+function getPayslipPeriod(payslip) {
+  return [payslip.period_month, payslip.period_year].filter(Boolean).join(" ") || "Not recorded";
+}
+
+function PayslipsApprovalView() {
+  const session = getStoredSession();
+  const [payslips, setPayslips] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [actionInProgress, setActionInProgress] = useState(null);
+  const [rejectingPayslipId, setRejectingPayslipId] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const fetchPayslips = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const response = await fetch(`${API_BASE_URL}/api/hr/payslips`, {
+        headers: getAuthHeaders(session?.token)
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to load payslips");
+      }
+
+      const data = await response.json();
+      setPayslips(data.filter((payslip) => ["draft", "finance_pending"].includes(payslip.status)));
+    } catch (err) {
+      setError(err.message || "Failed to load payslips");
+      setPayslips([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprove = async (payslipId) => {
+    try {
+      setActionInProgress(payslipId);
+      setError("");
+
+      const response = await fetch(`${API_BASE_URL}/api/payroll/payslips/${payslipId}/finance-approve`, {
+        method: "PUT",
+        headers: {
+          ...getAuthHeaders(session?.token),
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to approve payslip");
+      }
+
+      setSuccessMessage("Payslip approved successfully");
+      await fetchPayslips();
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      setError(err.message || "Failed to approve payslip");
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleReject = async (payslipId) => {
+    if (!rejectReason.trim()) {
+      setError("Please enter a rejection reason");
+      return;
+    }
+
+    try {
+      setActionInProgress(payslipId);
+      setError("");
+
+      const response = await fetch(`${API_BASE_URL}/api/payroll/payslips/${payslipId}/finance-reject`, {
+        method: "PUT",
+        headers: {
+          ...getAuthHeaders(session?.token),
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ reason: rejectReason })
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to reject payslip");
+      }
+
+      setSuccessMessage("Payslip rejected successfully");
+      setRejectingPayslipId(null);
+      setRejectReason("");
+      await fetchPayslips();
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      setError(err.message || "Failed to reject payslip");
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  useEffect(() => {
+    fetchPayslips();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.token]);
+
+  return (
+    <PageShell
+      heading="Payslips Approval"
+      actions={
+        <ActionButton icon={RefreshCw} variant="secondary" onClick={fetchPayslips}>
+          Refresh
+        </ActionButton>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Pending Review" value={payslips.length} tone="text-[#FFB86B]" />
+        <StatCard label="Total Gross" value={formatPayslipMoney(payslips.reduce((sum, payslip) => sum + Number(payslip.gross_salary || 0), 0))} />
+        <StatCard label="Net Pay" value={formatPayslipMoney(payslips.reduce((sum, payslip) => sum + Number(payslip.net_pay || 0), 0))} tone="text-[#7CFFB2]" />
+        <StatCard label="Next Approval" value="Admin" detail="After finance approval" tone="text-[#C77DFF]" />
+      </div>
+
+      {error ? (
+        <div className="neon-glass neon-border mt-5 rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
+          {error}
+        </div>
+      ) : null}
+
+      {successMessage ? (
+        <div className="neon-glass neon-border mt-5 rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-200">
+          {successMessage}
+        </div>
+      ) : null}
+
+      <div className="neon-glass neon-border mt-5 overflow-hidden rounded-2xl">
+        {loading ? (
+          <div className="flex items-center gap-3 p-6 text-[#d8c6e8]">
+            <Loader2 className="animate-spin" size={18} />
+            Loading payslips...
+          </div>
+        ) : payslips.length === 0 ? (
+          <EmptyState message="No payslips pending finance approval." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-white/10 bg-white/[0.04] text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">
+                <tr>
+                  <th className="px-4 py-3">Staff</th>
+                  <th className="px-4 py-3">Period</th>
+                  <th className="px-4 py-3">Gross</th>
+                  <th className="px-4 py-3">Net Pay</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payslips.map((payslip) => (
+                  <tr key={payslip.payslip_id} className="border-b border-white/5 text-white last:border-b-0">
+                    <td className="px-4 py-3">
+                      <span className="block font-semibold">{payslip.staff_name || "Unknown staff"}</span>
+                      <span className="block text-xs text-[#d8c6e8]">Payslip #{payslip.payslip_id}</span>
+                    </td>
+                    <td className="px-4 py-3 text-[#d8c6e8]">{getPayslipPeriod(payslip)}</td>
+                    <td className="px-4 py-3 text-[#d8c6e8]">{formatPayslipMoney(payslip.gross_salary)}</td>
+                    <td className="px-4 py-3 font-semibold text-[#7CFFB2]">{formatPayslipMoney(payslip.net_pay)}</td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-full border border-[#FFB86B]/25 bg-[#FFB86B]/10 px-3 py-1 text-xs font-semibold text-[#FFE2B8]">
+                        Pending Finance
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleApprove(payslip.payslip_id)}
+                          disabled={actionInProgress === payslip.payslip_id}
+                          className="rounded-lg bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50"
+                        >
+                          {actionInProgress === payslip.payslip_id ? <Loader2 className="inline animate-spin" size={12} /> : "Approve"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRejectingPayslipId(payslip.payslip_id)}
+                          disabled={actionInProgress === payslip.payslip_id}
+                          className="rounded-lg bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {rejectingPayslipId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="neon-glass neon-border w-full max-w-md rounded-2xl p-6">
+            <div className="mb-4 flex items-center gap-3">
+              <AlertCircle className="text-red-300" size={20} />
+              <h3 className="text-lg font-semibold text-white">Reject Payslip</h3>
+            </div>
+            <textarea
+              value={rejectReason}
+              onChange={(event) => setRejectReason(event.target.value)}
+              placeholder="Enter rejection reason..."
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30"
+              rows={4}
+            />
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => handleReject(rejectingPayslipId)}
+                disabled={actionInProgress === rejectingPayslipId}
+                className="flex-1 rounded-lg bg-red-500/20 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRejectingPayslipId(null);
+                  setRejectReason("");
+                }}
+                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </PageShell>
   );
 }
 
@@ -2199,17 +2277,14 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, payrol
       <div className="mt-6">
         <ExceptionPanel run={selectedRun} />
       </div>
-      <div className="mt-6">
-        <AdminCpfConfigPanel />
-      </div>
       <div className="neon-glass neon-border mt-6 overflow-hidden rounded-2xl">
         <div className="grid grid-cols-8 gap-4 border-b border-white/10 px-6 py-4 text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">
           <span>Employee</span>
-          <span>Work Info</span>
-          <span>Earnings</span>
+          <span>Department</span>
+          <span>Gross Pay</span>
           <span>Deductions</span>
           <span>Net Pay</span>
-          <span>Bank Account</span>
+          <span>Bank</span>
           <span>Status</span>
           <span>Action</span>
         </div>
@@ -2217,13 +2292,6 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, payrol
           const netPay = getEmployeeNetPay(employee);
           const exceptions = getEmployeeExceptions(employee);
           const status = getEmployeeFinanceStatus(employee);
-          const mbmfReview = getMbmfReview(employee);
-          const earningSummary = getEmployeeEarningItems(employee)
-            .map((item) => `${item.label}: ${formatMoney(item.amount)}`)
-            .join(", ");
-          const deductionSummary = getEmployeeReviewDeductionItems(employee)
-            .map((item) => `${item.label}: ${formatMoney(item.amount)}`)
-            .join(", ");
 
           return (
             <div key={employee.id} className="grid grid-cols-8 gap-4 border-b border-white/10 px-6 py-4 text-sm last:border-b-0">
@@ -2238,21 +2306,14 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, payrol
                 {exceptions.length ? <span className="mt-1 block text-xs text-[#FFE2B8]">{exceptions.join(", ")}</span> : null}
               </span>
               <span className="text-[#d8c6e8]">
-                <span className="block">{employee.department}</span>
+                <span className="block">{employee.department || "Missing"}</span>
                 <span className="block text-xs">{employee.workLocation || "No location"}</span>
-                <span className="block text-xs">{employee.workingDays ?? "-"} days / NPL {employee.noPayLeave ?? 0}</span>
-                <span className="mt-1 block text-xs text-white">Religion: {mbmfReview.religionSource}</span>
-                <span className={mbmfReview.eligible ? "block text-xs text-[#7CFFB2]" : "block text-xs text-[#FFE2B8]"}>
-                  MBMF: {mbmfReview.eligible ? "Eligible" : `Not Eligible - ${mbmfReview.skipReason}`}
-                </span>
               </span>
               <span className="text-white">
                 <span className="block font-semibold">{formatMoney(getEmployeeTotalEarnings(employee))}</span>
-                <span className="block text-xs text-[#d8c6e8]">{earningSummary}</span>
               </span>
               <span className="text-[#d8c6e8]">
                 <span className="block font-semibold text-white">{formatMoney(getEmployeeTotalDeductions(employee))}</span>
-                <span className="block text-xs">{deductionSummary}</span>
               </span>
               <span className="font-semibold text-[#7CFFB2]">{formatMoney(netPay)}</span>
               <span className={employee.bankAccount ? "text-[#d8c6e8]" : "text-[#FFE2B8]"}>
@@ -2318,7 +2379,7 @@ function NotificationRecordsView({ selectedRun }) {
   }));
 
   return (
-    <PageShell heading="Notification Records">
+    <PageShell heading="Payslip Notifications">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {notifications.map((notification) => (
           <article key={notification.id} className="neon-glass neon-border rounded-2xl p-6">
@@ -2336,7 +2397,7 @@ function NotificationRecordsView({ selectedRun }) {
           </article>
         ))}
       </div>
-      {!notifications.length ? <EmptyState message="No notification records found." /> : null}
+      {!notifications.length ? <EmptyState message="No payslip notifications found." /> : null}
     </PageShell>
   );
 }
@@ -2347,16 +2408,11 @@ function buildReportRows(selectedRun) {
   const approvedStaffCount = selectedRun.employees.filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length;
 
   return [
-    ["Payroll Summary", `${selectedRun.employees.length} employees`, formatMoney(totals.netPay)],
-    ["Pay Run Summary", selectedRun.status, formatPayrollPeriod(selectedRun)],
-    ["Exception Summary", `${exceptionCount} system exception(s)`, `${approvedStaffCount}/${selectedRun.employees.length} staff approved`],
-    ["CPF Summary", `Employee ${formatMoney(totals.employeeCpf)}`, `Employer ${formatMoney(totals.employerCpf)}`],
-    ["MBMF Summary", `Employee ${formatMoney(totals.employeeMbmf)}`, `Employer ${formatMoney(totals.employerMbmf)}`],
-    ["Deduction Summary", `Total ${formatMoney(totals.deductions)}`, "CPF, loans and funds"],
+    ["Payroll Summary", `${selectedRun.employees.length} employee(s)`, formatMoney(totals.netPay)],
+    ["Payment File", selectedRun.paymentFileGeneratedAt ? "Generated" : "Not generated", selectedRun.bankReference || "Pending bank reference"],
+    ["Exception Summary", `${exceptionCount} exception(s)`, `${approvedStaffCount}/${selectedRun.employees.length} staff approved`],
     ["Compliance Checklist", `${getComplianceSummary(selectedRun).passed}/${getComplianceSummary(selectedRun).total} passed`, `${getComplianceSummary(selectedRun).failed} issue(s)`],
-    ["Audit Trail", `${getAuditEntries(selectedRun).length} event(s)`, "Workflow history"],
-    ["Payment File", selectedRun.paymentFileGeneratedAt ? "Generated" : "Not generated", formatDateTime(selectedRun.paymentFileGeneratedAt)],
-    ["Cost to Company", formatMoney(totals.salaryExpense + totals.employerCpf + totals.employerMbmf), selectedRun.bankReference || "Pending bank reference"]
+    ["Cost to Company", formatMoney(totals.salaryExpense + totals.employerCpf + totals.employerMbmf), formatPayrollPeriod(selectedRun)]
   ];
 }
 
@@ -2675,7 +2731,7 @@ function PayrollReportsView({ selectedRun }) {
   const reportCards = buildReportRows(selectedRun);
 
   return (
-    <PageShell heading="Payroll Reports">
+    <PageShell heading="Finance Reports">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {reportCards.map(([title, detail, value]) => (
           <article key={title} className="neon-glass neon-border rounded-2xl p-6">
@@ -2721,7 +2777,7 @@ function PayrollSummariesView({ payrollRuns, selectedRun }) {
   ];
 
   return (
-    <PageShell heading="Payroll Summaries">
+    <PageShell heading="Finance Summary">
       <PayrollStatsFilter
         filter={statsFilter}
         resultCount={filteredRuns.length}
@@ -2787,146 +2843,6 @@ function FinancePayrollContent({ onAdvanceRun, onGeneratePaymentFile, onSelectRu
       selectedRun={selectedRun}
       onSelectRun={onSelectRun}
     />
-            onClick={fetchPayslips}
-            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="neon-glass neon-border rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
-          {error}
-        </div>
-      )}
-
-      {successMessage && (
-        <div className="neon-glass neon-border rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-200">
-          {successMessage}
-        </div>
-      )}
-
-      <div className="neon-glass neon-border rounded-2xl overflow-hidden">
-        {loading ? (
-          <div className="flex items-center gap-3 p-6 text-[#d8c6e8]">
-            <Loader2 className="animate-spin" size={18} />
-            Loading payslips...
-          </div>
-        ) : payslips.length === 0 ? (
-          <div className="p-6 text-center">
-            <div className="inline-block rounded-full bg-emerald-500/10 p-3 mb-3">
-              <CheckCircle2 className="text-emerald-300" size={24} />
-            </div>
-            <p className="text-sm text-[#d8c6e8]">No payslips pending approval</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-white/10 bg-white/5 text-[#d8c6e8]">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Payslip ID</th>
-                  <th className="px-4 py-3 font-medium">Staff Name</th>
-                  <th className="px-4 py-3 font-medium">Period</th>
-                  <th className="px-4 py-3 font-medium">Gross</th>
-                  <th className="px-4 py-3 font-medium">Net Pay</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payslips.map((payslip) => (
-                  <tr key={payslip.payslip_id} className="border-b border-white/5 text-white">
-                    <td className="px-4 py-3 text-[#d8c6e8] text-xs">{payslip.payslip_id}</td>
-                    <td className="px-4 py-3">{payslip.staff_name}</td>
-                    <td className="px-4 py-3 text-[#d8c6e8]">
-                      {payslip.period_month} {payslip.period_year}
-                    </td>
-                    <td className="px-4 py-3 text-[#d8c6e8]">
-                      ${payslip.gross_salary?.toFixed(2) || "0.00"}
-                    </td>
-                    <td className="px-4 py-3 text-emerald-300">
-                      ${payslip.net_pay?.toFixed(2) || "0.00"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-full px-3 py-1 text-xs bg-yellow-500/20 text-yellow-300">
-                        Pending
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleApprove(payslip.payslip_id)}
-                          disabled={actionInProgress === payslip.payslip_id}
-                          className="rounded-lg bg-emerald-500/20 px-3 py-1 text-xs text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50"
-                        >
-                          {actionInProgress === payslip.payslip_id ? (
-                            <Loader2 className="animate-spin inline" size={12} />
-                          ) : (
-                            "Approve"
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setRejectingPayslipId(payslip.payslip_id)}
-                          disabled={actionInProgress === payslip.payslip_id}
-                          className="rounded-lg bg-red-500/20 px-3 py-1 text-xs text-red-300 hover:bg-red-500/30 disabled:opacity-50"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Rejection Modal */}
-      {rejectingPayslipId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="neon-glass neon-border rounded-2xl w-full max-w-md p-6 m-4">
-            <div className="flex items-center gap-3 mb-4">
-              <AlertCircle className="text-red-300" size={20} />
-              <h3 className="text-lg font-semibold text-white">Reject Payslip</h3>
-            </div>
-            <p className="text-sm text-[#d8c6e8] mb-4">
-              Please provide a reason for rejecting this payslip.
-            </p>
-            <textarea
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="Enter rejection reason..."
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder-white/30 text-sm"
-              rows={4}
-            />
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={() => handleReject(rejectingPayslipId)}
-                disabled={actionInProgress === rejectingPayslipId}
-                className="flex-1 rounded-lg bg-red-500/20 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/30 disabled:opacity-50"
-              >
-                Reject
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRejectingPayslipId(null);
-                  setRejectReason("");
-                }}
-                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
   );
 }
 

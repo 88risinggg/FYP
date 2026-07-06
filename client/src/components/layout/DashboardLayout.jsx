@@ -11,13 +11,9 @@ import {
   Users,
   X
 } from "lucide-react";
-import { useState } from "react";
-import { NavLink } from "react-router-dom";
-
 import { NavLink, useNavigate } from "react-router-dom";
 import Sidebar from "./Sidebar.jsx";
-import { clearSession } from "../../services/sessionService.js";
-import { getStoredSession } from "../../services/sessionService.js";
+import { clearSession, getStoredSession } from "../../services/sessionService.js";
 
 const defaultSidebarSections = [
   {
@@ -185,8 +181,7 @@ export default function DashboardLayout({
             onClick={() => setMobileOpen(true)}
             className="flex h-10 w-10 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-white/10 hover:text-white lg:hidden"
             aria-label="Open menu"
-            aria-expanded={isMenuOpen}
-            onClick={() => setIsMenuOpen(true)}
+            aria-expanded={mobileOpen}
           >
             <Menu size={21} />
           </button>

@@ -2917,10 +2917,17 @@ function AuditLogsView({ auditLogs = [] }) {
                     </td>
                     <td className="border-b border-white/10 px-4 py-4">{log.entity_id || "-"}</td>
                     <td className="border-b border-white/10 px-4 py-4">{log.user_name || "System"}</td>
-      }
-    ]
-  }
-];
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!filteredLogs.length ? <EmptyState message="No audit logs found." /> : null}
+        </div>
+      </div>
+    </PageShell>
+  );
+}
 
 const routeHeadings = {
   "/dashboard/payroll/admin": "Dashboard",
@@ -3144,15 +3151,10 @@ function PayslipsApprovalView() {
               </tbody>
             </table>
 
-            {!filteredLogs.length ? (
-              <div className="mt-4">
-                <EmptyState message="No audit logs match the current filters." />
-              </div>
-            ) : null}
           </div>
-        </div>
+        )}
       </div>
-    </PageShell>
+    </div>
   );
 }
 
@@ -3450,51 +3452,6 @@ function ReportPreviewModal({ data, report, onClose }) {
           ) : null}
         </div>
       </section>
-          </div>
-        )}
-      </div>
-
-      {/* Rejection Modal */}
-      {rejectingPayslipId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="neon-glass neon-border rounded-2xl w-full max-w-md p-6 m-4">
-            <div className="flex items-center gap-3 mb-4">
-              <AlertCircle className="text-red-300" size={20} />
-              <h3 className="text-lg font-semibold text-white">Reject Payslip</h3>
-            </div>
-            <p className="text-sm text-[#d8c6e8] mb-4">
-              Please provide a reason for rejecting this payslip.
-            </p>
-            <textarea
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="Enter rejection reason..."
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder-white/30 text-sm"
-              rows={4}
-            />
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={() => handleReject(rejectingPayslipId)}
-                disabled={actionInProgress === rejectingPayslipId}
-                className="flex-1 rounded-lg bg-red-500/20 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/30 disabled:opacity-50"
-              >
-                Reject
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRejectingPayslipId(null);
-                  setRejectReason("");
-                }}
-                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
