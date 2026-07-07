@@ -142,6 +142,7 @@ export default function StaffPayrollPage() {
           setProfile(profileData);
           setPayslips(payslipData);
           setSummary(summaryData);
+          // Count unread notifications from the notification table
           const unread = Array.isArray(unreadData) ? unreadData.filter(n => !n.is_read).length : 0;
           setUnreadCount(unread);
         }
@@ -382,21 +383,33 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
 
       {/* Quick Actions */}
       <div className="grid gap-3 sm:grid-cols-3">
-        <button type="button" onClick={() => navigate("/dashboard/payroll/staff/payslips")} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:bg-white/10">
+        <button
+          type="button"
+          onClick={() => navigate("/dashboard/payroll/staff/payslips")}
+          className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:bg-white/10"
+        >
           <FileText size={20} className="text-[#C77DFF]" />
           <div>
             <p className="text-sm font-medium text-white">View Payslips</p>
             <p className="text-xs text-[#d8c6e8]/60">Download your pay history</p>
           </div>
         </button>
-        <button type="button" onClick={() => navigate("/dashboard/payroll/staff/advance-payment")} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:bg-white/10">
+        <button
+          type="button"
+          onClick={() => navigate("/dashboard/payroll/staff/advance-payment")}
+          className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:bg-white/10"
+        >
           <DollarSign size={20} className="text-emerald-400" />
           <div>
             <p className="text-sm font-medium text-white">Request Advance</p>
             <p className="text-xs text-[#d8c6e8]/60">Apply for salary advance</p>
           </div>
         </button>
-        <button type="button" onClick={() => navigate("/dashboard/payroll/staff/profile")} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:bg-white/10">
+        <button
+          type="button"
+          onClick={() => navigate("/dashboard/payroll/staff/profile")}
+          className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:bg-white/10"
+        >
           <UserCog size={20} className="text-amber-400" />
           <div>
             <p className="text-sm font-medium text-white">Edit Profile</p>
@@ -421,7 +434,11 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
                 <MiniStat label="Net Pay" value={formatCurrency(latest.net_salary)} highlight />
               </div>
               {latest.file_path ? (
-                <button type="button" onClick={() => downloadPayslip(latest)} className="mt-2 inline-flex items-center gap-2 rounded-lg bg-[#7B2FF7] px-4 py-2 text-sm font-semibold text-white hover:brightness-110">
+                <button
+                  type="button"
+                  onClick={() => downloadPayslip(latest)}
+                  className="mt-2 inline-flex items-center gap-2 rounded-lg bg-[#7B2FF7] px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
+                >
                   <Download size={16} />
                   Download PDF
                 </button>
@@ -461,7 +478,11 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
                 <div className="flex items-center gap-3">
                   <StatusBadge status={p.run_status} />
                   {p.file_path && (
-                    <button type="button" onClick={() => downloadPayslip(p)} className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10">
+                    <button
+                      type="button"
+                      onClick={() => downloadPayslip(p)}
+                      className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10"
+                    >
                       <Download size={14} />
                       PDF
                     </button>
@@ -588,62 +609,115 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
   const maxAdvance = Math.floor((payrollInfo.salary || 0) * 0.5);
   const salaryAvailable = payrollInfo.salary > 0;
 
-  useEffect(() => { fetchRequests(); }, [token]);
+  useEffect(() => {
+    fetchRequests();
+  }, [token]);
 
   async function fetchRequests() {
     if (!token) return;
     setLoadingRequests(true);
     try {
-      const data = await apiRequest("/api/hr/advance-requests", { headers: { Authorization: `Bearer ${token}` } });
+      const data = await apiRequest("/api/hr/advance-requests", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setRequests(Array.isArray(data) ? data : []);
-    } catch { setRequests([]); }
-    finally { setLoadingRequests(false); }
+    } catch {
+      setRequests([]);
+    } finally {
+      setLoadingRequests(false);
+    }
   }
 
-  function showToast(message, type = "success") { setToast({ message, type }); setTimeout(() => setToast(null), 4000); }
+  function showToast(message, type = "success") {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  }
 
   function validate() {
     const newErrors = {};
     const numAmount = Number(amount);
-    if (!amount) newErrors.amount = "Amount is required";
-    else if (numAmount < 100) newErrors.amount = "Minimum amount is $100";
-    else if (numAmount > maxAdvance) newErrors.amount = `Maximum amount is ${formatCurrency(maxAdvance)} (50% of base salary)`;
-    if (!reason?.trim()) newErrors.reason = "Reason is required";
-    else if (reason.trim().length < 10) newErrors.reason = "Please provide a more detailed reason (at least 10 characters)";
+
+    if (!amount) {
+      newErrors.amount = "Amount is required";
+    } else if (numAmount < 100) {
+      newErrors.amount = "Minimum amount is $100";
+    } else if (numAmount > maxAdvance) {
+      newErrors.amount = `Maximum amount is ${formatCurrency(maxAdvance)} (50% of base salary)`;
+    }
+
+    if (!reason?.trim()) {
+      newErrors.reason = "Reason is required";
+    } else if (reason.trim().length < 10) {
+      newErrors.reason = "Please provide a more detailed reason (at least 10 characters)";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
 
   async function handleSubmit() {
     if (!validate()) return;
+
     setSubmitting(true);
     try {
       await apiRequest("/api/hr/advance-requests", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ staff_id: profile?.employee_id, requested_amount: Number(amount), reason: reason.trim() })
+        body: JSON.stringify({
+          staff_id: profile?.employee_id,
+          requested_amount: Number(amount),
+          reason: reason.trim()
+        })
       });
+
       showToast("Advance payment request submitted successfully");
-      setAmount(""); setReason(""); setErrors({});
+      setAmount("");
+      setReason("");
+      setErrors({});
       fetchRequests();
-    } catch (err) { console.error(err); showToast("Failed to submit request. Please try again.", "error"); }
-    finally { setSubmitting(false); }
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to submit request. Please try again.", "error");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  const advanceStatusStyles = { pending: "border-amber-300/30 bg-amber-300/10 text-amber-200", hr_approved: "border-cyan-300/30 bg-cyan-300/10 text-cyan-200", hr_rejected: "border-red-300/30 bg-red-300/10 text-red-200", finance_approved: "border-emerald-300/30 bg-emerald-300/10 text-emerald-200" };
-  const statusLabels = { pending: "Pending", hr_approved: "HR Approved", hr_rejected: "HR Rejected", finance_approved: "Finance Approved" };
+  const advanceStatusStyles = {
+    pending: "border-amber-300/30 bg-amber-300/10 text-amber-200",
+    hr_approved: "border-cyan-300/30 bg-cyan-300/10 text-cyan-200",
+    hr_rejected: "border-red-300/30 bg-red-300/10 text-red-200",
+    finance_approved: "border-emerald-300/30 bg-emerald-300/10 text-emerald-200"
+  };
+
+  const statusLabels = {
+    pending: "Pending",
+    hr_approved: "HR Approved",
+    hr_rejected: "HR Rejected",
+    finance_approved: "Finance Approved"
+  };
 
   return (
     <div className="space-y-6">
+      {/* Toast */}
       {toast && (
-        <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[70] w-full max-w-md rounded-xl border px-5 py-4 shadow-2xl backdrop-blur-sm ${toast.type === "error" ? "border-red-400/30 bg-red-950/90 text-red-100" : "border-emerald-400/30 bg-emerald-950/90 text-emerald-100"}`}>
+        <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[70] w-full max-w-md rounded-xl border px-5 py-4 shadow-2xl backdrop-blur-sm animate-[slideDown_0.3s_ease-out] ${
+          toast.type === "error"
+            ? "border-red-400/30 bg-red-950/90 text-red-100"
+            : "border-emerald-400/30 bg-emerald-950/90 text-emerald-100"
+        }`}>
           <div className="flex items-center gap-3">
-            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${toast.type === "error" ? "bg-red-500/20 text-red-300" : "bg-emerald-500/20 text-emerald-300"}`}>{toast.type === "error" ? "✕" : "✓"}</span>
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+              toast.type === "error" ? "bg-red-500/20 text-red-300" : "bg-emerald-500/20 text-emerald-300"
+            }`}>
+              {toast.type === "error" ? "✕" : "✓"}
+            </span>
             <p className="text-sm font-medium">{toast.message}</p>
           </div>
         </div>
       )}
 
+      {/* Request Form */}
       <Panel title="Request Advance Payment">
         {!salaryAvailable ? (
           <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 p-4">
@@ -653,23 +727,53 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
           <div className="space-y-4">
             <div>
               <label className="block text-xs text-[#d8c6e8]">Amount ($)</label>
-              <input type="number" min="100" max={maxAdvance} value={amount} onChange={(e) => { setAmount(e.target.value); if (errors.amount) setErrors(prev => ({ ...prev, amount: undefined })); }} placeholder={`Min $100 — Max ${formatCurrency(maxAdvance)}`} className={`mt-1 w-full rounded-md border px-3 py-2 text-white bg-transparent placeholder:text-white/20 ${errors.amount ? "border-red-400/60" : "border-white/10"}`} />
+              <input
+                type="number"
+                min="100"
+                max={maxAdvance}
+                value={amount}
+                onChange={(e) => { setAmount(e.target.value); if (errors.amount) setErrors(prev => ({ ...prev, amount: undefined })); }}
+                placeholder={`Min $100 — Max ${formatCurrency(maxAdvance)}`}
+                className={`mt-1 w-full rounded-md border px-3 py-2 text-white bg-transparent placeholder:text-white/20 ${
+                  errors.amount ? "border-red-400/60" : "border-white/10"
+                }`}
+              />
               <p className="mt-1 text-xs text-[#d8c6e8]/60">Maximum: {formatCurrency(maxAdvance)} (50% of base salary)</p>
               {errors.amount && <p className="mt-1 text-xs text-red-400">{errors.amount}</p>}
             </div>
+
             <div>
               <label className="block text-xs text-[#d8c6e8]">Reason</label>
-              <textarea value={reason} onChange={(e) => { setReason(e.target.value); if (errors.reason) setErrors(prev => ({ ...prev, reason: undefined })); }} placeholder="Explain why you need an advance payment..." rows={3} className={`mt-1 w-full resize-none rounded-md border px-3 py-2 text-white bg-transparent placeholder:text-white/20 ${errors.reason ? "border-red-400/60" : "border-white/10"}`} />
+              <textarea
+                value={reason}
+                onChange={(e) => { setReason(e.target.value); if (errors.reason) setErrors(prev => ({ ...prev, reason: undefined })); }}
+                placeholder="Explain why you need an advance payment..."
+                rows={3}
+                className={`mt-1 w-full resize-none rounded-md border px-3 py-2 text-white bg-transparent placeholder:text-white/20 ${
+                  errors.reason ? "border-red-400/60" : "border-white/10"
+                }`}
+              />
               {errors.reason && <p className="mt-1 text-xs text-red-400">{errors.reason}</p>}
             </div>
-            <button type="button" onClick={handleSubmit} disabled={submitting} className="rounded-lg bg-[#7B2FF7] px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60">{submitting ? "Submitting…" : "Submit Request"}</button>
+
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="rounded-lg bg-[#7B2FF7] px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
+            >
+              {submitting ? "Submitting…" : "Submit Request"}
+            </button>
           </div>
         )}
       </Panel>
 
+      {/* Request History */}
       <Panel title="Your Requests">
         {loadingRequests ? (
-          <div className="space-y-3">{[1,2,3].map(i => <SkeletonBar key={i} height="h-14" />)}</div>
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => <SkeletonBar key={i} height="h-14" />)}
+          </div>
         ) : requests.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <DollarSign size={48} className="text-[#C77DFF]/30" />
@@ -683,11 +787,15 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-3">
                       <p className="text-sm font-semibold text-white">{formatCurrency(r.requested_amount)}</p>
-                      <span className={`rounded-full border px-3 py-0.5 text-xs font-semibold whitespace-nowrap ${advanceStatusStyles[r.status] || "border-gray-300/30 bg-gray-300/10 text-gray-200"}`}>{statusLabels[r.status] || r.status}</span>
+                      <span className={`rounded-full border px-3 py-0.5 text-xs font-semibold whitespace-nowrap ${advanceStatusStyles[r.status] || "border-gray-300/30 bg-gray-300/10 text-gray-200"}`}>
+                        {statusLabels[r.status] || r.status}
+                      </span>
                     </div>
                     <p className="mt-1 text-xs text-[#d8c6e8] line-clamp-1">{r.reason || "—"}</p>
                   </div>
-                  <p className="text-xs text-white/30 whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" }) : "—"}</p>
+                  <p className="text-xs text-white/30 whitespace-nowrap">
+                    {r.created_at ? new Date(r.created_at).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                  </p>
                 </div>
                 {r.hr_comments && (
                   <div className="mt-2 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">

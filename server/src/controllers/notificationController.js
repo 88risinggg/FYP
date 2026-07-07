@@ -1,7 +1,7 @@
 const { pool } = require("../config/db");
 
 /**
- * Ensures the notification table exists.
+ * Ensures the notification table exists and has up-to-date schema.
  */
 async function ensureNotificationTable() {
   await pool.query(`
@@ -16,6 +16,16 @@ async function ensureNotificationTable() {
       FOREIGN KEY (user_id) REFERENCES user(user_id) ON DELETE CASCADE
     )
   `);
+
+  // Ensure 'profile_updated' exists in the ENUM (handles tables created before this type was added)
+  try {
+    await pool.query(`
+      ALTER TABLE notification MODIFY COLUMN type
+      ENUM('payslip_available', 'payslip_approved', 'profile_updated', 'system') DEFAULT 'system'
+    `);
+  } catch (e) {
+    // Ignore if already correct
+  }
 }
 
 /**
@@ -25,14 +35,15 @@ async function ensureNotificationTable() {
 async function getNotificationsByUserId(req, res) {
   const { userId } = req.params;
 
+  // Staff can only view their own notifications
   if (req.user.role === "Staff" && String(req.user.userId) !== String(userId)) {
     return res.status(403).json({ message: "Access denied" });
   }
 
   try {
     const [rows] = await pool.query(
-      `SELECT notification_id, type, subject AS title, message,
-              CASE WHEN status = 'Unread' THEN 0 ELSE 1 END AS is_read,
+      `SELECT notification_id, type, subject AS title, message, 
+              CASE WHEN status = 'Unread' THEN 0 ELSE 1 END AS is_read, 
               sent_at AS created_at
        FROM notification
        WHERE user_user_id = ?
@@ -114,10 +125,8 @@ async function createNotification(req, res) {
   }
 
   try {
-    await ensureNotificationTable();
-
     const [result] = await pool.query(
-      "INSERT INTO notification (user_id, type, title, message) VALUES (?, ?, ?, ?)",
+      "INSERT INTO notification (user_user_id, type, subject, message, status, sent_at) VALUES (?, ?, ?, ?, 'Unread', NOW())",
       [user_id, type || "system", title, message || null]
     );
 
