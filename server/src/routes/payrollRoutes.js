@@ -52,121 +52,135 @@ router.put("/rates", authenticateToken, allowRoles("Admin"), (req, res) => {
 
 // ----- Payslip Approval Workflow -----
 
-// Finance approval - transition draft → finance_pending → finance_approved
-router.put("/payslips/:id/finance-approve", authenticateToken, allowRoles("Admin", "Finance"), (req, res) => {
-  const payslip = payslips.find((p) => p.payslip_id === req.params.id);
-  if (!payslip) {
-    return res.status(404).json({ message: "Payslip not found" });
+// Finance approval - transition finance_pending → finance_approved
+router.put("/payslips/:id/finance-approve", authenticateToken, allowRoles("Admin", "Finance"), async (req, res) => {
+  try {
+    const { pool } = require("../config/db");
+    const payslipId = req.params.id;
+
+    const [rows] = await pool.query('SELECT * FROM payslip WHERE payslip_id = ? LIMIT 1', [payslipId]);
+    if (!rows.length) {
+      return res.status(404).json({ message: "Payslip not found" });
+    }
+
+    const payslip = rows[0];
+    if (payslip.status !== 'draft' && payslip.status !== 'finance_pending') {
+      return res.status(400).json({ message: `Cannot approve payslip in ${payslip.status} status. Expected draft or finance_pending.` });
+    }
+
+    await pool.query(
+      "UPDATE payslip SET status = 'finance_approved', updated_at = NOW() WHERE payslip_id = ?",
+      [payslipId]
+    );
+
+    addAudit(req.user.email, `Finance approved payslip ${payslipId}`, "Payroll");
+    res.json({ message: "Payslip approved by Finance", payslip: { ...payslip, status: 'finance_approved' } });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to approve payslip", error: err.message });
   }
-
-  // Check if already in finance_pending or draft status
-  if (payslip.status !== PAYSLIP_STATUSES.DRAFT && payslip.status !== PAYSLIP_STATUSES.FINANCE_PENDING) {
-    return res.status(400).json({
-      message: `Cannot approve payslip in ${payslip.status} status. Expected draft or finance_pending.`
-    });
-  }
-
-  payslip.status = PAYSLIP_STATUSES.ADMIN_PENDING;
-  payslip.finance_approval = true;
-  payslip.finance_approved_at = new Date().toISOString();
-  payslip.finance_approved_by = req.user.email;
-  payslip.finance_rejection_reason = null;
-  payslip.updated_at = new Date().toISOString();
-
-  addAudit(req.user.email, `Finance approved payslip ${req.params.id}`, "Payroll");
-  res.json({
-    message: "Payslip approved by Finance",
-    payslip
-  });
 });
 
 // HR -> Finance: send payslip for finance review (draft -> finance_pending)
-router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
-  const payslip = payslips.find((p) => p.payslip_id === req.params.id);
-  if (!payslip) {
-    return res.status(404).json({ message: "Payslip not found" });
+router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+  try {
+    const { pool } = require("../config/db");
+    const payslipId = req.params.id;
+
+    const [rows] = await pool.query('SELECT * FROM payslip WHERE payslip_id = ? LIMIT 1', [payslipId]);
+    if (!rows.length) {
+      return res.status(404).json({ message: "Payslip not found" });
+    }
+
+    const payslip = rows[0];
+    if (payslip.status !== 'draft' && payslip.status !== 'finance_pending') {
+      return res.status(400).json({ message: `Cannot send payslip in ${payslip.status} status.` });
+    }
+
+    await pool.query(
+      "UPDATE payslip SET status = 'finance_pending', updated_at = NOW() WHERE payslip_id = ?",
+      [payslipId]
+    );
+
+    addAudit(req.user.email, `HR sent payslip ${payslipId} to Finance`, "Payroll");
+    res.json({ message: "Payslip sent to Finance", payslip: { ...payslip, status: 'finance_pending' } });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to send to Finance", error: err.message });
   }
-
-  // Only allow sending when in draft status (idempotent if already pending)
-  if (payslip.status !== PAYSLIP_STATUSES.DRAFT && payslip.status !== PAYSLIP_STATUSES.FINANCE_PENDING) {
-    return res.status(400).json({ message: `Cannot send payslip in ${payslip.status} status.` });
-  }
-
-  payslip.status = PAYSLIP_STATUSES.FINANCE_PENDING;
-  payslip.updated_at = new Date().toISOString();
-
-  addAudit(req.user.email, `HR sent payslip ${req.params.id} to Finance`, "Payroll");
-
-  res.json({ message: "Payslip sent to Finance", payslip });
 });
 
 // Bulk send payslips to Finance (accepts { payslip_ids: [...]} or { allDrafts: true })
-router.put("/payslips/bulk-send-to-finance", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
+router.put("/payslips/bulk-send-to-finance", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
   try {
     const { payslip_ids, allDrafts } = req.body || {};
+    const { pool } = require("../config/db");
 
-    let targets = [];
+    let targetIds = [];
     if (allDrafts) {
-      targets = payslips.filter((p) => p.status === PAYSLIP_STATUSES.DRAFT);
+      const [rows] = await pool.query("SELECT payslip_id FROM payslip WHERE status = 'draft'");
+      targetIds = rows.map(r => r.payslip_id);
     } else {
       if (!Array.isArray(payslip_ids) || payslip_ids.length === 0) {
         return res.status(400).json({ message: "payslip_ids array is required unless allDrafts=true" });
       }
-      targets = payslips.filter((p) => payslip_ids.includes(p.payslip_id));
+      targetIds = payslip_ids;
     }
 
-    const updated = [];
-    const skipped = [];
+    if (targetIds.length === 0) {
+      return res.json({ message: "No draft payslips to send", updated_count: 0, updated_ids: [], skipped: [] });
+    }
 
-    targets.forEach((p) => {
-      if (p.status !== PAYSLIP_STATUSES.DRAFT) {
-        skipped.push({ payslip_id: p.payslip_id, reason: `Invalid status ${p.status}` });
-        return;
-      }
+    const [result] = await pool.query(
+      "UPDATE payslip SET status = 'finance_pending', updated_at = NOW() WHERE payslip_id IN (?) AND status = 'draft'",
+      [targetIds]
+    );
 
-      p.status = PAYSLIP_STATUSES.FINANCE_PENDING;
-      p.updated_at = new Date().toISOString();
-      updated.push(p.payslip_id);
-      addAudit(req.user.email, `HR sent payslip ${p.payslip_id} to Finance (bulk)`, "Payroll");
+    const updated_count = result.affectedRows;
+    const skipped = targetIds.length - updated_count;
+
+    addAudit(req.user.email, `Bulk sent ${updated_count} payslips to Finance`, "Payroll");
+
+    res.json({
+      message: "Bulk send completed",
+      updated_count,
+      updated_ids: targetIds.slice(0, updated_count),
+      skipped: skipped > 0 ? [{ reason: `${skipped} payslips were not in draft status` }] : []
     });
-
-    res.json({ message: "Bulk send completed", updated_count: updated.length, updated_ids: updated, skipped });
   } catch (err) {
     res.status(500).json({ message: "Bulk send failed", error: err.message });
   }
 });
 
 // Finance rejection
-router.put("/payslips/:id/finance-reject", authenticateToken, allowRoles("Admin", "Finance"), (req, res) => {
-  const payslip = payslips.find((p) => p.payslip_id === req.params.id);
-  if (!payslip) {
-    return res.status(404).json({ message: "Payslip not found" });
+router.put("/payslips/:id/finance-reject", authenticateToken, allowRoles("Admin", "Finance"), async (req, res) => {
+  try {
+    const { pool } = require("../config/db");
+    const payslipId = req.params.id;
+    const { reason } = req.body;
+
+    if (!reason) {
+      return res.status(400).json({ message: "Rejection reason is required" });
+    }
+
+    const [rows] = await pool.query('SELECT * FROM payslip WHERE payslip_id = ? LIMIT 1', [payslipId]);
+    if (!rows.length) {
+      return res.status(404).json({ message: "Payslip not found" });
+    }
+
+    const payslip = rows[0];
+    if (payslip.status !== 'draft' && payslip.status !== 'finance_pending') {
+      return res.status(400).json({ message: `Cannot reject payslip in ${payslip.status} status.` });
+    }
+
+    await pool.query(
+      "UPDATE payslip SET status = 'draft', updated_at = NOW() WHERE payslip_id = ?",
+      [payslipId]
+    );
+
+    addAudit(req.user.email, `Finance rejected payslip ${payslipId}: ${reason}`, "Payroll");
+    res.json({ message: "Payslip rejected by Finance", payslip: { ...payslip, status: 'draft' } });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to reject payslip", error: err.message });
   }
-
-  const { reason } = req.body;
-  if (!reason) {
-    return res.status(400).json({ message: "Rejection reason is required" });
-  }
-
-  // Can reject from draft or finance_pending
-  if (payslip.status !== PAYSLIP_STATUSES.DRAFT && payslip.status !== PAYSLIP_STATUSES.FINANCE_PENDING) {
-    return res.status(400).json({
-      message: `Cannot reject payslip in ${payslip.status} status.`
-    });
-  }
-
-  payslip.status = PAYSLIP_STATUSES.DRAFT;
-  payslip.finance_approval = false;
-  payslip.finance_approved_at = null;
-  payslip.finance_approved_by = null;
-  payslip.finance_rejection_reason = reason;
-  payslip.updated_at = new Date().toISOString();
-
-  addAudit(req.user.email, `Finance rejected payslip ${req.params.id}: ${reason}`, "Payroll");
-  res.json({
-    message: "Payslip rejected by Finance",
-    payslip
-  });
 });
 
 // Admin final approval - transition admin_pending → sent_to_staff

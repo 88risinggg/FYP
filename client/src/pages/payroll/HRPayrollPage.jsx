@@ -241,6 +241,21 @@ function getDaysUntil(targetDay) {
   return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
 }
 
+function getDaysUntilCpf() {
+  // CPF contributions are due by 14th of the following month
+  const today = new Date();
+  const target = new Date(today.getFullYear(), today.getMonth() + 1, 14);
+  return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+}
+
+function getDaysUntilIR8A() {
+  // IR8A filing is due by 1st March every year
+  const today = new Date();
+  let target = new Date(today.getFullYear(), 2, 1);
+  if (target <= today) target.setFullYear(target.getFullYear() + 1);
+  return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+}
+
 const DEPARTMENT_NAMES = {
   1: "Admin", 2: "HR", 3: "Finance",
   4: "Operations", 5: "Sales", 6: "IT"
@@ -338,6 +353,38 @@ function HRDashboardView() {
 
   const maxPayroll = Math.max(...payrollHistoryData.map(d => d.total), 1);
 
+  // Total Payroll: use actual net pay from the latest month's payslips (real disbursed amount)
+  const totalPayroll = useMemo(() => {
+    if (payslipList.length === 0) return 0;
+    // Find the most recent month/year with payslip data
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1; // 1-indexed
+    const currentYear = now.getFullYear();
+
+    // Try current month first, then find the latest available month
+    let latestPayslips = payslipList.filter(p =>
+      Number(p.period_month) === currentMonth && Number(p.period_year) === currentYear
+    );
+
+    if (latestPayslips.length === 0) {
+      // Find the most recent month in the data
+      const sorted = [...payslipList].sort((a, b) => {
+        const yearDiff = Number(b.period_year) - Number(a.period_year);
+        if (yearDiff !== 0) return yearDiff;
+        return Number(b.period_month) - Number(a.period_month);
+      });
+      if (sorted.length > 0) {
+        const latestMonth = Number(sorted[0].period_month);
+        const latestYear = Number(sorted[0].period_year);
+        latestPayslips = payslipList.filter(p =>
+          Number(p.period_month) === latestMonth && Number(p.period_year) === latestYear
+        );
+      }
+    }
+
+    return latestPayslips.reduce((sum, p) => sum + Number(p.net_pay || 0), 0);
+  }, [payslipList]);
+
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <Loader2 className="animate-spin text-[#7B2FF7]" size={32} />
@@ -347,9 +394,7 @@ function HRDashboardView() {
   // Computed values
   const activeStaff = staffList.filter(s => s.status === 1 || s.status === '1').length;
   const totalStaff = staffList.length;
-  const totalPayroll = staffList
-    .filter(s => s.status === 1 || s.status === '1')
-    .reduce((sum, s) => sum + Number(s.base_salary || 0), 0);
+
   const pendingFinance = payslipList.filter(p => p.status === 'finance_pending').length;
   const totalPayslips = payslipList.length;
   const sentThisMonth = payslipList.filter(p => {
@@ -361,8 +406,8 @@ function HRDashboardView() {
 
   const deadlines = [
     { label: "Payroll Cutoff", days: getDaysUntil(25), icon: "📋" },
-    { label: "CPF Submission", days: getDaysUntil(14), icon: "🏦" },
-    { label: "IR8A Filing", days: getDaysUntil(1), icon: "📄" }
+    { label: "CPF Submission", days: getDaysUntilCpf(), icon: "🏦" },
+    { label: "IR8A Filing", days: getDaysUntilIR8A(), icon: "📄" }
   ];
 
   const birthdaysThisMonth = staffList
@@ -421,7 +466,7 @@ function HRDashboardView() {
           <p className="text-2xl font-bold text-white">
             ${totalPayroll.toLocaleString()}
           </p>
-          <p className="text-xs text-white/30">This month</p>
+          <p className="text-xs text-white/30">Net pay (latest run)</p>
         </div>
 
         <div className="rounded-xl border border-white/10 bg-white/5 p-5 flex flex-col items-center justify-center">
@@ -695,7 +740,11 @@ function getStaffDisplayDepartment(staff) {
 }
 
 function getStaffDisplayHireDate(staff) {
-  return staff?.hire_date || staff?.hireDate || staff?.hired_at || "-";
+  const raw = staff?.hire_date || staff?.hireDate || staff?.hired_at;
+  if (!raw) return "-";
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return "-";
+  return d.toLocaleDateString("en-SG", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function getStaffActionId(staff) {
@@ -1399,9 +1448,9 @@ function StaffRecordsView() {
                     {historyPayslips.map(p => (
                       <tr key={p.payslip_id} className="border-b border-white/5 text-white">
                         <td className="px-3 py-2">{p.period_month} {p.period_year}</td>
-                        <td className="px-3 py-2">${p.gross_salary?.toFixed(2)}</td>
-                        <td className="px-3 py-2 text-red-300">${p.total_deductions?.toFixed(2)}</td>
-                        <td className="px-3 py-2 text-emerald-300">${p.net_pay?.toFixed(2)}</td>
+                        <td className="px-3 py-2">${Number(p.gross_salary || 0).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-red-300">${Number(p.total_deductions || 0).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-emerald-300">${Number(p.net_pay || 0).toFixed(2)}</td>
                         <td className="px-3 py-2">{p.status}</td>
                       </tr>
                     ))}
@@ -1908,6 +1957,8 @@ function PayslipsView() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [payrollMonth, setPayrollMonth] = useState(new Date().toLocaleString('en-US', { month: 'long' }));
   const [payrollYear, setPayrollYear] = useState(new Date().getFullYear());
+  const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1);
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear());
   const [actionInProgress, setActionInProgress] = useState(null);
   const rowRefs = useRef(new Map());
   const [previewPayslip, setPreviewPayslip] = useState(null);
@@ -1925,7 +1976,10 @@ function PayslipsView() {
     try {
       setLoading(true);
       setError("");
-      const response = await fetch(`${API_BASE_URL}/api/hr/payslips`, {
+      const url = new URL(`${API_BASE_URL}/api/hr/payslips`);
+      if (filterMonth) url.searchParams.set('month', filterMonth);
+      if (filterYear) url.searchParams.set('year', filterYear);
+      const response = await fetch(url.toString(), {
         headers: {
           ...getAuthHeaders(session?.token)
         }
@@ -2226,7 +2280,7 @@ function PayslipsView() {
   useEffect(() => {
     fetchPayslips();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.token]);
+  }, [session?.token, filterMonth, filterYear]);
 
   const filteredPayslips = useMemo(() => {
     let list = payslips;
@@ -2317,30 +2371,65 @@ function PayslipsView() {
           </div>
         </div>
 
-        <div>
-          <label htmlFor="payslip-payroll-file" className="block text-sm font-medium text-[#d8c6e8]">Payroll File (CSV/XLSX)</label>
-          <input
-            id="payslip-payroll-file"
-            type="file"
-            accept=".csv,.xlsx,.xls"
-            onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-            className="mt-2 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white file:mr-4 file:rounded-md file:border-0 file:bg-[#C77DFF] file:px-4 file:py-2 file:text-white hover:file:bg-[#b866ff]"
-          />
-        </div>
-
+        {/* Primary action: Quick Generate from DB */}
         <button
-          type="submit"
+          type="button"
           disabled={generating}
-          className="w-full rounded-lg bg-[#C77DFF] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#b866ff] disabled:opacity-50"
+          onClick={async () => {
+            try {
+              setGenerating(true);
+              setError("");
+              setSuccessMessage("");
+              const response = await fetch(`${API_BASE_URL}/api/hr/payslips/quick-generate`, {
+                method: "POST",
+                headers: { ...getAuthHeaders(session?.token), "Content-Type": "application/json" },
+                body: JSON.stringify({ period_month: payrollMonth, period_year: payrollYear })
+              });
+              const result = await response.json();
+              if (!response.ok) throw new Error(result.message || "Failed to generate payslips");
+              setSuccessMessage(`Generated ${result.generated_count} payslips from database. ${result.skipped_count} skipped. Net total: $${result.summary.total_net}`);
+              await fetchPayslips();
+              setTimeout(() => setSuccessMessage(""), 6000);
+            } catch (err) {
+              setError(err.message || "Quick generate failed");
+            } finally {
+              setGenerating(false);
+            }
+          }}
+          className="w-full rounded-lg bg-[#7B2FF7] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#6a1fe0] disabled:opacity-50"
         >
           {generating ? (
             <span className="flex items-center justify-center gap-2">
               <Loader2 className="animate-spin" size={16} /> Generating...
             </span>
           ) : (
-            "Generate Payslips"
+            "⚡ Generate Payslips from Database"
           )}
         </button>
+
+        <p className="text-xs text-white/30 text-center">Uses base salary from staff records + auto CPF/SDL calculation</p>
+
+        {/* Secondary action: Upload file & generate */}
+        <div className="border-t border-white/10 pt-4 mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/30 mb-3">Or upload with variable pay data</p>
+          <div>
+            <input
+              id="payslip-payroll-file"
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              className="block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white file:mr-4 file:rounded-md file:border-0 file:bg-[#C77DFF] file:px-4 file:py-2 file:text-white hover:file:bg-[#b866ff]"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={generating || !selectedFile}
+            className="mt-3 w-full rounded-lg border border-[#C77DFF]/50 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-[#C77DFF] transition hover:bg-[#C77DFF]/20 disabled:opacity-50"
+          >
+            Upload & Generate Payslips
+          </button>
+        </div>
       </form>
 
       <div className="neon-glass neon-border rounded-2xl p-4">
@@ -2365,9 +2454,16 @@ function PayslipsView() {
         <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-white/5 p-6">
           <div>
             <h3 className="text-lg font-semibold text-white">Payslips</h3>
-            <p className="mt-1 text-sm text-[#d8c6e8]">{payslips.length} total payslips</p>
+            <p className="mt-1 text-sm text-[#d8c6e8]">{payslips.length} payslips for {new Date(filterYear, filterMonth - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' })}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Month/Year Filter */}
+            <select value={filterMonth} onChange={(e) => setFilterMonth(Number(e.target.value))} className="rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white">
+              {["January","February","March","April","May","June","July","August","September","October","November","December"].map((m, i) => (
+                <option key={m} value={i + 1}>{m}</option>
+              ))}
+            </select>
+            <input type="number" value={filterYear} onChange={(e) => setFilterYear(Number(e.target.value))} className="w-20 rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white" />
             <button
               type="button"
               onClick={() => openConfirmBulkSend({ allDrafts: true })}
@@ -2445,13 +2541,13 @@ function PayslipsView() {
                         {payslip.period_month} {payslip.period_year}
                       </td>
                       <td className="px-4 py-3 text-[#d8c6e8]">
-                        ${payslip.gross_salary?.toFixed(2) || "0.00"}
+                        ${Number(payslip.gross_salary || 0).toFixed(2)}
                       </td>
                       <td className="px-4 py-3 text-red-300">
-                        ${payslip.total_deductions?.toFixed(2) || "0.00"}
+                        ${Number(payslip.total_deductions || 0).toFixed(2)}
                       </td>
                       <td className="px-4 py-3 text-emerald-300">
-                        ${payslip.net_pay?.toFixed(2) || "0.00"}
+                        ${Number(payslip.net_pay || 0).toFixed(2)}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap ${getStatusColor(payslip.status)}`}>

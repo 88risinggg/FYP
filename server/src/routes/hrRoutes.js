@@ -5,7 +5,7 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
-const { staffProfiles, payrollRuns, payslips, payrollRateConfig, PAYSLIP_STATUSES, advanceRequests, financeRequests } = require("../services/data");
+const { staffProfiles, payrollRuns, payslips, payrollRateConfig, PAYSLIP_STATUSES } = require("../services/data");
 const { addAudit } = require("../services/audit");
 const { pool } = require("../config/db");
 const { parseFile, extractStaffNames, titleCase } = require("../services/importParser");
@@ -735,51 +735,88 @@ router.post(
 );
 // ----- END: employee upload/validation + optional create endpoint -----
 
-// ----- Payroll Run Management -----
-router.post("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
-  const { period_month, period_year } = req.body;
+// ----- Payroll Run Management (DB-backed) -----
+// [HR BRANCH - Steven] Migrated from in-memory payrollRuns[] to payroll_run table
+router.post("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+  try {
+    const { period_month, period_year } = req.body;
 
-  if (!period_month || !period_year) {
-    return res.status(400).json({ message: "period_month and period_year are required" });
+    if (!period_month || !period_year) {
+      return res.status(400).json({ message: "period_month and period_year are required" });
+    }
+
+    // Convert period_month to numeric if it's a string name (e.g., "June" → 6)
+    const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    let numMonth = Number(period_month);
+    if (isNaN(numMonth)) {
+      const idx = monthNames.findIndex(m => m.toLowerCase() === String(period_month).toLowerCase());
+      numMonth = idx >= 0 ? idx + 1 : null;
+    }
+    if (!numMonth || numMonth < 1 || numMonth > 12) {
+      return res.status(400).json({ message: "Invalid period_month" });
+    }
+    const numYear = Number(period_year);
+
+    // FR1: Ensure same period doesn't create redundant runs
+    const [existing] = await pool.query(
+      'SELECT payroll_run_id FROM payroll_run WHERE payroll_month = ? AND payroll_year = ? LIMIT 1',
+      [numMonth, numYear]
+    );
+    if (existing.length > 0) {
+      return res.status(409).json({
+        message: `A payroll run already exists for ${period_month} ${period_year}`,
+        run: existing[0]
+      });
+    }
+
+    const [result] = await pool.query(
+      'INSERT INTO payroll_run (payroll_month, payroll_year, status, created_by, created_at) VALUES (?, ?, ?, ?, NOW())',
+      [numMonth, numYear, 'Draft', req.user.userId]
+    );
+
+    const [rows] = await pool.query('SELECT * FROM payroll_run WHERE payroll_run_id = ? LIMIT 1', [result.insertId]);
+    const run = rows[0];
+
+    addAudit(req.user.email, `Created payroll run ${run.payroll_run_id} for ${numMonth}/${numYear}`, "HR");
+    res.status(201).json(run);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to create payroll run", error: err.message });
   }
-
-  // FR1: Ensure same file/period upload doesn't create redundant runs
-  const existing = payrollRuns.find(r => r.period_month === period_month && r.period_year === period_year);
-  if (existing) {
-    return res.status(409).json({ message: `A payroll run already exists for ${period_month} ${period_year}`, run: existing });
-  }
-
-  const payrollRunId = `PR-${period_year}-${String(period_month).padStart(2, "0")}-${Date.now().toString(36).toUpperCase()}`;
-
-  const payrollRun = {
-    payroll_run_id: payrollRunId,
-    period_month,
-    period_year,
-    status: "created",
-    total_payslips: 0,
-    approved_count: 0,
-    created_at: new Date().toISOString(),
-    created_by: req.user.email
-  };
-
-  payrollRuns.push(payrollRun);
-  addAudit(req.user.email, `Created payroll run ${payrollRunId} for ${period_month}/${period_year}`, "HR");
-  res.status(201).json(payrollRun);
 });
 
-router.get("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), (_req, res) => {
-  res.json(payrollRuns);
-});
-
-router.get("/payroll-run/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
-  const run = payrollRuns.find(r => r.payroll_run_id === req.params.id);
-  if (!run) {
-    return res.status(404).json({ message: "Payroll run not found" });
+router.get("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), async (_req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT pr.*, u.name AS created_by_name,
+        (SELECT COUNT(*) FROM payroll p WHERE p.payroll_run_id = pr.payroll_run_id) AS total_payslips
+       FROM payroll_run pr
+       LEFT JOIN user u ON pr.created_by = u.user_id
+       ORDER BY pr.payroll_year DESC, pr.payroll_month DESC`
+    );
+    return res.json(rows);
+  } catch (err) {
+    return res.status(500).json({ message: "Failed to fetch payroll runs", error: err.message });
   }
-  res.json(run);
 });
 
-// ----- Payslip Generation from Upload -----
+router.get("/payroll-run/:id", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT pr.*, u.name AS created_by_name,
+        (SELECT COUNT(*) FROM payroll p WHERE p.payroll_run_id = pr.payroll_run_id) AS total_payslips
+       FROM payroll_run pr
+       LEFT JOIN user u ON pr.created_by = u.user_id
+       WHERE pr.payroll_run_id = ? LIMIT 1`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ message: "Payroll run not found" });
+    return res.json(rows[0]);
+  } catch (err) {
+    return res.status(500).json({ message: "Failed to fetch payroll run", error: err.message });
+  }
+});
+
+// ----- Payslip Generation from Upload (DB-backed) -----
 router.post(
   "/payslips/generate",
   authenticateToken,
@@ -797,11 +834,12 @@ router.post(
         return res.status(400).json({ message: "payroll_run_id is required" });
       }
 
-      // Verify payroll run exists
-      const payrollRun = payrollRuns.find(r => r.payroll_run_id === payroll_run_id);
-      if (!payrollRun) {
+      // Verify payroll run exists in DB
+      const [runRows] = await pool.query('SELECT * FROM payroll_run WHERE payroll_run_id = ? LIMIT 1', [payroll_run_id]);
+      if (!runRows.length) {
         return res.status(404).json({ message: "Payroll run not found" });
       }
+      const payrollRun = runRows[0];
 
       // Parse uploaded payroll file
       const rows = await parseFile(req.file.path, req.file.originalname);
@@ -810,41 +848,125 @@ router.post(
         return res.status(400).json({ message: "Uploaded file has no data rows" });
       }
 
-      let staffForCalculation;
-      try {
-        const [staffFromDb] = await pool.query("SELECT * FROM staff WHERE status = 1 OR status = 'Active'");
-        staffForCalculation = staffFromDb;
-      } catch (_err) {
-        staffForCalculation = staffProfiles;
-      }
+      // Get active staff from DB
+      const [staffFromDb] = await pool.query("SELECT * FROM staff WHERE status = 1 OR status = 'Active'");
 
       // Use payroll calculation service to generate payslips
       const { created: generatedPayslips, skipped } = calculatePayslipsFromRows(
         rows,
-        staffForCalculation,
+        staffFromDb,
         payrollRateConfig,
-        payroll_run_id,
+        String(payroll_run_id),
         req.user.email
       );
 
-      // Save all generated payslips to in-memory array, but avoid duplicates for same payroll run + employee
+      // Save to DB: INSERT into payroll + payslip tables
       const savedPayslips = [];
-      const employeesSavedInThisUpload = new Set();
-      generatedPayslips.forEach((slip) => {
-        const employeeRunKey = `${slip.payroll_run_id}:${slip.employee_id}`;
-        const exists = employeesSavedInThisUpload.has(employeeRunKey) || payslips.find(p => p.payslip_id === slip.payslip_id || (p.payroll_run_id === slip.payroll_run_id && p.employee_id === slip.employee_id));
-        if (exists) {
-          skipped.push({ row_identifier: slip.employee_id, reason: 'Duplicate payslip for run' });
-          return;
-        }
-        employeesSavedInThisUpload.add(employeeRunKey);
-        payslips.push(slip);
-        savedPayslips.push(slip);
-      });
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
 
-      // Update payroll run
-      payrollRun.total_payslips = savedPayslips.length;
-      payrollRun.status = "payslips_generated";
+        for (const slip of generatedPayslips) {
+          // Check for duplicate (same employee + same run)
+          const [dupCheck] = await conn.query(
+            'SELECT payroll_id FROM payroll WHERE staff_employee_id = ? AND payroll_run_id = ? LIMIT 1',
+            [slip.employee_id, payroll_run_id]
+          );
+          if (dupCheck.length > 0) {
+            skipped.push({ row_identifier: slip.employee_id, reason: 'Duplicate payslip for run' });
+            continue;
+          }
+
+          // Insert payroll record
+          const [payrollResult] = await conn.query(
+            `INSERT INTO payroll 
+              (staff_employee_id, payroll_month, payroll_year, payroll_run_id, total_allowances, total_deductions, net_salary)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+              slip.employee_id,
+              payrollRun.payroll_month,
+              payrollRun.payroll_year,
+              payroll_run_id,
+              slip.allowance || 0,
+              slip.total_deductions || 0,
+              slip.net_pay || 0
+            ]
+          );
+
+          // Insert payslip record
+          await conn.query(
+            'INSERT INTO payslip (payroll_payroll_id, status, generated_at) VALUES (?, ?, NOW())',
+            [payrollResult.insertId, 'draft']
+          );
+
+          // Insert allowance line items if any
+          if (slip.allowance > 0) {
+            await conn.query(
+              'INSERT INTO payroll_allowance (payroll_payroll_id, allowance_type, amount) VALUES (?, ?, ?)',
+              [payrollResult.insertId, 'Allowance', slip.allowance]
+            );
+          }
+          if (slip.services_commission > 0) {
+            await conn.query(
+              'INSERT INTO payroll_allowance (payroll_payroll_id, allowance_type, amount) VALUES (?, ?, ?)',
+              [payrollResult.insertId, 'Services Commission', slip.services_commission]
+            );
+          }
+          if (slip.product_commission > 0) {
+            await conn.query(
+              'INSERT INTO payroll_allowance (payroll_payroll_id, allowance_type, amount) VALUES (?, ?, ?)',
+              [payrollResult.insertId, 'Product Commission', slip.product_commission]
+            );
+          }
+          if (slip.credit_commission > 0) {
+            await conn.query(
+              'INSERT INTO payroll_allowance (payroll_payroll_id, allowance_type, amount) VALUES (?, ?, ?)',
+              [payrollResult.insertId, 'Credit Commission', slip.credit_commission]
+            );
+          }
+
+          // Insert deduction line items if any
+          if (slip.cpf_employee_deduction > 0) {
+            await conn.query(
+              'INSERT INTO payroll_deduction (payroll_payroll_id, deduction_type, amount) VALUES (?, ?, ?)',
+              [payrollResult.insertId, 'CPF Employee', slip.cpf_employee_deduction]
+            );
+          }
+          if (slip.loan_deduction > 0) {
+            await conn.query(
+              'INSERT INTO payroll_deduction (payroll_payroll_id, deduction_type, amount) VALUES (?, ?, ?)',
+              [payrollResult.insertId, 'Loan', slip.loan_deduction]
+            );
+          }
+          if (slip.other_deduction > 0) {
+            await conn.query(
+              'INSERT INTO payroll_deduction (payroll_payroll_id, deduction_type, amount) VALUES (?, ?, ?)',
+              [payrollResult.insertId, 'Other', slip.other_deduction]
+            );
+          }
+          if (slip.donation_amount > 0) {
+            await conn.query(
+              'INSERT INTO payroll_deduction (payroll_payroll_id, deduction_type, amount) VALUES (?, ?, ?)',
+              [payrollResult.insertId, slip.donation_fund || 'Donation', slip.donation_amount]
+            );
+          }
+
+          savedPayslips.push(slip);
+        }
+
+        // Update payroll run status
+        await conn.query(
+          'UPDATE payroll_run SET status = ?, updated_at = NOW() WHERE payroll_run_id = ?',
+          ['Payslips Generated', payroll_run_id]
+        );
+
+        await conn.commit();
+      } catch (dbErr) {
+        await conn.rollback();
+        throw dbErr;
+      } finally {
+        conn.release();
+      }
 
       addAudit(
         req.user.email,
@@ -871,157 +993,419 @@ router.post(
   }
 );
 
-// ----- Payslip Retrieval -----
-router.get("/payslips", authenticateToken, allowRoles("Admin", "HR", "Finance", "Staff"), (req, res) => {
-  // HR/Admin sees all payslips, Finance sees only pending/approved ones, Staff sees only their sent payslips
-  let filteredPayslips = payslips;
+// ----- Quick Generate: Create payslips from DB data (no file upload needed) -----
+// Uses base_salary from staff table + CPF/SDL calculation
+router.post("/payslips/quick-generate", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+  try {
+    const { period_month, period_year } = req.body || {};
+    if (!period_month || !period_year) {
+      return res.status(400).json({ message: "period_month and period_year are required" });
+    }
 
-  if (req.user.role === "Finance") {
-    filteredPayslips = payslips.filter(
-      (p) =>
-        p.status === PAYSLIP_STATUSES.FINANCE_PENDING ||
-        p.status === PAYSLIP_STATUSES.FINANCE_APPROVED
+    const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    let numMonth = Number(period_month);
+    if (isNaN(numMonth)) {
+      const idx = monthNames.findIndex(m => m.toLowerCase() === String(period_month).toLowerCase());
+      numMonth = idx >= 0 ? idx + 1 : null;
+    }
+    if (!numMonth || numMonth < 1 || numMonth > 12) {
+      return res.status(400).json({ message: "Invalid period_month" });
+    }
+    const numYear = Number(period_year);
+
+    // Check if payroll run already exists for this period
+    const [existingRun] = await pool.query(
+      'SELECT payroll_run_id FROM payroll_run WHERE payroll_month = ? AND payroll_year = ? LIMIT 1',
+      [numMonth, numYear]
     );
-  } else if (req.user.role === "Staff") {
-    // Staff should only see payslips that have been sent to them
-    filteredPayslips = payslips.filter(
-      (p) => p.staff_email && p.staff_email.toLowerCase() === req.user.email.toLowerCase() && p.status === PAYSLIP_STATUSES.SENT_TO_STAFF
-    );
+    if (existingRun.length > 0) {
+      return res.status(409).json({ message: `A payroll run already exists for ${period_month} ${period_year}. Use the existing run or choose a different period.` });
+    }
+
+    // Get all active staff from DB
+    const [staffList] = await pool.query("SELECT * FROM staff WHERE status = 1");
+    if (staffList.length === 0) {
+      return res.status(400).json({ message: "No active staff found in database" });
+    }
+
+    // Get donation settings from payroll_setting if available
+    let donationConfig = {};
+    try {
+      const [settings] = await pool.query("SELECT setting_key, setting_value FROM payroll_setting WHERE setting_key LIKE 'donation_%'");
+      settings.forEach(s => {
+        try { donationConfig[s.setting_key] = JSON.parse(s.setting_value); } catch (_) { donationConfig[s.setting_key] = s.setting_value; }
+      });
+    } catch (_) { /* no donation settings, that's OK */ }
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      // Create payroll run
+      const [runResult] = await conn.query(
+        'INSERT INTO payroll_run (payroll_month, payroll_year, status, created_by, created_at) VALUES (?, ?, ?, ?, NOW())',
+        [numMonth, numYear, 'Payslips Generated', req.user.userId]
+      );
+      const payrollRunId = runResult.insertId;
+
+      const generated = [];
+      const skipped = [];
+
+      for (const staff of staffList) {
+        const baseSalary = parseFloat(staff.base_salary) || 0;
+        if (baseSalary <= 0) {
+          skipped.push({ employee_id: staff.employee_id, name: staff.name, reason: 'No base salary' });
+          continue;
+        }
+
+        // Calculate CPF
+        const cpfEmployee = baseSalary * payrollRateConfig.employeeCpfRate;
+        const cpfEmployer = baseSalary * payrollRateConfig.employerCpfRate;
+        const sdl = cpfEmployer * payrollRateConfig.sdlRate;
+
+        // Calculate donation based on religion
+        let donationAmount = 0;
+        const religionKey = String(staff.religion || '').toLowerCase().trim();
+        if (payrollRateConfig.donations && payrollRateConfig.donations[religionKey]) {
+          const dc = payrollRateConfig.donations[religionKey];
+          donationAmount = (baseSalary * (Number(dc.rate) || 0)) + (Number(dc.amount) || 0);
+        }
+
+        const totalDeductions = parseFloat((cpfEmployee + donationAmount).toFixed(2));
+        const netSalary = parseFloat((baseSalary - totalDeductions).toFixed(2));
+
+        // Insert payroll record
+        const [payrollResult] = await conn.query(
+          `INSERT INTO payroll 
+            (staff_employee_id, payroll_month, payroll_year, payroll_run_id, total_allowances, total_deductions, net_salary)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [staff.employee_id, numMonth, numYear, payrollRunId, 0, totalDeductions, netSalary]
+        );
+
+        // Insert payslip record
+        await conn.query(
+          'INSERT INTO payslip (payroll_payroll_id, status, generated_at) VALUES (?, ?, NOW())',
+          [payrollResult.insertId, 'draft']
+        );
+
+        // Insert CPF deduction line item
+        if (cpfEmployee > 0) {
+          await conn.query(
+            'INSERT INTO payroll_deduction (payroll_payroll_id, deduction_type, amount) VALUES (?, ?, ?)',
+            [payrollResult.insertId, 'CPF Employee', parseFloat(cpfEmployee.toFixed(2))]
+          );
+        }
+
+        // Insert donation deduction if applicable
+        if (donationAmount > 0) {
+          await conn.query(
+            'INSERT INTO payroll_deduction (payroll_payroll_id, deduction_type, amount) VALUES (?, ?, ?)',
+            [payrollResult.insertId, 'MBMF/SINDA/CDAC', parseFloat(donationAmount.toFixed(2))]
+          );
+        }
+
+        generated.push({
+          employee_id: staff.employee_id,
+          name: staff.name,
+          base_salary: baseSalary,
+          cpf_employee: parseFloat(cpfEmployee.toFixed(2)),
+          cpf_employer: parseFloat(cpfEmployer.toFixed(2)),
+          total_deductions: totalDeductions,
+          net_salary: netSalary
+        });
+      }
+
+      await conn.commit();
+
+      addAudit(req.user.email, `Quick-generated ${generated.length} payslips for ${numMonth}/${numYear}`, 'Payroll');
+
+      res.status(201).json({
+        message: "Payslips generated successfully from database",
+        payroll_run_id: payrollRunId,
+        period: { month: numMonth, year: numYear },
+        generated_count: generated.length,
+        skipped_count: skipped.length,
+        generated,
+        skipped,
+        summary: {
+          total_gross: generated.reduce((sum, p) => sum + p.base_salary, 0).toFixed(2),
+          total_deductions: generated.reduce((sum, p) => sum + p.total_deductions, 0).toFixed(2),
+          total_net: generated.reduce((sum, p) => sum + p.net_salary, 0).toFixed(2)
+        }
+      });
+    } catch (dbErr) {
+      await conn.rollback();
+      throw dbErr;
+    } finally {
+      conn.release();
+    }
+  } catch (err) {
+    res.status(500).json({ message: "Quick generate failed", error: err.message });
   }
-
-  res.json(filteredPayslips);
 });
 
-// ----- Advance Pay Requests -----
+// ----- Payslip Retrieval -----
+router.get("/payslips", authenticateToken, allowRoles("Admin", "HR", "Finance", "Staff"), async (req, res) => {
+  // HR/Admin sees all payslips, Finance sees only pending/approved ones, Staff sees only their sent payslips
+  // Optional query params: ?month=7&year=2026 to filter by period
+  try {
+    let sql = `
+      SELECT
+        ps.payslip_id,
+        ps.status,
+        ps.file_path,
+        ps.generated_at,
+        ps.sent_to_staff_at,
+        ps.updated_at,
+        p.payroll_month AS period_month,
+        p.payroll_year AS period_year,
+        p.net_salary AS net_pay,
+        p.total_allowances,
+        p.total_deductions,
+        s.name AS staff_name,
+        s.employee_id,
+        s.email AS staff_email,
+        s.base_salary,
+        s.department_id
+      FROM payslip ps
+      JOIN payroll p ON ps.payroll_payroll_id = p.payroll_id
+      JOIN staff s ON p.staff_employee_id = s.employee_id
+    `;
+    const params = [];
+    const conditions = [];
+
+    if (req.user.role === "Finance") {
+      conditions.push("ps.status IN (?, ?)");
+      params.push('finance_pending', 'finance_approved');
+    } else if (req.user.role === "Staff") {
+      conditions.push("s.user_user_id = ? AND ps.status = ?");
+      params.push(req.user.userId, 'sent_to_staff');
+    }
+
+    // Month/year filter
+    const filterMonth = req.query.month ? Number(req.query.month) : null;
+    const filterYear = req.query.year ? Number(req.query.year) : null;
+    if (filterMonth && filterYear) {
+      conditions.push("p.payroll_month = ? AND p.payroll_year = ?");
+      params.push(filterMonth, filterYear);
+    } else if (filterYear) {
+      conditions.push("p.payroll_year = ?");
+      params.push(filterYear);
+    }
+
+    if (conditions.length > 0) {
+      sql += " WHERE " + conditions.join(" AND ");
+    }
+
+    sql += " ORDER BY ps.generated_at DESC";
+
+    const [rows] = await pool.query(sql, params);
+    return res.json(rows);
+  } catch (err) {
+    // Fallback to in-memory if DB query fails (e.g. tables not yet created)
+    let filteredPayslips = payslips;
+    if (req.user.role === "Finance") {
+      filteredPayslips = payslips.filter(
+        (p) => p.status === PAYSLIP_STATUSES.FINANCE_PENDING || p.status === PAYSLIP_STATUSES.FINANCE_APPROVED
+      );
+    } else if (req.user.role === "Staff") {
+      filteredPayslips = payslips.filter(
+        (p) => p.staff_email && p.staff_email.toLowerCase() === req.user.email.toLowerCase() && p.status === PAYSLIP_STATUSES.SENT_TO_STAFF
+      );
+    }
+    return res.json(filteredPayslips);
+  }
+});
+
+// [HR BRANCH - Steven] Advance payment endpoints — migrated from in-memory to MySQL
+// Tables: advance_request, finance_request (created by Staff/HR branch)
+// Do not revert to in-memory arrays
 
 function makeId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8).toUpperCase()}`;
 }
 
-// Create an advance request (staff or HR)
 // Create an advance request — only `Staff` may create requests (HR should not create on behalf)
-router.post("/advance-requests", authenticateToken, allowRoles("Staff"), (req, res) => {
+router.post("/advance-requests", authenticateToken, allowRoles("Staff"), async (req, res) => {
   try {
-    const { staff_id, requested_amount, reason } = req.body || {};
-    if (!staff_id || !requested_amount) return res.status(400).json({ message: "staff_id and requested_amount are required" });
+    const { requested_amount, reason } = req.body || {};
+    if (!requested_amount) return res.status(400).json({ message: "requested_amount is required" });
 
-    const reqObj = {
-      request_id: makeId('AR'),
-      staff_id,
-      requested_amount: Number(requested_amount),
-      reason: reason || '',
-      status: 'pending', // pending -> hr_approved -> hr_rejected -> finance_queued -> finance_processed
-      created_at: new Date().toISOString(),
-      created_by: req.user.email,
-      approved_by: null,
-      approved_at: null,
-      hr_comments: null
-    };
+    // Derive staff_employee_id from JWT userId
+    const [staffRows] = await pool.query('SELECT employee_id FROM staff WHERE user_user_id = ? LIMIT 1', [req.user.userId]);
+    if (!staffRows.length) return res.status(400).json({ message: "Staff profile not found for current user" });
+    const staffEmployeeId = staffRows[0].employee_id;
 
-    advanceRequests.push(reqObj);
-    addAudit(req.user.email, `Advance pay request created ${reqObj.request_id} for ${staff_id}`, 'Payroll');
-    res.status(201).json(reqObj);
+    const requestId = makeId('AR');
+    await pool.query(
+      `INSERT INTO advance_request 
+        (request_id, staff_employee_id, requested_amount, reason, status, created_at, created_by, approved_by, approved_at, hr_comments)
+       VALUES (?, ?, ?, ?, 'pending', NOW(), ?, NULL, NULL, NULL)`,
+      [requestId, staffEmployeeId, Number(requested_amount), reason || '', req.user.userId]
+    );
+
+    const [rows] = await pool.query(
+      'SELECT request_id, staff_employee_id AS staff_id, requested_amount, reason, status, created_at, created_by, approved_by, approved_at, hr_comments FROM advance_request WHERE request_id = ? LIMIT 1',
+      [requestId]
+    );
+
+    addAudit(req.user.email, `Advance pay request created ${requestId} for employee ${staffEmployeeId}`, 'Payroll');
+    res.status(201).json(rows[0]);
   } catch (err) {
     res.status(500).json({ message: 'Failed to create advance request', error: err.message });
   }
 });
 
 // List advance requests (HR/Admin see all, Staff see their own)
-router.get("/advance-requests", authenticateToken, allowRoles("Admin", "HR", "Staff"), (req, res) => {
-  if (req.user.role === 'Staff') {
-    const mine = advanceRequests.filter(a => a.created_by && a.created_by.toLowerCase() === req.user.email.toLowerCase());
-    return res.json(mine);
+router.get("/advance-requests", authenticateToken, allowRoles("Admin", "HR", "Staff"), async (req, res) => {
+  try {
+    if (req.user.role === 'Staff') {
+      const [rows] = await pool.query(
+        `SELECT ar.request_id, ar.staff_employee_id AS staff_id, ar.requested_amount, ar.reason, ar.status, ar.created_at, ar.created_by, ar.approved_by, ar.approved_at, ar.hr_comments
+         FROM advance_request ar
+         JOIN staff s ON ar.staff_employee_id = s.employee_id
+         WHERE s.user_user_id = ?
+         ORDER BY ar.created_at DESC`,
+        [req.user.userId]
+      );
+      return res.json(rows);
+    }
+    const [rows] = await pool.query(
+      'SELECT request_id, staff_employee_id AS staff_id, requested_amount, reason, status, created_at, created_by, approved_by, approved_at, hr_comments FROM advance_request ORDER BY created_at DESC'
+    );
+    return res.json(rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch advance requests', error: err.message });
   }
-  return res.json(advanceRequests);
 });
 
-// HR approves an advance request — creates a finance queue item
+// HR approves an advance request — creates a finance queue item (transaction)
 // HR approval: only HR role may approve at HR step (Admin cannot approve here)
-router.put("/advance-requests/:id/approve", authenticateToken, allowRoles("HR"), (req, res) => {
+router.put("/advance-requests/:id/approve", authenticateToken, allowRoles("HR"), async (req, res) => {
+  const conn = await pool.getConnection();
   try {
+    await conn.beginTransaction();
     const id = req.params.id;
-    const reqItem = advanceRequests.find(r => r.request_id === id);
-    if (!reqItem) return res.status(404).json({ message: 'Advance request not found' });
-    if (reqItem.status !== 'pending') return res.status(400).json({ message: `Cannot approve request in status ${reqItem.status}` });
 
-    reqItem.status = 'hr_approved';
-    reqItem.approved_by = req.user.email;
-    reqItem.approved_at = new Date().toISOString();
-    reqItem.hr_comments = req.body?.hr_comments || null;
+    const [advRows] = await conn.query('SELECT * FROM advance_request WHERE request_id = ? LIMIT 1', [id]);
+    if (!advRows.length) { await conn.rollback(); return res.status(404).json({ message: 'Advance request not found' }); }
+    const advRow = advRows[0];
+    if (advRow.status !== 'pending') { await conn.rollback(); return res.status(400).json({ message: `Cannot approve request in status ${advRow.status}` }); }
 
-    // Create finance request entry
-    const fin = {
-      finance_request_id: makeId('FR'),
-      advance_request_id: reqItem.request_id,
-      staff_id: reqItem.staff_id,
-      amount: reqItem.requested_amount,
-      status: 'queued',
-      created_at: new Date().toISOString(),
-      created_by: req.user.email
-    };
-    financeRequests.push(fin);
+    const hrComments = req.body?.hr_comments || null;
+    await conn.query(
+      'UPDATE advance_request SET status = ?, approved_by = ?, approved_at = NOW(), hr_comments = ? WHERE request_id = ? AND status = ?',
+      ['hr_approved', req.user.userId, hrComments, id, 'pending']
+    );
 
-    addAudit(req.user.email, `HR approved advance request ${id} and queued finance request ${fin.finance_request_id}`, 'Payroll');
+    const finId = makeId('FR');
+    await conn.query(
+      `INSERT INTO finance_request 
+        (finance_request_id, advance_request_id, staff_employee_id, amount, status, created_at, created_by, processed_by, processed_at)
+       VALUES (?, ?, ?, ?, 'queued', NOW(), ?, NULL, NULL)`,
+      [finId, id, advRow.staff_employee_id, advRow.requested_amount, req.user.userId]
+    );
 
-    res.json({ message: 'Advance request approved and queued for Finance', request: reqItem, finance_request: fin });
+    await conn.commit();
+
+    const [updatedRows] = await pool.query(
+      'SELECT request_id, staff_employee_id AS staff_id, requested_amount, reason, status, created_at, created_by, approved_by, approved_at, hr_comments FROM advance_request WHERE request_id = ? LIMIT 1',
+      [id]
+    );
+    const [finRows] = await pool.query(
+      'SELECT finance_request_id, advance_request_id, staff_employee_id AS staff_id, amount, status, created_at, created_by, processed_by, processed_at FROM finance_request WHERE finance_request_id = ? LIMIT 1',
+      [finId]
+    );
+
+    addAudit(req.user.email, `HR approved advance request ${id} and queued finance request ${finId}`, 'Payroll');
+    res.json({ message: 'Advance request approved and queued for Finance', request: updatedRows[0], finance_request: finRows[0] });
   } catch (err) {
+    await conn.rollback();
     res.status(500).json({ message: 'Failed to approve advance request', error: err.message });
+  } finally {
+    conn.release();
   }
 });
 
 // HR rejects advance request
-router.put("/advance-requests/:id/reject", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
+router.put("/advance-requests/:id/reject", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
   try {
     const id = req.params.id;
-    const reqItem = advanceRequests.find(r => r.request_id === id);
-    if (!reqItem) return res.status(404).json({ message: 'Advance request not found' });
-    if (reqItem.status !== 'pending') return res.status(400).json({ message: `Cannot reject request in status ${reqItem.status}` });
 
-    reqItem.status = 'hr_rejected';
-    reqItem.approved_by = req.user.email;
-    reqItem.approved_at = new Date().toISOString();
-    reqItem.hr_comments = req.body?.hr_comments || null;
+    const [advRows] = await pool.query('SELECT * FROM advance_request WHERE request_id = ? LIMIT 1', [id]);
+    if (!advRows.length) return res.status(404).json({ message: 'Advance request not found' });
+    if (advRows[0].status !== 'pending') return res.status(400).json({ message: `Cannot reject request in status ${advRows[0].status}` });
+
+    const hrComments = req.body?.hr_comments || null;
+    await pool.query(
+      'UPDATE advance_request SET status = ?, approved_by = ?, approved_at = NOW(), hr_comments = ? WHERE request_id = ? AND status = ?',
+      ['hr_rejected', req.user.userId, hrComments, id, 'pending']
+    );
+
+    const [updatedRows] = await pool.query(
+      'SELECT request_id, staff_employee_id AS staff_id, requested_amount, reason, status, created_at, created_by, approved_by, approved_at, hr_comments FROM advance_request WHERE request_id = ? LIMIT 1',
+      [id]
+    );
 
     addAudit(req.user.email, `HR rejected advance request ${id}`, 'Payroll');
-    res.json({ message: 'Advance request rejected', request: reqItem });
+    res.json({ message: 'Advance request rejected', request: updatedRows[0] });
   } catch (err) {
     res.status(500).json({ message: 'Failed to reject advance request', error: err.message });
   }
 });
 
 // Finance: list queued finance requests
-router.get('/finance-requests', authenticateToken, allowRoles('Finance'), (_req, res) => {
+router.get('/finance-requests', authenticateToken, allowRoles('Finance'), async (_req, res) => {
   try {
-    return res.json(financeRequests);
+    const [rows] = await pool.query(
+      'SELECT finance_request_id, advance_request_id, staff_employee_id AS staff_id, amount, status, created_at, created_by, processed_by, processed_at FROM finance_request ORDER BY created_at DESC'
+    );
+    return res.json(rows);
   } catch (err) {
     return res.status(500).json({ message: 'Failed to fetch finance queue', error: err.message });
   }
 });
 
-// Finance: approve/process a finance request (only Finance role allowed)
-router.put('/finance-requests/:id/approve', authenticateToken, allowRoles('Finance'), (req, res) => {
+// Finance: approve/process a finance request (transaction — only Finance role allowed)
+router.put('/finance-requests/:id/approve', authenticateToken, allowRoles('Finance'), async (req, res) => {
+  const conn = await pool.getConnection();
   try {
+    await conn.beginTransaction();
     const id = req.params.id;
-    const fin = financeRequests.find(f => f.finance_request_id === id);
-    if (!fin) return res.status(404).json({ message: 'Finance request not found' });
-    if (fin.status !== 'queued') return res.status(400).json({ message: `Cannot process request in status ${fin.status}` });
 
-    fin.status = 'processed';
-    fin.processed_by = req.user.email;
-    fin.processed_at = new Date().toISOString();
+    const [finRows] = await conn.query('SELECT * FROM finance_request WHERE finance_request_id = ? LIMIT 1', [id]);
+    if (!finRows.length) { await conn.rollback(); return res.status(404).json({ message: 'Finance request not found' }); }
+    const finRow = finRows[0];
+    if (finRow.status !== 'queued') { await conn.rollback(); return res.status(400).json({ message: `Cannot process request in status ${finRow.status}` }); }
 
-    // update corresponding advance request status
-    const adv = advanceRequests.find(a => a.request_id === fin.advance_request_id);
-    if (adv) {
-      adv.status = 'finance_approved';
-      adv.finance_approved_at = new Date().toISOString();
-      adv.finance_approved_by = req.user.email;
-    }
+    await conn.query(
+      'UPDATE finance_request SET status = ?, processed_by = ?, processed_at = NOW() WHERE finance_request_id = ? AND status = ?',
+      ['processed', req.user.userId, id, 'queued']
+    );
 
-    addAudit(req.user.email, `Finance processed request ${id} for advance ${fin.advance_request_id}`, 'Payroll');
-    return res.json({ message: 'Finance request processed', finance_request: fin, advance_request: adv || null });
+    await conn.query(
+      'UPDATE advance_request SET status = ? WHERE request_id = ?',
+      ['finance_approved', finRow.advance_request_id]
+    );
+
+    await conn.commit();
+
+    const [updatedFin] = await pool.query(
+      'SELECT finance_request_id, advance_request_id, staff_employee_id AS staff_id, amount, status, created_at, created_by, processed_by, processed_at FROM finance_request WHERE finance_request_id = ? LIMIT 1',
+      [id]
+    );
+    const [updatedAdv] = await pool.query(
+      'SELECT request_id, staff_employee_id AS staff_id, requested_amount, reason, status, created_at, created_by, approved_by, approved_at, hr_comments FROM advance_request WHERE request_id = ? LIMIT 1',
+      [finRow.advance_request_id]
+    );
+
+    addAudit(req.user.email, `Finance processed request ${id} for advance ${finRow.advance_request_id}`, 'Payroll');
+    return res.json({ message: 'Finance request processed', finance_request: updatedFin[0], advance_request: updatedAdv[0] || null });
   } catch (err) {
+    await conn.rollback();
     return res.status(500).json({ message: 'Failed to process finance request', error: err.message });
+  } finally {
+    conn.release();
   }
 });
 
@@ -1099,7 +1483,8 @@ router.get("/audit-log", authenticateToken, allowRoles("HR", "Admin"), async (re
       `SELECT al.action, al.entity_type, al.created_at, u.name AS user_name
        FROM audit_log al
        LEFT JOIN user u ON al.user_user_id = u.user_id
-       ORDER BY al.created_at DESC LIMIT 5`
+       WHERE al.entity_type IN ('HR', 'Payroll', 'Staff')
+       ORDER BY al.created_at DESC LIMIT 10`
     );
     return res.json(rows);
   } catch (err) {
