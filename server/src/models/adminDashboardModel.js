@@ -60,8 +60,22 @@ async function getAdminDashboardData() {
 
   const invoiceCountsResult = await safeQuery(
     `SELECT
-      SUM(LOWER(status) IN ('draft', 'sent', 'viewed', 'overdue')) AS activeInvoices,
-      SUM(LOWER(status) = 'overdue') AS overdueInvoices
+      SUM(
+        LOWER(
+          CASE
+            WHEN due_date IS NOT NULL AND due_date < CURDATE() AND LOWER(status) <> 'paid' THEN 'overdue'
+            ELSE status
+          END
+        ) IN ('draft', 'sent', 'viewed', 'overdue')
+      ) AS activeInvoices,
+      SUM(
+        CASE
+          WHEN LOWER(status) = 'overdue'
+            OR (due_date IS NOT NULL AND due_date < CURDATE() AND LOWER(status) <> 'paid')
+          THEN 1
+          ELSE 0
+        END
+      ) AS overdueInvoices
      FROM invoice`,
     [],
     [{ activeInvoices: 0, overdueInvoices: 0 }]
@@ -69,9 +83,18 @@ async function getAdminDashboardData() {
   if (invoiceCountsResult.missing) missingTables.add("invoice");
 
   const statusDistributionResult = await safeQuery(
-    `SELECT status, COUNT(*) AS count
+    `SELECT
+       CASE
+         WHEN due_date IS NOT NULL AND due_date < CURDATE() AND LOWER(status) <> 'paid' THEN 'Overdue'
+         ELSE status
+       END AS status,
+       COUNT(*) AS count
      FROM invoice
-     GROUP BY status
+     GROUP BY
+       CASE
+         WHEN due_date IS NOT NULL AND due_date < CURDATE() AND LOWER(status) <> 'paid' THEN 'Overdue'
+         ELSE status
+       END
      ORDER BY status`,
     [],
     []

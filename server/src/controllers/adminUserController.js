@@ -5,7 +5,12 @@ const {
   findRoleById,
   findUserByEmail,
   findUserById,
+  getDepartments,
+  getRoleDistribution,
   getRoles,
+  getStatusOptions,
+  getUserSummary,
+  listUserActivity,
   listUsers,
   updateUser,
   updateUserPassword,
@@ -24,15 +29,35 @@ function normalizeName(name) {
 }
 
 function toStatus(value) {
-  if (value === 0 || value === "0" || value === false) {
-    return 0;
-  }
+  if (value === false) return 0;
+  if (value === true) return 1;
 
-  if (value === 1 || value === "1" || value === true) {
-    return 1;
+  if (value !== undefined && value !== null && value !== "") {
+    const status = Number(value);
+    if (Number.isInteger(status) && status >= 0) {
+      return status;
+    }
   }
 
   return null;
+}
+
+function statusLabel(status) {
+  const labels = {
+    0: "Disabled",
+    1: "Active",
+    2: "Pending",
+    3: "Inactive"
+  };
+
+  return labels[Number(status)] || `Status ${status}`;
+}
+
+function formatStatusOption(status) {
+  return {
+    value: Number(status),
+    label: statusLabel(status)
+  };
 }
 
 function formatUser(user) {
@@ -45,30 +70,16 @@ function formatUser(user) {
     name: user.name,
     email: user.email,
     status: Number(user.status),
-    statusLabel: Number(user.status) === 1 ? "Active" : "Disabled",
+    statusLabel: statusLabel(user.status),
     roleId: user.roleId,
     roleName: user.roleName,
+    departmentId: user.departmentId,
+    departmentName: user.departmentName,
+    permissions: user.roleDescription ? [user.roleDescription] : [],
+    assignedModules: [],
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
-    lastLogin: null
-  };
-}
-
-function buildSummary(users, roles) {
-  const byRole = roles.reduce((summary, role) => {
-    summary[role.roleName] = 0;
-    return summary;
-  }, {});
-
-  users.forEach((user) => {
-    byRole[user.roleName] = (byRole[user.roleName] || 0) + 1;
-  });
-
-  return {
-    totalUsers: users.length,
-    activeUsers: users.filter((user) => Number(user.status) === 1).length,
-    disabledUsers: users.filter((user) => Number(user.status) === 0).length,
-    roles: byRole
+    lastLogin: user.lastLogin
   };
 }
 
@@ -82,19 +93,47 @@ async function validateRole(roleId) {
 
 async function getUsers(req, res) {
   try {
-    const { search = "", roleId = "", status = "" } = req.query;
-    const roles = await getRoles();
-    const users = await listUsers({
-      search: String(search).trim(),
-      roleId: roleId ? Number(roleId) : null,
-      status: String(status)
-    });
-    const allUsers = await listUsers({});
+    const {
+      search = "",
+      roleId = "",
+      departmentId = "",
+      status = "",
+      lastActiveFrom = "",
+      page = "1",
+      pageSize = "10"
+    } = req.query;
+    const [roles, departments, statusValues, result, summary, recentActivity, accessOverview] =
+      await Promise.all([
+        getRoles(),
+        getDepartments(),
+        getStatusOptions(),
+        listUsers({
+          search: String(search).trim(),
+          roleId: roleId ? Number(roleId) : null,
+          departmentId,
+          status: status === "" ? "" : String(status),
+          lastActiveFrom: String(lastActiveFrom || "").trim(),
+          page: Number(page),
+          pageSize: Number(pageSize)
+        }),
+        getUserSummary(),
+        listUserActivity({ limit: 5 }),
+        getRoleDistribution()
+      ]);
+    const totalPages = Math.max(Math.ceil(result.pagination.total / result.pagination.pageSize), 1);
 
     res.json({
-      users: users.map(formatUser),
+      users: result.users.map(formatUser),
       roles,
-      summary: buildSummary(allUsers, roles)
+      departments,
+      statusOptions: statusValues.map(formatStatusOption),
+      summary,
+      recentActivity,
+      accessOverview,
+      pagination: {
+        ...result.pagination,
+        totalPages
+      }
     });
   } catch (error) {
     res.status(500).json({ message: "Unable to load users." });
@@ -109,7 +148,20 @@ async function getUser(req, res) {
       return res.status(404).json({ message: "User not found." });
     }
 
-    res.json({ user: formatUser(user) });
+    const [roles, departments, statusValues, recentActivity] = await Promise.all([
+      getRoles(),
+      getDepartments(),
+      getStatusOptions(),
+      listUserActivity({ limit: 8, userId: req.params.id })
+    ]);
+
+    res.json({
+      user: formatUser(user),
+      roles,
+      departments,
+      statusOptions: statusValues.map(formatStatusOption),
+      recentActivity
+    });
   } catch (error) {
     res.status(500).json({ message: "Unable to load user details." });
   }
@@ -122,6 +174,7 @@ async function postUser(req, res) {
     const password = String(req.body.password || "");
     const roleId = Number(req.body.roleId);
     const status = toStatus(req.body.status);
+    const departmentId = req.body.departmentId || null;
 
     if (!name) {
       return res.status(400).json({ message: "Name is required." });
@@ -154,7 +207,7 @@ async function postUser(req, res) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await createUser({ name, email, passwordHash, roleId, status });
+    const user = await createUser({ name, email, passwordHash, roleId, status, departmentId });
 
     await logAuditEvent({
       userId: req.user?.userId,
@@ -189,6 +242,7 @@ async function putUser(req, res) {
     const email = normalizeEmail(req.body.email);
     const roleId = Number(req.body.roleId);
     const status = toStatus(req.body.status);
+    const departmentId = req.body.departmentId || null;
 
     if (!name) {
       return res.status(400).json({ message: "Name is required." });
@@ -216,7 +270,7 @@ async function putUser(req, res) {
       return res.status(409).json({ message: "A user with this email already exists." });
     }
 
-    const user = await updateUser(userId, { name, email, roleId, status });
+    const user = await updateUser(userId, { name, email, roleId, status, departmentId });
 
     await logAuditEvent({
       userId: req.user?.userId,

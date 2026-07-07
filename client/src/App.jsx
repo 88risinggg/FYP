@@ -139,6 +139,14 @@ export default function App() {
         }
       />
       <Route
+        path="/admin/*"
+        element={
+          <AdminInvoicingRoute>
+            <AdminInvoicingDashboard />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
         path="/dashboard/invoicing/finance/*"
         element={
           <FinanceInvoicingRoute>

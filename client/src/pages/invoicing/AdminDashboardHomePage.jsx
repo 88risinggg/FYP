@@ -14,7 +14,6 @@ import {
   DollarSign,
   FileCheck2,
   FileText,
-  Hourglass,
   Plus,
   RefreshCw,
   Search,
@@ -22,8 +21,7 @@ import {
   Settings,
   Target,
   TrendingUp,
-  UserPlus,
-  XCircle
+  UserPlus
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -38,10 +36,10 @@ const revenuePeriods = ["This Month", "This Quarter", "This Year", "Last 7 Days"
 
 const statusColors = {
   Paid: "#4FB783",
-  "Awaiting Payment": "#FFB65C",
+  Sent: "#FFB65C",
+  Viewed: "#D97706",
   Overdue: "#F38978",
-  Draft: "#7FA7D8",
-  Cancelled: "#A8A4A2"
+  Draft: "#7FA7D8"
 };
 
 function formatDate(value) {
@@ -307,17 +305,12 @@ export default function AdminDashboardHomePage() {
   }, [dashboard?.invoiceStatusDistribution]);
 
   const invoiceStatusItems = useMemo(() => {
-    const awaitingPayment =
-      Number(statusCountMap["awaiting payment"] || 0) +
-      Number(statusCountMap.sent || 0) +
-      Number(statusCountMap.viewed || 0);
-
     return [
-      { status: "Paid", count: Number(statusCountMap.paid || 0), color: statusColors.Paid },
-      { status: "Awaiting Payment", count: awaitingPayment, color: statusColors["Awaiting Payment"] },
-      { status: "Overdue", count: Number(statusCountMap.overdue || dashboard?.overdueInvoices || 0), color: statusColors.Overdue },
       { status: "Draft", count: Number(statusCountMap.draft || 0), color: statusColors.Draft },
-      { status: "Cancelled", count: Number(statusCountMap.cancelled || 0), color: statusColors.Cancelled }
+      { status: "Sent", count: Number(statusCountMap.sent || 0), color: statusColors.Sent },
+      { status: "Viewed", count: Number(statusCountMap.viewed || 0), color: statusColors.Viewed },
+      { status: "Paid", count: Number(statusCountMap.paid || 0), color: statusColors.Paid },
+      { status: "Overdue", count: Number(statusCountMap.overdue || dashboard?.overdueInvoices || 0), color: statusColors.Overdue }
     ];
   }, [dashboard?.overdueInvoices, statusCountMap]);
 
@@ -328,8 +321,8 @@ export default function AdminDashboardHomePage() {
   const userName = session?.user?.name || "Admin";
   const overdueInvoices = Number(dashboard?.overdueInvoices || 0);
   const draftInvoices = Number(statusCountMap.draft || 0);
-  const cancelledInvoices = Number(statusCountMap.cancelled || 0);
-  const awaitingPayment = invoiceStatusItems.find((item) => item.status === "Awaiting Payment")?.count || 0;
+  const sentInvoices = Number(statusCountMap.sent || 0);
+  const viewedInvoices = Number(statusCountMap.viewed || 0);
 
   const metricCards = [
     {
@@ -365,11 +358,19 @@ export default function AdminDashboardHomePage() {
       available: false
     },
     {
-      label: "Awaiting Payment",
-      value: formatCount(awaitingPayment),
-      note: "Sent/viewed invoices",
-      icon: Hourglass,
+      label: "Sent",
+      value: formatCount(sentInvoices),
+      note: "From invoice status data",
+      icon: Send,
       accent: "#FFB65C",
+      available: true
+    },
+    {
+      label: "Viewed",
+      value: formatCount(viewedInvoices),
+      note: "From invoice status data",
+      icon: FileCheck2,
+      accent: "#D97706",
       available: true
     },
     {
@@ -386,14 +387,6 @@ export default function AdminDashboardHomePage() {
       note: "From invoice status data",
       icon: FileCheck2,
       accent: "#7FA7D8",
-      available: true
-    },
-    {
-      label: "Cancelled",
-      value: formatCount(cancelledInvoices),
-      note: cancelledInvoices > 0 ? "From invoice status data" : "No status data yet",
-      icon: XCircle,
-      accent: "#A8A4A2",
       available: true
     }
   ];

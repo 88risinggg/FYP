@@ -13,8 +13,11 @@ import { getStoredSession } from "../../services/sessionService.js";
 import AdminAuditLogsPage from "./AdminAuditLogsPage.jsx";
 import AdminDashboardHomePage from "./AdminDashboardHomePage.jsx";
 import AdminInvoiceSettingsPage from "./AdminInvoiceSettingsPage.jsx";
+import AdminRoleActionPage from "./AdminRoleActionPage.jsx";
+import AdminRolesPermissionsPage from "./AdminRolesPermissionsPage.jsx";
 import AdminReminderSettingsPage from "./AdminReminderSettingsPage.jsx";
 import AdminUserManagementPage from "./AdminUserManagementPage.jsx";
+import AdminUserProfilePage from "./AdminUserProfilePage.jsx";
 
 const pageTitle = "Automated Invoicing System - Admin Dashboard";
 
@@ -82,6 +85,14 @@ const routeHeadings = {
   "/dashboard/invoicing/admin/users": "Users",
   "/dashboard/invoicing/admin/roles": "Roles",
   "/dashboard/invoicing/admin/invoice-settings": "Invoice Settings",
+  "/dashboard/invoicing/admin/invoice-settings/general": "Invoice Settings",
+  "/dashboard/invoicing/admin/invoice-settings/numbering": "Invoice Settings",
+  "/dashboard/invoicing/admin/invoice-settings/template": "Invoice Settings",
+  "/dashboard/invoicing/admin/invoice-settings/email": "Invoice Settings",
+  "/dashboard/invoicing/admin/invoice-settings/reminders": "Invoice Settings",
+  "/dashboard/invoicing/admin/invoice-settings/payments": "Invoice Settings",
+  "/dashboard/invoicing/admin/invoice-settings/bulk-upload": "Invoice Settings",
+  "/dashboard/invoicing/admin/invoice-settings/automation": "Invoice Settings",
   "/dashboard/invoicing/admin/reminder-settings": "Reminder Settings",
   "/dashboard/invoicing/admin/audit-logs": "Audit Logs",
   "/dashboard/invoicing/admin/reports": "Reports"
@@ -90,13 +101,29 @@ const routeHeadings = {
 export default function AdminInvoicingDashboard() {
   const session = getStoredSession();
   const location = useLocation();
-  const heading = routeHeadings[location.pathname] || "Dashboard";
-  const isUserManagement = location.pathname === "/dashboard/invoicing/admin/users";
-  const isInvoiceSettings = location.pathname === "/dashboard/invoicing/admin/invoice-settings";
-  const isReminderSettings = location.pathname === "/dashboard/invoicing/admin/reminder-settings";
-  const isAuditLogs = location.pathname === "/dashboard/invoicing/admin/audit-logs";
-  const currentPageTitle = isUserManagement
+  const normalizedPath = location.pathname.startsWith("/admin")
+    ? `/dashboard/invoicing/admin${location.pathname.slice("/admin".length)}`
+    : location.pathname;
+  const heading = routeHeadings[normalizedPath] || "Dashboard";
+  const isUserManagement = normalizedPath === "/dashboard/invoicing/admin/users";
+  const isRolesManagement = normalizedPath === "/dashboard/invoicing/admin/roles";
+  const userProfileMatch = normalizedPath.match(
+    /^\/dashboard\/invoicing\/admin\/users\/(\d+)$/
+  );
+  const roleCreateMatch = normalizedPath === "/dashboard/invoicing/admin/roles/create";
+  const roleActionMatch = normalizedPath.match(
+    /^\/dashboard\/invoicing\/admin\/roles\/(\d+)(?:\/(edit|assign-users|duplicate|deactivate))?$/
+  );
+  const invoiceSettingsMatch = normalizedPath.match(
+    /^\/dashboard\/invoicing\/admin\/invoice-settings(?:\/([a-z-]+))?$/
+  );
+  const isInvoiceSettings = Boolean(invoiceSettingsMatch);
+  const isReminderSettings = normalizedPath === "/dashboard/invoicing/admin/reminder-settings";
+  const isAuditLogs = normalizedPath === "/dashboard/invoicing/admin/audit-logs";
+  const currentPageTitle = isUserManagement || userProfileMatch
     ? "Automated Invoicing System - User Management"
+    : isRolesManagement || roleCreateMatch || roleActionMatch
+      ? "Automated Invoicing System - Roles & Permissions"
     : isInvoiceSettings
       ? "Automated Invoicing System - Invoice Settings"
     : isReminderSettings
@@ -113,12 +140,20 @@ export default function AdminInvoicingDashboard() {
       sidebarTitle="Automated Invoicing & Payroll System"
       searchPlaceholder="Search invoices, users, settings..."
     >
-      {location.pathname === "/dashboard/invoicing/admin" ? (
+      {normalizedPath === "/dashboard/invoicing/admin" ? (
         <AdminDashboardHomePage />
       ) : isUserManagement ? (
         <AdminUserManagementPage />
+      ) : userProfileMatch ? (
+        <AdminUserProfilePage userId={userProfileMatch[1]} />
+      ) : isRolesManagement ? (
+        <AdminRolesPermissionsPage />
+      ) : roleCreateMatch ? (
+        <AdminRoleActionPage action="create" />
+      ) : roleActionMatch ? (
+        <AdminRoleActionPage roleId={roleActionMatch[1]} action={roleActionMatch[2] || "view"} />
       ) : isInvoiceSettings ? (
-        <AdminInvoiceSettingsPage />
+        <AdminInvoiceSettingsPage activeTab={invoiceSettingsMatch?.[1] || "general"} />
       ) : isReminderSettings ? (
         <AdminReminderSettingsPage />
       ) : isAuditLogs ? (
