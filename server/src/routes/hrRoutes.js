@@ -1077,9 +1077,9 @@ router.post("/payslips/quick-generate", authenticateToken, allowRoles("Admin", "
         // Insert payroll record
         const [payrollResult] = await conn.query(
           `INSERT INTO payroll 
-            (staff_employee_id, payroll_month, payroll_year, payroll_run_id, total_allowances, total_deductions, net_salary, employee_cpf, employer_cpf)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [staff.employee_id, numMonth, numYear, payrollRunId, 0, totalDeductions, netSalary, parseFloat(cpfEmployee.toFixed(2)), parseFloat(cpfEmployer.toFixed(2))]
+            (staff_employee_id, payroll_month, payroll_year, payroll_run_id, total_allowances, total_deductions, net_salary)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [staff.employee_id, numMonth, numYear, payrollRunId, 0, totalDeductions, netSalary]
         );
 
         // Insert payslip record
@@ -1147,6 +1147,7 @@ router.post("/payslips/quick-generate", authenticateToken, allowRoles("Admin", "
 // ----- Payslip Retrieval -----
 router.get("/payslips", authenticateToken, allowRoles("Admin", "HR", "Finance", "Staff"), async (req, res) => {
   // HR/Admin sees all payslips, Finance sees only pending/approved ones, Staff sees only their sent payslips
+  // Optional query params: ?month=7&year=2026 to filter by period
   try {
     let sql = `
       SELECT
@@ -1171,13 +1172,29 @@ router.get("/payslips", authenticateToken, allowRoles("Admin", "HR", "Finance", 
       JOIN staff s ON p.staff_employee_id = s.employee_id
     `;
     const params = [];
+    const conditions = [];
 
     if (req.user.role === "Finance") {
-      sql += " WHERE ps.status IN (?, ?)";
+      conditions.push("ps.status IN (?, ?)");
       params.push('finance_pending', 'finance_approved');
     } else if (req.user.role === "Staff") {
-      sql += " WHERE s.user_user_id = ? AND ps.status = ?";
+      conditions.push("s.user_user_id = ? AND ps.status = ?");
       params.push(req.user.userId, 'sent_to_staff');
+    }
+
+    // Month/year filter
+    const filterMonth = req.query.month ? Number(req.query.month) : null;
+    const filterYear = req.query.year ? Number(req.query.year) : null;
+    if (filterMonth && filterYear) {
+      conditions.push("p.payroll_month = ? AND p.payroll_year = ?");
+      params.push(filterMonth, filterYear);
+    } else if (filterYear) {
+      conditions.push("p.payroll_year = ?");
+      params.push(filterYear);
+    }
+
+    if (conditions.length > 0) {
+      sql += " WHERE " + conditions.join(" AND ");
     }
 
     sql += " ORDER BY ps.generated_at DESC";
