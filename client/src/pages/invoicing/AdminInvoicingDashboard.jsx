@@ -12,7 +12,9 @@ import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
 import AdminAuditLogsPage from "./AdminAuditLogsPage.jsx";
 import AdminDashboardHomePage from "./AdminDashboardHomePage.jsx";
+import AdminInvoicePerformancePage from "./AdminInvoicePerformancePage.jsx";
 import AdminInvoiceSettingsPage from "./AdminInvoiceSettingsPage.jsx";
+import AdminPaymentReminderSummaryPage from "./AdminPaymentReminderSummaryPage.jsx";
 import AdminRoleActionPage from "./AdminRoleActionPage.jsx";
 import AdminRolesPermissionsPage from "./AdminRolesPermissionsPage.jsx";
 import AdminReminderSettingsPage from "./AdminReminderSettingsPage.jsx";
@@ -29,7 +31,26 @@ const invoicingSidebarSections = [
         label: "Dashboard",
         icon: LayoutDashboard,
         path: "/dashboard/invoicing/admin",
-        end: true
+        end: true,
+        children: [
+          {
+            label: "Overview",
+            path: "/dashboard/invoicing/admin",
+            end: true
+          },
+          {
+            label: "Invoice Performance",
+            path: "/dashboard/invoicing/admin/dashboard/invoice-performance"
+          },
+          {
+            label: "Payment & Reminder Summary",
+            path: "/dashboard/invoicing/admin/dashboard/payment-reminder-summary"
+          },
+          {
+            label: "Validation Summary",
+            path: "/dashboard/invoicing/admin/dashboard/validation-summary"
+          }
+        ]
       },
       {
         label: "Users",
@@ -82,6 +103,15 @@ const invoicingSidebarSections = [
 
 const routeHeadings = {
   "/dashboard/invoicing/admin": "Dashboard",
+  "/dashboard/invoicing/admin/dashboard/invoice-performance": "Invoice Performance",
+  "/dashboard/invoicing/admin/dashboard/payment-reminder-summary": "Payment & Reminder Summary",
+  "/dashboard/invoicing/admin/dashboard/validation-summary": "Validation Summary",
+  "/dashboard/invoicing/admin/invoices": "Invoices",
+  "/dashboard/invoicing/admin/invoices/create": "Create Invoice",
+  "/dashboard/invoicing/admin/customers": "Customers",
+  "/dashboard/invoicing/admin/customers/create": "New Customer",
+  "/dashboard/invoicing/admin/payments": "Payments",
+  "/dashboard/invoicing/admin/payments/record": "Record Payment",
   "/dashboard/invoicing/admin/users": "Users",
   "/dashboard/invoicing/admin/roles": "Roles",
   "/dashboard/invoicing/admin/invoice-settings": "Invoice Settings",
@@ -89,7 +119,6 @@ const routeHeadings = {
   "/dashboard/invoicing/admin/invoice-settings/numbering": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/template": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/email": "Invoice Settings",
-  "/dashboard/invoicing/admin/invoice-settings/reminders": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/payments": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/bulk-upload": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/automation": "Invoice Settings",
@@ -104,7 +133,16 @@ export default function AdminInvoicingDashboard() {
   const normalizedPath = location.pathname.startsWith("/admin")
     ? `/dashboard/invoicing/admin${location.pathname.slice("/admin".length)}`
     : location.pathname;
-  const heading = routeHeadings[normalizedPath] || "Dashboard";
+  const heading = routeHeadings[normalizedPath] ||
+    (normalizedPath.startsWith("/dashboard/invoicing/admin/invoices")
+      ? "Invoices"
+      : normalizedPath.startsWith("/dashboard/invoicing/admin/customers")
+        ? "Customers"
+        : normalizedPath.startsWith("/dashboard/invoicing/admin/payments")
+          ? "Payments"
+          : normalizedPath.startsWith("/dashboard/invoicing/admin/dashboard")
+            ? "Dashboard"
+            : "Dashboard");
   const isUserManagement = normalizedPath === "/dashboard/invoicing/admin/users";
   const isRolesManagement = normalizedPath === "/dashboard/invoicing/admin/roles";
   const userProfileMatch = normalizedPath.match(
@@ -120,10 +158,16 @@ export default function AdminInvoicingDashboard() {
   const isInvoiceSettings = Boolean(invoiceSettingsMatch);
   const isReminderSettings = normalizedPath === "/dashboard/invoicing/admin/reminder-settings";
   const isAuditLogs = normalizedPath === "/dashboard/invoicing/admin/audit-logs";
+  const isInvoicePerformance = normalizedPath === "/dashboard/invoicing/admin/dashboard/invoice-performance";
+  const isPaymentReminderSummary = normalizedPath === "/dashboard/invoicing/admin/dashboard/payment-reminder-summary";
   const currentPageTitle = isUserManagement || userProfileMatch
     ? "Automated Invoicing System - User Management"
     : isRolesManagement || roleCreateMatch || roleActionMatch
       ? "Automated Invoicing System - Roles & Permissions"
+    : isInvoicePerformance
+      ? "Automated Invoicing System - Invoice Performance"
+    : isPaymentReminderSummary
+      ? "Automated Invoicing System - Payment & Reminder Summary"
     : isInvoiceSettings
       ? "Automated Invoicing System - Invoice Settings"
     : isReminderSettings
@@ -138,10 +182,14 @@ export default function AdminInvoicingDashboard() {
       user={session?.user}
       sidebarSections={invoicingSidebarSections}
       sidebarTitle="Automated Invoicing & Payroll System"
-      searchPlaceholder="Search invoices, users, settings..."
+      searchPlaceholder="Search invoices, customers..."
     >
       {normalizedPath === "/dashboard/invoicing/admin" ? (
         <AdminDashboardHomePage />
+      ) : isInvoicePerformance ? (
+        <AdminInvoicePerformancePage />
+      ) : isPaymentReminderSummary ? (
+        <AdminPaymentReminderSummaryPage />
       ) : isUserManagement ? (
         <AdminUserManagementPage />
       ) : userProfileMatch ? (
@@ -160,9 +208,9 @@ export default function AdminInvoicingDashboard() {
         <AdminAuditLogsPage />
       ) : (
         <section>
-          <h2 className="text-2xl font-semibold text-white">{heading}</h2>
+          <h2 className="text-2xl font-semibold text-[#251E1F]">{heading}</h2>
           <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl border-dashed p-8">
-            <p className="text-sm text-[#d8c6e8]">
+            <p className="text-sm text-[#7b6660]">
               This page is reserved for module development.
             </p>
           </div>
