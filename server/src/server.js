@@ -10,3 +10,7 @@ app.listen(port, () => {
   startReminderScheduler();
 });
 
+// Secondary listener for Singpass callback (staging demo requires port 3080)
+const { startCallbackServer } = require("./controllers/singpassController");
+startCallbackServer();
+

@@ -54,6 +54,10 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [showOtpForm, setShowOtpForm] = useState(false);
+  const [otpEmail, setOtpEmail] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
 
   // Handle OAuth callback redirects (Singpass, Google)
   useEffect(() => {
@@ -116,6 +120,56 @@ export default function LoginPage() {
       }
     } catch (err) {
       setError("Google service unavailable. Please try again later.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleOtpRequest(e) {
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
+    try {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+      const response = await fetch(`${API_BASE}/api/auth/otp/request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: otpEmail })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setOtpSent(true);
+      } else {
+        setError(data.message || "Failed to send OTP.");
+      }
+    } catch (err) {
+      setError("OTP service unavailable. Please try again later.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleOtpVerify(e) {
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
+    try {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+      const response = await fetch(`${API_BASE}/api/auth/otp/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: otpEmail, otp: otpCode })
+      });
+      const data = await response.json();
+      if (response.ok && data.token) {
+        saveSession(data.token, data.user, true);
+        startHealthCheck();
+        navigate("/module-selection", { replace: true });
+      } else {
+        setError(data.message || "OTP verification failed.");
+      }
+    } catch (err) {
+      setError("Verification failed. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -678,6 +732,18 @@ export default function LoginPage() {
                   </svg>
                   Log in with Google
                 </motion.button>
+
+                <motion.button
+                  type="button"
+                  onClick={() => setShowOtpForm(true)}
+                  disabled={isLoading}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#C77DFF]/30 bg-[#C77DFF]/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#C77DFF]/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  whileHover={!isLoading && !shouldReduceMotion ? { scale: 1.02 } : undefined}
+                  whileTap={!isLoading && !shouldReduceMotion ? { scale: 0.98 } : undefined}
+                >
+                  <Mail size={18} />
+                  Log in with Email OTP
+                </motion.button>
               </form>
 
               <div className="mt-5 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-slate-400">
@@ -685,6 +751,105 @@ export default function LoginPage() {
                 Role-based access is applied after successful login.
               </div>
             </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Email OTP Modal */}
+      <AnimatePresence>
+        {showOtpForm && (
+          <motion.div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            initial={shouldReduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={shouldReduceMotion ? undefined : { opacity: 0 }}
+            onClick={() => { if (!isLoading) { setShowOtpForm(false); setOtpSent(false); setOtpCode(""); setError(""); } }}
+          >
+            <motion.div
+              className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#1a1a2e] p-6 shadow-2xl"
+              initial={shouldReduceMotion ? false : { scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={shouldReduceMotion ? undefined : { scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-white">
+                {otpSent ? "Enter verification code" : "Sign in with Email"}
+              </h3>
+              <p className="mt-1 text-sm text-slate-400">
+                {otpSent
+                  ? `We sent a 6-digit code to ${otpEmail}`
+                  : "We'll send a one-time code to your email"}
+              </p>
+
+              {!otpSent ? (
+                <form className="mt-5 space-y-4" onSubmit={handleOtpRequest}>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300" htmlFor="otp-email">Email</label>
+                    <div className="mt-2 flex rounded-xl border border-white/10 bg-white/[0.06] focus-within:border-[#C77DFF]/70 focus-within:ring-4 focus-within:ring-[#9D4EDD]/15">
+                      <span className="flex items-center px-3 text-slate-400"><Mail size={18} /></span>
+                      <input
+                        id="otp-email"
+                        type="email"
+                        required
+                        value={otpEmail}
+                        onChange={(e) => setOtpEmail(e.target.value)}
+                        className="min-w-0 flex-1 rounded-r-xl bg-transparent px-1 py-3 pr-4 text-sm text-white outline-none placeholder:text-slate-500"
+                        placeholder="name@example.com"
+                      />
+                    </div>
+                  </div>
+                  {error && <p className="rounded-xl border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm text-red-100">{error}</p>}
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full rounded-xl bg-gradient-to-r from-[#7B2FF7] via-[#9D4EDD] to-[#FF4DDB] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[#9D4EDD]/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isLoading ? "Sending..." : "Send Code"}
+                  </button>
+                </form>
+              ) : (
+                <form className="mt-5 space-y-4" onSubmit={handleOtpVerify}>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300" htmlFor="otp-code">Verification Code</label>
+                    <input
+                      id="otp-code"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      required
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                      className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-white outline-none focus:border-[#C77DFF]/70 focus:ring-4 focus:ring-[#9D4EDD]/15"
+                      placeholder="000000"
+                      autoFocus
+                    />
+                  </div>
+                  {error && <p className="rounded-xl border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm text-red-100">{error}</p>}
+                  <button
+                    type="submit"
+                    disabled={isLoading || otpCode.length < 6}
+                    className="w-full rounded-xl bg-gradient-to-r from-[#7B2FF7] via-[#9D4EDD] to-[#FF4DDB] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[#9D4EDD]/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isLoading ? "Verifying..." : "Verify & Login"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); }}
+                    className="w-full text-center text-sm text-slate-400 hover:text-white"
+                  >
+                    Use a different email
+                  </button>
+                </form>
+              )}
+
+              <button
+                type="button"
+                onClick={() => { setShowOtpForm(false); setOtpSent(false); setOtpCode(""); setError(""); }}
+                className="mt-4 w-full text-center text-sm text-slate-500 hover:text-white"
+              >
+                Cancel
+              </button>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

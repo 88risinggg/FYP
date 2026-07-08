@@ -24,6 +24,7 @@ const adminReminderRoutes = require("./routes/adminReminderRoutes");
 const adminAuditLogRoutes = require("./routes/adminAuditLogRoutes");
 const singpassRoutes = require("./routes/singpassRoutes");
 const googleAuthRoutes = require("./routes/googleAuthRoutes");
+const otpAuthRoutes = require("./routes/otpAuthRoutes");
 const publicRoutes = require("./routes/publicRoutes");
 
 const app = express();
@@ -68,6 +69,7 @@ app.use("/api/admin/invoicing", adminReminderRoutes);
 app.use("/api/admin/invoicing/audit-logs", adminAuditLogRoutes);
 app.use("/api/auth/singpass", singpassRoutes);
 app.use("/api/auth/google", googleAuthRoutes);
+app.use("/api/auth/otp", otpAuthRoutes);
 
 // 404 handler
 app.use((req, res) => {

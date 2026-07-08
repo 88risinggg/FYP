@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import LoginPage from "./pages/LoginPage.jsx";
+import SingpassLoginPage from "./pages/SingpassLoginPage.jsx";
 import ModuleSelectionPage from "./pages/ModuleSelectionPage.jsx";
 import PublicInvoiceViewPage from "./pages/PublicInvoiceViewPage.jsx";
 import AdminInvoicingDashboard from "./pages/invoicing/AdminInvoicingDashboard.jsx";
@@ -132,6 +133,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/singpass-login" element={<SingpassLoginPage />} />
       <Route path="/invoice/view/:invoiceId" element={<PublicInvoiceViewPage />} />
       <Route
         path="/module-selection"
