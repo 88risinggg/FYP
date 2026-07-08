@@ -30,11 +30,46 @@ import { useLocation } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getPayrollRuleConfig } from "../../services/adminPayrollService.js";
+import {
+  createFinancePayrollRunFromStaff,
+  getFinancePayrollRuns,
+  saveFinancePayrollRun
+} from "../../services/financePayrollService.js";
+import {
+  setupModernTreasuryRecipients,
+  submitModernTreasuryTransfer
+} from "../../services/payrollPaymentService.js";
 import { getStoredSession } from "../../services/sessionService.js";
 import {
   createDefaultFinancePayrollConfig,
   resolveFinancePayrollConfig
 } from "../../utils/payrollRules.js";
+
+/*
+===============================================================================
+Finance Payroll Page Guide
+===============================================================================
+Detailed function-by-function notes are in:
+client/src/pages/payroll/FinancePayrollPage.guide.md
+
+1. Page constants and navigation
+2. Demo payroll data and mock-run setup
+3. Date, money and filter helpers
+4. Payroll calculation, CPF/MBMF and compliance helpers
+5. Workflow, Modern Treasury and payment-file helpers
+6. PDF generation helpers
+7. Shared UI components
+8. Dashboard and payroll-run workflow views
+9. Staff payroll detail editor
+10. Payslip approval workflow
+11. Reports and summaries
+12. Main page state and event handlers
+===============================================================================
+*/
+
+// -----------------------------------------------------------------------------
+// 1. Page constants and navigation
+// -----------------------------------------------------------------------------
 
 const pageTitle = "Automated Payroll System - Finance Payroll Dashboard";
 const FINANCE_PAYROLL_STORAGE_KEY = "financePayrollWorkflowStateV3";
@@ -122,6 +157,12 @@ const workflowSteps = [
     details: ["Final PDF payslips generated", "Payslips sent to employees"]
   },
   {
+    key: "statutoryDeductionsLogged",
+    title: "CPF & Deduction Logs",
+    icon: ReceiptText,
+    details: ["CPF payable recorded", "Other deductions logged", "Recovery accounts prepared"]
+  },
+  {
     key: "ledgerRecorded",
     title: "Record in Ledger",
     icon: RefreshCw,
@@ -134,6 +175,10 @@ const workflowSteps = [
     details: ["Payroll reports generated", "Bank payment reconciled"]
   }
 ];
+
+// -----------------------------------------------------------------------------
+// 2. Demo payroll data and mock-run setup
+// -----------------------------------------------------------------------------
 
 const initialPayrollRuns = [
   {
@@ -235,8 +280,8 @@ const initialPayrollRuns = [
           { label: "Employer CPF", rate: "17%", amount: 765 },
           { label: "SDL", rate: "-", amount: 11 }
         ],
-        bankType: "",
-        bankAccount: ""
+        bankType: "UOB",
+        bankAccount: "UOB-721-443210"
       }
     ],
     timeline: [
@@ -335,6 +380,62 @@ const initialPayrollRuns = [
   }
 ];
 
+const demoEmployeeBankDetails = {
+  "EMP-001": { bankType: "DBS", bankAccount: "DBS-001-234567" },
+  "EMP-002": { bankType: "OCBC", bankAccount: "OCBC-501-991122" },
+  "EMP-003": { bankType: "UOB", bankAccount: "UOB-721-443210" }
+};
+
+function normalizeDemoEmployeeBankDetails(employee) {
+  const fallbackBankDetails = demoEmployeeBankDetails[employee?.id];
+
+  if (!fallbackBankDetails) return employee;
+
+  return {
+    ...employee,
+    bankType: employee.bankType || fallbackBankDetails.bankType,
+    bankAccount: employee.bankAccount || fallbackBankDetails.bankAccount
+  };
+}
+
+function createMockFinancePayrollRun(existingRuns = []) {
+  const now = new Date();
+  const runMonth = now.getMonth() + 1;
+  const runYear = now.getFullYear();
+  const duplicateCount = existingRuns.filter((run) => run.month === runMonth && run.year === runYear).length;
+  const runIdSuffix = duplicateCount ? `-MOCK-${duplicateCount + 1}` : "-MOCK";
+  const sourceEmployees = initialPayrollRuns[0].employees;
+
+  return {
+    id: `PAY-${runYear}-${padDatePart(runMonth)}${runIdSuffix}`,
+    month: runMonth,
+    year: runYear,
+    status: "Submitted for Finance Review",
+    submittedBy: "Finance Demo",
+    submittedAt: now.toISOString(),
+    bankReference: "",
+    paymentMethod: "Modern Treasury ACH Sandbox",
+    employees: sourceEmployees.map((employee) =>
+      normalizeDemoEmployeeBankDetails({
+        ...employee,
+        earningItems: (employee.earningItems || []).map((item) => ({ ...item })),
+        deductionItems: (employee.deductionItems || []).map((item) => ({ ...item })),
+        employerItems: (employee.employerItems || []).map((item) => ({ ...item })),
+        financeStatus: "Approved",
+        modernTreasuryCounterpartyId: "",
+        modernTreasuryReceivingAccountId: ""
+      })
+    ),
+    timeline: [
+      {
+        action: "Mock payroll run created for Finance testing",
+        at: now.toISOString(),
+        owner: "Finance Demo"
+      }
+    ]
+  };
+}
+
 function getInitialPayrollRuns() {
   try {
     const stored = localStorage.getItem(FINANCE_PAYROLL_STORAGE_KEY);
@@ -346,7 +447,9 @@ function getInitialPayrollRuns() {
       .filter((run) => run && run.id && run.month && run.year)
       .map((run) => ({
         ...run,
-        employees: Array.isArray(run.employees) ? run.employees : [],
+        employees: Array.isArray(run.employees)
+          ? run.employees.map(normalizeDemoEmployeeBankDetails)
+          : [],
         timeline: Array.isArray(run.timeline) ? run.timeline : []
       }));
 
@@ -355,6 +458,10 @@ function getInitialPayrollRuns() {
     return initialPayrollRuns;
   }
 }
+
+// -----------------------------------------------------------------------------
+// 3. Date, money and filter helpers
+// -----------------------------------------------------------------------------
 
 function formatDateTime(value) {
   if (!value) return "Not completed";
@@ -503,6 +610,10 @@ function getAggregateAccountingTotals(runs = []) {
     }
   );
 }
+
+// -----------------------------------------------------------------------------
+// 4. Payroll calculation, CPF/MBMF and compliance helpers
+// -----------------------------------------------------------------------------
 
 function sumPayrollItems(items = []) {
   return items.reduce((total, item) => total + Number(item.amount || 0), 0);
@@ -934,6 +1045,10 @@ function getComplianceSummary(run) {
   };
 }
 
+// -----------------------------------------------------------------------------
+// 5. Workflow, Modern Treasury and payment-file helpers
+// -----------------------------------------------------------------------------
+
 function canApprovePayrollRun(run) {
   return (run?.employees || []).every((employee) => getEmployeeFinanceStatus(employee) === "Approved");
 }
@@ -944,6 +1059,9 @@ function getCompletedSteps(run) {
     approved: Boolean(run?.approvedAt || run?.paidAt),
     paid: Boolean(run?.paymentFileGeneratedAt && run?.paidAt),
     payslipsSent: Boolean(run?.payslipsSentAt),
+    cpfLogged: Boolean(run?.cpfSubmissionLoggedAt),
+    otherDeductionsLogged: Boolean(run?.otherDeductionsLoggedAt),
+    statutoryDeductionsLogged: Boolean(run?.cpfSubmissionLoggedAt && run?.otherDeductionsLoggedAt),
     ledgerRecorded: Boolean(run?.ledgerRecordedAt || run?.xeroRecordedAt),
     reconciled: Boolean(run?.reconciledAt)
   };
@@ -994,6 +1112,64 @@ function buildPaymentFileRows(run) {
       ])
   ];
 }
+
+function getApprovedPaymentRecipients(run) {
+  return (run?.employees || [])
+    .filter((employee) => getEmployeeFinanceStatus(employee) === "Approved")
+    .map((employee) => ({
+      employeeId: employee.id,
+      employeeName: employee.name,
+      bankName: employee.bankType,
+      bankAccount: employee.bankAccount,
+      amount: getEmployeeNetPay(employee),
+      currency: "SGD",
+      modernTreasuryCounterpartyId: employee.modernTreasuryCounterpartyId,
+      modernTreasuryReceivingAccountId: employee.modernTreasuryReceivingAccountId
+    }));
+}
+
+function getMissingModernTreasuryRecipientCount(run) {
+  return (run?.employees || []).filter(
+    (employee) =>
+      getEmployeeFinanceStatus(employee) === "Approved" &&
+      (!employee.modernTreasuryCounterpartyId || !employee.modernTreasuryReceivingAccountId)
+  ).length;
+}
+
+function getCpfDeductionProcessRows(run) {
+  const totals = getRunTotals(run);
+
+  return [
+    {
+      key: "cpf",
+      label: "CPF Payable",
+      amount: totals.employeeCpf + totals.employerCpf,
+      detail: `Employee ${formatMoney(totals.employeeCpf)} + employer ${formatMoney(totals.employerCpf)}`,
+      status: run?.cpfSubmissionLoggedAt ? "Logged" : "Pending",
+      completedAt: run?.cpfSubmissionLoggedAt
+    },
+    {
+      key: "mbmf",
+      label: "MBMF Payable",
+      amount: totals.employeeMbmf + totals.employerMbmf,
+      detail: `Employee ${formatMoney(totals.employeeMbmf)} + employer ${formatMoney(totals.employerMbmf)}`,
+      status: run?.cpfSubmissionLoggedAt ? "Logged with CPF" : "Pending",
+      completedAt: run?.cpfSubmissionLoggedAt
+    },
+    {
+      key: "otherDeductions",
+      label: "Other Deduction Recovery",
+      amount: totals.otherDeductions,
+      detail: "Loans, salary advances and other recoveries",
+      status: run?.otherDeductionsLoggedAt ? "Logged" : "Pending",
+      completedAt: run?.otherDeductionsLoggedAt
+    }
+  ];
+}
+
+// -----------------------------------------------------------------------------
+// 6. PDF generation helpers
+// -----------------------------------------------------------------------------
 
 function escapePdfText(value) {
   return String(value ?? "")
@@ -1142,6 +1318,10 @@ function downloadPdf(filename, pdfBlob) {
   URL.revokeObjectURL(url);
 }
 
+// -----------------------------------------------------------------------------
+// 7. Shared UI components
+// -----------------------------------------------------------------------------
+
 function PageShell({ heading, children, actions }) {
   return (
     <section>
@@ -1159,18 +1339,29 @@ function PageShell({ heading, children, actions }) {
   );
 }
 
-function ActionButton({ children, disabled = false, icon: Icon, onClick, variant = "primary" }) {
+function ActionButton({ children, disabled = false, disabledReason = "", icon: Icon, onClick, variant = "primary" }) {
+  const isBlockedWithReason = Boolean(disabled && disabledReason);
   const className =
     variant === "secondary"
       ? "inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
       : "neon-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold";
+  const handleClick = () => {
+    if (isBlockedWithReason) {
+      window.alert(disabledReason);
+      return;
+    }
+
+    onClick?.();
+  };
 
   return (
     <button
       type="button"
-      className={`${className} disabled:cursor-not-allowed disabled:opacity-60`}
-      onClick={onClick}
-      disabled={disabled}
+      className={`${className} ${(disabled || isBlockedWithReason) ? "cursor-not-allowed opacity-60" : ""} disabled:cursor-not-allowed disabled:opacity-60`}
+      onClick={handleClick}
+      disabled={disabled && !isBlockedWithReason}
+      aria-disabled={disabled || undefined}
+      title={isBlockedWithReason ? disabledReason : undefined}
     >
       <Icon size={17} />
       {children}
@@ -1608,7 +1799,79 @@ function AccountingImpact({ payrollRuns = [], run }) {
   );
 }
 
-function DashboardView({ onSelectRun, payrollRuns, selectedRun }) {
+function CpfDeductionProcessPanel({ onAdvanceRun, run }) {
+  const rows = getCpfDeductionProcessRows(run);
+  const steps = getCompletedSteps(run);
+
+  return (
+    <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-white">CPF & Deduction Remittance</h3>
+          <p className="mt-1 text-sm text-[#d8c6e8]">
+            Finance records statutory CPF/MBMF payables and employee deduction recoveries before ledger posting.
+          </p>
+        </div>
+        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${steps.statutoryDeductionsLogged ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
+          {steps.statutoryDeductionsLogged ? "Ready for ledger" : "Action required"}
+        </span>
+      </div>
+      <div className="mt-5 grid gap-3 lg:grid-cols-3">
+        {rows.map((row) => (
+          <div key={row.key} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-white">{row.label}</p>
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${row.completedAt ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-white/10 bg-white/[0.06] text-[#d8c6e8]"}`}>
+                {row.status}
+              </span>
+            </div>
+            <p className="mt-3 text-2xl font-semibold text-white">{formatMoney(row.amount)}</p>
+            <p className="mt-2 text-xs leading-5 text-[#d8c6e8]">{row.detail}</p>
+            {row.completedAt ? <p className="mt-2 text-xs text-[#7CFFB2]">Logged {formatDateTime(row.completedAt)}</p> : null}
+          </div>
+        ))}
+      </div>
+      <div className="mt-5 flex flex-wrap gap-3">
+        <ActionButton
+          icon={ReceiptText}
+          variant="secondary"
+          disabled={!steps.paid || steps.cpfLogged}
+          disabledReason={
+            steps.cpfLogged
+              ? "CPF and MBMF payables have already been logged."
+              : !steps.paid
+                ? "Process payroll payment before logging CPF payable."
+                : ""
+          }
+          onClick={() => onAdvanceRun("cpfLogged")}
+        >
+          Log CPF Payable
+        </ActionButton>
+        <ActionButton
+          icon={ListChecks}
+          variant="secondary"
+          disabled={!steps.paid || steps.otherDeductionsLogged}
+          disabledReason={
+            steps.otherDeductionsLogged
+              ? "Other deduction recoveries have already been logged."
+              : !steps.paid
+                ? "Process payroll payment before logging other deductions."
+                : ""
+          }
+          onClick={() => onAdvanceRun("otherDeductionsLogged")}
+        >
+          Log Other Deductions
+        </ActionButton>
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// 8. Dashboard and payroll-run workflow views
+// -----------------------------------------------------------------------------
+
+function DashboardView({ onAdvanceRun, onSelectRun, payrollRuns, selectedRun }) {
   const [statsFilter, setStatsFilter] = useState(() => getDefaultStatsFilter(selectedRun));
   const filteredRuns = getFilteredPayrollRuns(payrollRuns, statsFilter);
   const stats = getAggregatePayrollStats(filteredRuns);
@@ -1696,27 +1959,110 @@ function DashboardView({ onSelectRun, payrollRuns, selectedRun }) {
       </div>
 
       <div className="mt-6">
+        <CpfDeductionProcessPanel run={selectedRun} onAdvanceRun={onAdvanceRun} />
+      </div>
+
+      <div className="mt-6">
         <AccountingImpact payrollRuns={payrollRuns} run={selectedRun} />
       </div>
     </PageShell>
   );
 }
 
-function PayrollRunsView({ onAdvanceRun, onGeneratePaymentFile, onSelectRun, payrollRuns, selectedRun }) {
+function PayrollRunsView({
+  onAdvanceRun,
+  onCreateDbRun,
+  onCreateMockRun,
+  onGeneratePaymentFile,
+  onSelectRun,
+  onSetupModernTreasuryRecipients,
+  onSubmitModernTreasuryTransfer,
+  paymentError,
+  paymentProcessing,
+  payrollRuns,
+  recipientSetupProcessing,
+  selectedRun
+}) {
   const steps = getCompletedSteps(selectedRun);
   const canApprove = canApprovePayrollRun(selectedRun);
   const exceptionCount = getRunExceptions(selectedRun).length;
+  const approvedStaffCount = selectedRun.employees.filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length;
+  const missingRecipientCount = getMissingModernTreasuryRecipientCount(selectedRun);
+  const getApprovalBlockedReason = () => {
+    if (steps.approved) return "This payroll run has already been approved.";
+    if (!steps.reviewed) return "Review Payroll must be completed before approval.";
+    if (!canApprove) {
+      return `All staff must be approved before payroll approval. Current approved staff: ${approvedStaffCount}/${selectedRun.employees.length}.`;
+    }
+
+    return "";
+  };
+  const getPaymentPdfBlockedReason = () => {
+    if (selectedRun.paymentFileGeneratedAt) return "The payment PDF has already been generated for this payroll run.";
+    if (!steps.approved) return "Approve the payroll run before generating the payment PDF.";
+
+    return "";
+  };
+  const getPaymentSubmissionBlockedReason = () => {
+    if (paymentProcessing) return "Modern Treasury submission is already in progress.";
+    if (steps.paid) return "Payment has already been processed for this payroll run.";
+    if (!selectedRun.paymentFileGeneratedAt) return "Generate the payment PDF before submitting to Modern Treasury.";
+    if (missingRecipientCount) return `Set up Modern Treasury recipients first. Missing recipient setup: ${missingRecipientCount} approved staff.`;
+
+    return "";
+  };
+  const getRecipientSetupBlockedReason = () => {
+    if (recipientSetupProcessing) return "Modern Treasury recipient setup is already in progress.";
+    if (!steps.approved) return "Approve the payroll run before setting up Modern Treasury recipients.";
+    if (!approvedStaffCount) return "At least one staff payment must be approved before recipient setup.";
+    return "";
+  };
+  const getPayslipBlockedReason = () => {
+    if (steps.payslipsSent) return "Payslips have already been sent for this payroll run.";
+    if (!steps.paid) return "Process or manually confirm payment before sending payslips.";
+
+    return "";
+  };
+  const getLedgerBlockedReason = () => {
+    if (steps.ledgerRecorded) return "This payroll run has already been recorded in the ledger.";
+    if (!steps.payslipsSent) return "Send payslips before recording the payroll run in the ledger.";
+    if (!steps.statutoryDeductionsLogged) return "Log CPF payable and other deductions before recording the payroll run in the ledger.";
+
+    return "";
+  };
+  const getReconciliationBlockedReason = () => {
+    if (steps.reconciled) return "This payroll run has already been reconciled.";
+    if (!steps.ledgerRecorded) return "Record the payroll run in the ledger before reconciliation.";
+
+    return "";
+  };
 
   return (
     <PageShell
       heading="Payroll Runs"
       actions={
         <>
+          <ActionButton icon={Users} variant="secondary" onClick={onCreateDbRun}>
+            Staff DB Run
+          </ActionButton>
+          <ActionButton icon={Plus} variant="secondary" onClick={onCreateMockRun}>
+            Mock Run
+          </ActionButton>
           <RunSelector payrollRuns={payrollRuns} selectedRunId={selectedRun?.id} onSelectRun={onSelectRun} />
-          <ActionButton icon={ClipboardCheck} disabled={steps.reviewed} onClick={() => onAdvanceRun("reviewed")}>
+          <ActionButton
+            icon={ClipboardCheck}
+            disabled={steps.reviewed}
+            disabledReason={steps.reviewed ? "This payroll run has already been reviewed." : ""}
+            onClick={() => onAdvanceRun("reviewed")}
+          >
             Review Payroll
           </ActionButton>
-          <ActionButton icon={ShieldCheck} disabled={!steps.reviewed || !canApprove || steps.approved} onClick={() => onAdvanceRun("approved")}>
+          <ActionButton
+            icon={ShieldCheck}
+            disabled={!steps.reviewed || !canApprove || steps.approved}
+            disabledReason={getApprovalBlockedReason()}
+            onClick={() => onAdvanceRun("approved")}
+          >
             Approve
           </ActionButton>
         </>
@@ -1770,30 +2116,97 @@ function PayrollRunsView({ onAdvanceRun, onGeneratePaymentFile, onSelectRun, pay
             <div className="flex items-center justify-between gap-3">
               <span className="text-[#d8c6e8]">Staff approvals</span>
               <span className="font-semibold text-white">
-                {selectedRun.employees.filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length}/{selectedRun.employees.length}
+                {approvedStaffCount}/{selectedRun.employees.length}
               </span>
             </div>
           </div>
           <div className="mt-5 grid gap-3">
-            <ActionButton icon={Download} disabled={!steps.approved || selectedRun.paymentFileGeneratedAt} onClick={onGeneratePaymentFile}>
+            <ActionButton
+              icon={Download}
+              disabled={!steps.approved || selectedRun.paymentFileGeneratedAt}
+              disabledReason={getPaymentPdfBlockedReason()}
+              onClick={onGeneratePaymentFile}
+            >
               Generate Payment PDF
             </ActionButton>
-            <ActionButton icon={Banknote} disabled={!selectedRun.paymentFileGeneratedAt || steps.paid} onClick={() => onAdvanceRun("paid")}>
-              Confirm Payment
+            <ActionButton
+              icon={Users}
+              variant="secondary"
+              disabled={!steps.approved || !approvedStaffCount || recipientSetupProcessing}
+              disabledReason={getRecipientSetupBlockedReason()}
+              onClick={onSetupModernTreasuryRecipients}
+            >
+              {recipientSetupProcessing ? "Setting up..." : missingRecipientCount ? "Setup MT Recipients" : "Refresh MT Recipients"}
             </ActionButton>
-            <ActionButton icon={Mail} variant="secondary" disabled={!steps.paid || steps.payslipsSent} onClick={() => onAdvanceRun("payslipsSent")}>
+            <ActionButton
+              icon={paymentProcessing ? Loader2 : Banknote}
+              disabled={!selectedRun.paymentFileGeneratedAt || steps.paid || paymentProcessing || Boolean(missingRecipientCount)}
+              disabledReason={getPaymentSubmissionBlockedReason()}
+              onClick={onSubmitModernTreasuryTransfer}
+            >
+              {paymentProcessing ? "Submitting..." : "Submit Modern Treasury"}
+            </ActionButton>
+            <ActionButton
+              icon={Banknote}
+              variant="secondary"
+              disabled={!selectedRun.paymentFileGeneratedAt || steps.paid || paymentProcessing}
+              disabledReason={getPaymentSubmissionBlockedReason()}
+              onClick={() => onAdvanceRun("paid")}
+            >
+              Manual Confirm
+            </ActionButton>
+            <ActionButton
+              icon={Mail}
+              variant="secondary"
+              disabled={!steps.paid || steps.payslipsSent}
+              disabledReason={getPayslipBlockedReason()}
+              onClick={() => onAdvanceRun("payslipsSent")}
+            >
               Send Payslips
             </ActionButton>
-            <ActionButton icon={Building2} variant="secondary" disabled={!steps.payslipsSent || steps.ledgerRecorded} onClick={() => onAdvanceRun("ledgerRecorded")}>
+            <ActionButton
+              icon={Building2}
+              variant="secondary"
+              disabled={!steps.payslipsSent || !steps.statutoryDeductionsLogged || steps.ledgerRecorded}
+              disabledReason={getLedgerBlockedReason()}
+              onClick={() => onAdvanceRun("ledgerRecorded")}
+            >
               Record in Ledger
             </ActionButton>
-            <ActionButton icon={FileBarChart} variant="secondary" disabled={!steps.ledgerRecorded || steps.reconciled} onClick={() => onAdvanceRun("reconciled")}>
+            <ActionButton
+              icon={FileBarChart}
+              variant="secondary"
+              disabled={!steps.ledgerRecorded || steps.reconciled}
+              disabledReason={getReconciliationBlockedReason()}
+              onClick={() => onAdvanceRun("reconciled")}
+            >
               Reconcile
             </ActionButton>
           </div>
           <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.04] p-4 text-sm text-[#d8c6e8]">
             Bank reference: <span className="font-semibold text-white">{selectedRun.bankReference || "Pending payment"}</span>
           </div>
+          {selectedRun.paymentProvider ? (
+            <div className="mt-3 rounded-xl border border-[#7CFFB2]/20 bg-[#7CFFB2]/10 p-4 text-sm text-[#CFFFE0]">
+              {selectedRun.paymentProvider} submitted {selectedRun.paymentTransferCount || 0} transfer(s).
+            </div>
+          ) : null}
+          {selectedRun.simulationAccount ? (
+            <div className="mt-3 rounded-xl border border-[#7DD3FC]/20 bg-[#7DD3FC]/10 p-4 text-sm text-[#D9F3FF]">
+              <p className="font-semibold text-white">{selectedRun.simulationAccount.accountName}</p>
+              <p className="mt-1">
+                Balance: {formatMoney(selectedRun.simulationAccount.balanceBefore)} to {formatMoney(selectedRun.simulationAccount.balanceAfter)}
+              </p>
+            </div>
+          ) : null}
+          <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] p-4 text-sm text-[#d8c6e8]">
+            Modern Treasury recipients: <span className="font-semibold text-white">{approvedStaffCount - missingRecipientCount}/{approvedStaffCount}</span>
+          </div>
+          {paymentError ? (
+            <div className="mt-3 rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-4 text-sm text-[#FFE2B8]">
+              {paymentError}
+            </div>
+          ) : null}
         </aside>
       </div>
 
@@ -1804,9 +2217,17 @@ function PayrollRunsView({ onAdvanceRun, onGeneratePaymentFile, onSelectRun, pay
       <div className="mt-6">
         <AuditTrailPanel run={selectedRun} />
       </div>
+
+      <div className="mt-6">
+        <CpfDeductionProcessPanel run={selectedRun} onAdvanceRun={onAdvanceRun} />
+      </div>
     </PageShell>
   );
 }
+
+// -----------------------------------------------------------------------------
+// 9. Staff payroll detail editor
+// -----------------------------------------------------------------------------
 
 function PayrollItemList({ items, title }) {
   return (
@@ -1848,8 +2269,14 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
     const itemLabel = window.prompt(`${label} name`);
     if (!itemLabel) return;
 
-    const amount = Number(window.prompt(`${label} amount`, "0") || 0);
-    const rate = window.prompt(`${label} rate`, "-") || "-";
+    const amountInput = window.prompt(`${label} amount`, "0");
+    if (amountInput === null) return;
+
+    const rateInput = window.prompt(`${label} rate`, "-");
+    if (rateInput === null) return;
+
+    const amount = Number(amountInput || 0);
+    const rate = rateInput || "-";
 
     setDraft((current) => ({
       ...current,
@@ -1997,6 +2424,10 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
     </div>
   );
 }
+
+// -----------------------------------------------------------------------------
+// 10. Payslip approval workflow
+// -----------------------------------------------------------------------------
 
 function getAuthHeaders(token) {
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -2244,6 +2675,10 @@ function PayslipsApprovalView() {
     </PageShell>
   );
 }
+
+// -----------------------------------------------------------------------------
+// 11. Staff details, reports and summaries
+// -----------------------------------------------------------------------------
 
 function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, payrollRuns, selectedRun }) {
   const [statsFilter, setStatsFilter] = useState(() => getDefaultStatsFilter(selectedRun));
@@ -2810,15 +3245,42 @@ function PayrollSummariesView({ payrollRuns, selectedRun }) {
   );
 }
 
-function FinancePayrollContent({ onAdvanceRun, onGeneratePaymentFile, onSelectRun, onUpdateEmployee, onUpdateStaffStatus, pathname, payrollRuns, selectedRun }) {
+// -----------------------------------------------------------------------------
+// 12. View router
+// -----------------------------------------------------------------------------
+
+function FinancePayrollContent({
+  onAdvanceRun,
+  onCreateDbRun,
+  onCreateMockRun,
+  onGeneratePaymentFile,
+  onSelectRun,
+  onSetupModernTreasuryRecipients,
+  onSubmitModernTreasuryTransfer,
+  onUpdateEmployee,
+  onUpdateStaffStatus,
+  pathname,
+  paymentError,
+  paymentProcessing,
+  payrollRuns,
+  recipientSetupProcessing,
+  selectedRun
+}) {
   if (pathname.endsWith("/payroll-runs")) {
     return (
       <PayrollRunsView
         payrollRuns={payrollRuns}
         selectedRun={selectedRun}
         onAdvanceRun={onAdvanceRun}
+        onCreateDbRun={onCreateDbRun}
+        onCreateMockRun={onCreateMockRun}
         onGeneratePaymentFile={onGeneratePaymentFile}
         onSelectRun={onSelectRun}
+        onSetupModernTreasuryRecipients={onSetupModernTreasuryRecipients}
+        onSubmitModernTreasuryTransfer={onSubmitModernTreasuryTransfer}
+        paymentError={paymentError}
+        paymentProcessing={paymentProcessing}
+        recipientSetupProcessing={recipientSetupProcessing}
       />
     );
   }
@@ -2839,12 +3301,17 @@ function FinancePayrollContent({ onAdvanceRun, onGeneratePaymentFile, onSelectRu
 
   return (
     <DashboardView
+      onAdvanceRun={onAdvanceRun}
       payrollRuns={payrollRuns}
       selectedRun={selectedRun}
       onSelectRun={onSelectRun}
     />
   );
 }
+
+// -----------------------------------------------------------------------------
+// 13. Main page state and event handlers
+// -----------------------------------------------------------------------------
 
 export default function FinancePayrollPage() {
   const session = getStoredSession();
@@ -2854,12 +3321,57 @@ export default function FinancePayrollPage() {
   const [selectedRunId, setSelectedRunId] = useState(() => getInitialPayrollRuns()[0]?.id || "");
   const [payrollRuleConfig, setPayrollRuleConfig] = useState(createDefaultFinancePayrollConfig);
   const [configError, setConfigError] = useState("");
+  const [financeDbError, setFinanceDbError] = useState("");
+  const [financeDbLoaded, setFinanceDbLoaded] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [recipientSetupProcessing, setRecipientSetupProcessing] = useState(false);
 
   adminCpfConfiguration = payrollRuleConfig;
 
   useEffect(() => {
     localStorage.setItem(FINANCE_PAYROLL_STORAGE_KEY, JSON.stringify(payrollRuns));
   }, [payrollRuns]);
+
+  useEffect(() => {
+    async function loadFinancePayrollRuns() {
+      try {
+        setFinanceDbError("");
+        const data = await getFinancePayrollRuns();
+        const dbRuns = Array.isArray(data.runs) ? data.runs : [];
+
+        if (dbRuns.length) {
+          setPayrollRuns(dbRuns);
+          setSelectedRunId(dbRuns[0].id);
+        }
+        setFinanceDbLoaded(true);
+      } catch (error) {
+        setFinanceDbError(`Finance payroll DB unavailable. Using local demo data. ${error.message}`);
+      }
+    }
+
+    loadFinancePayrollRuns();
+  }, []);
+
+  useEffect(() => {
+    if (!financeDbLoaded) return undefined;
+
+    const timer = setTimeout(() => {
+      payrollRuns
+        .filter((run) => run.source === "staff_db")
+        .forEach((run) => {
+          saveFinancePayrollRun(run).catch((error) => {
+            setFinanceDbError(`Finance payroll DB save failed. ${error.message}`);
+          });
+        });
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [financeDbLoaded, payrollRuns]);
+
+  useEffect(() => {
+    setPaymentError("");
+  }, [selectedRunId]);
 
   useEffect(() => {
     async function loadPayrollRuleConfig() {
@@ -2922,6 +3434,32 @@ export default function FinancePayrollPage() {
     }));
   };
 
+  const handleCreateMockRun = () => {
+    const mockRun = createMockFinancePayrollRun(payrollRuns);
+
+    setPayrollRuns((currentRuns) => [mockRun, ...currentRuns]);
+    setSelectedRunId(mockRun.id);
+    setPaymentError("");
+  };
+
+  const handleCreateDbRun = async () => {
+    try {
+      setPaymentError("");
+      setFinanceDbError("");
+      const now = new Date();
+      const result = await createFinancePayrollRunFromStaff({
+        month: now.getMonth() + 1,
+        year: now.getFullYear()
+      });
+
+      setPayrollRuns((currentRuns) => [result.run, ...currentRuns]);
+      setSelectedRunId(result.run.id);
+      setFinanceDbLoaded(true);
+    } catch (error) {
+      setFinanceDbError(error.message || "Failed to create Finance payroll run from staff database.");
+    }
+  };
+
   const handleGeneratePaymentFile = () => {
     const now = new Date().toISOString();
     const totals = getRunTotals(selectedRun);
@@ -2952,8 +3490,107 @@ export default function FinancePayrollPage() {
     }));
   };
 
+  const handleSubmitModernTreasuryTransfer = async () => {
+    const approvedRecipients = getApprovedPaymentRecipients(selectedRun);
+
+    if (!approvedRecipients.length) {
+      setPaymentError("No approved staff payments are ready for bank transfer.");
+      return;
+    }
+
+    setPaymentProcessing(true);
+    setPaymentError("");
+
+    try {
+      const result = await submitModernTreasuryTransfer({
+        payrollRunId: selectedRun.id,
+        payrollPeriod: formatPayrollPeriod(selectedRun),
+        employees: approvedRecipients
+      });
+
+      updateSelectedRun((run) => ({
+        ...run,
+        bankReference: result.batchReference,
+        paidAt: result.submittedAt,
+        paymentProvider: result.provider,
+        paymentTransferCount: result.transferCount,
+        paymentTransfers: result.transfers,
+        simulationAccount: result.simulationAccount,
+        status: "Payment Processed",
+        timeline: [
+          createTimelineEntry(`Modern Treasury payroll batch submitted: ${result.batchReference}`, result.provider),
+          ...(run.timeline || [])
+        ]
+      }));
+    } catch (error) {
+      setPaymentError(error.message || "Modern Treasury submission failed.");
+    } finally {
+      setPaymentProcessing(false);
+    }
+  };
+
+  const handleSetupModernTreasuryRecipients = async () => {
+    const approvedRecipients = getApprovedPaymentRecipients(selectedRun);
+
+    if (!approvedRecipients.length) {
+      setPaymentError("No approved staff payments are ready for Modern Treasury recipient setup.");
+      return;
+    }
+
+    setRecipientSetupProcessing(true);
+    setPaymentError("");
+
+    try {
+      const result = await setupModernTreasuryRecipients({
+        forceNew: true,
+        payrollRunId: selectedRun.id,
+        employees: approvedRecipients
+      });
+      const recipientByEmployeeId = new Map(
+        result.recipients.map((recipient) => [recipient.employeeId, recipient])
+      );
+
+      updateSelectedRun((run) => ({
+        ...run,
+        employees: run.employees.map((employee) => {
+          const recipient = recipientByEmployeeId.get(employee.id);
+
+          if (!recipient) return employee;
+
+          return {
+            ...employee,
+            modernTreasuryCounterpartyId: recipient.modernTreasuryCounterpartyId,
+            modernTreasuryReceivingAccountId: recipient.modernTreasuryReceivingAccountId
+          };
+        }),
+        timeline: [
+          createTimelineEntry(`Modern Treasury recipients set up for ${result.recipientCount} staff`, result.provider),
+          ...(run.timeline || [])
+        ]
+      }));
+    } catch (error) {
+      setPaymentError(error.message || "Modern Treasury recipient setup failed.");
+    } finally {
+      setRecipientSetupProcessing(false);
+    }
+  };
+
   const handleAdvanceRun = (stepKey) => {
     const now = new Date().toISOString();
+    const defaultBankReference = `GIRO-${selectedRun.year}${String(selectedRun.month).padStart(2, "0")}-${Math.floor(1000 + Math.random() * 9000)}`;
+    let manualBankReference = "";
+
+    if (stepKey === "paid") {
+      const bankReferenceInput = window.prompt(
+        "Bank confirmation reference",
+        selectedRun.bankReference || defaultBankReference
+      );
+
+      if (bankReferenceInput === null) return;
+
+      manualBankReference = bankReferenceInput.trim() || selectedRun.bankReference || defaultBankReference;
+    }
+
     const transitions = {
       reviewed: {
         status: "Exceptions Reviewed",
@@ -2969,10 +3606,7 @@ export default function FinancePayrollPage() {
         status: "Payment Processed",
         fields: {
           paidAt: now,
-          bankReference:
-            window.prompt("Bank confirmation reference", selectedRun.bankReference || `GIRO-${selectedRun.year}${String(selectedRun.month).padStart(2, "0")}-${Math.floor(1000 + Math.random() * 9000)}`) ||
-            selectedRun.bankReference ||
-            `GIRO-${selectedRun.year}${String(selectedRun.month).padStart(2, "0")}-${Math.floor(1000 + Math.random() * 9000)}`
+          bankReference: manualBankReference
         },
         timeline: createTimelineEntry("Payment file uploaded and confirmed")
       },
@@ -2980,6 +3614,16 @@ export default function FinancePayrollPage() {
         status: "Payslips Sent",
         fields: { payslipsSentAt: now },
         timeline: createTimelineEntry("Final payslips sent to employees", "System")
+      },
+      cpfLogged: {
+        status: "CPF Payable Logged",
+        fields: { cpfSubmissionLoggedAt: now },
+        timeline: createTimelineEntry("CPF and MBMF payables logged for remittance")
+      },
+      otherDeductionsLogged: {
+        status: "Deductions Logged",
+        fields: { otherDeductionsLoggedAt: now },
+        timeline: createTimelineEntry("Other deduction recoveries logged")
       },
       ledgerRecorded: {
         status: "Recorded in Internal Ledger",
@@ -3042,6 +3686,11 @@ export default function FinancePayrollPage() {
           Admin payroll settings could not be loaded. Finance is using fallback payroll rules. {configError}
         </div>
       ) : null}
+      {financeDbError ? (
+        <div className="mb-4 rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-4 text-sm text-[#FFE2B8]">
+          {financeDbError}
+        </div>
+      ) : null}
       {selectedRun ? (
         <FinancePayrollContent
           heading={heading}
@@ -3049,10 +3698,17 @@ export default function FinancePayrollPage() {
           payrollRuns={payrollRuns}
           selectedRun={selectedRun}
           onAdvanceRun={handleAdvanceRun}
+          onCreateDbRun={handleCreateDbRun}
+          onCreateMockRun={handleCreateMockRun}
           onGeneratePaymentFile={handleGeneratePaymentFile}
           onSelectRun={setSelectedRunId}
+          onSetupModernTreasuryRecipients={handleSetupModernTreasuryRecipients}
+          onSubmitModernTreasuryTransfer={handleSubmitModernTreasuryTransfer}
           onUpdateEmployee={handleUpdateEmployee}
           onUpdateStaffStatus={handleUpdateStaffStatus}
+          paymentError={paymentError}
+          paymentProcessing={paymentProcessing}
+          recipientSetupProcessing={recipientSetupProcessing}
         />
       ) : (
         <PageShell heading={heading}>

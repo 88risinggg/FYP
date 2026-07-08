@@ -35,6 +35,8 @@ const payrollRoutes = require("./routes/payrollRoutes");
 const adminUserRoutes = require("./routes/adminUserRoutes");
 const adminReminderRoutes = require("./routes/adminReminderRoutes");
 const adminAuditLogRoutes = require("./routes/adminAuditLogRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const financePayrollRoutes = require("./routes/financePayrollRoutes");
 
 const app = express();
 const allowedOrigins = [
@@ -54,6 +56,8 @@ app.use("/api/payroll/admin", adminPayrollRoutes);
 // [HR BRANCH - Steven] HR module routes — payslip approval workflow, payroll management
 app.use("/api/hr", hrRoutes);
 app.use("/api/staff", staffRoutes);
+app.use("/api/payroll/finance", financePayrollRoutes);
+app.use("/api/payroll/payments", paymentRoutes);
 app.use("/api/payroll", payrollRoutes);
 app.use("/api/admin/users", adminUserRoutes);
 app.use("/api/admin/invoicing", adminReminderRoutes);
