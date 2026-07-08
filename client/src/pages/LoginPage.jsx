@@ -121,57 +121,6 @@ export default function LoginPage() {
     }
   }
 
-  async function handleTelegramLogin() {
-    setError("");
-    setIsLoading(true);
-    try {
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-      const response = await fetch(`${API_BASE}/api/auth/telegram/init`);
-      const data = await response.json();
-
-      if (!data.deepLink) {
-        setError("Telegram login not configured.");
-        setIsLoading(false);
-        return;
-      }
-
-      // Open the Telegram deep link
-      window.open(data.deepLink, "_blank");
-
-      // Poll for completion
-      const pollInterval = setInterval(async () => {
-        try {
-          const pollRes = await fetch(`${API_BASE}/api/auth/telegram/poll?token=${data.loginToken}`);
-          const pollData = await pollRes.json();
-
-          if (pollData.status === "success") {
-            clearInterval(pollInterval);
-            saveSession(pollData.token, pollData.user, true);
-            startHealthCheck();
-            navigate("/module-selection", { replace: true });
-          } else if (pollData.status === "expired") {
-            clearInterval(pollInterval);
-            setError("Telegram login expired. Please try again.");
-            setIsLoading(false);
-          }
-        } catch {
-          clearInterval(pollInterval);
-          setError("Telegram login failed.");
-          setIsLoading(false);
-        }
-      }, 2000);
-
-      // Stop polling after 3 minutes
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        setIsLoading(false);
-      }, 180000);
-    } catch (err) {
-      setError("Telegram service unavailable. Please try again later.");
-      setIsLoading(false);
-    }
-  }
-
   function openLogin() {
     setError("");
     setIsLoginOpen(true);
@@ -728,20 +677,6 @@ export default function LoginPage() {
                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                   </svg>
                   Log in with Google
-                </motion.button>
-
-                <motion.button
-                  type="button"
-                  onClick={handleTelegramLogin}
-                  disabled={isLoading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#2AABEE]/30 bg-[#2AABEE]/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#2AABEE]/20 disabled:cursor-not-allowed disabled:opacity-50"
-                  whileHover={!isLoading && !shouldReduceMotion ? { scale: 1.02 } : undefined}
-                  whileTap={!isLoading && !shouldReduceMotion ? { scale: 0.98 } : undefined}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.88.03-.24.37-.49 1.02-.74 3.98-1.73 6.64-2.88 7.97-3.44 3.8-1.58 4.59-1.86 5.1-1.87.11 0 .37.03.54.17.14.12.18.28.2.45-.01.06.01.24 0 .38z" fill="#2AABEE"/>
-                  </svg>
-                  Log in with Telegram
                 </motion.button>
               </form>
 
