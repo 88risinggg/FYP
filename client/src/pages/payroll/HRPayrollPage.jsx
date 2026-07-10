@@ -1,10 +1,14 @@
 import {
   AlertCircle,
+  BarChart3,
   Bell,
+  Calendar,
+  CalendarCheck,
   CheckCircle2,
   ClipboardList,
   FileUp,
   FileText,
+  HandCoins,
   Send,
   Loader2,
   LayoutDashboard,
@@ -16,6 +20,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
+import HRLeaveManagement from "./HRLeaveManagement.jsx";
+import HRLoanManagement from "./HRLoanManagement.jsx";
+import HRPublicHolidays from "./HRPublicHolidays.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
 import * as XLSX from "xlsx";
 
@@ -172,9 +179,23 @@ const payrollSidebarSections = [
     ]
   },
   {
+    label: "Leave",
+    items: [
+      { label: "Leave Management", icon: CalendarCheck, path: "/dashboard/payroll/hr/leave-management" },
+      { label: "Public Holidays", icon: Calendar, path: "/dashboard/payroll/hr/public-holidays" }
+    ]
+  },
+  {
+    label: "Loans",
+    items: [
+      { label: "Loan Management", icon: HandCoins, path: "/dashboard/payroll/hr/loans" }
+    ]
+  },
+  {
     label: null,
     items: [
       { label: "Payslips", icon: FileText, path: "/dashboard/payroll/hr/payslips" },
+      { label: "Reports", icon: BarChart3, path: "/dashboard/payroll/hr/reports" },
       { label: "Notifications", icon: Bell, path: "/dashboard/payroll/hr/notifications" }
     ]
   }
@@ -185,6 +206,9 @@ const routeHeadings = {
   "/dashboard/payroll/hr/staff": "Staff Records",
   "/dashboard/payroll/hr/upload": "Payroll Upload",
   "/dashboard/payroll/hr/payroll-runs": "Payroll Runs",
+  "/dashboard/payroll/hr/leave-management": "Leave Management",
+  "/dashboard/payroll/hr/public-holidays": "Public Holidays",
+  "/dashboard/payroll/hr/loans": "Loan Management",
   "/dashboard/payroll/hr/payslips": "Payslips",
   "/dashboard/payroll/hr/notifications": "Notifications"
 };
@@ -1502,9 +1526,13 @@ function PayrollUploadView() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [result, setResult] = useState(null);
+  const [validationResult, setValidationResult] = useState(null);
+  const [selectedRows, setSelectedRows] = useState(new Set());
+  const [committing, setCommitting] = useState(false);
+  const [commitResult, setCommitResult] = useState(null);
   const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
+  const [alert, setAlert] = useState(null);
 
   const handleUnauthorized = () => {
     localStorage.removeItem("authToken");
@@ -1512,58 +1540,81 @@ function PayrollUploadView() {
     navigate("/login", { state: { from: location, message: "Session expired." } });
   };
 
-  const handleUpload = async (event) => {
+  // Step 1: Validate (preview only, no DB writes)
+  const handleValidate = async (event) => {
     event.preventDefault();
-    if (!selectedFile) {
-      setError("Choose a CSV or XLSX file first.");
-      return;
-    }
-    if (!/\.(csv|xlsx|xls)$/i.test(selectedFile.name)) {
-      setError("Invalid file format. Please upload a CSV or XLSX file.");
-      return;
-    }
-
+    if (!selectedFile) { setError("Choose a CSV or XLSX file first."); return; }
+    if (!/\.(csv|xlsx|xls)$/i.test(selectedFile.name)) { setError("Invalid file format. Please upload a CSV or XLSX file."); return; }
     if (selectedFile.size > 5 * 1024 * 1024) setWarning("Large file detected. Processing may take a moment.");
 
     let progressTimer;
     try {
-      setUploading(true);
-      setUploadProgress(10);
-      setError("");
-      setResult(null);
-      progressTimer = window.setInterval(() => {
-        setUploadProgress((current) => Math.min(current + 15, 90));
-      }, 120);
+      setUploading(true); setUploadProgress(10); setError(""); setValidationResult(null); setCommitResult(null); setAlert(null);
+      progressTimer = window.setInterval(() => { setUploadProgress((c) => Math.min(c + 15, 90)); }, 120);
 
       const formData = new FormData();
       formData.append("file", selectedFile);
 
-      const response = await fetch(`${API_BASE_URL}/api/hr/employees/upload?create=true`, {
-        method: "POST",
-        headers: {
-          ...getAuthHeaders(session?.token)
-        },
-        body: formData
+      const response = await fetch(`${API_BASE_URL}/api/hr/employees/validate`, {
+        method: "POST", headers: { ...getAuthHeaders(session?.token) }, body: formData
       });
-
       if (response.status === 401 || response.status === 403) return handleUnauthorized();
-
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(body.message || "Upload failed");
-      }
+      if (!response.ok) throw new Error(body.message || "Validation failed");
 
-      setResult(body);
-      setSelectedFile(null);
+      setValidationResult(body);
+      // Auto-select all "new" rows
+      const newIds = new Set((body.rows || []).filter(r => r.status === "new").map(r => r.id));
+      setSelectedRows(newIds);
       setUploadProgress(100);
+
+      // Show alert if duplicates or errors found
+      if (body.summary?.duplicates > 0 || body.summary?.errors > 0) {
+        setAlert({ severity: body.summary.errors > 0 ? "error" : "warning", title: "Issues Found", message: `${body.summary.duplicates} duplicate(s), ${body.summary.errors} error(s) detected. Review below before confirming.` });
+      }
     } catch (err) {
-      setError(err.name === 'TypeError' ? "Network error: Server unreachable" : err.message || "Upload failed");
+      setError(err.name === "TypeError" ? "Network error: Server unreachable" : err.message || "Validation failed");
     } finally {
       if (progressTimer) window.clearInterval(progressTimer);
-      setUploading(false);
-      window.setTimeout(() => setUploadProgress(0), 500);
-      window.setTimeout(() => setWarning(""), 5000);
+      setUploading(false); window.setTimeout(() => setUploadProgress(0), 500); window.setTimeout(() => setWarning(""), 5000);
     }
+  };
+
+  // Step 2: Commit selected rows
+  const handleCommit = async () => {
+    if (selectedRows.size === 0) { setError("Select at least one row to commit."); return; }
+    try {
+      setCommitting(true); setError("");
+      const response = await fetch(`${API_BASE_URL}/api/hr/employees/commit`, {
+        method: "POST",
+        headers: { ...getAuthHeaders(session?.token), "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: validationResult.sessionId, selectedRowIds: [...selectedRows] })
+      });
+      if (response.status === 401 || response.status === 403) return handleUnauthorized();
+      const body = await response.json().catch(() => ({}));
+      if (response.status === 409) {
+        setAlert({ severity: "error", title: "Concurrent Conflict", message: `${body.conflicts?.length || 0} record(s) were added by another user. Please re-upload to refresh.` });
+        setCommitResult(body);
+      } else if (!response.ok) {
+        throw new Error(body.message || "Commit failed");
+      } else {
+        setCommitResult(body);
+        setAlert({ severity: "success", title: "Records Created", message: `${body.totalCreated} record(s) saved successfully.` });
+        setValidationResult(null); setSelectedFile(null);
+      }
+    } catch (err) {
+      setError(err.message || "Commit failed");
+    } finally {
+      setCommitting(false);
+    }
+  };
+
+  const toggleRow = (id) => {
+    setSelectedRows(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  };
+  const toggleAll = () => {
+    const selectableIds = (validationResult?.rows || []).filter(r => r.status === "new").map(r => r.id);
+    setSelectedRows(prev => prev.size === selectableIds.length ? new Set() : new Set(selectableIds));
   };
 
   return (
@@ -1585,8 +1636,8 @@ function PayrollUploadView() {
         </div>
       </div>
 
-      <form onSubmit={handleUpload} className="neon-glass neon-border rounded-2xl p-6">
-        <label htmlFor="hr-sample-upload" className="block text-sm font-medium text-white">Choose sample file</label>
+      <form onSubmit={handleValidate} className="neon-glass neon-border rounded-2xl p-6">
+        <label htmlFor="hr-sample-upload" className="block text-sm font-medium text-white">Choose file to preview</label>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
           <input
             id="hr-sample-upload"
@@ -1595,7 +1646,7 @@ function PayrollUploadView() {
             onChange={(event) => {
               setSelectedFile(event.target.files?.[0] || null);
               setUploadProgress(0);
-              setError("");
+              setError(""); setValidationResult(null); setCommitResult(null); setAlert(null);
             }}
             className="block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white file:mr-4 file:rounded-md file:border-0 file:bg-[#C77DFF] file:px-4 file:py-2 file:text-white hover:file:bg-[#b866ff]"
           />
@@ -1605,9 +1656,9 @@ function PayrollUploadView() {
             className="inline-flex items-center justify-center rounded-lg bg-[#C77DFF] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#b866ff] disabled:cursor-not-allowed disabled:opacity-70"
           >
             {uploading ? (
-              <span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" size={16} /> Uploading</span>
+              <span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" size={16} /> Validating...</span>
             ) : (
-              "Upload and Create"
+              "Upload & Preview"
             )}
           </button>
         </div>
@@ -1638,65 +1689,84 @@ function PayrollUploadView() {
         </div>
       ) : null}
 
-      {result?.rowErrors?.length > 0 ? (
-        <div className="neon-glass neon-border rounded-2xl border-red-500/40 p-6 text-white shadow-[0_0_30px_rgba(239,68,68,0.08)]">
-          <div className="flex items-center gap-2 text-red-200">
-            <AlertCircle size={18} />
-            <span className="font-semibold text-sm">Validation Errors Found</span>
+      {/* Alert notification popup */}
+      {alert ? (
+        <div className={`rounded-2xl border p-4 text-sm flex items-start gap-3 ${
+          alert.severity === "error" ? "border-red-500/40 bg-red-500/10 text-red-200" :
+          alert.severity === "warning" ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-200" :
+          "border-emerald-400/40 bg-emerald-400/10 text-emerald-200"
+        }`}>
+          <AlertCircle size={18} className="mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold">{alert.title}</p>
+            <p className="mt-1 text-xs opacity-80">{alert.message}</p>
           </div>
-          <div className="mt-3 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-            <ul className="space-y-1 text-xs text-red-100/80">
-              {result.rowErrors.map((err, idx) => (
-                <li key={idx} className="flex gap-2"><span className="font-mono text-red-300">Row {err.row}:</span> {err.error}</li>
-              ))}
-            </ul>
-          </div>
+          <button onClick={() => setAlert(null)} className="text-white/50 hover:text-white text-lg leading-none">&times;</button>
         </div>
       ) : null}
 
-      {result ? (
+      {/* Preview table with status badges */}
+      {validationResult ? (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-6 text-white shadow-[0_0_30px_rgba(16,185,129,0.08)]">
-            <div className="flex items-center gap-2 text-emerald-200">
-              <CheckCircle2 size={18} />
-              <span className="font-semibold">Upload processed</span>
-            </div>
-            <div className="mt-4 grid gap-3 text-sm text-emerald-50 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">Rows: <span className="font-semibold text-white">{result.processedRows ?? 0}</span></div>
-              <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">Created: <span className="font-semibold text-white">{result.createdCount ?? 0}</span></div>
-              <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">Missing headers: <span className="font-semibold text-white">{result.missingHeaders?.length ?? 0}</span></div>
-              <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">Row errors: <span className="font-semibold text-white">{result.rowErrors?.length ?? 0}</span></div>
+          <div className="rounded-2xl border border-white/10 bg-[#120022]/90 p-4">
+            <div className="flex flex-wrap items-center gap-4 text-sm">
+              <span className="text-white font-semibold">Preview:</span>
+              <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-emerald-300">{validationResult.summary?.valid ?? 0} New</span>
+              <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-yellow-300">{validationResult.summary?.duplicates ?? 0} Duplicates</span>
+              <span className="rounded-full bg-red-500/20 px-3 py-1 text-red-300">{validationResult.summary?.errors ?? 0} Errors</span>
+              <span className="text-[#d8c6e8]">Total: {validationResult.summary?.total ?? 0}</span>
             </div>
           </div>
-
-          <div className="rounded-2xl border border-white/10 bg-[#120022]/90 p-6 shadow-[0_0_30px_rgba(199,125,255,0.08)]">
-            <h4 className="text-base font-semibold text-white">Sample rows preview</h4>
-            <div className="mt-4 overflow-x-auto text-sm">
+          <div className="rounded-2xl border border-white/10 bg-[#120022]/90 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-base font-semibold text-white">Records Preview</h4>
+              <span className="text-xs text-[#d8c6e8]">{selectedRows.size} selected</span>
+            </div>
+            <div className="overflow-x-auto text-sm max-h-[400px] overflow-y-auto">
               <table className="min-w-full text-left">
-                <thead className="border-b border-white/10 text-[#d8c6e8]">
+                <thead className="border-b border-white/10 text-[#d8c6e8] sticky top-0 bg-[#120022]">
                   <tr>
-                    <th className="px-3 py-2">employee_id</th>
-                    <th className="px-3 py-2">name</th>
-                    <th className="px-3 py-2">email</th>
-                    <th className="px-3 py-2">phone</th>
-                    <th className="px-3 py-2">status</th>
-                    <th className="px-3 py-2">department_id</th>
+                    <th className="px-2 py-2"><input type="checkbox" checked={selectedRows.size === (validationResult.rows || []).filter(r => r.status === "new").length && selectedRows.size > 0} onChange={toggleAll} className="accent-[#C77DFF]" /></th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Row</th>
+                    <th className="px-3 py-2">Employee ID</th>
+                    <th className="px-3 py-2">Name</th>
+                    <th className="px-3 py-2">Email</th>
+                    <th className="px-3 py-2">Issues</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(result.sampleRows || []).map((row, index) => (
-                    <tr key={index} className="border-b border-white/5 text-white">
-                      <td className="px-3 py-2 text-[#d8c6e8]">{displayCellValue(row.employee_id)}</td>
-                      <td className="px-3 py-2">{displayCellValue(row.name)}</td>
-                      <td className="px-3 py-2 text-[#d8c6e8]">{displayCellValue(row.email)}</td>
-                      <td className="px-3 py-2 text-[#d8c6e8]">{displayCellValue(row.phone)}</td>
-                      <td className="px-3 py-2 text-[#d8c6e8]">{displayCellValue(row.status)}</td>
-                      <td className="px-3 py-2 text-[#d8c6e8]">{displayCellValue(row.department_id)}</td>
+                  {(validationResult.rows || []).map((row) => (
+                    <tr key={row.id} className={`border-b border-white/5 ${row.status === "error" ? "bg-red-500/5" : row.status === "duplicate" ? "bg-yellow-500/5" : ""}`}>
+                      <td className="px-2 py-2">{row.status === "new" ? <input type="checkbox" checked={selectedRows.has(row.id)} onChange={() => toggleRow(row.id)} className="accent-[#C77DFF]" /> : <span className="text-white/20">—</span>}</td>
+                      <td className="px-3 py-2"><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${row.status === "new" ? "bg-emerald-500/20 text-emerald-300" : row.status === "duplicate" ? "bg-yellow-500/20 text-yellow-300" : "bg-red-500/20 text-red-300"}`}>{row.status}</span></td>
+                      <td className="px-3 py-2 text-[#d8c6e8] text-xs">{row.rowNumber}</td>
+                      <td className="px-3 py-2 text-white">{displayCellValue(row.data?.employee_id)}</td>
+                      <td className="px-3 py-2 text-white">{displayCellValue(row.data?.name)}</td>
+                      <td className="px-3 py-2 text-[#d8c6e8]">{displayCellValue(row.data?.email)}</td>
+                      <td className="px-3 py-2 text-xs text-red-300/80">{row.errors?.length > 0 ? row.errors.join("; ") : "—"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            <div className="mt-5 flex items-center gap-4">
+              <button onClick={handleCommit} disabled={committing || selectedRows.size === 0} className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50">
+                {committing ? <span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" size={16} /> Saving...</span> : `Confirm & Save ${selectedRows.size} Record(s)`}
+              </button>
+              <button onClick={() => { setValidationResult(null); setSelectedFile(null); setAlert(null); }} className="text-sm text-[#d8c6e8] hover:text-white">Cancel</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {commitResult ? (
+        <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-6 text-white">
+          <div className="flex items-center gap-2 text-emerald-200"><CheckCircle2 size={18} /><span className="font-semibold">Commit Complete</span></div>
+          <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+            <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">Created: <span className="font-semibold text-white">{commitResult.totalCreated ?? 0}</span></div>
+            <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">Skipped: <span className="font-semibold text-white">{commitResult.totalSkipped ?? 0}</span></div>
+            <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">Conflicts: <span className="font-semibold text-white">{commitResult.conflicts?.length ?? 0}</span></div>
           </div>
         </div>
       ) : null}
@@ -2829,6 +2899,18 @@ export default function HRPayrollPage() {
 
     if (activePath === "/dashboard/payroll/hr/notifications") {
       return <NotificationsView />;
+    }
+
+    if (activePath === "/dashboard/payroll/hr/leave-management") {
+      return <HRLeaveManagement />;
+    }
+
+    if (activePath === "/dashboard/payroll/hr/public-holidays") {
+      return <HRPublicHolidays />;
+    }
+
+    if (activePath === "/dashboard/payroll/hr/loans") {
+      return <HRLoanManagement />;
     }
 
     return (

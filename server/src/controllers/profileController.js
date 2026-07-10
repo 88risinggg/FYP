@@ -338,10 +338,293 @@ async function deleteProfileByUserId(req, res) {
   }
 }
 
+/* ─── EMERGENCY CONTACTS ─── */
+// [STAFF BRANCH - Steven] Emergency contact CRUD
+
+/**
+ * Ensure the emergency_contact table exists.
+ */
+async function ensureEmergencyContactTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS emergency_contact (
+      contact_id INT AUTO_INCREMENT PRIMARY KEY,
+      employee_id INT NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      relationship VARCHAR(50) NOT NULL,
+      phone VARCHAR(20) NOT NULL,
+      is_primary TINYINT(1) DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_id) REFERENCES staff(employee_id) ON DELETE CASCADE
+    )
+  `);
+}
+
+// Run table creation on module load (silent fail if already exists)
+ensureEmergencyContactTable().catch(err => {
+  console.error("Emergency contact table init error:", err.message);
+});
+
+/**
+ * Helper: resolve employee_id from a userId (staff.user_user_id)
+ */
+async function resolveEmployeeId(userId) {
+  const [rows] = await pool.query(
+    "SELECT employee_id FROM staff WHERE user_user_id = ? LIMIT 1",
+    [userId]
+  );
+  return rows.length > 0 ? rows[0].employee_id : null;
+}
+
+/**
+ * GET /api/profile/:userId/emergency-contacts
+ * Staff: can only view their own. HR/Admin: can view any. Finance: 403.
+ */
+async function getEmergencyContacts(req, res) {
+  const { userId } = req.params;
+  const role = req.user.role;
+
+  // Finance cannot access
+  if (role === "Finance") {
+    return res.status(403).json({ message: "Access denied" });
+  }
+
+  // Staff can only view their own
+  if (role === "Staff" && String(req.user.userId) !== String(userId)) {
+    return res.status(403).json({ message: "Access denied" });
+  }
+
+  try {
+    const employeeId = await resolveEmployeeId(userId);
+    if (!employeeId) {
+      return res.json([]);
+    }
+
+    const [rows] = await pool.query(
+      "SELECT * FROM emergency_contact WHERE employee_id = ? ORDER BY is_primary DESC, created_at ASC",
+      [employeeId]
+    );
+
+    return res.json(rows);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Failed to fetch emergency contacts" });
+  }
+}
+
+/**
+ * POST /api/profile/:userId/emergency-contacts
+ * Staff only — add emergency contact to own profile.
+ */
+async function addEmergencyContact(req, res) {
+  const { userId } = req.params;
+  const role = req.user.role;
+
+  // Only Staff can add emergency contacts
+  if (role !== "Staff") {
+    return res.status(403).json({ message: "Access denied" });
+  }
+
+  // Must be their own profile
+  if (String(req.user.userId) !== String(userId)) {
+    return res.status(403).json({ message: "Access denied" });
+  }
+
+  const { name, relationship, phone, is_primary } = req.body;
+
+  // Validate required fields
+  if (!name || !name.trim()) {
+    return res.status(400).json({ message: "name is required" });
+  }
+  if (!relationship || !relationship.trim()) {
+    return res.status(400).json({ message: "relationship is required" });
+  }
+  if (!phone || !phone.trim()) {
+    return res.status(400).json({ message: "phone is required" });
+  }
+
+  // Phone format validation
+  const phoneRegex = /^[0-9+\-() ]{6,20}$/;
+  if (!phoneRegex.test(phone)) {
+    return res.status(400).json({ message: "Invalid phone format" });
+  }
+
+  try {
+    const employeeId = await resolveEmployeeId(req.user.userId);
+    if (!employeeId) {
+      return res.status(404).json({ message: "Staff profile not found" });
+    }
+
+    // Check max 3 contacts
+    const [countRows] = await pool.query(
+      "SELECT COUNT(*) AS cnt FROM emergency_contact WHERE employee_id = ?",
+      [employeeId]
+    );
+    if (countRows[0].cnt >= 3) {
+      return res.status(400).json({ message: "Maximum 3 emergency contacts allowed" });
+    }
+
+    // If is_primary, unset others first
+    const primaryVal = is_primary ? 1 : 0;
+    if (primaryVal === 1) {
+      await pool.query(
+        "UPDATE emergency_contact SET is_primary = 0 WHERE employee_id = ?",
+        [employeeId]
+      );
+    }
+
+    // Insert
+    const [result] = await pool.query(
+      "INSERT INTO emergency_contact (employee_id, name, relationship, phone, is_primary) VALUES (?, ?, ?, ?, ?)",
+      [employeeId, name.trim(), relationship.trim(), phone.trim(), primaryVal]
+    );
+
+    // Return created contact
+    const [newRows] = await pool.query(
+      "SELECT * FROM emergency_contact WHERE contact_id = ?",
+      [result.insertId]
+    );
+
+    return res.status(201).json(newRows[0]);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Failed to add emergency contact" });
+  }
+}
+
+/**
+ * PUT /api/profile/:userId/emergency-contacts/:contactId
+ * Staff only — update own emergency contact.
+ */
+async function updateEmergencyContact(req, res) {
+  const { userId, contactId } = req.params;
+  const role = req.user.role;
+
+  // Only Staff can update
+  if (role !== "Staff") {
+    return res.status(403).json({ message: "Access denied" });
+  }
+
+  // Must be their own profile
+  if (String(req.user.userId) !== String(userId)) {
+    return res.status(403).json({ message: "Access denied" });
+  }
+
+  const { name, relationship, phone, is_primary } = req.body;
+
+  // Phone format validation (if provided)
+  if (phone) {
+    const phoneRegex = /^[0-9+\-() ]{6,20}$/;
+    if (!phoneRegex.test(phone)) {
+      return res.status(400).json({ message: "Invalid phone format" });
+    }
+  }
+
+  try {
+    const employeeId = await resolveEmployeeId(req.user.userId);
+    if (!employeeId) {
+      return res.status(404).json({ message: "Staff profile not found" });
+    }
+
+    // Verify ownership
+    const [contactRows] = await pool.query(
+      "SELECT employee_id FROM emergency_contact WHERE contact_id = ?",
+      [contactId]
+    );
+    if (contactRows.length === 0) {
+      return res.status(404).json({ message: "Emergency contact not found" });
+    }
+    if (contactRows[0].employee_id !== employeeId) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // If setting as primary, unset others first
+    const primaryVal = is_primary ? 1 : 0;
+    if (primaryVal === 1) {
+      await pool.query(
+        "UPDATE emergency_contact SET is_primary = 0 WHERE employee_id = ?",
+        [employeeId]
+      );
+    }
+
+    // Update
+    await pool.query(
+      "UPDATE emergency_contact SET name = ?, relationship = ?, phone = ?, is_primary = ? WHERE contact_id = ?",
+      [
+        name ? name.trim() : contactRows[0].name,
+        relationship ? relationship.trim() : contactRows[0].relationship,
+        phone ? phone.trim() : contactRows[0].phone,
+        primaryVal,
+        contactId
+      ]
+    );
+
+    // Return updated
+    const [updatedRows] = await pool.query(
+      "SELECT * FROM emergency_contact WHERE contact_id = ?",
+      [contactId]
+    );
+
+    return res.json(updatedRows[0]);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Failed to update emergency contact" });
+  }
+}
+
+/**
+ * DELETE /api/profile/:userId/emergency-contacts/:contactId
+ * Staff only — delete own emergency contact.
+ */
+async function deleteEmergencyContact(req, res) {
+  const { userId, contactId } = req.params;
+  const role = req.user.role;
+
+  // Only Staff can delete
+  if (role !== "Staff") {
+    return res.status(403).json({ message: "Access denied" });
+  }
+
+  // Must be their own profile
+  if (String(req.user.userId) !== String(userId)) {
+    return res.status(403).json({ message: "Access denied" });
+  }
+
+  try {
+    const employeeId = await resolveEmployeeId(req.user.userId);
+    if (!employeeId) {
+      return res.status(404).json({ message: "Staff profile not found" });
+    }
+
+    // Verify ownership
+    const [contactRows] = await pool.query(
+      "SELECT employee_id FROM emergency_contact WHERE contact_id = ?",
+      [contactId]
+    );
+    if (contactRows.length === 0) {
+      return res.status(404).json({ message: "Emergency contact not found" });
+    }
+    if (contactRows[0].employee_id !== employeeId) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // Delete
+    await pool.query("DELETE FROM emergency_contact WHERE contact_id = ?", [contactId]);
+
+    return res.json({ message: "Contact deleted" });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Failed to delete emergency contact" });
+  }
+}
+
 module.exports = {
   createProfile,
   getProfileByUserId,
   getAllProfiles,
   updateProfileByUserId,
-  deleteProfileByUserId
+  deleteProfileByUserId,
+  getEmergencyContacts,
+  addEmergencyContact,
+  updateEmergencyContact,
+  deleteEmergencyContact
 };

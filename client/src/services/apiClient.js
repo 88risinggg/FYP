@@ -17,6 +17,13 @@ export async function apiRequest(path, options = {}) {
     ...options.headers
   };
 
+  // Remove headers explicitly set to undefined (e.g. Content-Type for FormData)
+  Object.keys(headers).forEach((key) => {
+    if (headers[key] === undefined) {
+      delete headers[key];
+    }
+  });
+
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
