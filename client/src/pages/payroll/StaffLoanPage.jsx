@@ -92,8 +92,19 @@ const SkeletonBar = ({ width = "100%", height = "h-4" }) => (
   <div className={`${height} rounded-lg bg-white/5 animate-pulse`} style={{ width }} />
 );
 
-export default function StaffLoanPage() {
+export default function StaffLoanPage({ embedded = false }) {
   const session = getStoredSession();
+
+  const content = (
+    <div className="space-y-6">
+      <LoanRequestForm />
+      <LoanRequestList />
+    </div>
+  );
+
+  if (embedded) {
+    return content;
+  }
 
   return (
     <DashboardLayout
@@ -109,10 +120,7 @@ export default function StaffLoanPage() {
         <h2 className="text-2xl font-semibold text-white">Loans</h2>
 
         <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl p-6">
-          <div className="space-y-6">
-            <LoanRequestForm />
-            <LoanRequestList />
-          </div>
+          {content}
         </div>
       </section>
     </DashboardLayout>

@@ -11,22 +11,24 @@ const { pool } = require("../config/db");
 async function fetchPayrollReport({ month, year, departmentId } = {}) {
   let sql = `
     SELECT
-      p.payslip_id, p.employee_id, s.name AS employee_name,
-      s.department_id, p.base_salary, p.allowances,
-      p.deductions, p.net_pay, p.period_month, p.period_year,
-      p.status
-    FROM payslip p
-    JOIN staff s ON s.employee_id = p.employee_id
+      ps.payslip_id, p.staff_employee_id AS employee_id, s.name AS employee_name,
+      s.department_id, s.base_salary, p.total_allowances AS allowances,
+      p.total_deductions AS deductions, p.net_salary AS net_pay, 
+      p.payroll_month AS period_month, p.payroll_year AS period_year,
+      ps.status
+    FROM payslip ps
+    JOIN payroll p ON p.payroll_id = ps.payroll_payroll_id
+    JOIN staff s ON s.employee_id = p.staff_employee_id
     WHERE 1=1
   `;
   const params = [];
 
   if (month) {
-    sql += " AND DATE_FORMAT(CONCAT(p.period_year, '-', LPAD(p.period_month,2,'0'), '-01'), '%Y-%m') = ?";
+    sql += " AND DATE_FORMAT(CONCAT(p.payroll_year, '-', LPAD(p.payroll_month,2,'0'), '-01'), '%Y-%m') = ?";
     params.push(month);
   }
   if (year) {
-    sql += " AND p.period_year = ?";
+    sql += " AND p.payroll_year = ?";
     params.push(year);
   }
   if (departmentId) {
@@ -34,7 +36,7 @@ async function fetchPayrollReport({ month, year, departmentId } = {}) {
     params.push(departmentId);
   }
 
-  sql += " ORDER BY p.period_year DESC, p.period_month DESC, s.name ASC";
+  sql += " ORDER BY p.payroll_year DESC, p.payroll_month DESC, s.name ASC";
   const [rows] = await pool.query(sql, params);
   return rows;
 }
@@ -50,26 +52,28 @@ async function fetchPayrollReport({ month, year, departmentId } = {}) {
 async function fetchPayrollReportForStaff(staffId, { month, year } = {}) {
   let sql = `
     SELECT
-      p.payslip_id, p.employee_id, s.name AS employee_name,
-      s.department_id, p.base_salary, p.allowances,
-      p.deductions, p.net_pay, p.period_month, p.period_year,
-      p.status
-    FROM payslip p
-    JOIN staff s ON s.employee_id = p.employee_id
-    WHERE p.employee_id = ?
+      ps.payslip_id, p.staff_employee_id AS employee_id, s.name AS employee_name,
+      s.department_id, s.base_salary, p.total_allowances AS allowances,
+      p.total_deductions AS deductions, p.net_salary AS net_pay, 
+      p.payroll_month AS period_month, p.payroll_year AS period_year,
+      ps.status
+    FROM payslip ps
+    JOIN payroll p ON p.payroll_id = ps.payroll_payroll_id
+    JOIN staff s ON s.employee_id = p.staff_employee_id
+    WHERE p.staff_employee_id = ?
   `;
   const params = [staffId];
 
   if (month) {
-    sql += " AND DATE_FORMAT(CONCAT(p.period_year, '-', LPAD(p.period_month,2,'0'), '-01'), '%Y-%m') = ?";
+    sql += " AND DATE_FORMAT(CONCAT(p.payroll_year, '-', LPAD(p.payroll_month,2,'0'), '-01'), '%Y-%m') = ?";
     params.push(month);
   }
   if (year) {
-    sql += " AND p.period_year = ?";
+    sql += " AND p.payroll_year = ?";
     params.push(year);
   }
 
-  sql += " ORDER BY p.period_year DESC, p.period_month DESC";
+  sql += " ORDER BY p.payroll_year DESC, p.payroll_month DESC";
   const [rows] = await pool.query(sql, params);
   return rows;
 }
@@ -86,14 +90,14 @@ async function fetchPayrollReportForStaff(staffId, { month, year } = {}) {
 async function fetchLeaveReport({ year, departmentId, leaveType, status } = {}) {
   let sql = `
     SELECT
-      la.leave_application_id, la.staff_employee_id AS employee_id,
+      la.id AS leave_application_id, la.staff_id AS employee_id,
       s.name AS employee_name, s.department_id,
-      lt.type_name AS leave_type,
+      lt.name AS leave_type,
       la.start_date, la.end_date, la.total_days,
       la.status, la.reason
     FROM leave_application la
-    JOIN staff s ON s.employee_id = la.staff_employee_id
-    JOIN leave_type lt ON lt.leave_type_id = la.leave_type_id
+    JOIN staff s ON s.employee_id = la.staff_id
+    JOIN leave_type lt ON lt.id = la.leave_type_id
     WHERE 1=1
   `;
   const params = [];
@@ -107,7 +111,7 @@ async function fetchLeaveReport({ year, departmentId, leaveType, status } = {}) 
     params.push(departmentId);
   }
   if (leaveType) {
-    sql += " AND lt.type_name = ?";
+    sql += " AND lt.name = ?";
     params.push(leaveType);
   }
   if (status) {
@@ -130,15 +134,15 @@ async function fetchLeaveReport({ year, departmentId, leaveType, status } = {}) 
 async function fetchLeaveReportForStaff(staffId, { year } = {}) {
   let sql = `
     SELECT
-      la.leave_application_id, la.staff_employee_id AS employee_id,
+      la.id AS leave_application_id, la.staff_id AS employee_id,
       s.name AS employee_name, s.department_id,
-      lt.type_name AS leave_type,
+      lt.name AS leave_type,
       la.start_date, la.end_date, la.total_days,
       la.status, la.reason
     FROM leave_application la
-    JOIN staff s ON s.employee_id = la.staff_employee_id
-    JOIN leave_type lt ON lt.leave_type_id = la.leave_type_id
-    WHERE la.staff_employee_id = ?
+    JOIN staff s ON s.employee_id = la.staff_id
+    JOIN leave_type lt ON lt.id = la.leave_type_id
+    WHERE la.staff_id = ?
   `;
   const params = [staffId];
 

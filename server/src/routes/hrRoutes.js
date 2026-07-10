@@ -897,12 +897,12 @@ router.put("/payroll-run/:id/lock", authenticateToken, allowRoles("Admin", "HR")
       return res.status(404).json({ message: "Payroll run not found" });
     }
 
-    // 2. Validate lockable status
+    // 2. Validate lockable status — only finance-approved runs can be sent to staff
     const run = rows[0];
-    const lockableStatuses = ["Payslips Generated", "finance_approved"];
+    const lockableStatuses = ["finance_approved"];
     if (!lockableStatuses.includes(run.status)) {
       return res.status(400).json({
-        message: `Cannot lock payroll run with status "${run.status}". Must be "Payslips Generated" or "finance_approved".`
+        message: `Cannot lock payroll run with status "${run.status}". Finance approval is required before sending to staff.`
       });
     }
 

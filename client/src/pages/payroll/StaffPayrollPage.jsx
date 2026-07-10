@@ -39,8 +39,7 @@ const payrollSidebarSections = [
       { label: "Payslips", icon: FileText, path: "/dashboard/payroll/staff/payslips" },
       { label: "Payroll Info", icon: Wallet, path: "/dashboard/payroll/staff/payroll-info" },
       { label: "Advance Payment", icon: DollarSign, path: "/dashboard/payroll/staff/advance-payment" },
-      { label: "Loans", icon: HandCoins, path: "/dashboard/payroll/staff/loans" },
-      { label: "Reports", icon: BarChart3, path: "/dashboard/payroll/staff/reports" }
+      { label: "Loans", icon: HandCoins, path: "/dashboard/payroll/staff/loans" }
     ]
   },
   {
@@ -345,7 +344,7 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
               )}
 
               {heading === "Loans" && (
-                <StaffLoanPage />
+                <StaffLoanPage embedded />
               )}
             </div>
           )}

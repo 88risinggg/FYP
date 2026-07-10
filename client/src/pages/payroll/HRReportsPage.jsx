@@ -424,11 +424,12 @@ function StatusBadge({ status }) {
     inactive: "bg-gray-500/20 text-gray-400 border-gray-500/30",
   };
 
-  const colorClass = colors[status?.toLowerCase()] || "bg-white/10 text-[#d8c6e8] border-white/20";
+  const statusStr = status != null ? String(status) : "";
+  const colorClass = colors[statusStr.toLowerCase()] || "bg-white/10 text-[#d8c6e8] border-white/20";
 
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${colorClass}`}>
-      {status ? status.charAt(0).toUpperCase() + status.slice(1) : "—"}
+      {statusStr ? statusStr.charAt(0).toUpperCase() + statusStr.slice(1) : "—"}
     </span>
   );
 }
@@ -472,7 +473,7 @@ function ReportTable({ columns, rows }) {
 
 // ─── Main Page Component ────────────────────────────────────────────────────
 
-export default function HRReportsPage() {
+export default function HRReportsPage({ embedded = false }) {
   const session = getStoredSession();
   const user = session?.user;
 
@@ -618,14 +619,8 @@ export default function HRReportsPage() {
     },
   ];
 
-  return (
-    <DashboardLayout
-      pageTitle="HR Reports"
-      user={user}
-      sidebarSections={sidebarSections}
-      sidebarTitle="HR Payroll"
-    >
-      <div className="space-y-6">
+  const reportContent = (
+    <div className="space-y-6">
         {/* Tab Navigation */}
         <div className="flex flex-wrap gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
           {TABS.map((tab) => {
@@ -719,6 +714,20 @@ export default function HRReportsPage() {
           </>
         )}
       </div>
+  );
+
+  if (embedded) {
+    return reportContent;
+  }
+
+  return (
+    <DashboardLayout
+      pageTitle="HR Reports"
+      user={user}
+      sidebarSections={sidebarSections}
+      sidebarTitle="HR Payroll"
+    >
+      {reportContent}
     </DashboardLayout>
   );
 }

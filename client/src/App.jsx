@@ -10,9 +10,7 @@ import FinanceInvoicingPage from "./pages/invoicing/FinanceInvoicingPage.jsx";
 import AdminPayrollPage from "./pages/payroll/AdminPayrollPage.jsx";
 import FinancePayrollPage from "./pages/payroll/FinancePayrollPage.jsx";
 import HRPayrollPage from "./pages/payroll/HRPayrollPage.jsx";
-import HRReportsPage from "./pages/payroll/HRReportsPage.jsx";
 import StaffPayrollPage from "./pages/payroll/StaffPayrollPage.jsx";
-import StaffReportsPage from "./pages/payroll/StaffReportsPage.jsx";
 import { startHealthCheck, stopHealthCheck } from "./services/apiClient.js";
 import { getStoredSession } from "./services/sessionService.js";
 
@@ -194,27 +192,11 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/payroll/hr/reports"
-        element={
-          <HRPayrollRoute>
-            <HRReportsPage />
-          </HRPayrollRoute>
-        }
-      />
-      <Route
         path="/dashboard/payroll/hr/*"
         element={
           <HRPayrollRoute>
             <HRPayrollPage />
           </HRPayrollRoute>
-        }
-      />
-      <Route
-        path="/dashboard/payroll/staff/reports"
-        element={
-          <StaffOrHRPayrollRoute>
-            <StaffReportsPage />
-          </StaffOrHRPayrollRoute>
         }
       />
       <Route

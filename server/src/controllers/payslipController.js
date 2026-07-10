@@ -6,9 +6,10 @@ const { pool } = require("../config/db");
 const { createNotificationInternal } = require("./notificationController");
 
 /**
- * Visibility filter: staff can only see payslips from runs with these statuses.
+ * Visibility filter: staff can only see payslips from runs that HR has finalized and sent to staff.
+ * Payroll run lifecycle: Draft → Payslips Generated → (Finance approval) → Closed (sent to staff)
  */
-const VISIBLE_RUN_STATUSES = ["Payslips Generated", "Closed"];
+const VISIBLE_RUN_STATUSES = ["Closed"];
 
 /**
  * Resolves the staff employee_id from the logged-in user's JWT userId.
@@ -64,9 +65,9 @@ async function getPayslipsByUserId(req, res) {
       JOIN payroll_run pr ON p.payroll_run_id = pr.payroll_run_id
       LEFT JOIN payslip ps ON ps.payroll_payroll_id = p.payroll_id
       WHERE s.employee_id = ?
-        AND pr.status IN (?, ?)
+        AND pr.status = ?
     `;
-    const params = [employeeId, ...VISIBLE_RUN_STATUSES];
+    const params = [employeeId, VISIBLE_RUN_STATUSES[0]];
 
     // Optional year filter
     if (req.query.year) {
@@ -124,8 +125,8 @@ async function getPayslipById(req, res) {
       JOIN staff s ON p.staff_employee_id = s.employee_id
       JOIN payroll_run pr ON p.payroll_run_id = pr.payroll_run_id
       WHERE ps.payslip_id = ?
-        AND pr.status IN (?, ?)`,
-      [payslipId, ...VISIBLE_RUN_STATUSES]
+        AND pr.status = ?`,
+      [payslipId, VISIBLE_RUN_STATUSES[0]]
     );
 
     if (rows.length === 0) {
@@ -196,8 +197,8 @@ async function getPayrollSummary(req, res) {
       JOIN payroll_run pr ON p.payroll_run_id = pr.payroll_run_id
       WHERE s.employee_id = ?
         AND p.payroll_year = ?
-        AND pr.status IN (?, ?)`,
-      [employeeId, currentYear, ...VISIBLE_RUN_STATUSES]
+        AND pr.status = ?`,
+      [employeeId, currentYear, VISIBLE_RUN_STATUSES[0]]
     );
 
     // Latest payroll record
@@ -218,10 +219,10 @@ async function getPayrollSummary(req, res) {
       JOIN payroll_run pr ON p.payroll_run_id = pr.payroll_run_id
       LEFT JOIN payslip ps ON ps.payroll_payroll_id = p.payroll_id
       WHERE s.employee_id = ?
-        AND pr.status IN (?, ?)
+        AND pr.status = ?
       ORDER BY p.payroll_year DESC, p.payroll_month DESC
       LIMIT 1`,
-      [employeeId, ...VISIBLE_RUN_STATUSES]
+      [employeeId, VISIBLE_RUN_STATUSES[0]]
     );
 
     return res.json({
@@ -261,8 +262,8 @@ async function getUnreadPayslipCount(req, res) {
        JOIN payroll_run pr ON p.payroll_run_id = pr.payroll_run_id
        WHERE s.employee_id = ?
          AND (ps.is_read_by_staff = 0 OR ps.is_read_by_staff IS NULL)
-         AND pr.status IN (?, ?)`,
-      [employeeId, ...VISIBLE_RUN_STATUSES]
+         AND pr.status = ?`,
+      [employeeId, VISIBLE_RUN_STATUSES[0]]
     );
 
     return res.json({ unread_count: rows[0].unread_count });
@@ -290,8 +291,8 @@ async function markPayslipAsRead(req, res) {
        JOIN staff s ON p.staff_employee_id = s.employee_id
        JOIN payroll_run pr ON p.payroll_run_id = pr.payroll_run_id
        WHERE ps.payslip_id = ?
-         AND pr.status IN (?, ?)`,
-      [payslipId, ...VISIBLE_RUN_STATUSES]
+         AND pr.status = ?`,
+      [payslipId, VISIBLE_RUN_STATUSES[0]]
     );
 
     if (rows.length === 0) {
