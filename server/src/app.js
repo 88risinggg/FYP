@@ -1,4 +1,5 @@
 const cors = require("cors");
+const compression = require("compression");
 const express = require("express");
 const path = require("path");
 require("dotenv").config();
@@ -17,8 +18,11 @@ const payslipRoutes = require("./routes/payslipRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const adminPayrollRoutes = require("./routes/adminPayrollRoutes");
 const hrRoutes = require("./routes/hrRoutes");
+const publicHolidayRoutes = require("./routes/publicHolidayRoutes");
 const staffRoutes = require("./routes/staffRoutes");
 const payrollRoutes = require("./routes/payrollRoutes");
+const leaveRoutes = require("./routes/leaveRoutes");
+const hrReportRoutes = require("./routes/hrReportRoutes");
 const adminUserRoutes = require("./routes/adminUserRoutes");
 const adminReminderRoutes = require("./routes/adminReminderRoutes");
 const adminAuditLogRoutes = require("./routes/adminAuditLogRoutes");
@@ -34,6 +38,7 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 app.use(cors({ origin: allowedOrigins }));
+app.use(compression());
 app.use(express.json());
 
 // Static file serving for payslip PDF downloads
@@ -55,9 +60,12 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/payslips", payslipRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/payroll/admin", adminPayrollRoutes);
+app.use("/api/hr/reports", hrReportRoutes);
+app.use("/api/hr/public-holidays", publicHolidayRoutes);
 app.use("/api/hr", hrRoutes);
 app.use("/api/staff", staffRoutes);
 app.use("/api/payroll", payrollRoutes);
+app.use("/api/leave", leaveRoutes);
 
 // Routes — Admin module
 app.use("/api/admin/users", adminUserRoutes);

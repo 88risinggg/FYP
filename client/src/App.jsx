@@ -9,7 +9,9 @@ import FinanceInvoicingPage from "./pages/invoicing/FinanceInvoicingPage.jsx";
 import AdminPayrollPage from "./pages/payroll/AdminPayrollPage.jsx";
 import FinancePayrollPage from "./pages/payroll/FinancePayrollPage.jsx";
 import HRPayrollPage from "./pages/payroll/HRPayrollPage.jsx";
+import HRReportsPage from "./pages/payroll/HRReportsPage.jsx";
 import StaffPayrollPage from "./pages/payroll/StaffPayrollPage.jsx";
+import StaffReportsPage from "./pages/payroll/StaffReportsPage.jsx";
 import { startHealthCheck, stopHealthCheck } from "./services/apiClient.js";
 import { getStoredSession } from "./services/sessionService.js";
 
@@ -120,6 +122,22 @@ function StaffPayrollRoute({ children }) {
   return children;
 }
 
+function StaffOrHRPayrollRoute({ children }) {
+  const session = getStoredSession();
+  const user = session?.user;
+  const canAccessPayroll = user?.allowedModules?.includes("payroll");
+
+  if (!session?.token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if ((user?.role !== "Staff" && user?.role !== "HR") || !canAccessPayroll) {
+    return <Navigate to="/module-selection" replace />;
+  }
+
+  return children;
+}
+
 export default function App() {
   useEffect(() => {
     if (getStoredSession()) {
@@ -174,11 +192,27 @@ export default function App() {
         }
       />
       <Route
+        path="/dashboard/payroll/hr/reports"
+        element={
+          <HRPayrollRoute>
+            <HRReportsPage />
+          </HRPayrollRoute>
+        }
+      />
+      <Route
         path="/dashboard/payroll/hr/*"
         element={
           <HRPayrollRoute>
             <HRPayrollPage />
           </HRPayrollRoute>
+        }
+      />
+      <Route
+        path="/dashboard/payroll/staff/reports"
+        element={
+          <StaffOrHRPayrollRoute>
+            <StaffReportsPage />
+          </StaffOrHRPayrollRoute>
         }
       />
       <Route

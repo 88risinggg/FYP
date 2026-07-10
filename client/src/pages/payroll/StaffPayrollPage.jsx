@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  BarChart3,
   Bell,
   Briefcase,
+  CalendarDays,
   DollarSign,
   Download,
   FileText,
+  HandCoins,
   LayoutDashboard,
   Printer,
   TrendingUp,
@@ -17,6 +20,8 @@ import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { apiRequest } from "../../services/apiClient.js";
 import { getStoredSession, clearSession } from "../../services/sessionService.js";
 import StaffProfile from "./StaffProfile.jsx";
+import StaffLeaveView from "./StaffLeaveView.jsx";
+import StaffLoanPage from "./StaffLoanPage.jsx";
 
 const pageTitle = "Automated Payroll System – Staff Payroll Portal";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -33,7 +38,15 @@ const payrollSidebarSections = [
     items: [
       { label: "Payslips", icon: FileText, path: "/dashboard/payroll/staff/payslips" },
       { label: "Payroll Info", icon: Wallet, path: "/dashboard/payroll/staff/payroll-info" },
-      { label: "Advance Payment", icon: DollarSign, path: "/dashboard/payroll/staff/advance-payment" }
+      { label: "Advance Payment", icon: DollarSign, path: "/dashboard/payroll/staff/advance-payment" },
+      { label: "Loans", icon: HandCoins, path: "/dashboard/payroll/staff/loans" },
+      { label: "Reports", icon: BarChart3, path: "/dashboard/payroll/staff/reports" }
+    ]
+  },
+  {
+    label: "Leave",
+    items: [
+      { label: "Leave", icon: CalendarDays, path: "/dashboard/payroll/staff/leave" }
     ]
   },
   {
@@ -60,6 +73,8 @@ export default function StaffPayrollPage() {
     "/dashboard/payroll/staff/payslips": "Payslips",
     "/dashboard/payroll/staff/payroll-info": "Payroll Info",
     "/dashboard/payroll/staff/advance-payment": "Advance Payment",
+    "/dashboard/payroll/staff/loans": "Loans",
+    "/dashboard/payroll/staff/leave": "Leave",
     "/dashboard/payroll/staff/profile": "Profile",
     "/dashboard/payroll/staff/notifications": "Notifications"
   };
@@ -323,6 +338,14 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
 
               {heading === "Notifications" && (
                 <NotificationsView payslips={payslips} getMonthLabel={getMonthLabel} />
+              )}
+
+              {heading === "Leave" && (
+                <StaffLeaveView />
+              )}
+
+              {heading === "Loans" && (
+                <StaffLoanPage />
               )}
             </div>
           )}

@@ -43,6 +43,21 @@ async function authenticateToken(req, res, next) {
       email: user.email,
       role: user.role
     };
+
+    // Resolve staffId (employee_id) for Staff users from the staff table
+    try {
+      const [staffRows] = await pool.execute(
+        "SELECT employee_id FROM staff WHERE user_user_id = ? LIMIT 1",
+        [user.userId]
+      );
+      if (staffRows.length > 0) {
+        req.user.staffId = staffRows[0].employee_id;
+        req.user.employeeId = staffRows[0].employee_id;
+      }
+    } catch (staffErr) {
+      // Non-blocking — staffId simply won't be set if staff record doesn't exist
+    }
+
     next();
   } catch (error) {
     res.status(403).json({

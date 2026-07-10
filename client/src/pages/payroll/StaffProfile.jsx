@@ -14,6 +14,14 @@ export default function StaffProfile({ onProfileSaved }) {
   const [fetchError, setFetchError] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
 
+  // Emergency contacts state
+  const [contacts, setContacts] = useState([]);
+  const [contactsLoading, setContactsLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingContact, setEditingContact] = useState(null);
+  const [contactForm, setContactForm] = useState({ name: '', relationship: '', phone: '', is_primary: false });
+  const [contactError, setContactError] = useState('');
+
   useEffect(() => {
     if (!userId) return;
 
@@ -35,13 +43,109 @@ export default function StaffProfile({ onProfileSaved }) {
       }
     }
 
+    async function loadContacts() {
+      try {
+        const data = await apiRequest(`/api/profile/${userId}/emergency-contacts`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (mounted) setContacts(data);
+      } catch (err) {
+        console.error("Failed to load emergency contacts:", err);
+        if (mounted) setContacts([]);
+      } finally {
+        if (mounted) setContactsLoading(false);
+      }
+    }
+
     load();
+    loadContacts();
     return () => { mounted = false; };
   }, [userId, token]);
 
   function showToast(message, type = "success") {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
+  }
+
+  // Emergency contact helpers
+  async function fetchContacts() {
+    try {
+      const data = await apiRequest(`/api/profile/${userId}/emergency-contacts`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setContacts(data);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function resetContactForm() {
+    setContactForm({ name: '', relationship: '', phone: '', is_primary: false });
+    setContactError('');
+    setShowAddForm(false);
+    setEditingContact(null);
+  }
+
+  function validateContactPhone(phone) {
+    return /^[0-9+\-() ]{6,20}$/.test(phone);
+  }
+
+  async function handleSaveContact() {
+    setContactError('');
+
+    if (!contactForm.name.trim()) { setContactError('Name is required'); return; }
+    if (!contactForm.relationship.trim()) { setContactError('Relationship is required'); return; }
+    if (!contactForm.phone.trim()) { setContactError('Phone is required'); return; }
+    if (!validateContactPhone(contactForm.phone)) { setContactError('Invalid phone format (6–20 digits, +, -, (), spaces)'); return; }
+
+    try {
+      if (editingContact) {
+        await apiRequest(`/api/profile/${userId}/emergency-contacts/${editingContact.contact_id}`, {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(contactForm)
+        });
+        showToast("Emergency contact updated");
+      } else {
+        await apiRequest(`/api/profile/${userId}/emergency-contacts`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(contactForm)
+        });
+        showToast("Emergency contact added");
+      }
+      resetContactForm();
+      fetchContacts();
+    } catch (err) {
+      const msg = err?.message || "Failed to save contact";
+      setContactError(msg);
+    }
+  }
+
+  async function handleDeleteContact(contactId) {
+    if (!window.confirm("Delete this emergency contact?")) return;
+    try {
+      await apiRequest(`/api/profile/${userId}/emergency-contacts/${contactId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      showToast("Emergency contact deleted");
+      fetchContacts();
+    } catch (err) {
+      showToast("Failed to delete contact", "error");
+    }
+  }
+
+  function handleEditContact(contact) {
+    setContactForm({
+      name: contact.name,
+      relationship: contact.relationship,
+      phone: contact.phone,
+      is_primary: contact.is_primary === 1
+    });
+    setEditingContact(contact);
+    setShowAddForm(false);
+    setContactError('');
   }
 
   if (loading) return (
@@ -123,6 +227,138 @@ export default function StaffProfile({ onProfileSaved }) {
           <DisplayField label="Date of Birth" value={profile?.date_of_birth ? new Date(profile.date_of_birth).toLocaleDateString() : "-"} />
         </div>
         <p className="mt-3 text-xs text-[#d8c6e8]/60">Managed by HR. Contact HR to request changes to employment details.</p>
+      </div>
+
+      {/* Emergency Contacts */}
+      <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+        <h3 className="mb-3 text-lg font-semibold text-white">Emergency Contacts</h3>
+
+        {contactsLoading ? (
+          <div className="space-y-3">
+            <div className="h-4 rounded bg-white/5 animate-pulse" style={{ width: "70%" }} />
+            <div className="h-4 rounded bg-white/5 animate-pulse" style={{ width: "50%" }} />
+          </div>
+        ) : contacts.length === 0 && !showAddForm && !editingContact ? (
+          <p className="text-sm text-[#d8c6e8]/60">No emergency contacts added yet</p>
+        ) : (
+          <div className="space-y-3">
+            {contacts.map(contact => (
+              <div key={contact.contact_id} className="rounded-lg border border-white/10 bg-black/10 px-4 py-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-white">
+                      {contact.name}
+                      <span className="ml-2 text-xs text-[#d8c6e8]/60">{contact.relationship}</span>
+                    </p>
+                    <p className="mt-0.5 text-xs text-[#d8c6e8]">{contact.phone}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {contact.is_primary === 1 && (
+                      <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] font-medium text-cyan-300">Primary</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleEditContact(contact)}
+                      className="text-xs text-[#d8c6e8] hover:text-white"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteContact(contact.contact_id)}
+                      className="text-xs text-red-400 hover:text-red-300"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add Contact button — only show if less than 3 and no form open */}
+        {!showAddForm && !editingContact && contacts.length < 3 && !contactsLoading && (
+          <button
+            type="button"
+            onClick={() => { resetContactForm(); setShowAddForm(true); }}
+            className="mt-3 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
+          >
+            + Add Contact
+          </button>
+        )}
+
+        {/* Add/Edit form */}
+        {(showAddForm || editingContact) && (
+          <div className="mt-4 rounded-lg border border-white/10 bg-black/10 p-4 space-y-3">
+            <p className="text-sm font-medium text-white">{editingContact ? 'Edit Contact' : 'Add Emergency Contact'}</p>
+
+            {contactError && (
+              <p className="text-xs text-red-400">{contactError}</p>
+            )}
+
+            <label className="block">
+              <span className="text-xs text-[#d8c6e8]">Name</span>
+              <input
+                type="text"
+                value={contactForm.name}
+                onChange={e => setContactForm(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Contact full name"
+                className="mt-1 w-full rounded-md border border-white/10 px-3 py-2 text-white bg-transparent placeholder:text-white/20"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-xs text-[#d8c6e8]">Relationship</span>
+              <input
+                type="text"
+                value={contactForm.relationship}
+                onChange={e => setContactForm(prev => ({ ...prev, relationship: e.target.value }))}
+                placeholder="e.g. Spouse, Parent, Sibling"
+                className="mt-1 w-full rounded-md border border-white/10 px-3 py-2 text-white bg-transparent placeholder:text-white/20"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-xs text-[#d8c6e8]">Phone</span>
+              <input
+                type="text"
+                value={contactForm.phone}
+                onChange={e => setContactForm(prev => ({ ...prev, phone: e.target.value }))}
+                placeholder="+65 9123 4567"
+                className="mt-1 w-full rounded-md border border-white/10 px-3 py-2 text-white bg-transparent placeholder:text-white/20"
+              />
+              <p className="mt-1 text-[10px] text-[#d8c6e8]/50">Singapore format: +65 XXXX XXXX</p>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={contactForm.is_primary}
+                onChange={e => setContactForm(prev => ({ ...prev, is_primary: e.target.checked }))}
+                className="rounded border-white/20 bg-transparent"
+              />
+              <span className="text-xs text-[#d8c6e8]">Set as primary contact</span>
+            </label>
+
+            <div className="flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={resetContactForm}
+                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveContact}
+                className="flex-1 rounded-lg bg-[#7B2FF7] px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
+              >
+                {editingContact ? 'Update' : 'Save'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Single Edit Button */}
