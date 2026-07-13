@@ -3,15 +3,10 @@ import { useNavigate } from "react-router-dom";
 import {
   Bell,
   Check,
-  FileBarChart,
-  LayoutDashboard,
   LogOut,
   Menu,
   Search,
-  Settings,
-  Shield,
   UserCog,
-  Users,
   X
 } from "lucide-react";
 
@@ -19,31 +14,7 @@ import Sidebar from "./Sidebar.jsx";
 import { clearSession, getStoredSession } from "../../services/sessionService.js";
 import { apiRequest } from "../../services/apiClient.js";
 
-const defaultSidebarSections = [
-  {
-    label: "MAIN",
-    items: [
-      { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard/invoicing/admin", end: true },
-      { label: "Users", icon: Users, path: "/dashboard/invoicing/admin" },
-      { label: "Roles", icon: Shield, path: "/dashboard/invoicing/admin" }
-    ]
-  },
-  {
-    label: "INVOICING",
-    items: [
-      { label: "Invoice Settings", icon: Settings, path: "/dashboard/invoicing/admin" },
-      { label: "Reminder Settings", icon: Bell, path: "/dashboard/invoicing/admin" }
-    ]
-  },
-  {
-    label: "MONITORING",
-    items: [{ label: "Audit Logs", icon: FileBarChart, path: "/dashboard/invoicing/admin" }]
-  },
-  {
-    label: "REPORTS",
-    items: [{ label: "Reports", icon: FileBarChart, path: "/dashboard/invoicing/admin" }]
-  }
-];
+const defaultSidebarSections = [];
 
 const roleProfiles = {
   Admin: {

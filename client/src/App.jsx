@@ -5,7 +5,7 @@ import LoginPage from "./pages/LoginPage.jsx";
 import SingpassLoginPage from "./pages/SingpassLoginPage.jsx";
 import ModuleSelectionPage from "./pages/ModuleSelectionPage.jsx";
 import PublicInvoiceViewPage from "./pages/PublicInvoiceViewPage.jsx";
-import AdminInvoicingDashboard from "./pages/invoicing/AdminInvoicingDashboard.jsx";
+import AdminInvoicingPlaceholderPage from "./pages/invoicing/AdminInvoicingPlaceholderPage.jsx";
 import FinanceInvoicingPage from "./pages/invoicing/FinanceInvoicingPage.jsx";
 import AdminPayrollPage from "./pages/payroll/AdminPayrollPage.jsx";
 import FinancePayrollPage from "./pages/payroll/FinancePayrollPage.jsx";
@@ -163,7 +163,7 @@ export default function App() {
         path="/dashboard/invoicing/admin/*"
         element={
           <AdminInvoicingRoute>
-            <AdminInvoicingDashboard />
+            <AdminInvoicingPlaceholderPage />
           </AdminInvoicingRoute>
         }
       />
