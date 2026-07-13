@@ -55,7 +55,7 @@ export default function PublicInvoiceViewPage() {
 
   const statusColor = {
     Draft: "bg-slate-500",
-    Scheduled: "bg-violet-500",
+    Scheduled: "bg-[#F38978]",
     Sent: "bg-blue-500",
     Viewed: "bg-cyan-500",
     Paid: "bg-emerald-500",

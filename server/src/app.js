@@ -24,6 +24,7 @@ const payrollRoutes = require("./routes/payrollRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
 const hrReportRoutes = require("./routes/hrReportRoutes");
 const adminUserRoutes = require("./routes/adminUserRoutes");
+const adminRoleRoutes = require("./routes/adminRoleRoutes");
 const adminReminderRoutes = require("./routes/adminReminderRoutes");
 const adminAuditLogRoutes = require("./routes/adminAuditLogRoutes");
 const singpassRoutes = require("./routes/singpassRoutes");
@@ -45,7 +46,7 @@ const allowedOrigins = [
 
 app.use(cors({ origin: allowedOrigins }));
 app.use(compression());
-app.use(express.json());
+app.use(express.json({ limit: "5mb" }));
 
 // Static file serving for payslip PDF downloads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
@@ -78,6 +79,7 @@ app.use("/api/claims", claimRoutes);
 
 // Routes — Admin module
 app.use("/api/admin/users", adminUserRoutes);
+app.use("/api/admin/roles", adminRoleRoutes);
 app.use("/api/admin/invoicing", adminReminderRoutes);
 app.use("/api/admin/invoicing/audit-logs", adminAuditLogRoutes);
 app.use("/api/auth/singpass", singpassRoutes);

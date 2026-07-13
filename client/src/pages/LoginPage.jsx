@@ -346,7 +346,7 @@ export default function LoginPage() {
             />
 
             <div className="absolute inset-x-0 top-20 rounded-3xl border border-[#ead3cc] bg-white/80 p-5 shadow-2xl shadow-cyan-950/40 backdrop-blur-2xl lg:left-8">
-              <div className="rounded-2xl border border-[#f0d2ca] bg-[#0b1027]/80 p-5">
+              <div className="rounded-2xl border border-[#f0d2ca] bg-white/80 p-5">
                 <div className="flex items-center justify-between gap-4 border-b border-[#f0d2ca] pb-4">
                   <div>
                     <p className="text-sm font-semibold text-[#251E1F]">Operations Overview</p>
@@ -465,7 +465,7 @@ export default function LoginPage() {
 
       <motion.section
         id="modules"
-        className="bg-[#090b20] px-5 py-20 sm:px-6 lg:px-8"
+        className="bg-[#fff3ee] px-5 py-20 sm:px-6 lg:px-8"
         initial={sectionInitial}
         whileInView={sectionVisible}
         viewport={{ once: true, amount: 0.18 }}
@@ -540,7 +540,7 @@ export default function LoginPage() {
         </div>
       </motion.section>
 
-      <footer id="contact" className="border-t border-[#f0d2ca] bg-[#050612] px-5 py-10 text-slate-400 sm:px-6 lg:px-8">
+      <footer id="contact" className="border-t border-[#f0d2ca] bg-[#FDD9CD] px-5 py-10 text-[#7b6660] sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-[#251E1F]">Automated Invoicing & Payroll System</p>
@@ -562,7 +562,7 @@ export default function LoginPage() {
             transition={{ duration: shouldReduceMotion ? 0 : 0.22 }}
           >
             <motion.section
-              className="relative w-full max-w-md rounded-3xl border border-[#ead3cc] bg-[#0b1027]/95 p-6 text-[#251E1F] shadow-2xl shadow-cyan-950/40 backdrop-blur-xl sm:p-8"
+              className="relative w-full max-w-md rounded-3xl border border-[#ead3cc] bg-white/95 p-6 text-[#251E1F] shadow-2xl shadow-[#f2b5a9]/20 backdrop-blur-xl sm:p-8"
               initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.94, y: 18 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={shouldReduceMotion ? undefined : { opacity: 0, scale: 0.97, y: 12 }}
@@ -766,7 +766,7 @@ export default function LoginPage() {
             onClick={() => { if (!isLoading) { setShowOtpForm(false); setOtpSent(false); setOtpCode(""); setError(""); } }}
           >
             <motion.div
-              className="w-full max-w-sm rounded-2xl border border-[#f0d2ca] bg-[#1a1a2e] p-6 shadow-2xl"
+              className="w-full max-w-sm rounded-2xl border border-[#f0d2ca] bg-white/95 p-6 shadow-2xl"
               initial={shouldReduceMotion ? false : { scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={shouldReduceMotion ? undefined : { scale: 0.95, opacity: 0 }}

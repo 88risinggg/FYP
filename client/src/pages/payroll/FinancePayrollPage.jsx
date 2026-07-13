@@ -1690,7 +1690,7 @@ function PayrollStatsFilter({ filter, onFilterChange, onModeChange, resultCount 
         </div>
       </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="inline-flex rounded-xl border border-[#f0d2ca] bg-[#140821] p-1">
+        <div className="inline-flex rounded-xl border border-[#f0d2ca] bg-white/80 p-1">
           {["month", "week"].map((mode) => (
             <button
               key={mode}

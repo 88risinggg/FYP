@@ -71,9 +71,9 @@ export default function SingpassLoginPage() {
   const seconds = countdown % 60;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#0d0d1a] p-4">
+    <main className="flex min-h-screen items-center justify-center bg-[#fff8f5] p-4">
       <motion.div
-        className="w-full max-w-md rounded-2xl border border-[#f0d2ca] bg-[#1a1a2e] p-8 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-[#f0d2ca] bg-white/95 p-8 shadow-2xl"
         initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: shouldReduceMotion ? 0 : 0.3 }}

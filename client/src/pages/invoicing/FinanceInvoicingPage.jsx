@@ -111,7 +111,7 @@ const invoiceStatuses = ["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdu
 
 const statusStyles = {
   Draft: "border-slate-400/25 bg-slate-400/10 text-[#514440]",
-  Scheduled: "border-violet-400/30 bg-violet-500/15 text-violet-100",
+  Scheduled: "border-[#F38978]/30 bg-[#F38978]/15 text-[#6f5b55]",
   Sent: "border-blue-400/30 bg-blue-500/15 text-blue-200",
   Viewed: "border-cyan-400/30 bg-cyan-500/15 text-cyan-200",
   Paid: "border-emerald-400/30 bg-emerald-500/15 text-emerald-200",
@@ -826,7 +826,7 @@ function InvoiceTable({
                     <button
                       type="button"
                       onClick={() => onScheduleInvoice(invoice.invoice_id)}
-                      className="inline-flex items-center gap-2 rounded-lg border border-violet-400/30 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-500/10"
+                      className="inline-flex items-center gap-2 rounded-lg border border-[#F38978]/30 px-3 py-2 text-xs font-semibold text-[#6f5b55] hover:bg-[#F38978]/10"
                     >
                       <CalendarClock size={14} />
                       Schedule Invoice

@@ -651,7 +651,7 @@ export default function HRLeaveManagement() {
           {/* Carry-Forward Confirmation Dialog */}
           {showCarryForwardConfirm && (
             <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-              <div className="w-full max-w-md rounded-xl border border-[#f0d2ca] bg-[#1a0e2e] p-6 shadow-2xl">
+              <div className="w-full max-w-md rounded-xl border border-[#f0d2ca] bg-white/95 p-6 shadow-2xl">
                 <h4 className="text-lg font-semibold text-[#251E1F] mb-2">Confirm Carry-Forward</h4>
                 <p className="text-sm text-[#7b6660] mb-4">
                   Are you sure you want to carry forward unused annual leave from <span className="font-semibold text-[#251E1F]">{carryForwardYear}</span> to <span className="font-semibold text-[#251E1F]">{Number(carryForwardYear) + 1}</span>?

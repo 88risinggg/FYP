@@ -71,9 +71,9 @@ function getCurrentYear() {
 
 // ─── Summary Card Component ─────────────────────────────────────────────────
 
-function SummaryCard({ icon: Icon, label, value, color = "purple" }) {
+function SummaryCard({ icon: Icon, label, value, color = "coral" }) {
   const colorMap = {
-    purple: "from-[#2D7C83]/20 to-[#F38978]/10 border-[#2D7C83]/30 text-[#F38978]",
+    coral: "from-[#2D7C83]/20 to-[#F38978]/10 border-[#2D7C83]/30 text-[#F38978]",
     green: "from-emerald-500/20 to-emerald-600/10 border-emerald-500/30 text-emerald-400",
     blue: "from-blue-500/20 to-blue-600/10 border-blue-500/30 text-blue-400",
     amber: "from-amber-500/20 to-amber-600/10 border-amber-500/30 text-amber-400",
@@ -283,7 +283,7 @@ function PayrollSummary({ summary }) {
   if (!summary) return null;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      <SummaryCard icon={DollarSign} label="Total Gross Pay" value={`$${Number(summary.totalGrossPay || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`} color="purple" />
+      <SummaryCard icon={DollarSign} label="Total Gross Pay" value={`$${Number(summary.totalGrossPay || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`} color="coral" />
       <SummaryCard icon={TrendingUp} label="Total Net Pay" value={`$${Number(summary.totalNetPay || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`} color="green" />
       <SummaryCard icon={BarChart3} label="Total Deductions" value={`$${Number(summary.totalDeductions || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`} color="rose" />
       <SummaryCard icon={Users} label="Employees" value={summary.employeeCount || 0} color="blue" />
@@ -296,7 +296,7 @@ function LeaveSummary({ summary }) {
   if (!summary) return null;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      <SummaryCard icon={ClipboardList} label="Total Applications" value={summary.totalApplications || 0} color="purple" />
+      <SummaryCard icon={ClipboardList} label="Total Applications" value={summary.totalApplications || 0} color="coral" />
       <SummaryCard icon={Calendar} label="Approved" value={summary.approved || 0} color="green" />
       <SummaryCard icon={AlertCircle} label="Pending" value={summary.pending || 0} color="amber" />
       <SummaryCard icon={AlertCircle} label="Rejected" value={summary.rejected || 0} color="rose" />
@@ -309,7 +309,7 @@ function EmployeeSummary({ summary }) {
   if (!summary) return null;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-      <SummaryCard icon={Users} label="Total Employees" value={summary.totalEmployees || 0} color="purple" />
+      <SummaryCard icon={Users} label="Total Employees" value={summary.totalEmployees || 0} color="coral" />
       <SummaryCard icon={Users} label="Active" value={summary.activeCount || 0} color="green" />
       <SummaryCard icon={Users} label="Inactive" value={summary.inactiveCount || 0} color="rose" />
       <SummaryCard icon={BarChart3} label="Departments" value={summary.departmentBreakdown?.length || 0} color="blue" />
@@ -321,7 +321,7 @@ function LoanSummary({ summary }) {
   if (!summary) return null;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-      <SummaryCard icon={Briefcase} label="Total Loans" value={summary.totalLoans || 0} color="purple" />
+      <SummaryCard icon={Briefcase} label="Total Loans" value={summary.totalLoans || 0} color="coral" />
       <SummaryCard icon={DollarSign} label="Disbursed" value={`$${Number(summary.totalDisbursed || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`} color="green" />
       <SummaryCard icon={TrendingUp} label="Outstanding" value={`$${Number(summary.totalOutstanding || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`} color="amber" />
       <SummaryCard icon={DollarSign} label="Repaid" value={`$${Number(summary.totalRepaid || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`} color="blue" />
@@ -333,7 +333,7 @@ function AdvanceSummary({ summary }) {
   if (!summary) return null;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      <SummaryCard icon={HandCoins} label="Total Requests" value={summary.totalRequests || 0} color="purple" />
+      <SummaryCard icon={HandCoins} label="Total Requests" value={summary.totalRequests || 0} color="coral" />
       <SummaryCard icon={HandCoins} label="Approved" value={summary.totalApproved || 0} color="green" />
       <SummaryCard icon={AlertCircle} label="Pending" value={summary.totalPending || 0} color="amber" />
       <SummaryCard icon={AlertCircle} label="Rejected" value={summary.totalRejected || 0} color="rose" />
@@ -651,7 +651,7 @@ export default function HRReportsPage({ embedded = false }) {
             <button
               onClick={() => handleExport("excel")}
               disabled={exporting || loading || !reportData?.rows?.length}
-              className="flex items-center gap-2 rounded-lg bg-[#2D7C83] px-4 py-2 text-sm font-medium text-[#251E1F] transition hover:bg-[#6B1FE7] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 rounded-lg bg-[#2D7C83] px-4 py-2 text-sm font-medium text-[#251E1F] transition hover:bg-[#23656b] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FileSpreadsheet size={16} />
               {exporting ? "Exporting..." : "Export Excel"}

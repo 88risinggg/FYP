@@ -1518,7 +1518,7 @@ function StaffRecordsView() {
                 <thead className="border-b border-[#f0d2ca] text-[#7b6660]"><tr><th className="px-3 py-2">ID</th><th className="px-3 py-2">Staff</th><th className="px-3 py-2">Amount</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Actions</th></tr></thead>
                 <tbody>
                   {advanceRequests.map(r=> (
-                    <tr key={r.request_id} className="border-b border-[#f0d2ca] text-[#251E1F]"><td className="px-3 py-2 text-[#7b6660]">{r.request_id}</td><td className="px-3 py-2">{r.staff_id}</td><td className="px-3 py-2">${r.requested_amount}</td><td className="px-3 py-2 text-[#7b6660]">{r.status}</td><td className="px-3 py-2">{r.status==='pending' ? <button onClick={()=>approveAdvanceRequest(r.request_id)} disabled={approvingId===r.request_id} className="rounded-lg bg-indigo-500/20 px-3 py-1 text-xs text-indigo-300 hover:bg-indigo-500/30">{approvingId===r.request_id ? 'Approving...' : 'Approve'}</button> : '-'}</td></tr>
+                    <tr key={r.request_id} className="border-b border-[#f0d2ca] text-[#251E1F]"><td className="px-3 py-2 text-[#7b6660]">{r.request_id}</td><td className="px-3 py-2">{r.staff_id}</td><td className="px-3 py-2">${r.requested_amount}</td><td className="px-3 py-2 text-[#7b6660]">{r.status}</td><td className="px-3 py-2">{r.status==='pending' ? <button onClick={()=>approveAdvanceRequest(r.request_id)} disabled={approvingId===r.request_id} className="rounded-lg bg-[#2D7C83]/20 px-3 py-1 text-xs text-[#2D7C83] hover:bg-[#2D7C83]/30">{approvingId===r.request_id ? 'Approving...' : 'Approve'}</button> : '-'}</td></tr>
                   ))}
                 </tbody>
               </table>
@@ -2351,7 +2351,7 @@ function PayslipsView() {
       case "finance_approved":
         return "bg-blue-500/20 text-blue-300";
       case "admin_pending":
-        return "bg-purple-500/20 text-purple-300";
+        return "bg-[#F38978]/20 text-[#6f5b55]";
       case "admin_approved":
         return "bg-cyan-500/20 text-cyan-300";
       case "sent_to_staff":
@@ -2564,7 +2564,7 @@ function PayslipsView() {
               setGenerating(false);
             }
           }}
-          className="w-full rounded-lg bg-[#2D7C83] px-4 py-3 text-sm font-semibold text-[#251E1F] transition hover:bg-[#6a1fe0] disabled:opacity-50"
+          className="w-full rounded-lg bg-[#2D7C83] px-4 py-3 text-sm font-semibold text-[#251E1F] transition hover:bg-[#23656b] disabled:opacity-50"
         >
           {generating ? (
             <span className="flex items-center justify-center gap-2">
@@ -2636,7 +2636,7 @@ function PayslipsView() {
               type="button"
               onClick={() => openConfirmBulkSend({ allDrafts: true })}
               disabled={actionInProgress === 'bulk' || payslips.filter(p => p.status === 'draft').length === 0}
-              className="rounded-lg bg-indigo-500/20 px-4 py-2 text-sm font-medium text-indigo-300 hover:bg-indigo-500/30 disabled:opacity-30 transition"
+              className="rounded-lg bg-[#2D7C83]/20 px-4 py-2 text-sm font-medium text-[#2D7C83] hover:bg-[#2D7C83]/30 disabled:opacity-30 transition"
             >
               {actionInProgress === 'bulk' ? 'Sending...' : `📤 Send to Finance (${payslips.filter(p => p.status === 'draft').length})`}
             </button>
@@ -2732,7 +2732,7 @@ function PayslipsView() {
                           <button
                             type="button"
                             onClick={() => setPreviewPayslip(payslip)}
-                            className="rounded-lg bg-purple-500/20 px-3 py-1 text-xs text-purple-300 hover:bg-purple-500/30"
+                            className="rounded-lg bg-[#F38978]/20 px-3 py-1 text-xs text-[#6f5b55] hover:bg-[#F38978]/30"
                           >
                             👁 Preview
                           </button>
@@ -2758,7 +2758,7 @@ function PayslipsView() {
               <div className="flex gap-2">
                 <button
                   onClick={() => printPayslip(previewPayslip)}
-                  className="rounded-lg bg-[#2D7C83]/20 px-3 py-2 text-sm text-purple-300 hover:bg-[#2D7C83]/40"
+                  className="rounded-lg bg-[#2D7C83]/20 px-3 py-2 text-sm text-[#2D7C83] hover:bg-[#2D7C83]/40"
                 >
                   🖨 Print
                 </button>
