@@ -44,6 +44,7 @@ import {
   createDefaultFinancePayrollConfig,
   resolveFinancePayrollConfig
 } from "../../utils/payrollRules.js";
+import FinanceRequestsPage from "./FinanceRequestsPage.jsx";
 
 /*
 ===============================================================================
@@ -96,6 +97,11 @@ const payrollSidebarSections = [
         path: "/dashboard/payroll/finance/payslips-approval"
       },
       {
+        label: "Employee Requests",
+        icon: ReceiptText,
+        path: "/dashboard/payroll/finance/employee-requests"
+      },
+      {
         label: "Staff Payroll Details",
         icon: Users,
         path: "/dashboard/payroll/finance/staff-payroll-details"
@@ -123,6 +129,7 @@ const routeHeadings = {
   "/dashboard/payroll/finance": "Dashboard",
   "/dashboard/payroll/finance/payroll-runs": "Payroll Runs",
   "/dashboard/payroll/finance/payslips-approval": "Payslips Approval",
+  "/dashboard/payroll/finance/employee-requests": "Employee Requests",
   "/dashboard/payroll/finance/staff-payroll-details": "Staff Payroll Details",
   "/dashboard/payroll/finance/notification-records": "Payslip Notifications",
   "/dashboard/payroll/finance/payroll-reports": "Finance Reports",
@@ -3266,6 +3273,7 @@ function FinancePayrollContent({
   recipientSetupProcessing,
   selectedRun
 }) {
+  if (pathname.endsWith("/employee-requests")) return <FinanceRequestsPage />;
   if (pathname.endsWith("/payroll-runs")) {
     return (
       <PayrollRunsView

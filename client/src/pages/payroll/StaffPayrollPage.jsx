@@ -22,6 +22,7 @@ import { getStoredSession, clearSession } from "../../services/sessionService.js
 import StaffProfile from "./StaffProfile.jsx";
 import StaffLeaveView from "./StaffLeaveView.jsx";
 import StaffLoanPage from "./StaffLoanPage.jsx";
+import StaffClaimsPage from "./StaffClaimsPage.jsx";
 
 const pageTitle = "Automated Payroll System – Staff Payroll Portal";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -39,6 +40,7 @@ const payrollSidebarSections = [
       { label: "Payslips", icon: FileText, path: "/dashboard/payroll/staff/payslips" },
       { label: "Payroll Info", icon: Wallet, path: "/dashboard/payroll/staff/payroll-info" },
       { label: "Advance Payment", icon: DollarSign, path: "/dashboard/payroll/staff/advance-payment" },
+      { label: "Claims", icon: Briefcase, path: "/dashboard/payroll/staff/claims" },
       { label: "Loans", icon: HandCoins, path: "/dashboard/payroll/staff/loans" }
     ]
   },
@@ -72,6 +74,7 @@ export default function StaffPayrollPage() {
     "/dashboard/payroll/staff/payslips": "Payslips",
     "/dashboard/payroll/staff/payroll-info": "Payroll Info",
     "/dashboard/payroll/staff/advance-payment": "Advance Payment",
+    "/dashboard/payroll/staff/claims": "Claims",
     "/dashboard/payroll/staff/loans": "Loans",
     "/dashboard/payroll/staff/leave": "Leave",
     "/dashboard/payroll/staff/profile": "Profile",
@@ -332,6 +335,8 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
               {heading === "Advance Payment" && (
                 <AdvancePaymentView session={session} payrollInfo={payrollInfo} profile={profile} formatCurrency={formatCurrency} />
               )}
+
+              {heading === "Claims" && <StaffClaimsPage />}
 
               {heading === "Profile" && <StaffProfile onProfileSaved={() => setUnreadCount(prev => prev + 1)} />}
 
@@ -699,7 +704,7 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
       fetchRequests();
     } catch (err) {
       console.error(err);
-      showToast("Failed to submit request. Please try again.", "error");
+      showToast(err.message || "Failed to submit request. Please try again.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -716,7 +721,7 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
     pending: "Pending",
     hr_approved: "HR Approved",
     hr_rejected: "HR Rejected",
-    finance_approved: "Finance Approved"
+    finance_approved: "Released by Finance"
   };
 
   return (
