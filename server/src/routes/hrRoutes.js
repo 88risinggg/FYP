@@ -14,6 +14,8 @@ const { authenticateToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/rolesMiddleware");
 const { validateUpload } = require("../services/uploadValidationService");
 const { commitUpload } = require("../services/uploadCommitService");
+require("../models/advanceModel");
+const { createNotificationInternal } = require("../controllers/notificationController");
 
 const router = express.Router();
 
@@ -1380,19 +1382,30 @@ function makeId(prefix) {
 router.post("/advance-requests", authenticateToken, allowRoles("Staff"), async (req, res) => {
   try {
     const { requested_amount, reason } = req.body || {};
-    if (!requested_amount) return res.status(400).json({ message: "requested_amount is required" });
+    const amount = Number(requested_amount);
+    if (!Number.isFinite(amount) || amount < 100) return res.status(400).json({ message: "Advance amount must be at least $100" });
+    if (!reason?.trim() || reason.trim().length < 10 || reason.trim().length > 1000) {
+      return res.status(400).json({ message: "Reason must contain 10 to 1,000 characters" });
+    }
 
     // Derive staff_employee_id from JWT userId
-    const [staffRows] = await pool.query('SELECT employee_id FROM staff WHERE user_user_id = ? LIMIT 1', [req.user.userId]);
+    const [staffRows] = await pool.query('SELECT employee_id, base_salary FROM staff WHERE user_user_id = ? LIMIT 1', [req.user.userId]);
     if (!staffRows.length) return res.status(400).json({ message: "Staff profile not found for current user" });
     const staffEmployeeId = staffRows[0].employee_id;
+    const maximum = Math.floor(Number(staffRows[0].base_salary || 0) * 0.5 * 100) / 100;
+    if (!maximum || amount > maximum) return res.status(400).json({ message: `Advance cannot exceed 50% of base salary ($${maximum.toFixed(2)})` });
+    const [activeRows] = await pool.query(
+      "SELECT request_id FROM advance_request WHERE staff_employee_id = ? AND status IN ('pending','hr_approved') LIMIT 1",
+      [staffEmployeeId]
+    );
+    if (activeRows.length) return res.status(409).json({ message: "You already have an advance awaiting approval or release" });
 
     const requestId = makeId('AR');
     await pool.query(
       `INSERT INTO advance_request 
         (request_id, staff_employee_id, requested_amount, reason, status, created_at, created_by, approved_by, approved_at, hr_comments)
        VALUES (?, ?, ?, ?, 'pending', NOW(), ?, NULL, NULL, NULL)`,
-      [requestId, staffEmployeeId, Number(requested_amount), reason || '', req.user.userId]
+      [requestId, staffEmployeeId, amount, reason.trim(), req.user.userId]
     );
 
     const [rows] = await pool.query(
@@ -1464,11 +1477,13 @@ router.put("/advance-requests/:id/approve", authenticateToken, allowRoles("HR"),
       [id]
     );
     const [finRows] = await pool.query(
-      'SELECT finance_request_id, advance_request_id, staff_employee_id AS staff_id, amount, status, created_at, created_by, processed_by, processed_at FROM finance_request WHERE finance_request_id = ? LIMIT 1',
+      'SELECT finance_request_id, advance_request_id, staff_employee_id AS staff_id, amount, status, created_at, created_by, processed_by, processed_at, payment_reference FROM finance_request WHERE finance_request_id = ? LIMIT 1',
       [finId]
     );
 
     addAudit(req.user.email, `HR approved advance request ${id} and queued finance request ${finId}`, 'Payroll');
+    const [ownerRows] = await pool.query('SELECT user_user_id FROM staff WHERE employee_id = ? LIMIT 1', [advRow.staff_employee_id]);
+    if (ownerRows[0]?.user_user_id) await createNotificationInternal(ownerRows[0].user_user_id, 'system', 'Salary advance approved by HR', 'Your request has been sent to Finance for release.');
     res.json({ message: 'Advance request approved and queued for Finance', request: updatedRows[0], finance_request: finRows[0] });
   } catch (err) {
     await conn.rollback();
@@ -1499,6 +1514,8 @@ router.put("/advance-requests/:id/reject", authenticateToken, allowRoles("Admin"
     );
 
     addAudit(req.user.email, `HR rejected advance request ${id}`, 'Payroll');
+    const [ownerRows] = await pool.query('SELECT user_user_id FROM staff WHERE employee_id = ? LIMIT 1', [advRows[0].staff_employee_id]);
+    if (ownerRows[0]?.user_user_id) await createNotificationInternal(ownerRows[0].user_user_id, 'system', 'Salary advance rejected by HR', hrComments || 'Contact HR for details.');
     res.json({ message: 'Advance request rejected', request: updatedRows[0] });
   } catch (err) {
     res.status(500).json({ message: 'Failed to reject advance request', error: err.message });
@@ -1509,7 +1526,12 @@ router.put("/advance-requests/:id/reject", authenticateToken, allowRoles("Admin"
 router.get('/finance-requests', authenticateToken, allowRoles('Finance'), async (_req, res) => {
   try {
     const [rows] = await pool.query(
-      'SELECT finance_request_id, advance_request_id, staff_employee_id AS staff_id, amount, status, created_at, created_by, processed_by, processed_at FROM finance_request ORDER BY created_at DESC'
+      `SELECT fr.finance_request_id, fr.advance_request_id, fr.staff_employee_id AS staff_id,
+        s.name AS staff_name, fr.amount, ar.reason, fr.status, fr.created_at, fr.created_by,
+        fr.processed_by, fr.processed_at, fr.payment_reference FROM finance_request fr
+        JOIN staff s ON s.employee_id = fr.staff_employee_id
+        JOIN advance_request ar ON ar.request_id = fr.advance_request_id
+        ORDER BY fr.created_at DESC`
     );
     return res.json(rows);
   } catch (err) {
@@ -1523,6 +1545,8 @@ router.put('/finance-requests/:id/approve', authenticateToken, allowRoles('Finan
   try {
     await conn.beginTransaction();
     const id = req.params.id;
+    const paymentReference = String(req.body?.payment_reference || '').trim();
+    if (!paymentReference) { await conn.rollback(); return res.status(400).json({ message: 'Payment reference is required' }); }
 
     const [finRows] = await conn.query('SELECT * FROM finance_request WHERE finance_request_id = ? LIMIT 1', [id]);
     if (!finRows.length) { await conn.rollback(); return res.status(404).json({ message: 'Finance request not found' }); }
@@ -1530,8 +1554,8 @@ router.put('/finance-requests/:id/approve', authenticateToken, allowRoles('Finan
     if (finRow.status !== 'queued') { await conn.rollback(); return res.status(400).json({ message: `Cannot process request in status ${finRow.status}` }); }
 
     await conn.query(
-      'UPDATE finance_request SET status = ?, processed_by = ?, processed_at = NOW() WHERE finance_request_id = ? AND status = ?',
-      ['processed', req.user.userId, id, 'queued']
+      'UPDATE finance_request SET status = ?, processed_by = ?, processed_at = NOW(), payment_reference = ? WHERE finance_request_id = ? AND status = ?',
+      ['processed', req.user.userId, paymentReference, id, 'queued']
     );
 
     await conn.query(
@@ -1551,6 +1575,8 @@ router.put('/finance-requests/:id/approve', authenticateToken, allowRoles('Finan
     );
 
     addAudit(req.user.email, `Finance processed request ${id} for advance ${finRow.advance_request_id}`, 'Payroll');
+    const [ownerRows] = await pool.query('SELECT user_user_id FROM staff WHERE employee_id = ? LIMIT 1', [finRow.staff_employee_id]);
+    if (ownerRows[0]?.user_user_id) await createNotificationInternal(ownerRows[0].user_user_id, 'system', 'Salary advance released', `Finance released your approved salary advance. Reference: ${paymentReference}`);
     return res.json({ message: 'Finance request processed', finance_request: updatedFin[0], advance_request: updatedAdv[0] || null });
   } catch (err) {
     await conn.rollback();

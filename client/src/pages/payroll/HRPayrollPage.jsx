@@ -24,6 +24,7 @@ import HRLeaveManagement from "./HRLeaveManagement.jsx";
 import HRLoanManagement from "./HRLoanManagement.jsx";
 import HRPublicHolidays from "./HRPublicHolidays.jsx";
 import HRReportsPage from "./HRReportsPage.jsx";
+import ClaimManagementPage from "./ClaimManagementPage.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
 import * as XLSX from "xlsx";
 
@@ -193,6 +194,12 @@ const payrollSidebarSections = [
     ]
   },
   {
+    label: "Claims",
+    items: [
+      { label: "Claim Management", icon: ClipboardList, path: "/dashboard/payroll/hr/claims" }
+    ]
+  },
+  {
     label: null,
     items: [
       { label: "Payslips", icon: FileText, path: "/dashboard/payroll/hr/payslips" },
@@ -210,6 +217,7 @@ const routeHeadings = {
   "/dashboard/payroll/hr/leave-management": "Leave Management",
   "/dashboard/payroll/hr/public-holidays": "Public Holidays",
   "/dashboard/payroll/hr/loans": "Loan Management",
+  "/dashboard/payroll/hr/claims": "Claim Management",
   "/dashboard/payroll/hr/payslips": "Payslips",
   "/dashboard/payroll/hr/reports": "Reports",
   "/dashboard/payroll/hr/notifications": "Notifications"
@@ -3001,6 +3009,10 @@ export default function HRPayrollPage() {
 
     if (activePath === "/dashboard/payroll/hr/loans") {
       return <HRLoanManagement />;
+    }
+
+    if (activePath === "/dashboard/payroll/hr/claims") {
+      return <ClaimManagementPage role="HR" />;
     }
 
     if (activePath === "/dashboard/payroll/hr/reports") {

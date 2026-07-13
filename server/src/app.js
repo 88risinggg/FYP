@@ -30,6 +30,8 @@ const singpassRoutes = require("./routes/singpassRoutes");
 const googleAuthRoutes = require("./routes/googleAuthRoutes");
 const otpAuthRoutes = require("./routes/otpAuthRoutes");
 const publicRoutes = require("./routes/publicRoutes");
+const financePayrollRoutes = require("./routes/financePayrollRoutes");
+const claimRoutes = require("./routes/claimRoutes");
 
 const app = express();
 
@@ -68,8 +70,11 @@ app.use("/api/hr/reports", hrReportRoutes);
 app.use("/api/hr/public-holidays", publicHolidayRoutes);
 app.use("/api/hr", hrRoutes);
 app.use("/api/staff", staffRoutes);
+app.use("/api/payroll/finance", financePayrollRoutes);
+app.use("/api/payroll/payments", paymentRoutes);
 app.use("/api/payroll", payrollRoutes);
 app.use("/api/leave", leaveRoutes);
+app.use("/api/claims", claimRoutes);
 
 // Routes — Admin module
 app.use("/api/admin/users", adminUserRoutes);
