@@ -9,13 +9,13 @@ import {
 } from "../../services/leaveService.js";
 
 const SkeletonBar = ({ width = "100%", height = "h-4" }) => (
-  <div className={`${height} rounded-lg bg-white/5 animate-pulse`} style={{ width }} />
+  <div className={`${height} rounded-lg bg-white/80 animate-pulse`} style={{ width }} />
 );
 
 function Panel({ title, children }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-      <h3 className="mb-3 text-lg font-semibold text-white">{title}</h3>
+    <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+      <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">{title}</h3>
       {children}
     </div>
   );
@@ -156,7 +156,7 @@ export default function StaffLeaveView() {
         {/* Skeleton: Balance cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {[1, 2, 3, 4].map(i => (
-            <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+            <div key={i} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4 space-y-3">
               <SkeletonBar width="60%" height="h-3" />
               <SkeletonBar width="80%" height="h-5" />
               <SkeletonBar width="100%" height="h-2" />
@@ -164,14 +164,14 @@ export default function StaffLeaveView() {
           ))}
         </div>
         {/* Skeleton: Form */}
-        <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-3">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 space-y-3">
           <SkeletonBar width="30%" height="h-4" />
           <SkeletonBar width="100%" height="h-10" />
           <SkeletonBar width="100%" height="h-10" />
           <SkeletonBar width="100%" height="h-20" />
         </div>
         {/* Skeleton: Table */}
-        <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-3">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 space-y-3">
           <SkeletonBar width="30%" height="h-4" />
           {[1, 2, 3].map(i => <SkeletonBar key={i} height="h-12" />)}
         </div>
@@ -201,7 +201,7 @@ export default function StaffLeaveView() {
 
       {/* Leave Balance Cards */}
       <div>
-        <h3 className="mb-3 text-lg font-semibold text-white">Leave Balances</h3>
+        <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">Leave Balances</h3>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {balances.map((bal) => {
             const entitled = Number(bal.entitled || 0) + Number(bal.carried_forward || 0);
@@ -210,40 +210,40 @@ export default function StaffLeaveView() {
             const progressPercent = entitled > 0 ? Math.min((used / entitled) * 100, 100) : 0;
 
             return (
-              <div key={bal.leave_type_id || bal.id} className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <div key={bal.leave_type_id || bal.id} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Calendar size={16} className="text-[#C77DFF]" />
-                  <p className="text-sm font-medium text-white">{bal.leave_type || bal.leave_type_name || bal.name || "Leave"}</p>
+                  <Calendar size={16} className="text-[#F38978]" />
+                  <p className="text-sm font-medium text-[#251E1F]">{bal.leave_type || bal.leave_type_name || bal.name || "Leave"}</p>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center mb-3">
                   <div>
-                    <p className="text-xs text-[#d8c6e8]">Entitled</p>
-                    <p className="text-sm font-semibold text-white">{entitled}</p>
+                    <p className="text-xs text-[#7b6660]">Entitled</p>
+                    <p className="text-sm font-semibold text-[#251E1F]">{entitled}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-[#d8c6e8]">Used</p>
+                    <p className="text-xs text-[#7b6660]">Used</p>
                     <p className="text-sm font-semibold text-amber-400">{used}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-[#d8c6e8]">Remaining</p>
+                    <p className="text-xs text-[#7b6660]">Remaining</p>
                     <p className="text-sm font-semibold text-emerald-400">{remaining}</p>
                   </div>
                 </div>
                 {/* Progress bar */}
-                <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
+                <div className="h-2 w-full rounded-full bg-white/80 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-[#7B2FF7] to-[#C77DFF] transition-all duration-300"
+                    className="h-full rounded-full bg-gradient-to-r from-[#2D7C83] to-[#F38978] transition-all duration-300"
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
-                <p className="mt-1 text-right text-xs text-[#d8c6e8]/60">
+                <p className="mt-1 text-right text-xs text-[#7b6660]/60">
                   {used}/{entitled} days used
                 </p>
               </div>
             );
           })}
           {balances.length === 0 && (
-            <p className="text-sm text-[#d8c6e8] col-span-full">No leave balance records found.</p>
+            <p className="text-sm text-[#7b6660] col-span-full">No leave balance records found.</p>
           )}
         </div>
       </div>
@@ -253,15 +253,15 @@ export default function StaffLeaveView() {
         <form onSubmit={handleApply} className="space-y-4">
           {/* Leave Type */}
           <div>
-            <label className="block text-xs text-[#d8c6e8] mb-1">Leave Type</label>
+            <label className="block text-xs text-[#7b6660] mb-1">Leave Type</label>
             <select
               value={selectedTypeId}
               onChange={(e) => setSelectedTypeId(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-[#7B2FF7] focus:outline-none focus:ring-1 focus:ring-[#7B2FF7]"
+              className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
             >
-              <option value="" className="bg-[#12071f]">Select leave type...</option>
+              <option value="" className="bg-[#fff3ee]">Select leave type...</option>
               {leaveTypes.map(type => (
-                <option key={type.id} value={type.id} className="bg-[#12071f]">
+                <option key={type.id} value={type.id} className="bg-[#fff3ee]">
                   {type.name}
                 </option>
               ))}
@@ -271,45 +271,45 @@ export default function StaffLeaveView() {
           {/* Date Pickers */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-xs text-[#d8c6e8] mb-1">Start Date</label>
+              <label className="block text-xs text-[#7b6660] mb-1">Start Date</label>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-[#7B2FF7] focus:outline-none focus:ring-1 focus:ring-[#7B2FF7]"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
               />
             </div>
             <div>
-              <label className="block text-xs text-[#d8c6e8] mb-1">End Date</label>
+              <label className="block text-xs text-[#7b6660] mb-1">End Date</label>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-[#7B2FF7] focus:outline-none focus:ring-1 focus:ring-[#7B2FF7]"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
               />
             </div>
           </div>
 
           {/* Reason */}
           <div>
-            <label className="block text-xs text-[#d8c6e8] mb-1">Reason</label>
+            <label className="block text-xs text-[#7b6660] mb-1">Reason</label>
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}
               placeholder="Enter your reason for leave..."
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-[#7B2FF7] focus:outline-none focus:ring-1 focus:ring-[#7B2FF7] resize-none"
+              className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#251E1F] placeholder:text-[#251E1F]/30 focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83] resize-none"
             />
           </div>
 
           {/* Conditional File Upload */}
           {requiresAttachment && (
             <div>
-              <label className="block text-xs text-[#d8c6e8] mb-1">
+              <label className="block text-xs text-[#7b6660] mb-1">
                 Attachment <span className="text-red-400">*</span> (Required for {selectedType?.name})
               </label>
               <div className="flex items-center gap-3">
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-[#d8c6e8] hover:bg-white/10 transition">
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#7b6660] hover:bg-[#FDD9CD]/45 transition">
                   <Upload size={16} />
                   {attachment ? attachment.name : "Choose file..."}
                   <input
@@ -336,7 +336,7 @@ export default function StaffLeaveView() {
           <button
             type="submit"
             disabled={submitting}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#7B2FF7] px-6 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#2D7C83] px-6 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
             {submitting ? (
               <>
@@ -357,29 +357,29 @@ export default function StaffLeaveView() {
       <Panel title="Leave History">
         {applications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-center">
-            <Calendar size={40} className="text-[#C77DFF]/40" />
-            <p className="mt-3 text-sm text-[#d8c6e8]">No leave applications found.</p>
+            <Calendar size={40} className="text-[#F38978]/40" />
+            <p className="mt-3 text-sm text-[#7b6660]">No leave applications found.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/10 text-left">
-                  <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#d8c6e8]">Leave Type</th>
-                  <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#d8c6e8]">Start Date</th>
-                  <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#d8c6e8]">End Date</th>
-                  <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#d8c6e8]">Days</th>
-                  <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#d8c6e8]">Status</th>
-                  <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#d8c6e8]">Action</th>
+                <tr className="border-b border-[#f0d2ca] text-left">
+                  <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#7b6660]">Leave Type</th>
+                  <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#7b6660]">Start Date</th>
+                  <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#7b6660]">End Date</th>
+                  <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#7b6660]">Days</th>
+                  <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#7b6660]">Status</th>
+                  <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#7b6660]">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {applications.map((app) => (
-                  <tr key={app.id} className="border-b border-white/5 hover:bg-white/[0.02] transition">
-                    <td className="px-3 py-3 text-white">{app.leave_type_name || app.type_name || "—"}</td>
-                    <td className="px-3 py-3 text-[#d8c6e8]">{formatDate(app.start_date)}</td>
-                    <td className="px-3 py-3 text-[#d8c6e8]">{formatDate(app.end_date)}</td>
-                    <td className="px-3 py-3 text-white font-medium">{app.total_days || "—"}</td>
+                  <tr key={app.id} className="border-b border-[#f0d2ca] hover:bg-white/[0.02] transition">
+                    <td className="px-3 py-3 text-[#251E1F]">{app.leave_type_name || app.type_name || "—"}</td>
+                    <td className="px-3 py-3 text-[#7b6660]">{formatDate(app.start_date)}</td>
+                    <td className="px-3 py-3 text-[#7b6660]">{formatDate(app.end_date)}</td>
+                    <td className="px-3 py-3 text-[#251E1F] font-medium">{app.total_days || "—"}</td>
                     <td className="px-3 py-3">
                       <LeaveStatusBadge status={app.status} />
                     </td>

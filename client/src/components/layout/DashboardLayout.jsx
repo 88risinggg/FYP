@@ -134,22 +134,22 @@ export default function DashboardLayout({
       <Sidebar sections={sidebarSections} title={sidebarTitle} />
 
       <div className="relative z-10 lg:pl-64">
-        <header className="sticky top-0 z-10 flex h-20 items-center gap-4 border-b border-white/10 bg-[#090014]/70 px-4 shadow-xl shadow-purple-950/20 backdrop-blur-2xl sm:px-6">
+        <header className="sticky top-0 z-10 flex h-20 items-center gap-4 border-b border-[#f0d2ca] bg-[#fff8f5]/70 px-4 shadow-xl shadow-[#f2b5a9]/20 backdrop-blur-2xl sm:px-6">
           <button
             type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-white/10 hover:text-white"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-[#7b6660] hover:bg-[#FDD9CD]/45 hover:text-[#251E1F]"
             aria-label="Open menu"
           >
             <Menu size={21} />
           </button>
 
-          <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-white sm:text-lg">
+          <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-[#251E1F] sm:text-lg">
             {pageTitle}
           </h1>
 
           {/* Search */}
-          <div className="hidden w-full max-w-sm items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 shadow-lg shadow-[#9D4EDD]/10 backdrop-blur lg:flex">
-            <Search size={16} className="text-[#C77DFF]" />
+          <div className="hidden w-full max-w-sm items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 shadow-lg shadow-[#F38978]/10 backdrop-blur lg:flex">
+            <Search size={16} className="text-[#F38978]" />
             <input
               type="search"
               value={searchQuery}
@@ -159,10 +159,10 @@ export default function DashboardLayout({
               }}
               onKeyDown={handleSearchKeyDown}
               placeholder={searchPlaceholder}
-              className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[#d8c6e8]/60"
+              className="w-full bg-transparent text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/60"
             />
             {searchQuery && (
-              <button type="button" onClick={() => { setSearchQuery(""); if (onSearch) onSearch(""); }} className="text-[#d8c6e8] hover:text-white">
+              <button type="button" onClick={() => { setSearchQuery(""); if (onSearch) onSearch(""); }} className="text-[#7b6660] hover:text-[#251E1F]">
                 <X size={14} />
               </button>
             )}
@@ -173,12 +173,12 @@ export default function DashboardLayout({
             <button
               type="button"
               onClick={handleBellClick}
-              className="relative flex h-10 w-10 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-white/10 hover:text-white"
+              className="relative flex h-10 w-10 items-center justify-center rounded-lg text-[#7b6660] hover:bg-[#FDD9CD]/45 hover:text-[#251E1F]"
               aria-label="Notifications"
             >
               <Bell size={20} />
               {unreadCount > 0 && (
-                <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#FF4DDB] text-[9px] font-bold text-white ring-2 ring-[#090014]">
+                <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#F38978] text-[9px] font-bold text-[#251E1F] ring-2 ring-[#fff8f5]">
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
@@ -188,16 +188,16 @@ export default function DashboardLayout({
             {showNotifications && (
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setShowNotifications(false)} />
-                <div className="absolute right-0 top-12 z-30 w-80 rounded-xl border border-white/10 bg-[#120022] shadow-2xl shadow-purple-950/40">
-                  <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-                    <h3 className="text-sm font-semibold text-white">Notifications</h3>
+                <div className="absolute right-0 top-12 z-30 w-80 rounded-xl border border-[#f0d2ca] bg-[#fff3ee] shadow-2xl shadow-[#f2b5a9]/20">
+                  <div className="flex items-center justify-between border-b border-[#f0d2ca] px-4 py-3">
+                    <h3 className="text-sm font-semibold text-[#251E1F]">Notifications</h3>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-[#d8c6e8]/60">{unreadCount} unread</span>
+                      <span className="text-xs text-[#7b6660]/60">{unreadCount} unread</span>
                       {unreadCount > 0 && (
                         <button
                           type="button"
                           onClick={handleMarkAllRead}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-[#C77DFF] hover:bg-white/10"
+                          className="flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-[#F38978] hover:bg-[#FDD9CD]/45"
                         >
                           <Check size={12} />
                           Mark all read
@@ -207,11 +207,11 @@ export default function DashboardLayout({
                   </div>
                   <div className="max-h-80 overflow-y-auto">
                     {loadingNotifications ? (
-                      <div className="px-4 py-8 text-center text-sm text-[#d8c6e8]/60">
+                      <div className="px-4 py-8 text-center text-sm text-[#7b6660]/60">
                         Loading...
                       </div>
                     ) : displayNotifications.length === 0 ? (
-                      <div className="px-4 py-8 text-center text-sm text-[#d8c6e8]/60">
+                      <div className="px-4 py-8 text-center text-sm text-[#7b6660]/60">
                         No notifications yet
                       </div>
                     ) : (
@@ -220,17 +220,17 @@ export default function DashboardLayout({
                         return (
                           <div
                             key={notif.notification_id || notif.id || index}
-                            className={`border-b border-white/5 px-4 py-3 transition hover:bg-white/[0.04] ${!isRead ? "bg-[#C77DFF]/5" : ""}`}
+                            className={`border-b border-[#f0d2ca] px-4 py-3 transition hover:bg-[#FDD9CD]/45 ${!isRead ? "bg-[#F38978]/5" : ""}`}
                           >
                             <div className="min-w-0 flex-1">
-                              <p className={`text-sm ${!isRead ? "font-semibold text-white" : "text-[#d8c6e8]/80"}`}>
+                              <p className={`text-sm ${!isRead ? "font-semibold text-[#251E1F]" : "text-[#7b6660]/80"}`}>
                                 {notif.title || notif.message}
                               </p>
                               {notif.message && notif.title && (
-                                <p className="mt-0.5 text-xs text-[#d8c6e8]/60">{notif.message}</p>
+                                <p className="mt-0.5 text-xs text-[#7b6660]/60">{notif.message}</p>
                               )}
                               {notif.created_at && (
-                                <p className="mt-1 text-xs text-[#d8c6e8]/40">
+                                <p className="mt-1 text-xs text-[#7b6660]/40">
                                   {new Date(notif.created_at).toLocaleDateString("en-SG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                                 </p>
                               )}
@@ -246,17 +246,17 @@ export default function DashboardLayout({
           </div>
 
           <div className="flex items-center gap-3 rounded-lg px-2 py-1.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#C77DFF]/15 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F38978]/15 text-[#F38978] ring-1 ring-[#F38978]/25">
               <UserCog size={20} />
             </div>
             <div className="hidden leading-tight sm:block">
-              <p className="text-sm font-semibold text-white">{displayName}</p>
-              <p className="text-xs text-[#d8c6e8]/75">{displayRole}</p>
+              <p className="text-sm font-semibold text-[#251E1F]">{displayName}</p>
+              <p className="text-xs text-[#7b6660]/75">{displayRole}</p>
             </div>
             <button
               type="button"
               onClick={handleLogout}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-rose-500/15 hover:text-rose-300"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-[#7b6660] hover:bg-rose-500/15 hover:text-rose-300"
               aria-label="Logout"
               title="Logout"
             >

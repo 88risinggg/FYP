@@ -44,7 +44,7 @@ function formatDate(dateStr) {
 }
 
 const SkeletonBar = ({ width = "100%", height = "h-4" }) => (
-  <div className={`${height} rounded-lg bg-white/5 animate-pulse`} style={{ width }} />
+  <div className={`${height} rounded-lg bg-white/80 animate-pulse`} style={{ width }} />
 );
 
 export default function HRLoanManagement() {
@@ -171,7 +171,7 @@ export default function HRLoanManagement() {
 
   return (
     <section>
-      <h2 className="text-2xl font-semibold text-white">Loan Management</h2>
+      <h2 className="text-2xl font-semibold text-[#251E1F]">Loan Management</h2>
 
       <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl p-6">
         {/* Toast Notification */}
@@ -200,7 +200,7 @@ export default function HRLoanManagement() {
 
         {/* Status Filter */}
         <div className="mb-6 flex items-center gap-3">
-          <Filter size={16} className="text-[#d8c6e8]/70" />
+          <Filter size={16} className="text-[#7b6660]/70" />
           <div className="flex gap-2">
             {filterOptions.map((status) => (
               <button
@@ -209,8 +209,8 @@ export default function HRLoanManagement() {
                 onClick={() => setFilterStatus(status)}
                 className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
                   filterStatus === status
-                    ? "bg-[#7B2FF7] text-white"
-                    : "border border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                    ? "bg-[#2D7C83] text-[#251E1F]"
+                    : "border border-[#f0d2ca] bg-white/80 text-[#251E1F]/60 hover:bg-[#FDD9CD]/45 hover:text-[#251E1F]"
                 }`}
               >
                 {status === "all" ? "All" : statusLabels[status]}
@@ -221,7 +221,7 @@ export default function HRLoanManagement() {
 
         {/* Loan Table */}
         {loading ? (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
             <div className="space-y-3">
               {[1, 2, 3, 4].map((i) => (
                 <SkeletonBar key={i} height="h-14" />
@@ -229,11 +229,11 @@ export default function HRLoanManagement() {
             </div>
           </div>
         ) : filteredLoans.length === 0 ? (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Landmark size={48} className="text-[#C77DFF]/30" />
-              <p className="mt-4 text-sm text-[#d8c6e8]">No loan requests found</p>
-              <p className="mt-1 text-xs text-white/30">
+              <Landmark size={48} className="text-[#F38978]/30" />
+              <p className="mt-4 text-sm text-[#7b6660]">No loan requests found</p>
+              <p className="mt-1 text-xs text-[#251E1F]/30">
                 {filterStatus === "all"
                   ? "No loan requests have been submitted yet."
                   : `No ${filterStatus} loan requests.`}
@@ -241,15 +241,15 @@ export default function HRLoanManagement() {
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
             {/* Table Header */}
-            <div className="hidden sm:grid sm:grid-cols-[1.5fr_1fr_0.8fr_0.8fr_1fr_0.5fr] gap-4 pb-3 border-b border-white/10">
-              <span className="text-[#d8c6e8]/70 font-medium text-xs">Staff Name</span>
-              <span className="text-[#d8c6e8]/70 font-medium text-xs">Amount</span>
-              <span className="text-[#d8c6e8]/70 font-medium text-xs">Months</span>
-              <span className="text-[#d8c6e8]/70 font-medium text-xs">Status</span>
-              <span className="text-[#d8c6e8]/70 font-medium text-xs">Date</span>
-              <span className="text-[#d8c6e8]/70 font-medium text-xs"></span>
+            <div className="hidden sm:grid sm:grid-cols-[1.5fr_1fr_0.8fr_0.8fr_1fr_0.5fr] gap-4 pb-3 border-b border-[#f0d2ca]">
+              <span className="text-[#7b6660]/70 font-medium text-xs">Staff Name</span>
+              <span className="text-[#7b6660]/70 font-medium text-xs">Amount</span>
+              <span className="text-[#7b6660]/70 font-medium text-xs">Months</span>
+              <span className="text-[#7b6660]/70 font-medium text-xs">Status</span>
+              <span className="text-[#7b6660]/70 font-medium text-xs">Date</span>
+              <span className="text-[#7b6660]/70 font-medium text-xs"></span>
             </div>
 
             {/* Table Rows */}
@@ -262,13 +262,13 @@ export default function HRLoanManagement() {
                   <div key={loanId} className="py-3">
                     {/* Row */}
                     <div className="grid grid-cols-1 sm:grid-cols-[1.5fr_1fr_0.8fr_0.8fr_1fr_0.5fr] gap-2 sm:gap-4 items-center">
-                      <span className="text-sm text-white font-medium">
+                      <span className="text-sm text-[#251E1F] font-medium">
                         {loan.staff_name || "Unknown"}
                       </span>
-                      <span className="text-sm text-white">
+                      <span className="text-sm text-[#251E1F]">
                         {formatCurrency(loan.requested_amount)}
                       </span>
-                      <span className="text-sm text-white/70">
+                      <span className="text-sm text-[#251E1F]/70">
                         {loan.repayment_months} month{loan.repayment_months > 1 ? "s" : ""}
                       </span>
                       <span>
@@ -280,14 +280,14 @@ export default function HRLoanManagement() {
                           {statusLabels[loan.status] || loan.status}
                         </span>
                       </span>
-                      <span className="text-xs text-white/40">
+                      <span className="text-xs text-[#251E1F]/40">
                         {formatDate(loan.created_at)}
                       </span>
                       <span className="flex justify-end">
                         <button
                           type="button"
                           onClick={() => toggleExpand(loanId)}
-                          className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white hover:bg-white/10"
+                          className="flex items-center gap-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-1.5 text-xs text-[#251E1F] hover:bg-[#FDD9CD]/45"
                           aria-label={isExpanded ? "Collapse details" : "Expand details"}
                         >
                           {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -297,12 +297,12 @@ export default function HRLoanManagement() {
 
                     {/* Expanded Detail View */}
                     {isExpanded && (
-                      <div className="mt-3 rounded-lg border border-white/5 bg-black/20 p-4">
+                      <div className="mt-3 rounded-lg border border-[#f0d2ca] bg-black/20 p-4">
                         {/* Pending: Approve/Reject + Comments */}
                         {loan.status === "pending" && (
                           <div className="space-y-4">
                             <div>
-                              <label className="block text-xs text-[#d8c6e8] mb-1">
+                              <label className="block text-xs text-[#7b6660] mb-1">
                                 HR Comments (optional)
                               </label>
                               <textarea
@@ -315,8 +315,8 @@ export default function HRLoanManagement() {
                                 }
                                 placeholder="Add comments for this loan request..."
                                 rows={3}
-                                className="w-full resize-none rounded-md border border-white/10 px-3 py-2 text-white bg-transparent placeholder:text-white/20"
-                                style={{ backgroundColor: "#12071f" }}
+                                className="w-full resize-none rounded-md border border-[#f0d2ca] px-3 py-2 text-[#251E1F] bg-transparent placeholder:text-[#251E1F]/20"
+                                style={{ backgroundColor: "#fff3ee" }}
                               />
                             </div>
                             <div className="flex gap-3">
@@ -324,7 +324,7 @@ export default function HRLoanManagement() {
                                 type="button"
                                 onClick={() => handleApprove(loanId)}
                                 disabled={approving === loanId || rejecting === loanId}
-                                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
+                                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-60"
                               >
                                 <Check size={16} />
                                 {approving === loanId ? "Approving…" : "Approve"}
@@ -333,7 +333,7 @@ export default function HRLoanManagement() {
                                 type="button"
                                 onClick={() => handleReject(loanId)}
                                 disabled={approving === loanId || rejecting === loanId}
-                                className="flex items-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
+                                className="flex items-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-60"
                               >
                                 <X size={16} />
                                 {rejecting === loanId ? "Rejecting…" : "Reject"}
@@ -345,7 +345,7 @@ export default function HRLoanManagement() {
                         {/* Approved: Installment Schedule */}
                         {loan.status === "approved" && (
                           <div>
-                            <h4 className="text-sm font-semibold text-white mb-3">
+                            <h4 className="text-sm font-semibold text-[#251E1F] mb-3">
                               Installment Schedule
                             </h4>
                             {loadingInstallments[loanId] ? (
@@ -355,14 +355,14 @@ export default function HRLoanManagement() {
                                 ))}
                               </div>
                             ) : (installments[loanId] || []).length === 0 ? (
-                              <p className="text-xs text-white/40 text-center py-3">
+                              <p className="text-xs text-[#251E1F]/40 text-center py-3">
                                 No installments found.
                               </p>
                             ) : (
                               <div className="overflow-x-auto">
                                 <table className="w-full text-xs">
                                   <thead>
-                                    <tr className="border-b border-white/10 text-left text-[#d8c6e8]/70">
+                                    <tr className="border-b border-[#f0d2ca] text-left text-[#7b6660]/70">
                                       <th className="pb-2 pr-4 font-medium">#</th>
                                       <th className="pb-2 pr-4 font-medium">Amount</th>
                                       <th className="pb-2 pr-4 font-medium">Due Date</th>
@@ -374,15 +374,15 @@ export default function HRLoanManagement() {
                                     {installments[loanId].map((inst) => (
                                       <tr
                                         key={inst.installment_id}
-                                        className="border-b border-white/5 last:border-b-0"
+                                        className="border-b border-[#f0d2ca] last:border-b-0"
                                       >
-                                        <td className="py-2 pr-4 text-white/60">
+                                        <td className="py-2 pr-4 text-[#251E1F]/60">
                                           {inst.installment_number}
                                         </td>
-                                        <td className="py-2 pr-4 text-white">
+                                        <td className="py-2 pr-4 text-[#251E1F]">
                                           {formatCurrency(inst.amount)}
                                         </td>
-                                        <td className="py-2 pr-4 text-white/60">
+                                        <td className="py-2 pr-4 text-[#251E1F]/60">
                                           {formatDate(inst.due_date)}
                                         </td>
                                         <td className="py-2 pr-4">
@@ -404,7 +404,7 @@ export default function HRLoanManagement() {
                                                 handleMarkPaid(loanId, inst.installment_id)
                                               }
                                               disabled={payingInstallment === inst.installment_id}
-                                              className="flex items-center gap-1 rounded-lg bg-[#7B2FF7] px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110 disabled:opacity-60"
+                                              className="flex items-center gap-1 rounded-lg bg-[#2D7C83] px-3 py-1.5 text-xs font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-60"
                                             >
                                               <Check size={12} />
                                               {payingInstallment === inst.installment_id
@@ -425,18 +425,18 @@ export default function HRLoanManagement() {
                         {/* Rejected: Show HR Comments */}
                         {loan.status === "rejected" && (
                           <div>
-                            <h4 className="text-sm font-semibold text-white mb-2">
+                            <h4 className="text-sm font-semibold text-[#251E1F] mb-2">
                               Rejection Details
                             </h4>
                             {loan.hr_comments ? (
-                              <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
-                                <p className="text-xs text-[#d8c6e8]/70">
-                                  <span className="font-medium text-[#d8c6e8]">HR Comments:</span>{" "}
+                              <div className="rounded-lg border border-[#f0d2ca] bg-white/[0.02] px-3 py-2">
+                                <p className="text-xs text-[#7b6660]/70">
+                                  <span className="font-medium text-[#7b6660]">HR Comments:</span>{" "}
                                   {loan.hr_comments}
                                 </p>
                               </div>
                             ) : (
-                              <p className="text-xs text-white/40">No comments provided.</p>
+                              <p className="text-xs text-[#251E1F]/40">No comments provided.</p>
                             )}
                           </div>
                         )}

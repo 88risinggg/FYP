@@ -10,7 +10,7 @@ import {
 } from "../../services/leaveService.js";
 
 const SkeletonBar = ({ width = "100%", height = "h-4" }) => (
-  <div className={`${height} rounded-lg bg-white/5 animate-pulse`} style={{ width }} />
+  <div className={`${height} rounded-lg bg-white/80 animate-pulse`} style={{ width }} />
 );
 
 function LeaveStatusBadge({ status }) {
@@ -208,12 +208,12 @@ export default function HRLeaveManagement() {
       <div className="space-y-6">
         <div className="flex gap-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-lg bg-white/5 px-6 py-3">
+            <div key={i} className="rounded-lg bg-white/80 px-6 py-3">
               <SkeletonBar width="100px" height="h-4" />
             </div>
           ))}
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-3">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 space-y-3">
           <SkeletonBar width="30%" height="h-4" />
           {[1, 2, 3, 4].map((i) => (
             <SkeletonBar key={i} height="h-14" />
@@ -244,7 +244,7 @@ export default function HRLeaveManagement() {
       )}
 
       {/* Tab Navigation */}
-      <div className="flex gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+      <div className="flex gap-1 rounded-xl border border-[#f0d2ca] bg-white/80 p-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -254,8 +254,8 @@ export default function HRLeaveManagement() {
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
                 isActive
-                  ? "bg-[#7B2FF7] text-white shadow-lg"
-                  : "text-[#d8c6e8] hover:bg-white/5 hover:text-white"
+                  ? "bg-[#2D7C83] text-[#251E1F] shadow-lg"
+                  : "text-[#7b6660] hover:bg-white/80 hover:text-[#251E1F]"
               }`}
             >
               <Icon size={16} />
@@ -272,44 +272,44 @@ export default function HRLeaveManagement() {
 
       {/* ─── Pending Approvals Tab ──────────────────────────────────── */}
       {activeTab === "pending" && (
-        <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-          <h3 className="mb-4 text-lg font-semibold text-white">Pending Leave Approvals</h3>
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+          <h3 className="mb-4 text-lg font-semibold text-[#251E1F]">Pending Leave Approvals</h3>
           {pendingApps.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <Check size={40} className="text-emerald-400/40" />
-              <p className="mt-3 text-sm text-[#d8c6e8]">No pending leave applications.</p>
+              <p className="mt-3 text-sm text-[#7b6660]">No pending leave applications.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {pendingApps.map((app) => (
                 <div
                   key={app.id}
-                  className="rounded-lg border border-white/10 bg-white/[0.02] p-4 transition hover:bg-white/[0.04]"
+                  className="rounded-lg border border-[#f0d2ca] bg-white/[0.02] p-4 transition hover:bg-[#FDD9CD]/45"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-1">
-                      <p className="text-sm font-semibold text-white">
+                      <p className="text-sm font-semibold text-[#251E1F]">
                         {app.staff_name || app.name || "Unknown Staff"}
                       </p>
-                      <p className="text-xs text-[#d8c6e8]">
+                      <p className="text-xs text-[#7b6660]">
                         {app.department || app.department_name || "—"}
                       </p>
                       <div className="flex flex-wrap gap-3 mt-2">
-                        <span className="text-xs text-[#d8c6e8]">
-                          <span className="text-white/50">Type:</span>{" "}
+                        <span className="text-xs text-[#7b6660]">
+                          <span className="text-[#251E1F]/50">Type:</span>{" "}
                           {app.leave_type_name || app.type_name || "—"}
                         </span>
-                        <span className="text-xs text-[#d8c6e8]">
-                          <span className="text-white/50">Dates:</span>{" "}
+                        <span className="text-xs text-[#7b6660]">
+                          <span className="text-[#251E1F]/50">Dates:</span>{" "}
                           {formatDate(app.start_date)} – {formatDate(app.end_date)}
                         </span>
-                        <span className="text-xs text-[#d8c6e8]">
-                          <span className="text-white/50">Days:</span>{" "}
-                          <span className="font-semibold text-white">{app.total_days}</span>
+                        <span className="text-xs text-[#7b6660]">
+                          <span className="text-[#251E1F]/50">Days:</span>{" "}
+                          <span className="font-semibold text-[#251E1F]">{app.total_days}</span>
                         </span>
                       </div>
                       {app.reason && (
-                        <p className="mt-2 text-xs text-[#d8c6e8] italic">
+                        <p className="mt-2 text-xs text-[#7b6660] italic">
                           "{app.reason}"
                         </p>
                       )}
@@ -342,7 +342,7 @@ export default function HRLeaveManagement() {
                           value={actionComment}
                           onChange={(e) => setActionComment(e.target.value)}
                           placeholder="Optional comment..."
-                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder:text-white/30 focus:border-[#7B2FF7] focus:outline-none focus:ring-1 focus:ring-[#7B2FF7]"
+                          className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-xs text-[#251E1F] placeholder:text-[#251E1F]/30 focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
                         />
                         <div className="flex gap-2">
                           <button
@@ -360,7 +360,7 @@ export default function HRLeaveManagement() {
                           <button
                             type="button"
                             onClick={cancelAction}
-                            className="rounded-lg border border-white/10 px-3 py-2 text-xs text-[#d8c6e8] hover:bg-white/5 transition"
+                            className="rounded-lg border border-[#f0d2ca] px-3 py-2 text-xs text-[#7b6660] hover:bg-white/80 transition"
                           >
                             Cancel
                           </button>
@@ -377,120 +377,120 @@ export default function HRLeaveManagement() {
 
       {/* ─── All Applications Tab ──────────────────────────────────── */}
       {activeTab === "all" && (
-        <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-          <h3 className="mb-4 text-lg font-semibold text-white">All Staff Leave Applications</h3>
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+          <h3 className="mb-4 text-lg font-semibold text-[#251E1F]">All Staff Leave Applications</h3>
 
           {/* Filters */}
           <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div>
-              <label className="block text-xs text-[#d8c6e8] mb-1">Staff Name</label>
+              <label className="block text-xs text-[#7b6660] mb-1">Staff Name</label>
               <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#251E1F]/30" />
                 <input
                   type="text"
                   value={filterName}
                   onChange={(e) => setFilterName(e.target.value)}
                   placeholder="Search name..."
-                  className="w-full rounded-lg border border-white/10 bg-white/5 pl-9 pr-4 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#7B2FF7] focus:outline-none focus:ring-1 focus:ring-[#7B2FF7]"
+                  className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 pl-9 pr-4 py-2 text-sm text-[#251E1F] placeholder:text-[#251E1F]/30 focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-xs text-[#d8c6e8] mb-1">Leave Type</label>
+              <label className="block text-xs text-[#7b6660] mb-1">Leave Type</label>
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white focus:border-[#7B2FF7] focus:outline-none focus:ring-1 focus:ring-[#7B2FF7]"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
               >
-                <option value="" className="bg-[#12071f]">All Types</option>
+                <option value="" className="bg-[#fff3ee]">All Types</option>
                 {leaveTypes.map((type) => (
-                  <option key={type.id} value={String(type.id)} className="bg-[#12071f]">
+                  <option key={type.id} value={String(type.id)} className="bg-[#fff3ee]">
                     {type.name}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-xs text-[#d8c6e8] mb-1">Status</label>
+              <label className="block text-xs text-[#7b6660] mb-1">Status</label>
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white focus:border-[#7B2FF7] focus:outline-none focus:ring-1 focus:ring-[#7B2FF7]"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
               >
-                <option value="" className="bg-[#12071f]">All Statuses</option>
-                <option value="pending" className="bg-[#12071f]">Pending</option>
-                <option value="approved" className="bg-[#12071f]">Approved</option>
-                <option value="rejected" className="bg-[#12071f]">Rejected</option>
-                <option value="cancelled" className="bg-[#12071f]">Cancelled</option>
+                <option value="" className="bg-[#fff3ee]">All Statuses</option>
+                <option value="pending" className="bg-[#fff3ee]">Pending</option>
+                <option value="approved" className="bg-[#fff3ee]">Approved</option>
+                <option value="rejected" className="bg-[#fff3ee]">Rejected</option>
+                <option value="cancelled" className="bg-[#fff3ee]">Cancelled</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs text-[#d8c6e8] mb-1">From Date</label>
+              <label className="block text-xs text-[#7b6660] mb-1">From Date</label>
               <input
                 type="date"
                 value={filterStartDate}
                 onChange={(e) => setFilterStartDate(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white focus:border-[#7B2FF7] focus:outline-none focus:ring-1 focus:ring-[#7B2FF7]"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
               />
             </div>
             <div>
-              <label className="block text-xs text-[#d8c6e8] mb-1">To Date</label>
+              <label className="block text-xs text-[#7b6660] mb-1">To Date</label>
               <input
                 type="date"
                 value={filterEndDate}
                 onChange={(e) => setFilterEndDate(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white focus:border-[#7B2FF7] focus:outline-none focus:ring-1 focus:ring-[#7B2FF7]"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
               />
             </div>
           </div>
 
           {/* Results count */}
-          <p className="mb-3 text-xs text-[#d8c6e8]">
+          <p className="mb-3 text-xs text-[#7b6660]">
             Showing {filteredApps.length} of {allApps.length} applications
           </p>
 
           {/* Table */}
           {filteredApps.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
-              <Calendar size={40} className="text-[#C77DFF]/40" />
-              <p className="mt-3 text-sm text-[#d8c6e8]">No applications match the current filters.</p>
+              <Calendar size={40} className="text-[#F38978]/40" />
+              <p className="mt-3 text-sm text-[#7b6660]">No applications match the current filters.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-white/10 text-left">
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#d8c6e8]">Staff</th>
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#d8c6e8]">Department</th>
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#d8c6e8]">Leave Type</th>
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#d8c6e8]">Start Date</th>
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#d8c6e8]">End Date</th>
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#d8c6e8]">Days</th>
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#d8c6e8]">Status</th>
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#d8c6e8]">HR Comment</th>
+                  <tr className="border-b border-[#f0d2ca] text-left">
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#7b6660]">Staff</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#7b6660]">Department</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#7b6660]">Leave Type</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#7b6660]">Start Date</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#7b6660]">End Date</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#7b6660]">Days</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#7b6660]">Status</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-[#7b6660]">HR Comment</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredApps.map((app) => (
-                    <tr key={app.id} className="border-b border-white/5 hover:bg-white/[0.02] transition">
-                      <td className="px-3 py-3 text-white font-medium">
+                    <tr key={app.id} className="border-b border-[#f0d2ca] hover:bg-white/[0.02] transition">
+                      <td className="px-3 py-3 text-[#251E1F] font-medium">
                         {app.staff_name || app.name || "—"}
                       </td>
-                      <td className="px-3 py-3 text-[#d8c6e8]">
+                      <td className="px-3 py-3 text-[#7b6660]">
                         {app.department || app.department_name || "—"}
                       </td>
-                      <td className="px-3 py-3 text-[#d8c6e8]">
+                      <td className="px-3 py-3 text-[#7b6660]">
                         {app.leave_type_name || app.type_name || "—"}
                       </td>
-                      <td className="px-3 py-3 text-[#d8c6e8]">{formatDate(app.start_date)}</td>
-                      <td className="px-3 py-3 text-[#d8c6e8]">{formatDate(app.end_date)}</td>
-                      <td className="px-3 py-3 text-white font-medium">{app.total_days || "—"}</td>
+                      <td className="px-3 py-3 text-[#7b6660]">{formatDate(app.start_date)}</td>
+                      <td className="px-3 py-3 text-[#7b6660]">{formatDate(app.end_date)}</td>
+                      <td className="px-3 py-3 text-[#251E1F] font-medium">{app.total_days || "—"}</td>
                       <td className="px-3 py-3">
                         <LeaveStatusBadge status={app.status} />
                       </td>
-                      <td className="px-3 py-3 text-[#d8c6e8] max-w-[200px] truncate" title={app.hr_comment || ""}>
-                        {app.hr_comment || <span className="text-white/20">—</span>}
+                      <td className="px-3 py-3 text-[#7b6660] max-w-[200px] truncate" title={app.hr_comment || ""}>
+                        {app.hr_comment || <span className="text-[#251E1F]/20">—</span>}
                       </td>
                     </tr>
                   ))}
@@ -503,9 +503,9 @@ export default function HRLeaveManagement() {
 
       {/* ─── Leave Configuration Tab ──────────────────────────────── */}
       {activeTab === "config" && (
-        <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-          <h3 className="mb-4 text-lg font-semibold text-white">Leave Type Configuration</h3>
-          <p className="mb-4 text-xs text-[#d8c6e8]">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+          <h3 className="mb-4 text-lg font-semibold text-[#251E1F]">Leave Type Configuration</h3>
+          <p className="mb-4 text-xs text-[#7b6660]">
             Edit entitlement settings for each leave type. Changes apply to future balance records only.
           </p>
 
@@ -513,23 +513,23 @@ export default function HRLeaveManagement() {
             {leaveTypes.map((type) => (
               <div
                 key={type.id}
-                className="rounded-lg border border-white/10 bg-white/[0.02] p-4 transition hover:bg-white/[0.04]"
+                className="rounded-lg border border-[#f0d2ca] bg-white/[0.02] p-4 transition hover:bg-[#FDD9CD]/45"
               >
                 {editingType !== type.id ? (
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-white">{type.name}</p>
+                      <p className="text-sm font-semibold text-[#251E1F]">{type.name}</p>
                       <div className="flex flex-wrap gap-4 mt-1">
-                        <span className="text-xs text-[#d8c6e8]">
-                          <span className="text-white/50">Entitlement:</span>{" "}
+                        <span className="text-xs text-[#7b6660]">
+                          <span className="text-[#251E1F]/50">Entitlement:</span>{" "}
                           {type.default_entitlement} days
                         </span>
-                        <span className="text-xs text-[#d8c6e8]">
-                          <span className="text-white/50">Carry-forward Cap:</span>{" "}
+                        <span className="text-xs text-[#7b6660]">
+                          <span className="text-[#251E1F]/50">Carry-forward Cap:</span>{" "}
                           {type.carry_forward_cap || 0} days
                         </span>
-                        <span className="text-xs text-[#d8c6e8]">
-                          <span className="text-white/50">Requires Attachment:</span>{" "}
+                        <span className="text-xs text-[#7b6660]">
+                          <span className="text-[#251E1F]/50">Requires Attachment:</span>{" "}
                           {type.requires_attachment === 1 || type.requires_attachment === true ? "Yes" : "No"}
                         </span>
                       </div>
@@ -537,17 +537,17 @@ export default function HRLeaveManagement() {
                     <button
                       type="button"
                       onClick={() => startEditType(type)}
-                      className="rounded-lg border border-white/10 px-4 py-2 text-xs font-medium text-[#d8c6e8] hover:bg-white/5 hover:text-white transition"
+                      className="rounded-lg border border-[#f0d2ca] px-4 py-2 text-xs font-medium text-[#7b6660] hover:bg-white/80 hover:text-[#251E1F] transition"
                     >
                       Edit
                     </button>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <p className="text-sm font-semibold text-white">{type.name}</p>
+                    <p className="text-sm font-semibold text-[#251E1F]">{type.name}</p>
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div>
-                        <label className="block text-xs text-[#d8c6e8] mb-1">
+                        <label className="block text-xs text-[#7b6660] mb-1">
                           Default Entitlement (days)
                         </label>
                         <input
@@ -555,12 +555,12 @@ export default function HRLeaveManagement() {
                           min="0"
                           value={editEntitlement}
                           onChange={(e) => setEditEntitlement(e.target.value)}
-                          className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-[#7B2FF7] focus:outline-none focus:ring-1 focus:ring-[#7B2FF7]"
+                          className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-xs text-[#d8c6e8] mb-1">
+                        <label className="block text-xs text-[#7b6660] mb-1">
                           Carry-forward Cap (days)
                         </label>
                         <input
@@ -568,7 +568,7 @@ export default function HRLeaveManagement() {
                           min="0"
                           value={editCarryCap}
                           onChange={(e) => setEditCarryCap(e.target.value)}
-                          className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-[#7B2FF7] focus:outline-none focus:ring-1 focus:ring-[#7B2FF7]"
+                          className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
                         />
                       </div>
                       <div className="flex items-center gap-3 pt-5">
@@ -579,9 +579,9 @@ export default function HRLeaveManagement() {
                             onChange={(e) => setEditRequiresAttachment(e.target.checked)}
                             className="peer sr-only"
                           />
-                          <div className="h-5 w-9 rounded-full bg-white/10 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white/60 after:transition-all peer-checked:bg-[#7B2FF7] peer-checked:after:translate-x-full peer-checked:after:bg-white"></div>
+                          <div className="h-5 w-9 rounded-full bg-white/80 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white/60 after:transition-all peer-checked:bg-[#2D7C83] peer-checked:after:translate-x-full peer-checked:after:bg-white"></div>
                         </label>
-                        <span className="text-xs text-[#d8c6e8]">Requires Attachment</span>
+                        <span className="text-xs text-[#7b6660]">Requires Attachment</span>
                       </div>
                     </div>
                     <div className="flex gap-2 pt-2">
@@ -589,14 +589,14 @@ export default function HRLeaveManagement() {
                         type="button"
                         disabled={savingType}
                         onClick={() => handleSaveLeaveType(type.id)}
-                        className="rounded-lg bg-[#7B2FF7] px-6 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50 transition"
+                        className="rounded-lg bg-[#2D7C83] px-6 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-50 transition"
                       >
                         {savingType ? "Saving..." : "Save Changes"}
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditingType(null)}
-                        className="rounded-lg border border-white/10 px-4 py-2.5 text-sm text-[#d8c6e8] hover:bg-white/5 transition"
+                        className="rounded-lg border border-[#f0d2ca] px-4 py-2.5 text-sm text-[#7b6660] hover:bg-white/80 transition"
                       >
                         Cancel
                       </button>
@@ -606,44 +606,44 @@ export default function HRLeaveManagement() {
               </div>
             ))}
             {leaveTypes.length === 0 && (
-              <p className="text-sm text-[#d8c6e8]">No leave types configured.</p>
+              <p className="text-sm text-[#7b6660]">No leave types configured.</p>
             )}
           </div>
 
           {/* ─── Carry-Forward Execution ──────────────────────────────── */}
-          <div className="mt-6 rounded-lg border border-white/10 bg-white/[0.02] p-5">
+          <div className="mt-6 rounded-lg border border-[#f0d2ca] bg-white/[0.02] p-5">
             <div className="flex items-center gap-2 mb-3">
-              <RefreshCw size={18} className="text-[#7B2FF7]" />
-              <h4 className="text-sm font-semibold text-white">Annual Leave Carry-Forward</h4>
+              <RefreshCw size={18} className="text-[#2D7C83]" />
+              <h4 className="text-sm font-semibold text-[#251E1F]">Annual Leave Carry-Forward</h4>
             </div>
-            <p className="mb-4 text-xs text-[#d8c6e8]">
+            <p className="mb-4 text-xs text-[#7b6660]">
               Transfer unused annual leave from a given year to the next, subject to each leave type's carry-forward cap. This operation is idempotent — running it multiple times produces the same result.
             </p>
 
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="block text-xs text-[#d8c6e8] mb-1">From Year</label>
+                <label className="block text-xs text-[#7b6660] mb-1">From Year</label>
                 <input
                   type="number"
                   min="2020"
                   max="2099"
                   value={carryForwardYear}
                   onChange={(e) => setCarryForwardYear(e.target.value)}
-                  className="w-32 rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-[#7B2FF7] focus:outline-none focus:ring-1 focus:ring-[#7B2FF7]"
+                  className="w-32 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
                 />
               </div>
               <button
                 type="button"
                 onClick={() => setShowCarryForwardConfirm(true)}
                 disabled={carryForwardProcessing || !carryForwardYear}
-                className="flex items-center gap-2 rounded-lg bg-[#7B2FF7] px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50 transition"
+                className="flex items-center gap-2 rounded-lg bg-[#2D7C83] px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-50 transition"
               >
                 <RefreshCw size={14} />
                 Run Carry-Forward
               </button>
             </div>
 
-            <p className="mt-2 text-xs text-white/40">
+            <p className="mt-2 text-xs text-[#251E1F]/40">
               Unused leave from {carryForwardYear || "—"} will be carried forward to {carryForwardYear ? Number(carryForwardYear) + 1 : "—"}.
             </p>
           </div>
@@ -651,12 +651,12 @@ export default function HRLeaveManagement() {
           {/* Carry-Forward Confirmation Dialog */}
           {showCarryForwardConfirm && (
             <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-              <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#1a0e2e] p-6 shadow-2xl">
-                <h4 className="text-lg font-semibold text-white mb-2">Confirm Carry-Forward</h4>
-                <p className="text-sm text-[#d8c6e8] mb-4">
-                  Are you sure you want to carry forward unused annual leave from <span className="font-semibold text-white">{carryForwardYear}</span> to <span className="font-semibold text-white">{Number(carryForwardYear) + 1}</span>?
+              <div className="w-full max-w-md rounded-xl border border-[#f0d2ca] bg-[#1a0e2e] p-6 shadow-2xl">
+                <h4 className="text-lg font-semibold text-[#251E1F] mb-2">Confirm Carry-Forward</h4>
+                <p className="text-sm text-[#7b6660] mb-4">
+                  Are you sure you want to carry forward unused annual leave from <span className="font-semibold text-[#251E1F]">{carryForwardYear}</span> to <span className="font-semibold text-[#251E1F]">{Number(carryForwardYear) + 1}</span>?
                 </p>
-                <p className="text-xs text-white/40 mb-6">
+                <p className="text-xs text-[#251E1F]/40 mb-6">
                   This will update balance records for all eligible staff members. The operation is idempotent and safe to run multiple times.
                 </p>
                 <div className="flex gap-3 justify-end">
@@ -664,7 +664,7 @@ export default function HRLeaveManagement() {
                     type="button"
                     onClick={() => setShowCarryForwardConfirm(false)}
                     disabled={carryForwardProcessing}
-                    className="rounded-lg border border-white/10 px-4 py-2.5 text-sm text-[#d8c6e8] hover:bg-white/5 transition disabled:opacity-50"
+                    className="rounded-lg border border-[#f0d2ca] px-4 py-2.5 text-sm text-[#7b6660] hover:bg-white/80 transition disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -672,7 +672,7 @@ export default function HRLeaveManagement() {
                     type="button"
                     onClick={handleRunCarryForward}
                     disabled={carryForwardProcessing}
-                    className="flex items-center gap-2 rounded-lg bg-[#7B2FF7] px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50 transition"
+                    className="flex items-center gap-2 rounded-lg bg-[#2D7C83] px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-50 transition"
                   >
                     {carryForwardProcessing ? (
                       <>

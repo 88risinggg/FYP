@@ -64,7 +64,7 @@ function getAuthHeaders(token) {
 }
 
 const SkeletonBar = ({ width = "100%", height = "h-4" }) => (
-  <div className={`${height} rounded-lg bg-white/5 animate-pulse`} style={{ width }} />
+  <div className={`${height} rounded-lg bg-white/80 animate-pulse`} style={{ width }} />
 );
 
 export default function StaffPayrollPage() {
@@ -249,7 +249,7 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
       notificationBadgeCount={unreadCount}
     >
       <section>
-        <h2 className="text-2xl font-semibold text-white">{heading}</h2>
+        <h2 className="text-2xl font-semibold text-[#251E1F]">{heading}</h2>
 
         <div className="neon-glass neon-border mt-6 max-h-[calc(100vh-12rem)] overflow-y-auto rounded-2xl p-6">
           {error ? (
@@ -270,7 +270,7 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
               {/* Skeleton: stat cards */}
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {[1,2,3,4].map(i => (
-                  <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+                  <div key={i} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4 space-y-3">
                     <SkeletonBar width="60%" height="h-3" />
                     <SkeletonBar width="80%" height="h-6" />
                   </div>
@@ -278,13 +278,13 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
               </div>
               {/* Skeleton: panels */}
               <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-3">
+                <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 space-y-3">
                   <SkeletonBar width="40%" height="h-4" />
                   <SkeletonBar width="100%" height="h-3" />
                   <SkeletonBar width="70%" height="h-3" />
                   <SkeletonBar width="30%" height="h-8" />
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-3">
+                <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 space-y-3">
                   <SkeletonBar width="40%" height="h-4" />
                   <div className="grid grid-cols-2 gap-3">
                     <SkeletonBar height="h-10" />
@@ -295,7 +295,7 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
                 </div>
               </div>
               {/* Skeleton: recent payslips */}
-              <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-3">
+              <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 space-y-3">
                 <SkeletonBar width="30%" height="h-4" />
                 {[1,2,3].map(i => <SkeletonBar key={i} height="h-12" />)}
               </div>
@@ -359,9 +359,9 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
       {/* Inactivity warning modal */}
       {showTimeoutWarning && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="rounded-2xl border border-amber-400/30 bg-[#12071f] p-6 shadow-2xl w-full max-w-sm mx-4">
-            <p className="text-lg font-semibold text-white">Session Expiring</p>
-            <p className="mt-2 text-sm text-[#d8c6e8]">
+          <div className="rounded-2xl border border-amber-400/30 bg-[#fff3ee] p-6 shadow-2xl w-full max-w-sm mx-4">
+            <p className="text-lg font-semibold text-[#251E1F]">Session Expiring</p>
+            <p className="mt-2 text-sm text-[#7b6660]">
               Your session will expire in 2 minutes due to inactivity.
             </p>
             <button
@@ -371,7 +371,7 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
                 // Trigger a synthetic activity event to reset timers
                 window.dispatchEvent(new Event('mousemove'));
               }}
-              className="mt-4 w-full rounded-lg bg-[#7B2FF7] px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110"
+              className="mt-4 w-full rounded-lg bg-[#2D7C83] px-4 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110"
             >
               Stay Logged In
             </button>
@@ -391,11 +391,11 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
   return (
     <div className="space-y-6">
       {/* Welcome */}
-      <div className="rounded-xl border border-white/10 bg-gradient-to-r from-[#7B2FF7]/10 to-[#FF4DDB]/10 p-5">
-        <p className="text-lg font-semibold text-white">
+      <div className="rounded-xl border border-[#f0d2ca] bg-gradient-to-r from-[#2D7C83]/10 to-[#F38978]/10 p-5">
+        <p className="text-lg font-semibold text-[#251E1F]">
           Welcome back, {profile?.name || session?.user?.name || "Staff"}
         </p>
-        <p className="mt-1 text-sm text-[#d8c6e8]">
+        <p className="mt-1 text-sm text-[#7b6660]">
           {payrollInfo.department} • {payrollInfo.employeeCode}
         </p>
       </div>
@@ -404,7 +404,7 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={DollarSign} label="Base Salary" value={formatCurrency(payrollInfo.salary)} accent="text-emerald-400" />
         <StatCard icon={TrendingUp} label="Year-To-Date Net Pay" value={formatCurrency(ytd?.ytd_net_pay)} accent="text-cyan-400" />
-        <StatCard icon={FileText} label="Payslips This Year" value={ytd?.total_payslips ?? 0} accent="text-[#C77DFF]" />
+        <StatCard icon={FileText} label="Payslips This Year" value={ytd?.total_payslips ?? 0} accent="text-[#F38978]" />
         <StatCard icon={Briefcase} label="Hire Date" value={payrollInfo.hireDate} accent="text-amber-400" />
       </div>
 
@@ -413,34 +413,34 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
         <button
           type="button"
           onClick={() => navigate("/dashboard/payroll/staff/payslips")}
-          className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:bg-white/10"
+          className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-left transition hover:bg-[#FDD9CD]/45"
         >
-          <FileText size={20} className="text-[#C77DFF]" />
+          <FileText size={20} className="text-[#F38978]" />
           <div>
-            <p className="text-sm font-medium text-white">View Payslips</p>
-            <p className="text-xs text-[#d8c6e8]/60">Download your pay history</p>
+            <p className="text-sm font-medium text-[#251E1F]">View Payslips</p>
+            <p className="text-xs text-[#7b6660]/60">Download your pay history</p>
           </div>
         </button>
         <button
           type="button"
           onClick={() => navigate("/dashboard/payroll/staff/advance-payment")}
-          className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:bg-white/10"
+          className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-left transition hover:bg-[#FDD9CD]/45"
         >
           <DollarSign size={20} className="text-emerald-400" />
           <div>
-            <p className="text-sm font-medium text-white">Request Advance</p>
-            <p className="text-xs text-[#d8c6e8]/60">Apply for salary advance</p>
+            <p className="text-sm font-medium text-[#251E1F]">Request Advance</p>
+            <p className="text-xs text-[#7b6660]/60">Apply for salary advance</p>
           </div>
         </button>
         <button
           type="button"
           onClick={() => navigate("/dashboard/payroll/staff/profile")}
-          className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:bg-white/10"
+          className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-left transition hover:bg-[#FDD9CD]/45"
         >
           <UserCog size={20} className="text-amber-400" />
           <div>
-            <p className="text-sm font-medium text-white">Edit Profile</p>
-            <p className="text-xs text-[#d8c6e8]/60">Update personal & bank details</p>
+            <p className="text-sm font-medium text-[#251E1F]">Edit Profile</p>
+            <p className="text-xs text-[#7b6660]/60">Update personal & bank details</p>
           </div>
         </button>
       </div>
@@ -451,7 +451,7 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
           {latest ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-[#d8c6e8]">{getMonthLabel(latest.payroll_month, latest.payroll_year)}</span>
+                <span className="text-sm text-[#7b6660]">{getMonthLabel(latest.payroll_month, latest.payroll_year)}</span>
                 <StatusBadge status={latest.run_status} />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -464,17 +464,17 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
                 <button
                   type="button"
                   onClick={() => downloadPayslip(latest)}
-                  className="mt-2 inline-flex items-center gap-2 rounded-lg bg-[#7B2FF7] px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
+                  className="mt-2 inline-flex items-center gap-2 rounded-lg bg-[#2D7C83] px-4 py-2 text-sm font-semibold text-[#251E1F] hover:brightness-110"
                 >
                   <Download size={16} />
                   Download PDF
                 </button>
               ) : (
-                <p className="mt-2 text-xs text-white/30">PDF not yet available</p>
+                <p className="mt-2 text-xs text-[#251E1F]/30">PDF not yet available</p>
               )}
             </div>
           ) : (
-            <p className="text-sm text-[#d8c6e8]">No payslips available yet.</p>
+            <p className="text-sm text-[#7b6660]">No payslips available yet.</p>
           )}
         </Panel>
 
@@ -487,7 +487,7 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
               <MiniStat label="Net Pay" value={formatCurrency(ytd.ytd_net_pay)} highlight />
             </div>
           ) : (
-            <p className="text-sm text-[#d8c6e8]">No payroll data for this year yet.</p>
+            <p className="text-sm text-[#7b6660]">No payroll data for this year yet.</p>
           )}
         </Panel>
       </div>
@@ -497,10 +497,10 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
         {payslips.length > 0 ? (
           <div className="space-y-2">
             {payslips.slice(0, 3).map((p) => (
-              <div key={p.payroll_id} className="flex items-center justify-between rounded-lg border border-white/10 bg-black/10 px-4 py-3">
+              <div key={p.payroll_id} className="flex items-center justify-between rounded-lg border border-[#f0d2ca] bg-black/10 px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-white">{getMonthLabel(p.payroll_month, p.payroll_year)}</p>
-                  <p className="text-xs text-[#d8c6e8]">Net: {formatCurrency(p.net_salary)}</p>
+                  <p className="text-sm font-medium text-[#251E1F]">{getMonthLabel(p.payroll_month, p.payroll_year)}</p>
+                  <p className="text-xs text-[#7b6660]">Net: {formatCurrency(p.net_salary)}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <StatusBadge status={p.run_status} />
@@ -508,7 +508,7 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
                     <button
                       type="button"
                       onClick={() => downloadPayslip(p)}
-                      className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10"
+                      className="flex items-center gap-1.5 rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-1.5 text-xs font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
                     >
                       <Download size={14} />
                       PDF
@@ -519,7 +519,7 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
             ))}
           </div>
         ) : (
-          <p className="text-sm text-[#d8c6e8]">No recent payslips</p>
+          <p className="text-sm text-[#7b6660]">No recent payslips</p>
         )}
       </Panel>
     </div>
@@ -549,9 +549,9 @@ function PayslipsView({ payslips, formatCurrency, getMonthLabel, downloadPayslip
   if (payslips.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <FileText size={48} className="text-[#C77DFF]/40" />
-        <p className="mt-4 text-lg font-semibold text-white">No payslips yet</p>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Payslips will appear here after your first payroll run.</p>
+        <FileText size={48} className="text-[#F38978]/40" />
+        <p className="mt-4 text-lg font-semibold text-[#251E1F]">No payslips yet</p>
+        <p className="mt-1 text-sm text-[#7b6660]">Payslips will appear here after your first payroll run.</p>
       </div>
     );
   }
@@ -559,14 +559,14 @@ function PayslipsView({ payslips, formatCurrency, getMonthLabel, downloadPayslip
   return (
     <div className="space-y-3">
       {payslips.map((p) => (
-        <div key={p.payroll_id} className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div key={p.payroll_id} className="flex flex-col gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="font-semibold text-white">{getMonthLabel(p.payroll_month, p.payroll_year)}</p>
-            <div className="mt-2 flex flex-wrap gap-3 text-xs text-[#d8c6e8]">
+            <p className="font-semibold text-[#251E1F]">{getMonthLabel(p.payroll_month, p.payroll_year)}</p>
+            <div className="mt-2 flex flex-wrap gap-3 text-xs text-[#7b6660]">
               <span>Gross: {formatCurrency(p.base_salary)}</span>
               <span>Allowances: {formatCurrency(p.total_allowances)}</span>
               <span>Deductions: -{formatCurrency(p.total_deductions)}</span>
-              <span className="font-semibold text-white">Net: {formatCurrency(p.net_salary)}</span>
+              <span className="font-semibold text-[#251E1F]">Net: {formatCurrency(p.net_salary)}</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -574,7 +574,7 @@ function PayslipsView({ payslips, formatCurrency, getMonthLabel, downloadPayslip
             <button
               type="button"
               onClick={() => printStaffPayslip(p)}
-              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-white/15"
             >
               <Printer size={16} />
               Print
@@ -583,13 +583,13 @@ function PayslipsView({ payslips, formatCurrency, getMonthLabel, downloadPayslip
               <button
                 type="button"
                 onClick={() => downloadPayslip(p)}
-                className="inline-flex items-center gap-2 rounded-lg border border-[#C77DFF]/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
+                className="inline-flex items-center gap-2 rounded-lg border border-[#F38978]/30 bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-white/15"
               >
                 <Download size={16} />
                 PDF
               </button>
             ) : (
-              <span className="text-xs text-white/30">Not yet available</span>
+              <span className="text-xs text-[#251E1F]/30">Not yet available</span>
             )}
           </div>
         </div>
@@ -753,7 +753,7 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
         ) : (
           <div className="space-y-4">
             <div>
-              <label className="block text-xs text-[#d8c6e8]">Amount ($)</label>
+              <label className="block text-xs text-[#7b6660]">Amount ($)</label>
               <input
                 type="number"
                 min="100"
@@ -761,23 +761,23 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
                 value={amount}
                 onChange={(e) => { setAmount(e.target.value); if (errors.amount) setErrors(prev => ({ ...prev, amount: undefined })); }}
                 placeholder={`Min $100 — Max ${formatCurrency(maxAdvance)}`}
-                className={`mt-1 w-full rounded-md border px-3 py-2 text-white bg-transparent placeholder:text-white/20 ${
-                  errors.amount ? "border-red-400/60" : "border-white/10"
+                className={`mt-1 w-full rounded-md border px-3 py-2 text-[#251E1F] bg-transparent placeholder:text-[#251E1F]/20 ${
+                  errors.amount ? "border-red-400/60" : "border-[#f0d2ca]"
                 }`}
               />
-              <p className="mt-1 text-xs text-[#d8c6e8]/60">Maximum: {formatCurrency(maxAdvance)} (50% of base salary)</p>
+              <p className="mt-1 text-xs text-[#7b6660]/60">Maximum: {formatCurrency(maxAdvance)} (50% of base salary)</p>
               {errors.amount && <p className="mt-1 text-xs text-red-400">{errors.amount}</p>}
             </div>
 
             <div>
-              <label className="block text-xs text-[#d8c6e8]">Reason</label>
+              <label className="block text-xs text-[#7b6660]">Reason</label>
               <textarea
                 value={reason}
                 onChange={(e) => { setReason(e.target.value); if (errors.reason) setErrors(prev => ({ ...prev, reason: undefined })); }}
                 placeholder="Explain why you need an advance payment..."
                 rows={3}
-                className={`mt-1 w-full resize-none rounded-md border px-3 py-2 text-white bg-transparent placeholder:text-white/20 ${
-                  errors.reason ? "border-red-400/60" : "border-white/10"
+                className={`mt-1 w-full resize-none rounded-md border px-3 py-2 text-[#251E1F] bg-transparent placeholder:text-[#251E1F]/20 ${
+                  errors.reason ? "border-red-400/60" : "border-[#f0d2ca]"
                 }`}
               />
               {errors.reason && <p className="mt-1 text-xs text-red-400">{errors.reason}</p>}
@@ -787,7 +787,7 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
               type="button"
               onClick={handleSubmit}
               disabled={submitting}
-              className="rounded-lg bg-[#7B2FF7] px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
+              className="rounded-lg bg-[#2D7C83] px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-60"
             >
               {submitting ? "Submitting…" : "Submit Request"}
             </button>
@@ -803,30 +803,30 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
           </div>
         ) : requests.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <DollarSign size={48} className="text-[#C77DFF]/30" />
-            <p className="mt-4 text-sm text-[#d8c6e8]">No advance payment requests yet</p>
+            <DollarSign size={48} className="text-[#F38978]/30" />
+            <p className="mt-4 text-sm text-[#7b6660]">No advance payment requests yet</p>
           </div>
         ) : (
           <div className="space-y-3">
             {requests.map((r) => (
-              <div key={r.request_id} className="rounded-xl border border-white/10 bg-black/10 p-4">
+              <div key={r.request_id} className="rounded-xl border border-[#f0d2ca] bg-black/10 p-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-3">
-                      <p className="text-sm font-semibold text-white">{formatCurrency(r.requested_amount)}</p>
+                      <p className="text-sm font-semibold text-[#251E1F]">{formatCurrency(r.requested_amount)}</p>
                       <span className={`rounded-full border px-3 py-0.5 text-xs font-semibold whitespace-nowrap ${advanceStatusStyles[r.status] || "border-gray-300/30 bg-gray-300/10 text-gray-200"}`}>
                         {statusLabels[r.status] || r.status}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-[#d8c6e8] line-clamp-1">{r.reason || "—"}</p>
+                    <p className="mt-1 text-xs text-[#7b6660] line-clamp-1">{r.reason || "—"}</p>
                   </div>
-                  <p className="text-xs text-white/30 whitespace-nowrap">
+                  <p className="text-xs text-[#251E1F]/30 whitespace-nowrap">
                     {r.created_at ? new Date(r.created_at).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                   </p>
                 </div>
                 {r.hr_comments && (
-                  <div className="mt-2 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
-                    <p className="text-xs text-[#d8c6e8]/70"><span className="font-medium text-[#d8c6e8]">HR:</span> {r.hr_comments}</p>
+                  <div className="mt-2 rounded-lg border border-[#f0d2ca] bg-white/[0.02] px-3 py-2">
+                    <p className="text-xs text-[#7b6660]/70"><span className="font-medium text-[#7b6660]">HR:</span> {r.hr_comments}</p>
                   </div>
                 )}
               </div>
@@ -902,11 +902,11 @@ function NotificationsView({ payslips, getMonthLabel }) {
     <div className="space-y-4">
       {unreadCount > 0 && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-[#d8c6e8]">{unreadCount} unread notification{unreadCount > 1 ? 's' : ''}</p>
+          <p className="text-sm text-[#7b6660]">{unreadCount} unread notification{unreadCount > 1 ? 's' : ''}</p>
           <button
             type="button"
             onClick={handleMarkAllRead}
-            className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white hover:bg-white/10"
+            className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-1.5 text-xs text-[#251E1F] hover:bg-[#FDD9CD]/45"
           >
             Mark all as read
           </button>
@@ -914,10 +914,10 @@ function NotificationsView({ payslips, getMonthLabel }) {
       )}
 
       {notifications.length === 0 ? (
-        <div className="rounded-xl border border-white/10 bg-white/5 p-6 text-center">
-          <Bell size={32} className="mx-auto text-[#C77DFF]/30" />
-          <p className="mt-3 text-sm text-[#d8c6e8]">No notifications at this time.</p>
-          <p className="mt-1 text-xs text-white/30">You'll be notified when a new payslip is available.</p>
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-6 text-center">
+          <Bell size={32} className="mx-auto text-[#F38978]/30" />
+          <p className="mt-3 text-sm text-[#7b6660]">No notifications at this time.</p>
+          <p className="mt-1 text-xs text-[#251E1F]/30">You'll be notified when a new payslip is available.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -926,23 +926,23 @@ function NotificationsView({ payslips, getMonthLabel }) {
               key={n.notification_id}
               className={`rounded-xl border p-4 text-sm transition ${
                 n.is_read
-                  ? "border-white/5 bg-white/[0.02] text-[#d8c6e8]/60"
+                  ? "border-[#f0d2ca] bg-white/[0.02] text-[#7b6660]/60"
                   : n.type === "payslip_available"
                     ? "border-emerald-400/20 bg-emerald-400/5 text-emerald-200"
-                    : "border-white/10 bg-white/5 text-[#d8c6e8]"
+                    : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className={`font-medium ${n.is_read ? "" : "text-white"}`}>{n.title}</p>
-                  {n.message && <p className="mt-1 text-xs text-white/40">{n.message}</p>}
+                  <p className={`font-medium ${n.is_read ? "" : "text-[#251E1F]"}`}>{n.title}</p>
+                  {n.message && <p className="mt-1 text-xs text-[#251E1F]/40">{n.message}</p>}
                 </div>
                 {!n.is_read && (
                   <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
                 )}
               </div>
               {n.created_at && (
-                <p className="mt-2 text-xs text-white/20">
+                <p className="mt-2 text-xs text-[#251E1F]/20">
                   {new Date(n.created_at).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                 </p>
               )}
@@ -957,30 +957,30 @@ function NotificationsView({ payslips, getMonthLabel }) {
 /* ─── Shared Components ─── */
 function Panel({ title, children }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-      <h3 className="mb-3 text-lg font-semibold text-white">{title}</h3>
+    <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+      <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">{title}</h3>
       {children}
     </div>
   );
 }
 
-function StatCard({ icon: Icon, label, value, accent = "text-[#C77DFF]" }) {
+function StatCard({ icon: Icon, label, value, accent = "text-[#F38978]" }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+    <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
       <div className="flex items-center gap-2">
         <Icon size={16} className={accent} />
-        <p className="text-xs uppercase tracking-wide text-[#d8c6e8]">{label}</p>
+        <p className="text-xs uppercase tracking-wide text-[#7b6660]">{label}</p>
       </div>
-      <p className="mt-2 text-lg font-semibold text-white">{value}</p>
+      <p className="mt-2 text-lg font-semibold text-[#251E1F]">{value}</p>
     </div>
   );
 }
 
 function InfoRow({ label, value }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-black/10 px-4 py-3">
-      <p className="text-xs uppercase tracking-wide text-[#d8c6e8]">{label}</p>
-      <p className="mt-1 text-sm font-medium text-white">{value}</p>
+    <div className="rounded-lg border border-[#f0d2ca] bg-black/10 px-4 py-3">
+      <p className="text-xs uppercase tracking-wide text-[#7b6660]">{label}</p>
+      <p className="mt-1 text-sm font-medium text-[#251E1F]">{value}</p>
     </div>
   );
 }
@@ -988,8 +988,8 @@ function InfoRow({ label, value }) {
 function MiniStat({ label, value, highlight }) {
   return (
     <div className="rounded-lg bg-black/20 px-3 py-2">
-      <p className="text-xs text-[#d8c6e8]">{label}</p>
-      <p className={`mt-0.5 text-sm font-semibold ${highlight ? "text-emerald-400" : "text-white"}`}>{value}</p>
+      <p className="text-xs text-[#7b6660]">{label}</p>
+      <p className={`mt-0.5 text-sm font-semibold ${highlight ? "text-emerald-400" : "text-[#251E1F]"}`}>{value}</p>
     </div>
   );
 }
