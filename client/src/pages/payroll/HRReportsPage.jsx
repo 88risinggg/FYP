@@ -36,12 +36,13 @@ const TABS = [
 
 const DEPARTMENTS = [
   { id: "", label: "All Departments" },
-  { id: "1", label: "Admin" },
-  { id: "2", label: "HR" },
-  { id: "3", label: "Finance" },
-  { id: "4", label: "Operations" },
-  { id: "5", label: "Sales" },
-  { id: "6", label: "IT" },
+  { id: "1", label: "Human Resources" },
+  { id: "2", label: "Finance & Accounting" },
+  { id: "3", label: "Sales" },
+  { id: "4", label: "Customer Service" },
+  { id: "5", label: "Operations" },
+  { id: "6", label: "Management" },
+  { id: "7", label: "IT / System Administrator" },
 ];
 
 const LEAVE_TYPES = [

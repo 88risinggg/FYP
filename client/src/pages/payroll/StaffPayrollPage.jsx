@@ -248,7 +248,7 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
       <section>
         <h2 className="text-2xl font-semibold text-white">{heading}</h2>
 
-        <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl p-6">
+        <div className="neon-glass neon-border mt-6 max-h-[calc(100vh-12rem)] overflow-y-auto rounded-2xl p-6">
           {error ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="rounded-xl border border-red-400/20 bg-red-400/5 px-6 py-5">

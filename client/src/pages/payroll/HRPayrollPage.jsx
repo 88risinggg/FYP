@@ -16,7 +16,7 @@ import {
   Upload,
   Users
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
@@ -81,7 +81,7 @@ function HighlightText({ text, query }) {
 }
 
 function getDeptName(deptId) {
-  const names = { 1: "Admin", 2: "HR", 3: "Finance", 4: "Operations", 5: "Sales", 6: "IT" };
+  const names = { 1: "Human Resources", 2: "Finance & Accounting", 3: "Sales", 4: "Customer Service", 5: "Operations", 6: "Management", 7: "IT / System Administrator" };
   return names[deptId] || "—";
 }
 
@@ -283,8 +283,8 @@ function getDaysUntilIR8A() {
 }
 
 const DEPARTMENT_NAMES = {
-  1: "Admin", 2: "HR", 3: "Finance",
-  4: "Operations", 5: "Sales", 6: "IT"
+  1: "Human Resources", 2: "Finance & Accounting", 3: "Sales",
+  4: "Customer Service", 5: "Operations", 6: "Management", 7: "IT / System Administrator"
 };
 
 function HRDashboardView() {
@@ -789,12 +789,13 @@ function StaffRecordsView() {
   const [successMessage, setSuccessMessage] = useState("");
 
   const departmentNames = {
-    1: "Admin",
-    2: "HR",
-    3: "Finance",
-    4: "Operations",
-    5: "Sales",
-    6: "IT"
+    1: "Human Resources",
+    2: "Finance & Accounting",
+    3: "Sales",
+    4: "Customer Service",
+    5: "Operations",
+    6: "Management",
+    7: "IT / System Administrator"
   };
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
@@ -1328,7 +1329,7 @@ function StaffRecordsView() {
 
       {isEditModalOpen && editingStaff && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="neon-glass neon-border rounded-2xl w-full max-w-md p-6 m-4" role="dialog" aria-modal="true" aria-labelledby="staff-edit-title">
+          <div className="neon-glass neon-border rounded-2xl w-full max-w-md p-6 m-4 max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="staff-edit-title">
             <h3 id="staff-edit-title" className="text-lg font-semibold text-white">Edit Staff Record</h3>
             <div className="mt-4 space-y-4">
               <div className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -1788,6 +1789,9 @@ function PayrollRunsView() {
   const [yearFilter, setYearFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const rowRefs = useRef(new Map());
+  const [expandedRunId, setExpandedRunId] = useState(null);
+  const [runDetails, setRunDetails] = useState({});
+  const [detailLoading, setDetailLoading] = useState(null);
 
   const handleUnauthorized = () => {
     localStorage.removeItem("authToken");
@@ -1796,6 +1800,27 @@ function PayrollRunsView() {
   };
 
   const getRowKey = (run) => run.payroll_run_id || run.run_id || run.id || "";
+
+  const fetchRunDetail = async (runId) => {
+    if (runDetails[runId]) {
+      setExpandedRunId(expandedRunId === runId ? null : runId);
+      return;
+    }
+    try {
+      setDetailLoading(runId);
+      setExpandedRunId(runId);
+      const response = await fetch(`${API_BASE_URL}/api/hr/payroll-run/${runId}/payslips`, {
+        headers: getAuthHeaders(session?.token)
+      });
+      if (response.status === 401 || response.status === 403) return handleUnauthorized();
+      const data = await response.json();
+      setRunDetails((prev) => ({ ...prev, [runId]: Array.isArray(data) ? data : [] }));
+    } catch (err) {
+      setRunDetails((prev) => ({ ...prev, [runId]: [] }));
+    } finally {
+      setDetailLoading(null);
+    }
+  };
 
   const fetchPayrollRuns = async () => {
     try {
@@ -1966,38 +1991,101 @@ function PayrollRunsView() {
                 {filteredPayrollRuns.map((run) => {
                   const rowKey = getRowKey(run);
                   const isSearchMatched = searchTerm.trim().length > 0;
+                  const isExpanded = expandedRunId === (run.payroll_run_id || run.run_id);
+                  const detail = runDetails[run.payroll_run_id || run.run_id];
 
                   return (
-                    <tr
-                      key={rowKey}
-                      ref={(node) => {
-                        if (node) {
-                          rowRefs.current.set(rowKey, node);
-                        } else {
-                          rowRefs.current.delete(rowKey);
-                        }
-                      }}
-                      className={`border-b border-white/5 text-white transition-colors duration-300 ${isSearchMatched ? "bg-amber-400/10" : ""}`}
-                    >
-                      <td className="px-4 py-3 text-[#d8c6e8]">{run.payroll_run_id || run.run_id || "-"}</td>
-                      <td className="px-4 py-3">
-                        {run.period || `${run.period_month || "-"} ${run.period_year || ""}`.trim()}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                          run.status === "completed" || run.status === "Completed" ? "bg-emerald-500/20 text-emerald-300" :
-                          run.status === "created" || run.status === "In Progress" ? "bg-blue-500/20 text-blue-300" :
-                          "bg-yellow-500/20 text-yellow-300"
-                        }`}>
-                          {run.status || "-"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-[#d8c6e8]">{run.staff_count ?? run.total_payslips ?? 0}</td>
-                      <td className="px-4 py-3 text-[#d8c6e8]">{run.total_amount || "-"}</td>
-                      <td className="px-4 py-3 text-[#d8c6e8]">
-                        {run.run_date || (run.created_at ? new Date(run.created_at).toLocaleDateString() : "-")}
-                      </td>
-                    </tr>
+                    <Fragment key={rowKey}>
+                      <tr
+                        ref={(node) => {
+                          if (node) { rowRefs.current.set(rowKey, node); } else { rowRefs.current.delete(rowKey); }
+                        }}
+                        onClick={() => fetchRunDetail(run.payroll_run_id || run.run_id)}
+                        className={`border-b border-white/5 text-white transition-colors duration-300 cursor-pointer hover:bg-white/5 ${isSearchMatched ? "bg-amber-400/10" : ""} ${isExpanded ? "bg-[#7B2FF7]/10" : ""}`}
+                      >
+                        <td className="px-4 py-3 text-[#d8c6e8]">{run.payroll_run_id || run.run_id || "-"}</td>
+                        <td className="px-4 py-3">
+                          {run.period || `${run.period_month || "-"} ${run.period_year || ""}`.trim()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`rounded-full px-3 py-1 text-xs font-medium ${
+                            run.status === "Closed" ? "bg-emerald-500/20 text-emerald-300" :
+                            run.status === "finance_approved" ? "bg-blue-500/20 text-blue-300" :
+                            run.status === "Draft" ? "bg-gray-500/20 text-gray-300" :
+                            "bg-yellow-500/20 text-yellow-300"
+                          }`}>
+                            {run.status || "-"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-[#d8c6e8]">{run.staff_count ?? run.total_payslips ?? 0}</td>
+                        <td className="px-4 py-3 text-[#d8c6e8]">{run.total_amount || "-"}</td>
+                        <td className="px-4 py-3 text-[#d8c6e8]">
+                          {run.run_date || (run.created_at ? new Date(run.created_at).toLocaleDateString() : "-")}
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={6} className="p-0">
+                            <div className="bg-[#0d0520] border-t border-b border-[#7B2FF7]/30 px-6 py-4">
+                              {detailLoading === (run.payroll_run_id || run.run_id) ? (
+                                <div className="flex items-center gap-2 text-sm text-[#d8c6e8]">
+                                  <Loader2 className="animate-spin" size={14} /> Loading staff details...
+                                </div>
+                              ) : !detail || detail.length === 0 ? (
+                                <p className="text-sm text-[#d8c6e8]/60">No payroll records in this run.</p>
+                              ) : (
+                                <div>
+                                  <p className="text-xs font-semibold uppercase tracking-wider text-[#C77DFF]/70 mb-3">
+                                    Staff in this run ({detail.length}) — sorted by Employee ID
+                                  </p>
+                                  <div className="overflow-x-auto rounded-lg border border-white/10">
+                                    <table className="min-w-full text-left text-xs">
+                                      <thead className="bg-white/5 text-[#d8c6e8]/80">
+                                        <tr>
+                                          <th className="px-3 py-2 font-medium">#</th>
+                                          <th className="px-3 py-2 font-medium">Employee ID</th>
+                                          <th className="px-3 py-2 font-medium">Name</th>
+                                          <th className="px-3 py-2 font-medium">Email</th>
+                                          <th className="px-3 py-2 font-medium">Base Salary</th>
+                                          <th className="px-3 py-2 font-medium">Allowances</th>
+                                          <th className="px-3 py-2 font-medium">Deductions</th>
+                                          <th className="px-3 py-2 font-medium">Net Pay</th>
+                                          <th className="px-3 py-2 font-medium">Status</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {detail.map((row, idx) => (
+                                          <tr key={row.payroll_id} className="border-t border-white/5 text-white hover:bg-white/5">
+                                            <td className="px-3 py-2 text-[#d8c6e8]/60">{idx + 1}</td>
+                                            <td className="px-3 py-2 text-[#d8c6e8]">{row.employee_id}</td>
+                                            <td className="px-3 py-2 font-medium">{row.staff_name}</td>
+                                            <td className="px-3 py-2 text-[#d8c6e8]">{row.email || "—"}</td>
+                                            <td className="px-3 py-2">${Number(row.base_salary || 0).toLocaleString()}</td>
+                                            <td className="px-3 py-2 text-emerald-300">${Number(row.total_allowances || 0).toLocaleString()}</td>
+                                            <td className="px-3 py-2 text-red-300">-${Number(row.total_deductions || 0).toLocaleString()}</td>
+                                            <td className="px-3 py-2 font-semibold">${Number(row.net_salary || 0).toLocaleString()}</td>
+                                            <td className="px-3 py-2">
+                                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                                row.payslip_status === "sent_to_staff" ? "bg-emerald-500/20 text-emerald-300" :
+                                                row.payslip_status === "finance_approved" ? "bg-blue-500/20 text-blue-300" :
+                                                row.payslip_status === "finance_pending" ? "bg-yellow-500/20 text-yellow-300" :
+                                                "bg-white/10 text-[#d8c6e8]"
+                                              }`}>
+                                                {row.payslip_status || "draft"}
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>

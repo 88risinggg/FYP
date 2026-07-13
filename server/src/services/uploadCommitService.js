@@ -100,39 +100,81 @@ async function commitUpload(sessionId, selectedRowIds, userId) {
 
     for (const row of rowsToInsert) {
       // Step 5: Optimistic concurrency check — detect concurrent duplicates
-      const [existing] = await connection.query(
-        "SELECT employee_id FROM staff WHERE employee_id = ? OR email = ? LIMIT 1",
-        [row.data.employee_id || "", row.data.email || ""]
-      );
+      const checkEmpId = row.data.employee_id || null;
+      const checkEmail = row.data.email || null;
 
-      if (existing.length > 0) {
-        // Concurrent duplicate detected — another user inserted this record
-        conflicts.push({
-          id: row.id,
-          employee_id: row.data.employee_id,
-          email: row.data.email,
-          name: row.data.name,
-          reason: "concurrent_duplicate",
-        });
-        continue;
+      if (checkEmpId || checkEmail) {
+        let dupSql = "SELECT employee_id FROM staff WHERE ";
+        const dupParams = [];
+        const conditions = [];
+
+        if (checkEmpId && Number.isInteger(Number(checkEmpId)) && Number(checkEmpId) > 0) {
+          conditions.push("employee_id = ?");
+          dupParams.push(Number(checkEmpId));
+        }
+        if (checkEmail) {
+          conditions.push("email = ?");
+          dupParams.push(checkEmail);
+        }
+
+        if (conditions.length > 0) {
+          dupSql += conditions.join(" OR ") + " LIMIT 1";
+          const [existing] = await connection.query(dupSql, dupParams);
+
+          if (existing.length > 0) {
+            conflicts.push({
+              id: row.id,
+              employee_id: row.data.employee_id,
+              email: row.data.email,
+              name: row.data.name,
+              reason: "concurrent_duplicate",
+            });
+            continue;
+          }
+        }
       }
 
       // Step 6: Insert the record into staff table
-      await connection.query(
-        `INSERT INTO staff (employee_id, name, email, phone, hire_date, base_salary,
-         status, department_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-        [
-          row.data.employee_id,
-          row.data.name,
-          row.data.email || null,
-          row.data.phone || null,
-          row.data.hire_date,
-          row.data.base_salary || 0,
-          row.data.status || "Active",
-          row.data.department_id || null,
-        ]
-      );
+      // employee_id is auto-increment, so omit it unless explicitly provided as a valid integer
+      const empId = row.data.employee_id;
+      const hasValidEmpId = empId && Number.isInteger(Number(empId)) && Number(empId) > 0;
+
+      // Convert status string to tinyint (1=active, 0=inactive)
+      const rawStatus = row.data.status;
+      const statusInt = (!rawStatus || rawStatus === "Active" || rawStatus === "active" || rawStatus === "1" || rawStatus === 1) ? 1 : 0;
+
+      if (hasValidEmpId) {
+        await connection.query(
+          `INSERT INTO staff (employee_id, name, email, phone, hire_date, base_salary,
+           status, department_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+          [
+            Number(empId),
+            row.data.name,
+            row.data.email || null,
+            row.data.phone || null,
+            row.data.hire_date,
+            row.data.base_salary || 0,
+            statusInt,
+            row.data.department_id || null,
+          ]
+        );
+      } else {
+        await connection.query(
+          `INSERT INTO staff (name, email, phone, hire_date, base_salary,
+           status, department_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+          [
+            row.data.name,
+            row.data.email || null,
+            row.data.phone || null,
+            row.data.hire_date,
+            row.data.base_salary || 0,
+            statusInt,
+            row.data.department_id || null,
+          ]
+        );
+      }
 
       created.push({
         employee_id: row.data.employee_id,
@@ -153,11 +195,14 @@ async function commitUpload(sessionId, selectedRowIds, userId) {
     }
     throw err;
   } finally {
-    // Step 9: Release connection and delete session from store
+    // Step 9: Release connection
     if (connection) {
       connection.release();
     }
-    uploadSessionStore.delete(sessionId);
+    // Only delete session on successful commit (not on error, so user can retry)
+    if (created.length > 0 || conflicts.length > 0) {
+      uploadSessionStore.delete(sessionId);
+    }
   }
 
   // Step 10: Return CommitResult
