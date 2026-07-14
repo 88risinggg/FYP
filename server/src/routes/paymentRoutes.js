@@ -2,6 +2,7 @@ const express = require("express");
 const {
   createStripePaymentLink,
   getPaymentsWorkspace,
+  getPaymentHistory,
   recordManualPayment,
   stripeWebhook
 } = require("../controllers/paymentController");
@@ -37,8 +38,8 @@ function validatePaymentEmployees(employees) {
     return {
       valid: false,
       response: {
-      message: "All payment recipients must have employee details, bank details and a positive amount",
-      invalidEmployeeIds: invalidEmployees.map((employee) => employee.employeeId || "Unknown")
+        message: "All payment recipients must have employee details, bank details and a positive amount",
+        invalidEmployeeIds: invalidEmployees.map((employee) => employee.employeeId || "Unknown")
       }
     };
   }
@@ -101,10 +102,15 @@ async function submitModernTreasuryTransfer(req, res) {
   }
 }
 
+// Webhook must be before auth middleware for raw body access
 router.post("/stripe/webhook", stripeWebhook);
 
 router.use(authenticateToken);
 router.get("/", getPaymentsWorkspace);
+router.get("/history/:invoiceId", getPaymentHistory);
+router.get("/stripe-config", (req, res) => {
+  res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null });
+});
 router.post("/manual", recordManualPayment);
 router.post("/stripe-link", createStripePaymentLink);
 router.post("/modern-treasury-recipients", allowRoles("Admin", "Finance"), setupModernTreasuryRecipientAccounts);

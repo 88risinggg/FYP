@@ -107,9 +107,15 @@ function buildFilteredWhere(query) {
  * @returns {Object} Indicator with parsed details object.
  */
 function parseIndicatorDetails(indicator) {
+  let details = {};
+  if (indicator.details_json) {
+    details = typeof indicator.details_json === "string"
+      ? JSON.parse(indicator.details_json)
+      : indicator.details_json;
+  }
   return {
     ...indicator,
-    details: indicator.details_json ? JSON.parse(indicator.details_json) : {}
+    details
   };
 }
 
@@ -353,10 +359,157 @@ async function reviewInvoice(req, res) {
   }
 }
 
+/**
+ * POST /api/fraud/report-notification
+ *
+ * Generates a fraud compliance report notification and sends it to all Finance users.
+ * Triggered from the Fraud Compliance Checklist panel when exporting a report.
+ *
+ * Request body: { failed_checks: Array, summary: Object }
+ */
+async function sendFraudReportNotification(req, res) {
+  const { failed_checks = [], summary = {} } = req.body;
+
+  try {
+    const { createNotificationInternal } = require("./notificationController");
+
+    // Get all Finance and Admin users to notify
+    const [financeUsers] = await pool.query(
+      `SELECT u.user_id, u.name FROM user u
+       INNER JOIN role r ON r.role_id = u.role_id
+       WHERE r.role_name IN ('Finance', 'Admin') AND u.status = 'Active'`
+    );
+
+    if (financeUsers.length === 0) {
+      return res.json({ message: "No finance users to notify", notified: 0 });
+    }
+
+    const failCount = failed_checks.length;
+    const criticalFails = failed_checks.filter((c) => c.severity === "Critical").length;
+    const title = criticalFails > 0
+      ? `⚠️ Fraud Alert: ${criticalFails} critical compliance failure(s)`
+      : `📋 Fraud Report: ${failCount} check(s) require attention`;
+
+    const message = [
+      `Fraud compliance report generated on ${new Date().toLocaleString()}.`,
+      `Summary: ${summary.assessedCount || 0} invoices assessed, ${summary.highCount || 0} high-risk, ${summary.flaggedCount || 0} flagged.`,
+      failCount > 0 ? `Failed checks: ${failed_checks.map((c) => c.label).join(", ")}` : "All checks passed.",
+      "Please review the exported Excel report for full details."
+    ].join(" ");
+
+    // Send notification to each Finance/Admin user
+    for (const user of financeUsers) {
+      await createNotificationInternal(user.user_id, "system", title, message);
+    }
+
+    // Log audit entry
+    await writeAuditLog(pool, "fraud_report_generated", "system", null, req.user?.userId);
+
+    res.json({
+      message: "Fraud report notification sent to finance team",
+      notified: financeUsers.length,
+      recipients: financeUsers.map((u) => u.name)
+    });
+  } catch (error) {
+    console.error("Failed to send fraud report notification:", error);
+    res.status(500).json({ message: "Failed to send notification", detail: error.message });
+  }
+}
+
+/**
+ * POST /api/fraud/flag-invalid-rows
+ *
+ * Flags invalid bulk upload rows as potential fraud indicators.
+ * Creates fraud assessment records for rows that failed validation.
+ * Request body: { rows: Array, source_file: string }
+ */
+async function flagInvalidRows(req, res) {
+  const connection = await pool.getConnection();
+  try {
+    const { rows = [], source_file = "bulk_upload" } = req.body;
+
+    if (rows.length === 0) {
+      return res.json({ message: "No rows to flag.", flagged: 0 });
+    }
+
+    let flaggedCount = 0;
+
+    for (const row of rows) {
+      const invoiceNumber = row["Invoice Number"] || row.invoice_number || `INVALID-${Date.now()}`;
+      const customerName = row["Customer Name"] || row.customer_name || "Unknown";
+      const amount = Number(row["Amount"] || row.amount) || 0;
+      const errors = row.validation_errors || [];
+
+      // Insert a record into invoice_fraud_assessment for tracking
+      await connection.query(
+        `INSERT INTO invoice_fraud_assessment
+          (invoice_id, risk_score, risk_level, assessed_at, review_status)
+         VALUES (NULL, ?, 'High', NOW(), 'Pending')`,
+        [85]
+      );
+      const [[{ lastId }]] = await connection.query("SELECT LAST_INSERT_ID() as lastId");
+
+      // Insert fraud indicators for each validation error
+      for (const error of errors) {
+        await connection.query(
+          `INSERT INTO invoice_fraud_indicator
+            (assessment_id, indicator_type, description, weight, details_json)
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            lastId,
+            "INVALID_BULK_UPLOAD",
+            `Invalid row from bulk upload: ${error}`,
+            30,
+            JSON.stringify({
+              invoice_number: invoiceNumber,
+              customer_name: customerName,
+              amount,
+              source_file,
+              validation_error: error
+            })
+          ]
+        );
+      }
+
+      // If no specific errors, add a generic indicator
+      if (errors.length === 0) {
+        await connection.query(
+          `INSERT INTO invoice_fraud_indicator
+            (assessment_id, indicator_type, description, weight, details_json)
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            lastId,
+            "INVALID_BULK_UPLOAD",
+            `Row failed validation during bulk upload from ${source_file}`,
+            30,
+            JSON.stringify({ invoice_number: invoiceNumber, customer_name: customerName, amount, source_file })
+          ]
+        );
+      }
+
+      flaggedCount++;
+    }
+
+    await writeAuditLog(pool, `fraud_flagged_invalid_rows:${flaggedCount}`, "bulk_upload", null, req.user?.userId);
+
+    res.json({
+      message: `${flaggedCount} invalid rows flagged for fraud review.`,
+      flagged: flaggedCount
+    });
+  } catch (error) {
+    console.error("[Fraud] Flag invalid rows error:", error);
+    res.status(500).json({ message: "Failed to flag invalid rows.", detail: error.message });
+  } finally {
+    connection.release();
+  }
+}
+
 module.exports = {
   buildFilteredWhere,
+  flagInvalidRows,
   getFraudDashboard,
   parseIndicatorDetails,
   reassessInvoice,
-  reviewInvoice
+  reviewInvoice,
+  sendFraudReportNotification
 };

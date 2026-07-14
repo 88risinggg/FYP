@@ -6,7 +6,7 @@ import {
   Shield,
   Users
 } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { useLocation, Link } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
@@ -96,6 +96,16 @@ const invoicingSidebarSections = [
         label: "Reports",
         icon: FileBarChart,
         path: "/dashboard/invoicing/admin/reports"
+      }
+    ]
+  },
+  {
+    label: "SYSTEM",
+    items: [
+      {
+        label: "Settings",
+        icon: Settings,
+        path: "/dashboard/settings"
       }
     ]
   }

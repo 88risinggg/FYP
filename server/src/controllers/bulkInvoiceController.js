@@ -266,17 +266,27 @@ async function processBulkInvoices(req, res) {
 
     const validation = await validateInvoiceImport(req.body.rows, req.body.file, connection);
 
-    if (validation.message || validation.invalidCount > 0) {
+    if (validation.message) {
       await connection.rollback();
       return res.status(400).json({
-        message: validation.message || "Bulk upload contains invalid rows. No invoices were saved.",
+        message: validation.message,
         rows: validation.rows,
         invalidRows: validation.rows.filter((row) => !row.is_valid).map((row) => row.row_number),
         missingColumns: validation.missingColumns
       });
     }
 
-    const invoices = validation.rows;
+    // Process only valid rows, skip invalid ones
+    const invoices = validation.rows.filter((row) => row.is_valid);
+
+    if (invoices.length === 0) {
+      await connection.rollback();
+      return res.status(400).json({
+        message: "No valid rows to process.",
+        rows: validation.rows,
+        invalidRows: validation.rows.filter((row) => !row.is_valid).map((row) => row.row_number)
+      });
+    }
 
     const createdInvoices = [];
 
@@ -360,6 +370,7 @@ async function processBulkInvoices(req, res) {
     });
   } catch (error) {
     await connection.rollback();
+    console.error("[BulkInvoice] Processing error:", error);
     res.status(500).json({
       message: "Failed to process bulk invoices.",
       detail: error.message

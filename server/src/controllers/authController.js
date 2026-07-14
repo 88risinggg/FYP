@@ -38,7 +38,10 @@ function getAllowedModules(roleName) {
  * @returns {boolean} True if user is active.
  */
 function isActiveStatus(status) {
-  return status === 1 || status === true || status === "1" || status === "active";
+  if (typeof status === "string") {
+    return status.toLowerCase() === "active" || status === "1";
+  }
+  return status === 1 || status === true;
 }
 
 /**

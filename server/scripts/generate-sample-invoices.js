@@ -1,0 +1,392 @@
+/**
+ * Generate Sample Invoices Script
+ *
+ * Creates a sample_invoices.xlsx file with 30 realistic invoices,
+ * then imports them into the database.
+ *
+ * Usage: node scripts/generate-sample-invoices.js
+ */
+
+require("dotenv").config();
+const ExcelJS = require("exceljs");
+const path = require("path");
+const { pool } = require("../src/config/db");
+
+// =====================================================
+// Sample Data
+// =====================================================
+
+const customers = [
+  { name: "Acme Corporation", company: "Acme Corp Pte Ltd", email: "billing@acmecorp.sg" },
+  { name: "TechWave Solutions", company: "TechWave Solutions Pte Ltd", email: "accounts@techwave.sg" },
+  { name: "Marina Bay Trading", company: "Marina Bay Trading Co", email: "finance@marinabay.sg" },
+  { name: "Sunrise Digital", company: "Sunrise Digital Pte Ltd", email: "payment@sunrisedigital.sg" },
+  { name: "Pacific Ventures", company: "Pacific Ventures Holdings", email: "ap@pacificventures.sg" },
+  { name: "GreenLeaf Consulting", company: "GreenLeaf Consulting Group", email: "invoices@greenleaf.sg" },
+  { name: "CloudNine Systems", company: "CloudNine Systems Pte Ltd", email: "billing@cloudnine.sg" },
+  { name: "Diamond Electronics", company: "Diamond Electronics Trading", email: "accounts@diamondel.sg" },
+  { name: "Golden Gate Logistics", company: "Golden Gate Logistics Pte Ltd", email: "finance@gglogistics.sg" },
+  { name: "Stellar Marketing", company: "Stellar Marketing Agency", email: "payments@stellarmarketing.sg" },
+  { name: "BluePeak Software", company: "BluePeak Software Pte Ltd", email: "ar@bluepeaksw.sg" },
+  { name: "Orchid Healthcare", company: "Orchid Healthcare Services", email: "billing@orchidhc.sg" },
+  { name: "Zenith Engineering", company: "Zenith Engineering Works", email: "accounts@zenitheng.sg" },
+  { name: "Coral Bay Restaurants", company: "Coral Bay F&B Group", email: "finance@coralbay.sg" },
+  { name: "Atlas Security", company: "Atlas Security Solutions", email: "invoices@atlassec.sg" }
+];
+
+const serviceDescriptions = [
+  "Web Development Services",
+  "Mobile App Development",
+  "Cloud Infrastructure Setup",
+  "UI/UX Design Consultation",
+  "Database Migration Services",
+  "API Integration Development",
+  "Security Audit & Penetration Testing",
+  "IT Support & Maintenance (Monthly)",
+  "Software License Renewal",
+  "Data Analytics Dashboard Setup",
+  "Email Marketing Campaign",
+  "SEO Optimization Package",
+  "Content Management System Setup",
+  "Server Administration Services",
+  "Network Configuration & Setup",
+  "Custom Report Development",
+  "Training & Onboarding Session",
+  "Technical Documentation",
+  "Performance Optimization",
+  "Disaster Recovery Planning",
+  "Social Media Management",
+  "Graphic Design Package",
+  "Video Production Services",
+  "Hosting Services (Annual)",
+  "Domain Registration & DNS Setup"
+];
+
+const statuses = ["Draft", "Sent", "Viewed", "Paid", "Overdue"];
+const statusWeights = [5, 6, 5, 10, 4]; // weighted probability
+
+const currencies = ["SGD"];
+
+const notes = [
+  "Payment due within 30 days. Thank you for your business.",
+  "Please reference the invoice number in your payment.",
+  "Net 30 payment terms apply.",
+  "Late payment incurs 2% monthly interest.",
+  "Thank you for choosing our services.",
+  "For queries, contact finance@paynivo.com.",
+  "Auto-generated invoice. No signature required.",
+  "Includes all applicable taxes.",
+  "Volume discount applied as per contract.",
+  "Recurring monthly service charge."
+];
+
+// =====================================================
+// Helper Functions
+// =====================================================
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function randomFloat(min, max, decimals = 2) {
+  return Number((Math.random() * (max - min) + min).toFixed(decimals));
+}
+
+function randomElement(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function weightedRandomStatus() {
+  const totalWeight = statusWeights.reduce((sum, w) => sum + w, 0);
+  let random = Math.random() * totalWeight;
+  for (let i = 0; i < statuses.length; i++) {
+    random -= statusWeights[i];
+    if (random <= 0) return statuses[i];
+  }
+  return statuses[0];
+}
+
+function randomDate(startDaysAgo, endDaysAgo) {
+  const start = Date.now() - startDaysAgo * 24 * 60 * 60 * 1000;
+  const end = Date.now() - endDaysAgo * 24 * 60 * 60 * 1000;
+  const timestamp = start + Math.random() * (end - start);
+  return new Date(timestamp).toISOString().split("T")[0];
+}
+
+function addDays(dateStr, days) {
+  const date = new Date(dateStr);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split("T")[0];
+}
+
+function generateLineItems() {
+  const itemCount = randomInt(1, 5);
+  const items = [];
+  const usedDescriptions = new Set();
+
+  for (let i = 0; i < itemCount; i++) {
+    let desc;
+    do {
+      desc = randomElement(serviceDescriptions);
+    } while (usedDescriptions.has(desc) && usedDescriptions.size < serviceDescriptions.length);
+    usedDescriptions.add(desc);
+
+    const quantity = randomInt(1, 10);
+    const unitPrice = randomFloat(50, 5000);
+    const total = Number((quantity * unitPrice).toFixed(2));
+
+    items.push({ description: desc, quantity, unitPrice, total });
+  }
+
+  return items;
+}
+
+// =====================================================
+// Generate 30 Invoices
+// =====================================================
+
+function generateInvoices() {
+  const invoices = [];
+
+  for (let i = 1; i <= 30; i++) {
+    const customer = randomElement(customers);
+    const issueDate = randomDate(90, 5);
+    const dueDays = randomInt(14, 45);
+    const dueDate = addDays(issueDate, dueDays);
+    const status = weightedRandomStatus();
+    const items = generateLineItems();
+    const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+    const taxRate = randomElement([0, 0.07, 0.08, 0.09]);
+    const tax = Number((subtotal * taxRate).toFixed(2));
+    const discountRate = Math.random() < 0.3 ? randomFloat(0.02, 0.1) : 0;
+    const discount = Number((subtotal * discountRate).toFixed(2));
+    const total = Number((subtotal + tax - discount).toFixed(2));
+
+    invoices.push({
+      invoiceNumber: `INV-${String(i).padStart(6, "0")}`,
+      customerName: customer.name,
+      companyName: customer.company,
+      customerEmail: customer.email,
+      invoiceDate: issueDate,
+      dueDate: dueDate,
+      currency: "SGD",
+      status: status,
+      subtotal: subtotal,
+      tax: tax,
+      discount: discount,
+      total: total,
+      notes: randomElement(notes),
+      items: items
+    });
+  }
+
+  return invoices;
+}
+
+// =====================================================
+// Create Excel File
+// =====================================================
+
+async function createExcelFile(invoices) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "PayNivo";
+  workbook.created = new Date();
+
+  // Sheet 1: Invoices
+  const invoiceSheet = workbook.addWorksheet("Invoices");
+  invoiceSheet.columns = [
+    { header: "Invoice Number", key: "invoiceNumber", width: 18 },
+    { header: "Customer Name", key: "customerName", width: 25 },
+    { header: "Company Name", key: "companyName", width: 30 },
+    { header: "Customer Email", key: "customerEmail", width: 30 },
+    { header: "Invoice Date", key: "invoiceDate", width: 14 },
+    { header: "Due Date", key: "dueDate", width: 14 },
+    { header: "Currency", key: "currency", width: 10 },
+    { header: "Status", key: "status", width: 12 },
+    { header: "Subtotal", key: "subtotal", width: 14 },
+    { header: "Tax", key: "tax", width: 12 },
+    { header: "Discount", key: "discount", width: 12 },
+    { header: "Total", key: "total", width: 14 },
+    { header: "Notes", key: "notes", width: 45 }
+  ];
+
+  // Style header row
+  invoiceSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  invoiceSheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF7B2FF7" }
+  };
+
+  invoices.forEach((inv) => {
+    invoiceSheet.addRow({
+      invoiceNumber: inv.invoiceNumber,
+      customerName: inv.customerName,
+      companyName: inv.companyName,
+      customerEmail: inv.customerEmail,
+      invoiceDate: inv.invoiceDate,
+      dueDate: inv.dueDate,
+      currency: inv.currency,
+      status: inv.status,
+      subtotal: inv.subtotal,
+      tax: inv.tax,
+      discount: inv.discount,
+      total: inv.total,
+      notes: inv.notes
+    });
+  });
+
+  // Sheet 2: Line Items
+  const itemsSheet = workbook.addWorksheet("Line Items");
+  itemsSheet.columns = [
+    { header: "Invoice Number", key: "invoiceNumber", width: 18 },
+    { header: "Description", key: "description", width: 40 },
+    { header: "Quantity", key: "quantity", width: 10 },
+    { header: "Unit Price", key: "unitPrice", width: 14 },
+    { header: "Total", key: "total", width: 14 }
+  ];
+
+  itemsSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  itemsSheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF7B2FF7" }
+  };
+
+  invoices.forEach((inv) => {
+    inv.items.forEach((item) => {
+      itemsSheet.addRow({
+        invoiceNumber: inv.invoiceNumber,
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        total: item.total
+      });
+    });
+  });
+
+  const filePath = path.join(__dirname, "..", "sample_invoices.xlsx");
+  await workbook.xlsx.writeFile(filePath);
+  console.log(`[GENERATE] ✓ Excel file created: ${filePath}`);
+  return filePath;
+}
+
+// =====================================================
+// Import Invoices into Database
+// =====================================================
+
+async function importInvoices(invoices) {
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // Ensure customers exist in the database
+    const customerMap = new Map();
+    for (const inv of invoices) {
+      if (!customerMap.has(inv.customerName)) {
+        // Check if customer exists
+        const [existing] = await connection.query(
+          "SELECT customer_id FROM customer WHERE name = ? LIMIT 1",
+          [inv.customerName]
+        );
+
+        if (existing.length > 0) {
+          customerMap.set(inv.customerName, existing[0].customer_id);
+        } else {
+          // Create customer
+          const [result] = await connection.query(
+            "INSERT INTO customer (name, email, address, created_at) VALUES (?, ?, ?, NOW())",
+            [inv.customerName, inv.customerEmail, `${inv.companyName}, Singapore`]
+          );
+          customerMap.set(inv.customerName, result.insertId);
+        }
+      }
+    }
+
+    console.log(`[IMPORT] Resolved ${customerMap.size} customers.`);
+
+    // Import each invoice
+    let imported = 0;
+    for (const inv of invoices) {
+      const customerId = customerMap.get(inv.customerName);
+
+      const [invoiceResult] = await connection.query(
+        `INSERT INTO invoice (status, issue_date, due_date, invoiceId, total_amount, customer_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, NOW())`,
+        [inv.status, inv.invoiceDate, inv.dueDate, inv.invoiceNumber, inv.total, customerId]
+      );
+
+      const invoicePk = invoiceResult.insertId;
+
+      // Insert line items
+      const itemValues = inv.items.map((item) => [
+        item.description,
+        item.quantity,
+        item.unitPrice,
+        item.total,
+        invoicePk
+      ]);
+
+      await connection.query(
+        "INSERT INTO invoice_item (description, quantity, unit_price, amount, invoice_invoice_id) VALUES ?",
+        [itemValues]
+      );
+
+      // Write audit log
+      await connection.query(
+        `INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, 'invoice', ?, NULL)`,
+        [`invoice_status:${inv.status}`, invoicePk]
+      );
+
+      imported++;
+    }
+
+    await connection.commit();
+    console.log(`[IMPORT] ✓ Successfully imported ${imported} invoices.`);
+
+    // Verify count
+    const [countResult] = await pool.query("SELECT COUNT(*) AS total FROM invoice");
+    console.log(`[VERIFY] ✓ Database contains ${countResult[0].total} invoices.`);
+
+    if (countResult[0].total !== 30) {
+      console.error(`[VERIFY] ✗ Expected 30 invoices, found ${countResult[0].total}`);
+    }
+  } catch (error) {
+    await connection.rollback();
+    console.error("[IMPORT] ✗ Import failed:", error.message);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+// =====================================================
+// Main
+// =====================================================
+
+async function main() {
+  try {
+    console.log("=== PayNivo Invoice Sample Data Generator ===\n");
+
+    // Generate 30 invoices
+    const invoices = generateInvoices();
+    console.log(`[GENERATE] Generated ${invoices.length} invoices with line items.\n`);
+
+    // Create Excel file
+    await createExcelFile(invoices);
+
+    // Import into database
+    console.log("\n[IMPORT] Importing invoices into database...");
+    await importInvoices(invoices);
+
+    console.log("\n=== ✓ All done! ===");
+  } catch (error) {
+    console.error("[ERROR]", error.message);
+    process.exit(1);
+  } finally {
+    await pool.end();
+  }
+}
+
+main();

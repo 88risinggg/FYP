@@ -59,7 +59,10 @@ export default function PublicInvoiceViewPage() {
     Sent: "bg-blue-500",
     Viewed: "bg-cyan-500",
     Paid: "bg-emerald-500",
-    Overdue: "bg-rose-500"
+    Overdue: "bg-rose-500",
+    Cancelled: "bg-gray-500",
+    Refunded: "bg-amber-500",
+    "Failed_Payment": "bg-red-500"
   };
 
   return (
@@ -140,16 +143,16 @@ export default function PublicInvoiceViewPage() {
           </div>
 
           {invoice.status !== "Paid" ? (
-            <div className="mt-6 rounded-xl border border-[#F38978]/30 bg-[#F38978]/10 p-4 text-center">
-              <p className="text-sm text-[#7b6660]">
-                Payment is due by <strong className="text-[#251E1F]">{formatDate(invoice.due_date)}</strong>.
+            <div className="mt-6 rounded-xl border border-[#C77DFF]/30 bg-[#C77DFF]/10 p-4 text-center">
+              <p className="text-sm text-[#d8c6e8]">
+                Payment is due by <strong className="text-white">{formatDate(invoice.due_date)}</strong>.
                 Please contact the sender for payment instructions.
               </p>
             </div>
           ) : (
             <div className="mt-6 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-center">
               <p className="text-sm font-semibold text-emerald-200">
-                ✓ This invoice has been paid. Thank you!
+                ✅ This invoice has been paid{invoice.paid_date ? ` on ${formatDate(invoice.paid_date)}` : ""}. Thank you!
               </p>
             </div>
           )}

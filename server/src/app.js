@@ -33,6 +33,8 @@ const otpAuthRoutes = require("./routes/otpAuthRoutes");
 const publicRoutes = require("./routes/publicRoutes");
 const financePayrollRoutes = require("./routes/financePayrollRoutes");
 const claimRoutes = require("./routes/claimRoutes");
+const settingsRoutes = require("./routes/settingsRoutes");
+const financeDashboardRoutes = require("./routes/financeDashboardRoutes");
 
 const app = express();
 
@@ -46,6 +48,19 @@ const allowedOrigins = [
 
 app.use(cors({ origin: allowedOrigins }));
 app.use(compression());
+
+// Stripe webhook needs raw body for signature verification
+app.use("/api/payments/stripe/webhook", express.raw({ type: "application/json" }));
+app.use((req, res, next) => {
+  if (req.originalUrl === "/api/payments/stripe/webhook") {
+    req.rawBody = req.body;
+    try {
+      req.body = JSON.parse(req.body.toString());
+    } catch { /* leave as-is */ }
+  }
+  next();
+});
+
 app.use(express.json({ limit: "5mb" }));
 
 // Static file serving for payslip PDF downloads
@@ -85,6 +100,12 @@ app.use("/api/admin/invoicing/audit-logs", adminAuditLogRoutes);
 app.use("/api/auth/singpass", singpassRoutes);
 app.use("/api/auth/google", googleAuthRoutes);
 app.use("/api/auth/otp", otpAuthRoutes);
+
+// Routes — Settings module
+app.use("/api/settings", settingsRoutes);
+
+// Routes — Finance Dashboard
+app.use("/api/finance", financeDashboardRoutes);
 
 // 404 handler
 app.use((req, res) => {

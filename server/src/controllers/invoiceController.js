@@ -207,6 +207,21 @@ async function getInvoices(req, res) {
       ORDER BY i.created_at DESC, i.invoice_id DESC
     `);
 
+    // Try to fetch payment columns (may not exist yet in older schemas)
+    let paymentData = {};
+    try {
+      const [paymentRows] = await pool.query(`
+        SELECT invoice_id, payment_url, qr_code_url, stripe_session_id,
+               payment_intent_id, payment_status, payment_method,
+               payment_date, transaction_id
+        FROM invoice
+        WHERE payment_url IS NOT NULL OR payment_status IS NOT NULL
+      `);
+      paymentRows.forEach((row) => {
+        paymentData[row.invoice_id] = row;
+      });
+    } catch { /* columns not yet added — skip */ }
+
     const invoiceIds = rows.map((row) => row.invoice_id);
     let itemsByInvoiceId = {};
     let statusByInvoiceId = {};
@@ -262,13 +277,24 @@ async function getInvoices(req, res) {
 
     // Map results with resolved status and attached items
     res.json({
-      invoices: rows.map((row) => ({
-        ...row,
-        database_status: row.status,
-        status: toOperationalInvoiceStatus(row.status, statusByInvoiceId[row.invoice_id]),
-        total_amount: toCurrencyNumber(row.total_amount),
-        items: itemsByInvoiceId[row.invoice_id] || []
-      }))
+      invoices: rows.map((row) => {
+        const payment = paymentData[row.invoice_id] || {};
+        return {
+          ...row,
+          database_status: row.status,
+          status: toOperationalInvoiceStatus(row.status, statusByInvoiceId[row.invoice_id]),
+          total_amount: toCurrencyNumber(row.total_amount),
+          items: itemsByInvoiceId[row.invoice_id] || [],
+          payment_url: payment.payment_url || null,
+          qr_code_url: payment.qr_code_url || null,
+          stripe_session_id: payment.stripe_session_id || null,
+          payment_intent_id: payment.payment_intent_id || null,
+          payment_status: payment.payment_status || null,
+          payment_method: payment.payment_method || null,
+          payment_date: payment.payment_date || null,
+          transaction_id: payment.transaction_id || null
+        };
+      })
     });
   } catch (error) {
     res.status(500).json({
@@ -422,6 +448,10 @@ async function createInvoice(req, res) {
 
     await connection.commit();
 
+    // Notify Finance that draft was saved (non-blocking)
+    const { notifyDraftSaved } = require("../services/invoiceNotificationService");
+    notifyDraftSaved(invoiceId, req.user?.userId).catch(() => {});
+
     res.status(201).json({
       message: "Invoice created successfully.",
       invoice: {
@@ -473,8 +503,10 @@ async function sendInvoice(req, res) {
           i.invoiceId,
           i.status,
           i.total_amount,
+          i.due_date,
           c.name AS customer_name,
-          c.email AS customer_email
+          c.email AS customer_email,
+          c.address AS customer_address
         FROM invoice i
         INNER JOIN customer c ON c.customer_id = i.customer_id
         WHERE i.invoice_id = ?
@@ -495,8 +527,49 @@ async function sendInvoice(req, res) {
       return res.status(400).json({ message: "Paid invoices cannot be sent again." });
     }
 
-    // Send invoice via email service
-    await sendInvoiceEmail(invoice);
+    // Fetch line items for PDF
+    const [items] = await connection.query(
+      "SELECT description, quantity, unit_price, amount FROM invoice_item WHERE invoice_invoice_id = ?",
+      [invoiceId]
+    );
+    invoice.items = items;
+
+    // Create Stripe Checkout Session
+    const { createCheckoutSession } = require("../services/stripeService");
+    const stripeResult = await createCheckoutSession(invoice);
+    const paymentUrl = stripeResult.paymentUrl;
+    const sessionId = stripeResult.sessionId;
+
+    // Generate QR Code
+    const { generateQRCode } = require("../services/qrCodeService");
+    const qrCodeDataUri = await generateQRCode(paymentUrl);
+
+    // Store payment URL and QR code in invoice record
+    try {
+      await connection.query(
+        "UPDATE invoice SET payment_url = ?, qr_code_url = ?, stripe_session_id = ? WHERE invoice_id = ?",
+        [paymentUrl, qrCodeDataUri, sessionId, invoiceId]
+      );
+    } catch (colError) {
+      // Columns may not exist yet — non-blocking
+      console.log("[SEND] Payment URL columns not available:", colError.code);
+    }
+
+    // Generate PDF with payment URL and QR code
+    const { generateInvoicePDF } = require("../services/pdfService");
+    let pdfBuffer = null;
+    try {
+      pdfBuffer = await generateInvoicePDF(invoice, { paymentUrl, qrCodeDataUri });
+    } catch (pdfError) {
+      console.error("[SEND] PDF generation failed:", pdfError.message);
+    }
+
+    // Send invoice via email service with PDF attachment
+    await sendInvoiceEmail(invoice, {
+      pdfBuffer,
+      paymentUrl,
+      qrCodeDataUri
+    });
 
     // Update status to Sent and clear schedule
     await connection.query(
@@ -508,10 +581,16 @@ async function sendInvoice(req, res) {
 
     await connection.commit();
 
+    // Notify Finance (non-blocking)
+    const { notifyInvoiceSent } = require("../services/invoiceNotificationService");
+    notifyInvoiceSent(invoice.invoiceId, invoice.customer_name, req.user?.userId).catch(() => {});
+
     res.json({
       message: "Invoice sent.",
       invoice_id: invoiceId,
-      status: "Sent"
+      status: "Sent",
+      payment_url: paymentUrl,
+      qr_code: qrCodeDataUri ? true : false
     });
   } catch (error) {
     await connection.rollback();

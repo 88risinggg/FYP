@@ -2,18 +2,21 @@
  * Stripe Payment Service
  *
  * Handles Stripe Checkout Session creation and webhook verification.
+ * Supports Credit/Debit Card, Apple Pay, Google Pay, and other Stripe methods.
  * Falls back to mock URLs if STRIPE_SECRET_KEY is not configured.
  *
  * Required environment variables:
  * - STRIPE_SECRET_KEY
+ * - STRIPE_PUBLISHABLE_KEY (for client-side use)
  * - STRIPE_WEBHOOK_SECRET (for webhook signature verification)
  */
 
 /**
  * Create a Stripe Checkout Session for an invoice.
+ * Supports multiple payment methods: Card, Apple Pay, Google Pay, etc.
  *
  * @param {Object} invoice - { invoice_id, invoiceId, total_amount, customer_email }
- * @returns {Object} { paymentUrl, sessionId } or mock URL if Stripe not configured.
+ * @returns {Object} { paymentUrl, sessionId, provider } or mock URL if Stripe not configured.
  */
 async function createCheckoutSession(invoice) {
   const amount = Math.round(Number(invoice.total_amount) * 100); // cents
@@ -34,7 +37,9 @@ async function createCheckoutSession(invoice) {
   const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
   const session = await stripe.checkout.sessions.create({
-    payment_method_types: ["card"],
+    // Allow multiple payment methods: card (includes Apple Pay, Google Pay),
+    // and any other Stripe-supported methods available in the merchant's region
+    payment_method_types: ["card", "paynow"],
     line_items: [{
       price_data: {
         currency: "sgd",
@@ -47,13 +52,14 @@ async function createCheckoutSession(invoice) {
       quantity: 1
     }],
     mode: "payment",
-    success_url: `${process.env.CLIENT_URL || "http://localhost:5173"}/payment/success?invoice=${invoice.invoiceId}`,
+    success_url: `${process.env.CLIENT_URL || "http://localhost:5173"}/payment/success?invoice=${invoice.invoiceId}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${process.env.CLIENT_URL || "http://localhost:5173"}/payment/cancelled?invoice=${invoice.invoiceId}`,
     customer_email: invoice.customer_email,
     metadata: {
       invoice_id: String(invoice.invoice_id),
       invoiceId: invoice.invoiceId
-    }
+    },
+    expires_at: Math.floor(Date.now() / 1000) + 24 * 60 * 60 // 24 hours
   });
 
   console.log(`[STRIPE] Checkout session created for ${invoice.invoiceId}: ${session.id}`);
@@ -63,6 +69,26 @@ async function createCheckoutSession(invoice) {
     paymentUrl: session.url,
     sessionId: session.id
   };
+}
+
+/**
+ * Retrieve a Stripe Checkout Session to check its status.
+ *
+ * @param {string} sessionId - Stripe session ID.
+ * @returns {Object|null} Session object or null.
+ */
+async function retrieveSession(sessionId) {
+  if (!process.env.STRIPE_SECRET_KEY || !sessionId) return null;
+
+  const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+  try {
+    return await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent"]
+    });
+  } catch (err) {
+    console.error("[STRIPE] Failed to retrieve session:", err.message);
+    return null;
+  }
 }
 
 /**
@@ -88,5 +114,6 @@ function verifyWebhookEvent(rawBody, signature) {
 
 module.exports = {
   createCheckoutSession,
+  retrieveSession,
   verifyWebhookEvent
 };
