@@ -8,13 +8,13 @@
 
 body {
   margin: 0;
-  background: #090014;
+  background: #fff8f5;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(199, 125, 255, 0.8) rgba(255, 255, 255, 0.06);
+  scrollbar-color: rgba(243, 137, 120, 0.85) rgba(253, 217, 205, 0.35);
 }
 
 *::-webkit-scrollbar {
@@ -23,38 +23,38 @@ body {
 }
 
 *::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(253, 217, 205, 0.35);
 }
 
 *::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: linear-gradient(180deg, #7b2ff7, #ff4ddb);
+  background: linear-gradient(180deg, #FDD9CD, #F38978);
 }
 
 @layer components {
   .neon-page {
-    @apply min-h-screen bg-[#090014] text-white;
+    @apply min-h-screen bg-[#fff8f5] text-[#251E1F];
     background-image:
-      radial-gradient(circle at 18% 18%, rgba(123, 47, 247, 0.28), transparent 30%),
-      radial-gradient(circle at 82% 12%, rgba(255, 77, 219, 0.18), transparent 28%),
-      linear-gradient(135deg, #090014 0%, #120022 48%, #1a0033 100%);
+      radial-gradient(circle at 16% 18%, rgba(253, 217, 205, 0.72), transparent 32%),
+      radial-gradient(circle at 86% 12%, rgba(255, 240, 235, 0.86), transparent 30%),
+      linear-gradient(135deg, #fff8f5 0%, #fff3ee 48%, #FDD9CD 100%);
   }
 
   .neon-glass {
-    @apply border border-white/10 bg-white/[0.055] shadow-2xl backdrop-blur-2xl;
-    box-shadow: 0 24px 80px rgba(9, 0, 20, 0.45), 0 0 32px rgba(157, 78, 221, 0.12);
+    @apply border border-[#f0d2ca] bg-white/95 shadow-2xl backdrop-blur-2xl;
+    box-shadow: 0 18px 48px rgba(37, 30, 31, 0.08), 0 0 28px rgba(243, 137, 120, 0.08);
   }
 
   .neon-border {
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 28px rgba(199, 125, 255, 0.18);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 10px 28px rgba(37, 30, 31, 0.06);
   }
 
   .neon-text-muted {
-    @apply text-[#d8c6e8];
+    @apply text-[#7b6660];
   }
 
   .neon-button {
-    @apply rounded-xl bg-gradient-to-r from-[#7B2FF7] via-[#9D4EDD] to-[#FF4DDB] text-white shadow-lg transition;
-    box-shadow: 0 0 24px rgba(157, 78, 221, 0.35);
+    @apply rounded-xl bg-[#F38978] text-white shadow-lg transition hover:bg-[#e87562];
+    box-shadow: 0 12px 25px rgba(243, 137, 120, 0.25);
   }
 }

@@ -98,43 +98,43 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#060716] text-white">
+    <main className="min-h-screen overflow-hidden bg-[#fff8f5] text-[#251E1F]">
       <section id="top" className="relative min-h-screen">
         <motion.div
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(circle at 18% 22%, rgba(123,47,247,0.38), transparent 28%), radial-gradient(circle at 86% 18%, rgba(255,77,219,0.26), transparent 30%), radial-gradient(circle at 72% 72%, rgba(76,201,240,0.16), transparent 34%), linear-gradient(135deg, #090014 0%, #120022 46%, #1A0033 100%)",
+              "radial-gradient(circle at 18% 22%, rgba(253,217,205,0.78), transparent 28%), radial-gradient(circle at 86% 18%, rgba(255,240,235,0.86), transparent 30%), radial-gradient(circle at 72% 72%, rgba(255,246,242,0.72), transparent 34%), linear-gradient(135deg, #fff8f5 0%, #fff3ee 46%, #FDD9CD 100%)",
             backgroundSize: "130% 130%"
           }}
           animate={shouldReduceMotion ? undefined : { backgroundPosition: ["0% 45%", "100% 55%", "0% 45%"] }}
           transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
         />
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.045)_1px,transparent_1px)] bg-[size:64px_64px] opacity-30" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[#060716] to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[#fff8f5] to-transparent" />
 
-        <header className="relative z-20 border-b border-white/10 bg-white/[0.04] backdrop-blur-xl">
+        <header className="relative z-20 border-b border-[#f0d2ca] bg-[#fff8f5] backdrop-blur-xl">
           <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
             <a href="#top" className="flex min-w-0 items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#C77DFF]/30 bg-[#C77DFF]/10 text-sm font-bold text-[#f3dcff] shadow-lg shadow-[#9D4EDD]/25">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#F38978]/30 bg-[#F38978]/10 text-sm font-bold text-[#6f5b55] shadow-lg shadow-[#F38978]/25">
                 AIP
               </div>
-              <span className="truncate text-sm font-semibold text-white sm:text-base">
+              <span className="truncate text-sm font-semibold text-[#251E1F] sm:text-base">
                 Automated Invoicing & Payroll System
               </span>
             </a>
 
-            <nav className="hidden items-center gap-7 text-sm font-medium text-slate-300 lg:flex">
-              <a href="#about" className="transition hover:text-white">About</a>
-              <a href="#features" className="transition hover:text-white">Features</a>
-              <a href="#modules" className="transition hover:text-white">Modules</a>
-              <a href="#contact" className="transition hover:text-white">Contact</a>
+            <nav className="hidden items-center gap-7 text-sm font-medium text-[#6f5b55] lg:flex">
+              <a href="#about" className="transition hover:text-[#251E1F]">About</a>
+              <a href="#features" className="transition hover:text-[#251E1F]">Features</a>
+              <a href="#modules" className="transition hover:text-[#251E1F]">Modules</a>
+              <a href="#contact" className="transition hover:text-[#251E1F]">Contact</a>
             </nav>
 
             <div className="flex items-center gap-3">
               <motion.button
                 type="button"
-                className="flex h-10 items-center rounded-lg border border-[#C77DFF]/30 bg-white/10 px-4 text-sm font-semibold text-white shadow-lg shadow-[#9D4EDD]/20 transition hover:bg-white/15"
+                className="flex h-10 items-center rounded-lg border border-[#F38978]/30 bg-white/80 px-4 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/20 transition hover:bg-[#fff3ee]"
                 onClick={openLogin}
                 whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
                 whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
@@ -143,7 +143,7 @@ export default function LoginPage() {
               </motion.button>
               <button
                 type="button"
-                className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 text-white ring-1 ring-white/15 lg:hidden"
+                className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/80 text-[#251E1F] ring-1 ring-[#ead3cc] lg:hidden"
                 aria-label="Open navigation"
               >
                 <Menu size={20} />
@@ -159,20 +159,20 @@ export default function LoginPage() {
             variants={heroVariant}
           >
             <motion.p
-              className="inline-flex items-center gap-2 rounded-full border border-[#C77DFF]/25 bg-white/10 px-4 py-2 text-sm font-medium text-[#f3dcff] shadow-lg shadow-purple-950/20 backdrop-blur"
+              className="inline-flex items-center gap-2 rounded-full border border-[#F38978]/25 bg-white/80 px-4 py-2 text-sm font-medium text-[#6f5b55] shadow-lg shadow-[#f2b5a9]/20 backdrop-blur"
               variants={heroItem}
             >
               <Sparkles size={16} />
               Academic FYP platform for secure business workflows
             </motion.p>
             <motion.h1
-              className="mt-7 max-w-3xl text-4xl font-semibold leading-tight tracking-normal text-white sm:text-5xl lg:text-6xl"
+              className="mt-7 max-w-3xl text-4xl font-semibold leading-tight tracking-normal text-[#251E1F] sm:text-5xl lg:text-6xl"
               variants={heroItem}
             >
               Automate Invoicing. Simplify Payroll.
             </motion.h1>
             <motion.p
-              className="mt-6 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg"
+              className="mt-6 max-w-2xl text-base leading-8 text-[#6f5b55] sm:text-lg"
               variants={heroItem}
             >
               A role-based platform for managing invoices, payroll, reports, and staff access.
@@ -182,7 +182,7 @@ export default function LoginPage() {
               <motion.button
                 type="button"
                 onClick={openLogin}
-                className="rounded-lg bg-gradient-to-r from-[#7B2FF7] via-[#9D4EDD] to-[#FF4DDB] px-6 py-3 text-sm font-semibold text-white shadow-xl shadow-[#9D4EDD]/35 transition hover:brightness-110"
+                className="rounded-lg bg-gradient-to-r from-[#F38978] via-[#F38978] to-[#e87562] px-6 py-3 text-sm font-semibold text-[#251E1F] shadow-xl shadow-[#F38978]/35 transition hover:brightness-110"
                 whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
                 whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
               >
@@ -190,7 +190,7 @@ export default function LoginPage() {
               </motion.button>
               <motion.a
                 href="#modules"
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/8 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/12"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#ead3cc] bg-white/80 px-6 py-3 text-sm font-semibold text-[#251E1F] transition hover:bg-[#fff3ee]"
                 whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
                 whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
               >
@@ -207,27 +207,27 @@ export default function LoginPage() {
             transition={{ ...standardTransition, delay: shouldReduceMotion ? 0 : 0.2 }}
           >
             <motion.div
-              className="absolute left-8 top-4 h-20 w-20 rotate-12 rounded-2xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 shadow-2xl shadow-[#9D4EDD]/25"
+              className="absolute left-8 top-4 h-20 w-20 rotate-12 rounded-2xl border border-[#F38978]/25 bg-[#F38978]/10 shadow-2xl shadow-[#F38978]/25"
               animate={shouldReduceMotion ? undefined : { y: [0, -14, 0], rotate: [12, 18, 12] }}
               transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
             />
             <motion.div
-              className="absolute bottom-12 right-6 h-24 w-24 -rotate-12 rounded-[1.35rem] border border-[#FF4DDB]/20 bg-[#FF4DDB]/10 shadow-2xl shadow-[#FF4DDB]/20"
+              className="absolute bottom-12 right-6 h-24 w-24 -rotate-12 rounded-[1.35rem] border border-[#e87562]/20 bg-[#e87562]/10 shadow-2xl shadow-[#e87562]/20"
               animate={shouldReduceMotion ? undefined : { y: [0, 16, 0], rotate: [-12, -18, -12] }}
               transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
             />
             <motion.div
-              className="absolute right-24 top-8 h-14 w-32 skew-x-6 rounded-xl border border-white/15 bg-white/8 shadow-xl shadow-blue-500/10"
+              className="absolute right-24 top-8 h-14 w-32 skew-x-6 rounded-xl border border-[#ead3cc] bg-white/80 shadow-xl shadow-[#f2b5a9]/10"
               animate={shouldReduceMotion ? undefined : { x: [0, 14, 0], opacity: [0.8, 1, 0.8] }}
               transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
             />
 
-            <div className="absolute inset-x-0 top-20 rounded-3xl border border-white/15 bg-white/[0.08] p-5 shadow-2xl shadow-cyan-950/40 backdrop-blur-2xl lg:left-8">
-              <div className="rounded-2xl border border-white/10 bg-[#0b1027]/80 p-5">
-                <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
+            <div className="absolute inset-x-0 top-20 rounded-3xl border border-[#ead3cc] bg-white/95 p-5 shadow-2xl shadow-[#f2b5a9]/30 backdrop-blur-2xl lg:left-8">
+              <div className="rounded-2xl border border-[#f0d2ca] bg-[#fff8f5]/80 p-5">
+                <div className="flex items-center justify-between gap-4 border-b border-[#f0d2ca] pb-4">
                   <div>
-                    <p className="text-sm font-semibold text-white">Operations Overview</p>
-                    <p className="mt-1 text-xs text-slate-400">Invoice and payroll monitoring</p>
+                    <p className="text-sm font-semibold text-[#251E1F]">Operations Overview</p>
+                    <p className="mt-1 text-xs text-[#7b6660]">Invoice and payroll monitoring</p>
                   </div>
                   <div className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-xs font-semibold text-emerald-200">
                     Secured
@@ -240,20 +240,20 @@ export default function LoginPage() {
                     ["Payroll", "Ready", Wallet],
                     ["Reports", "Synced", BarChart3]
                   ].map(([label, value, Icon]) => (
-                    <div key={label} className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
-                      <Icon className="text-[#C77DFF]" size={20} />
-                      <p className="mt-4 text-xs text-slate-400">{label}</p>
-                      <p className="mt-1 text-sm font-semibold text-white">{value}</p>
+                    <div key={label} className="rounded-xl border border-[#f0d2ca] bg-[#fff8f5] p-4">
+                      <Icon className="text-[#F38978]" size={20} />
+                      <p className="mt-4 text-xs text-[#7b6660]">{label}</p>
+                      <p className="mt-1 text-sm font-semibold text-[#251E1F]">{value}</p>
                     </div>
                   ))}
                 </div>
 
-                <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.05] p-4">
+                <div className="mt-5 rounded-2xl border border-[#f0d2ca] bg-[#fff8f5] p-4">
                   <div className="flex items-end gap-2">
                     {[48, 70, 54, 82, 62, 92, 76, 88].map((height, index) => (
                       <motion.div
                         key={height + index}
-                        className="flex-1 rounded-t-md bg-gradient-to-t from-[#7B2FF7] via-[#C77DFF] to-[#FF4DDB]"
+                        className="flex-1 rounded-t-md bg-gradient-to-t from-[#F38978] via-[#F38978] to-[#e87562]"
                         style={{ height }}
                         animate={shouldReduceMotion ? undefined : { opacity: [0.65, 1, 0.65] }}
                         transition={{ duration: 2.8, delay: index * 0.12, repeat: Infinity }}
@@ -265,33 +265,33 @@ export default function LoginPage() {
             </div>
 
             <motion.div
-              className="absolute left-0 top-8 w-64 rounded-2xl border border-[#C77DFF]/20 bg-[#1A0033]/80 p-4 shadow-2xl shadow-purple-950/40 backdrop-blur-xl"
+              className="absolute left-0 top-8 w-64 rounded-2xl border border-[#F38978]/20 bg-[#FDD9CD]/80 p-4 shadow-2xl shadow-[#f2b5a9]/30 backdrop-blur-xl"
               animate={shouldReduceMotion ? undefined : { y: [0, -16, 0] }}
               transition={{ duration: 6.5, repeat: Infinity, ease: "easeInOut" }}
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C77DFF]/15 text-[#C77DFF]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F38978]/15 text-[#F38978]">
                   <FileText size={20} />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white">Invoice Card</p>
-                  <p className="text-xs text-slate-400">Settings and reports</p>
+                  <p className="text-sm font-semibold text-[#251E1F]">Invoice Card</p>
+                  <p className="text-xs text-[#7b6660]">Settings and reports</p>
                 </div>
               </div>
             </motion.div>
 
             <motion.div
-              className="absolute bottom-6 right-0 w-72 rounded-2xl border border-[#FF4DDB]/20 bg-[#1A0033]/80 p-4 shadow-2xl shadow-[#FF4DDB]/10 backdrop-blur-xl"
+              className="absolute bottom-6 right-0 w-72 rounded-2xl border border-[#e87562]/20 bg-[#FDD9CD]/80 p-4 shadow-2xl shadow-[#e87562]/10 backdrop-blur-xl"
               animate={shouldReduceMotion ? undefined : { y: [0, 14, 0] }}
               transition={{ duration: 7.2, repeat: Infinity, ease: "easeInOut" }}
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FF4DDB]/15 text-[#FF4DDB]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#e87562]/15 text-[#e87562]">
                   <Wallet size={20} />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white">Payroll Card</p>
-                  <p className="text-xs text-slate-400">Runs, payslips, summaries</p>
+                  <p className="text-sm font-semibold text-[#251E1F]">Payroll Card</p>
+                  <p className="text-xs text-[#7b6660]">Runs, payslips, summaries</p>
                 </div>
               </div>
             </motion.div>
@@ -301,7 +301,7 @@ export default function LoginPage() {
 
       <motion.section
         id="features"
-        className="relative bg-[#060716] px-5 py-20 sm:px-6 lg:px-8"
+        className="relative bg-[#fff8f5] px-5 py-20 sm:px-6 lg:px-8"
         initial={sectionInitial}
         whileInView={sectionVisible}
         viewport={{ once: true, amount: 0.18 }}
@@ -309,8 +309,8 @@ export default function LoginPage() {
       >
         <div className="mx-auto max-w-7xl">
           <div className="max-w-2xl">
-            <p className="text-sm font-semibold uppercase tracking-wide text-[#C77DFF]">Features</p>
-            <h2 className="mt-3 text-3xl font-semibold tracking-normal text-white">
+            <p className="text-sm font-semibold uppercase tracking-wide text-[#F38978]">Features</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-normal text-[#251E1F]">
               Built for controlled enterprise-style workflows
             </h2>
           </div>
@@ -321,18 +321,18 @@ export default function LoginPage() {
               return (
                 <motion.article
                   key={feature.title}
-                  className="rounded-2xl border border-white/10 bg-white/[0.06] p-6 shadow-xl shadow-purple-950/10 backdrop-blur transition-colors hover:border-[#C77DFF]/40"
+                  className="rounded-2xl border border-[#f0d2ca] bg-[#fff8f5] p-6 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur transition-colors hover:border-[#F38978]/40"
                   initial={sectionInitial}
                   whileInView={sectionVisible}
                   viewport={{ once: true, amount: 0.2 }}
                   transition={standardTransition}
                   whileHover={shouldReduceMotion ? undefined : { y: -5 }}
                 >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#C77DFF]/12 text-[#C77DFF]">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978]">
                     <Icon size={22} />
                   </div>
-                  <h3 className="mt-5 text-lg font-semibold text-white">{feature.title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-slate-400">{feature.description}</p>
+                  <h3 className="mt-5 text-lg font-semibold text-[#251E1F]">{feature.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-[#7b6660]">{feature.description}</p>
                 </motion.article>
               );
             })}
@@ -342,7 +342,7 @@ export default function LoginPage() {
 
       <motion.section
         id="modules"
-        className="bg-[#090b20] px-5 py-20 sm:px-6 lg:px-8"
+        className="bg-[#fff3ee] px-5 py-20 sm:px-6 lg:px-8"
         initial={sectionInitial}
         whileInView={sectionVisible}
         viewport={{ once: true, amount: 0.18 }}
@@ -350,23 +350,23 @@ export default function LoginPage() {
       >
         <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-2">
           <motion.article
-            className="rounded-2xl border border-[#C77DFF]/20 bg-white/[0.06] p-7 shadow-xl shadow-purple-950/20 backdrop-blur"
+            className="rounded-2xl border border-[#F38978]/20 bg-[#fff8f5] p-7 shadow-xl shadow-[#f2b5a9]/20 backdrop-blur"
             whileHover={shouldReduceMotion ? undefined : { y: -5 }}
           >
-            <FileText className="text-[#C77DFF]" size={30} />
-            <h2 className="mt-5 text-2xl font-semibold text-white">Invoicing Module</h2>
-            <p className="mt-4 text-sm leading-7 text-slate-400">
+            <FileText className="text-[#F38978]" size={30} />
+            <h2 className="mt-5 text-2xl font-semibold text-[#251E1F]">Invoicing Module</h2>
+            <p className="mt-4 text-sm leading-7 text-[#7b6660]">
               A dedicated workspace for invoice settings, reminders, finance dashboards,
               reports, and audit visibility.
             </p>
           </motion.article>
           <motion.article
-            className="rounded-2xl border border-[#FF4DDB]/20 bg-white/[0.06] p-7 shadow-xl shadow-[#FF4DDB]/10 backdrop-blur"
+            className="rounded-2xl border border-[#e87562]/20 bg-[#fff8f5] p-7 shadow-xl shadow-[#e87562]/10 backdrop-blur"
             whileHover={shouldReduceMotion ? undefined : { y: -5 }}
           >
-            <Wallet className="text-[#FF4DDB]" size={30} />
-            <h2 className="mt-5 text-2xl font-semibold text-white">Payroll Module</h2>
-            <p className="mt-4 text-sm leading-7 text-slate-400">
+            <Wallet className="text-[#e87562]" size={30} />
+            <h2 className="mt-5 text-2xl font-semibold text-[#251E1F]">Payroll Module</h2>
+            <p className="mt-4 text-sm leading-7 text-[#7b6660]">
               A structured payroll area for HR uploads, finance review, staff payslips,
               notifications, and payroll summaries.
             </p>
@@ -376,7 +376,7 @@ export default function LoginPage() {
 
       <motion.section
         id="about"
-        className="bg-[#060716] px-5 py-20 sm:px-6 lg:px-8"
+        className="bg-[#fff8f5] px-5 py-20 sm:px-6 lg:px-8"
         initial={sectionInitial}
         whileInView={sectionVisible}
         viewport={{ once: true, amount: 0.18 }}
@@ -384,13 +384,13 @@ export default function LoginPage() {
       >
         <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-[#C77DFF]">
+            <p className="text-sm font-semibold uppercase tracking-wide text-[#F38978]">
               Role-Based Access
             </p>
-            <h2 className="mt-3 text-3xl font-semibold tracking-normal text-white">
+            <h2 className="mt-3 text-3xl font-semibold tracking-normal text-[#251E1F]">
               Users continue through the same authenticated module flow
             </h2>
-            <p className="mt-4 text-sm leading-7 text-slate-400">
+            <p className="mt-4 text-sm leading-7 text-[#7b6660]">
               The login modal still uses the existing API. After successful authentication,
               saved user data controls Admin, Finance, HR, and Staff access.
             </p>
@@ -399,16 +399,16 @@ export default function LoginPage() {
             {roleItems.map((role) => (
               <motion.div
                 key={role}
-                className="rounded-2xl border border-white/10 bg-white/[0.06] p-5 shadow-xl shadow-purple-950/10 backdrop-blur transition-colors hover:border-[#C77DFF]/40"
+                className="rounded-2xl border border-[#f0d2ca] bg-[#fff8f5] p-5 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur transition-colors hover:border-[#F38978]/40"
                 initial={sectionInitial}
                 whileInView={sectionVisible}
                 viewport={{ once: true, amount: 0.2 }}
                 transition={standardTransition}
                 whileHover={shouldReduceMotion ? undefined : { y: -4 }}
               >
-                <Users className="text-[#C77DFF]" size={22} />
-                <p className="mt-4 text-base font-semibold text-white">{role}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">
+                <Users className="text-[#F38978]" size={22} />
+                <p className="mt-4 text-base font-semibold text-[#251E1F]">{role}</p>
+                <p className="mt-2 text-sm leading-6 text-[#7b6660]">
                   Access is assigned after successful database-backed authentication.
                 </p>
               </motion.div>
@@ -417,29 +417,29 @@ export default function LoginPage() {
         </div>
       </motion.section>
 
-      <footer id="contact" className="border-t border-white/10 bg-[#050612] px-5 py-10 text-slate-400 sm:px-6 lg:px-8">
+      <footer id="contact" className="border-t border-[#f0d2ca] bg-[#fff8f5] px-5 py-10 text-[#7b6660] sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-white">Automated Invoicing & Payroll System</p>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="text-sm font-semibold text-[#251E1F]">Automated Invoicing & Payroll System</p>
+            <p className="mt-1 text-sm text-[#8d7b76]">
               Secure module access for academic FYP business operations.
             </p>
           </div>
-          <p className="text-sm text-slate-500">Built for role-based invoicing and payroll workflows.</p>
+          <p className="text-sm text-[#8d7b76]">Built for role-based invoicing and payroll workflows.</p>
         </div>
       </footer>
 
       <AnimatePresence>
         {isLoginOpen && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-md"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[#251E1F]/35 px-4 py-6 backdrop-blur-md"
             initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
             animate={{ opacity: 1, backdropFilter: "blur(12px)" }}
             exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
             transition={{ duration: shouldReduceMotion ? 0 : 0.22 }}
           >
             <motion.section
-              className="relative w-full max-w-md rounded-3xl border border-white/15 bg-[#0b1027]/95 p-6 text-white shadow-2xl shadow-cyan-950/40 backdrop-blur-xl sm:p-8"
+              className="relative w-full max-w-md rounded-3xl border border-[#ead3cc] bg-[#fff8f5]/95 p-6 text-[#251E1F] shadow-2xl shadow-[#f2b5a9]/30 backdrop-blur-xl sm:p-8"
               initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.94, y: 18 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={shouldReduceMotion ? undefined : { opacity: 0, scale: 0.97, y: 12 }}
@@ -449,31 +449,31 @@ export default function LoginPage() {
                 type="button"
                 onClick={closeLogin}
                 disabled={isLoading}
-                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed"
+                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-lg text-[#7b6660] transition hover:bg-white/80 hover:text-[#251E1F] disabled:cursor-not-allowed"
                 aria-label="Close login"
               >
                 <X size={20} />
               </button>
 
               <div className="pr-8">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#7B2FF7] to-[#FF4DDB] text-sm font-bold text-white shadow-lg shadow-[#9D4EDD]/30">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#F38978] to-[#e87562] text-sm font-bold text-[#251E1F] shadow-lg shadow-[#F38978]/30">
                   AIP
                 </div>
-                <h2 className="mt-6 text-2xl font-semibold tracking-normal text-white">
+                <h2 className="mt-6 text-2xl font-semibold tracking-normal text-[#251E1F]">
                   Login to System
                 </h2>
-                <p className="mt-2 text-sm text-slate-400">
+                <p className="mt-2 text-sm text-[#7b6660]">
                   Use your assigned account to continue to module selection.
                 </p>
               </div>
 
               <form className="mt-7 space-y-5" onSubmit={handleSubmit}>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300" htmlFor="email">
+                  <label className="block text-sm font-medium text-[#6f5b55]" htmlFor="email">
                     Email
                   </label>
-                  <div className="mt-2 flex transform-gpu rounded-xl border border-white/10 bg-white/[0.06] transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-[#C77DFF]/70 focus-within:ring-4 focus-within:ring-[#9D4EDD]/15">
-                    <span className="flex items-center px-3 text-slate-400">
+                  <div className="mt-2 flex transform-gpu rounded-xl border border-[#f0d2ca] bg-[#fff8f5] transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-[#F38978]/70 focus-within:ring-4 focus-within:ring-[#F38978]/15">
+                    <span className="flex items-center px-3 text-[#7b6660]">
                       <Mail size={18} />
                     </span>
                     <input
@@ -484,18 +484,18 @@ export default function LoginPage() {
                       required
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
-                      className="min-w-0 flex-1 rounded-r-xl bg-transparent px-1 py-3 pr-4 text-sm text-white outline-none placeholder:text-slate-500"
+                      className="min-w-0 flex-1 rounded-r-xl bg-transparent px-1 py-3 pr-4 text-sm text-[#251E1F] outline-none placeholder:text-[#8d7b76]"
                       placeholder="name@example.com"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300" htmlFor="password">
+                  <label className="block text-sm font-medium text-[#6f5b55]" htmlFor="password">
                     Password
                   </label>
-                  <div className="mt-2 flex transform-gpu rounded-xl border border-white/10 bg-white/[0.06] transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-[#C77DFF]/70 focus-within:ring-4 focus-within:ring-[#9D4EDD]/15">
-                    <span className="flex items-center px-3 text-slate-400">
+                  <div className="mt-2 flex transform-gpu rounded-xl border border-[#f0d2ca] bg-[#fff8f5] transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-[#F38978]/70 focus-within:ring-4 focus-within:ring-[#F38978]/15">
+                    <span className="flex items-center px-3 text-[#7b6660]">
                       <Lock size={18} />
                     </span>
                     <input
@@ -506,13 +506,13 @@ export default function LoginPage() {
                       required
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
-                      className="min-w-0 flex-1 bg-transparent px-1 py-3 text-sm text-white outline-none placeholder:text-slate-500"
+                      className="min-w-0 flex-1 bg-transparent px-1 py-3 text-sm text-[#251E1F] outline-none placeholder:text-[#8d7b76]"
                       placeholder="Enter your password"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword((current) => !current)}
-                      className="flex w-11 items-center justify-center rounded-r-xl text-slate-400 transition hover:bg-white/8 hover:text-white"
+                      className="flex w-11 items-center justify-center rounded-r-xl text-[#7b6660] transition hover:bg-white/80 hover:text-[#251E1F]"
                       aria-label={showPassword ? "Hide password" : "Show password"}
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -521,16 +521,16 @@ export default function LoginPage() {
                 </div>
 
                 <div className="flex items-center justify-between gap-4 text-sm">
-                  <label className="flex cursor-pointer items-center gap-2 text-slate-400">
+                  <label className="flex cursor-pointer items-center gap-2 text-[#7b6660]">
                     <input
                       type="checkbox"
                       checked={rememberMe}
                       onChange={(event) => setRememberMe(event.target.checked)}
-                      className="h-4 w-4 rounded border-slate-500 bg-transparent text-[#C77DFF] focus:ring-[#C77DFF]"
+                      className="h-4 w-4 rounded border-[#ead3cc] bg-transparent text-[#F38978] focus:ring-[#F38978]"
                     />
                     Remember me
                   </label>
-                  <Link className="font-medium text-[#C77DFF] hover:text-[#f3dcff]" to="/login">
+                  <Link className="font-medium text-[#F38978] hover:text-[#6f5b55]" to="/login">
                     Forgot password?
                   </Link>
                 </div>
@@ -552,14 +552,14 @@ export default function LoginPage() {
                 <motion.button
                   type="submit"
                   disabled={isLoading}
-                  className="flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#7B2FF7] via-[#9D4EDD] to-[#FF4DDB] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[#9D4EDD]/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-slate-500 disabled:text-slate-200 disabled:shadow-none"
+                  className="flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#F38978] via-[#F38978] to-[#e87562] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[#F38978]/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-[#dcc8c1] disabled:text-[#514440] disabled:shadow-none"
                   whileHover={!isLoading && !shouldReduceMotion ? { scale: 1.02 } : undefined}
                   whileTap={!isLoading && !shouldReduceMotion ? { scale: 0.98 } : undefined}
                   animate={isLoading && !shouldReduceMotion ? { scale: 0.99 } : { scale: 1 }}
                 >
                   {isLoading ? (
                     <span className="flex items-center gap-2">
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950/30 border-t-slate-950" />
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
                       Logging in
                     </span>
                   ) : (
@@ -568,8 +568,8 @@ export default function LoginPage() {
                 </motion.button>
               </form>
 
-              <div className="mt-5 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-slate-400">
-                <Bell size={16} className="shrink-0 text-[#C77DFF]" />
+              <div className="mt-5 flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-[#fff8f5] px-4 py-3 text-sm text-[#7b6660]">
+                <Bell size={16} className="shrink-0 text-[#F38978]" />
                 Role-based access is applied after successful login.
               </div>
             </motion.section>
@@ -579,3 +579,4 @@ export default function LoginPage() {
     </main>
   );
 }
+

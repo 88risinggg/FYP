@@ -22,7 +22,7 @@ const statusColors = {
   Draft: "#9b8b84",
   Sent: "#4F8FD8",
   Viewed: "#35A69B",
-  Paid: "#4FB783",
+  Paid: "#F38978",
   Overdue: "#F38978"
 };
 const statusBadgeClasses = {
@@ -390,7 +390,7 @@ function PaidVsOverdueCard({ data, range, onRangeChange }) {
           <p className="mt-1 text-lg font-bold text-[#251E1F]">{formatCurrency(data.paidAmount)}</p>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-[#fff0eb]">
-          <div className="h-full rounded-full bg-[#4FB783]" style={{ width: `${paidWidth}%` }} />
+          <div className="h-full rounded-full bg-[#F38978]" style={{ width: `${paidWidth}%` }} />
         </div>
         <div>
           <div className="flex justify-between gap-3 text-sm">

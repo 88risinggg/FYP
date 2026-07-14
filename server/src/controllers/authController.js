@@ -1,7 +1,7 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
-const { findUserByEmail } = require("../models/authModel");
+const { findUserByEmail, updateUserLoginTimestamps } = require("../models/authModel");
 const { getClientIp, logAuditEvent } = require("../models/auditLogModel");
 
 function getAllowedModules(roleName) {
@@ -80,6 +80,8 @@ async function login(req, res) {
       expiresIn: process.env.JWT_EXPIRES_IN || "1d"
     });
 
+    const previousLoginAt = await updateUserLoginTimestamps(user.user_id);
+
     await logAuditEvent({
       userId: user.user_id,
       userName: user.name,
@@ -97,7 +99,8 @@ async function login(req, res) {
         email: user.email,
         name: user.name,
         role: user.role_name,
-        allowedModules: getAllowedModules(user.role_name)
+        allowedModules: getAllowedModules(user.role_name),
+        lastLoginAt: previousLoginAt
       }
     });
   } catch (error) {

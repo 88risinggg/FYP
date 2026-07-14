@@ -174,7 +174,7 @@ function ReminderSummaryCard({ summary }) {
       ) : null}
       <div className="grid gap-2 sm:grid-cols-2">
         <MetricRow label="Scheduled" value={summary.scheduled} icon={CalendarDays} to={`${reminderLogsPath}?status=scheduled`} accent="#7FA7D8" />
-        <MetricRow label="Sent" value={summary.sent} icon={Send} to={`${reminderLogsPath}?status=sent`} accent="#4FB783" />
+        <MetricRow label="Sent" value={summary.sent} icon={Send} to={`${reminderLogsPath}?status=sent`} accent="#F38978" />
         <MetricRow label="Pending" value={summary.pending} icon={BellRing} to={`${reminderLogsPath}?status=pending`} accent="#D97706" />
         <MetricRow label="Failed" value={summary.failed} icon={XCircle} to={`${reminderLogsPath}?status=failed`} accent="#F38978" />
       </div>
@@ -184,7 +184,7 @@ function ReminderSummaryCard({ summary }) {
           <span className="text-sm font-bold text-[#251E1F]">{successRate.toFixed(1)}%</span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-white">
-          <div className="h-full rounded-full bg-[#4FB783]" style={{ width: `${Math.min(successRate, 100)}%` }} />
+          <div className="h-full rounded-full bg-[#F38978]" style={{ width: `${Math.min(successRate, 100)}%` }} />
         </div>
       </Link>
     </Panel>
@@ -203,7 +203,7 @@ function EmailDeliverySummaryCard({ summary }) {
     >
       {!hasAnyData ? <EmptyState>No email delivery logs found.</EmptyState> : null}
       <div className="space-y-2">
-        <MetricRow label="Email Sent" value={summary.emailSent} icon={Mail} to={`${reminderLogsPath}?channel=email&status=sent`} accent="#4FB783" />
+        <MetricRow label="Email Sent" value={summary.emailSent} icon={Mail} to={`${reminderLogsPath}?channel=email&status=sent`} accent="#F38978" />
         <MetricRow label="Email Failed" value={summary.emailFailed} icon={XCircle} to={`${reminderLogsPath}?channel=email&status=failed`} accent="#F38978" />
         {summary.whatsappEnabled ? (
           <MetricRow label="WhatsApp Sent" value={summary.whatsappSent} icon={Send} to={`${reminderLogsPath}?channel=whatsapp&status=sent`} accent="#35A69B" />
@@ -442,7 +442,7 @@ export default function AdminPaymentReminderSummaryPage() {
             note="Successful payments received"
             icon={Banknote}
             to={`${paymentListPath}?status=paid&date=${range}`}
-            accent="#4FB783"
+            accent="#F38978"
           />
           <KpiCard
             title="Outstanding Amount"

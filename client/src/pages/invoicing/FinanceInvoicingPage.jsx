@@ -70,7 +70,7 @@ export default function FinanceInvoicingPage() {
       searchPlaceholder="Search invoices, customers, payments..."
     >
       <div className="neon-glass neon-border min-h-[calc(100vh-8rem)] rounded-2xl border-dashed p-8">
-        <p className="text-sm text-[#d8c6e8]">
+        <p className="text-sm text-[#7b6660]">
           This page is reserved for module development.
         </p>
       </div>

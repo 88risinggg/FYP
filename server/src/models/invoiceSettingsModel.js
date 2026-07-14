@@ -34,7 +34,19 @@ const optionLists = {
     { value: "A4", label: "A4" },
     { value: "A5", label: "A5" }
   ],
-  excelFormats: [{ value: "xlsx", label: ".xlsx" }]
+  excelFormats: [{ value: "xlsx", label: ".xlsx" }],
+  separatorStyles: [
+    { value: "hyphen", label: "Hyphen (-)" },
+    { value: "slash", label: "Slash (/)" },
+    { value: "none", label: "No separator" }
+  ],
+  invoiceFormats: [
+    { value: "{PREFIX}-{YYYY}-{NNNN}", label: "{PREFIX}-{YYYY}-{NNNN}" },
+    { value: "{PREFIX}/{YYYY}/{NNNN}", label: "{PREFIX}/{YYYY}/{NNNN}" },
+    { value: "{PREFIX}{YYYY}{NNNN}", label: "{PREFIX}{YYYY}{NNNN}" },
+    { value: "{PREFIX}-{YY}-{NNNN}", label: "{PREFIX}-{YY}-{NNNN}" },
+    { value: "{YYYY}-{PREFIX}-{NNNN}", label: "{YYYY}-{PREFIX}-{NNNN}" }
+  ]
 };
 
 const invoiceStatusWorkflow = [
@@ -47,6 +59,9 @@ const invoiceStatusWorkflow = [
 
 const defaultSettings = {
   invoicePrefix: "INV",
+  invoiceYear: String(new Date().getFullYear()),
+  separatorStyle: "hyphen",
+  invoiceFormat: "{PREFIX}-{YYYY}-{NNNN}",
   nextInvoiceNumber: 1,
   numberingStyle: "PREFIX-DATE-NUMBER",
   dateFormat: "YYYYMM",
@@ -83,12 +98,21 @@ const defaultSettings = {
     companyLogoUrl: "",
     brandColor: "#F38978",
     showCompanyDetailsOnInvoice: true
+  },
+  sequenceRules: {
+    yearlyReset: true,
+    allowManualOverride: false,
+    lockNumberingAfterSent: true,
+    preventDuplicateNumbers: true
   }
 };
 
 const schemaColumns = {
   setting_id: "INT AUTO_INCREMENT PRIMARY KEY",
   invoice_prefix: "VARCHAR(20) NOT NULL DEFAULT 'INV'",
+  invoice_year: "VARCHAR(4) NOT NULL DEFAULT ''",
+  separator_style: "VARCHAR(20) NOT NULL DEFAULT 'hyphen'",
+  invoice_format: "VARCHAR(60) NOT NULL DEFAULT '{PREFIX}-{YYYY}-{NNNN}'",
   next_invoice_number: "INT NOT NULL DEFAULT 1",
   numbering_style: "VARCHAR(40) NOT NULL DEFAULT 'PREFIX-DATE-NUMBER'",
   date_format: "VARCHAR(20) NOT NULL DEFAULT 'YYYYMM'",
@@ -113,6 +137,10 @@ const schemaColumns = {
   company_logo_url: "VARCHAR(500) NULL",
   brand_color: "VARCHAR(20) NOT NULL DEFAULT '#F38978'",
   show_company_details_on_invoice: "TINYINT(1) NOT NULL DEFAULT 1",
+  yearly_reset_enabled: "TINYINT(1) NOT NULL DEFAULT 1",
+  manual_override_enabled: "TINYINT(1) NOT NULL DEFAULT 0",
+  lock_numbering_after_sent: "TINYINT(1) NOT NULL DEFAULT 1",
+  prevent_duplicate_numbers: "TINYINT(1) NOT NULL DEFAULT 1",
   company_name: "VARCHAR(255) NOT NULL DEFAULT ''",
   company_address: "TEXT NULL",
   support_email: "VARCHAR(255) NOT NULL DEFAULT ''",
@@ -142,6 +170,9 @@ async function ensureInvoiceSettingsSchema() {
       `CREATE TABLE IF NOT EXISTS invoice_settings (
         setting_id INT AUTO_INCREMENT PRIMARY KEY,
         invoice_prefix VARCHAR(20) NOT NULL DEFAULT 'INV',
+        invoice_year VARCHAR(4) NOT NULL DEFAULT '',
+        separator_style VARCHAR(20) NOT NULL DEFAULT 'hyphen',
+        invoice_format VARCHAR(60) NOT NULL DEFAULT '{PREFIX}-{YYYY}-{NNNN}',
         next_invoice_number INT NOT NULL DEFAULT 1,
         numbering_style VARCHAR(40) NOT NULL DEFAULT 'PREFIX-DATE-NUMBER',
         date_format VARCHAR(20) NOT NULL DEFAULT 'YYYYMM',
@@ -166,6 +197,10 @@ async function ensureInvoiceSettingsSchema() {
         company_logo_url VARCHAR(500) NULL,
         brand_color VARCHAR(20) NOT NULL DEFAULT '#F38978',
         show_company_details_on_invoice TINYINT(1) NOT NULL DEFAULT 1,
+        yearly_reset_enabled TINYINT(1) NOT NULL DEFAULT 1,
+        manual_override_enabled TINYINT(1) NOT NULL DEFAULT 0,
+        lock_numbering_after_sent TINYINT(1) NOT NULL DEFAULT 1,
+        prevent_duplicate_numbers TINYINT(1) NOT NULL DEFAULT 1,
         company_name VARCHAR(255) NOT NULL DEFAULT '',
         company_address TEXT NULL,
         support_email VARCHAR(255) NOT NULL DEFAULT '',
@@ -183,6 +218,19 @@ async function ensureInvoiceSettingsSchema() {
         await pool.execute(`ALTER TABLE invoice_settings ADD COLUMN ${columnName} ${definition}`);
       }
     }
+
+    await pool.execute(
+      `CREATE TABLE IF NOT EXISTS invoice_numbering_activity (
+        activity_id INT AUTO_INCREMENT PRIMARY KEY,
+        setting_id INT NULL,
+        action VARCHAR(120) NOT NULL,
+        old_value VARCHAR(500) NULL,
+        new_value VARCHAR(500) NULL,
+        changed_by VARCHAR(255) NOT NULL DEFAULT 'Admin',
+        notes VARCHAR(500) NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`
+    );
   } catch (error) {
     handleDatabaseShapeError(error);
   }
@@ -208,14 +256,43 @@ function formatDatePart(date, dateFormat) {
   return `${year}${month}`;
 }
 
-function buildInvoiceNumber(settings, date = new Date()) {
-  const prefix = settings.invoicePrefix || "INV";
-  const nextNumber = String(settings.nextInvoiceNumber || 1).padStart(4, "0");
-  const datePart = formatDatePart(date, settings.dateFormat);
+function normalizeInvoiceYear(value) {
+  const cleanValue = String(value || "").replace(/\D/g, "");
+  return cleanValue || String(new Date().getFullYear());
+}
 
-  if (settings.numberingStyle === "PREFIX-NUMBER") return `${prefix}-${nextNumber}`;
-  if (settings.numberingStyle === "DATE-PREFIX-NUMBER") return `${datePart}-${prefix}-${nextNumber}`;
-  return `${prefix}-${datePart}-${nextNumber}`;
+function numberToken(value) {
+  return String(numberValue(value, defaultSettings.nextInvoiceNumber)).padStart(4, "0");
+}
+
+function invoiceYearTokens(settings, date = new Date()) {
+  const fullYear = normalizeInvoiceYear(settings.invoiceYear || date.getFullYear());
+  return {
+    YYYY: fullYear,
+    YY: fullYear.slice(-2)
+  };
+}
+
+function legacyInvoiceFormat(settings) {
+  const numberingStyle = settings?.numberingStyle || settings?.numbering_style;
+  const dateFormat = settings?.dateFormat || settings?.date_format;
+
+  if (numberingStyle === "PREFIX-NUMBER") return "{PREFIX}-{NNNN}";
+  if (numberingStyle === "DATE-PREFIX-NUMBER") return "{YYYY}-{PREFIX}-{NNNN}";
+  return dateFormat === "YYMM" ? "{PREFIX}-{YY}-{NNNN}" : defaultSettings.invoiceFormat;
+}
+
+function buildInvoiceNumber(settings, date = new Date(), nextNumber = settings?.nextInvoiceNumber) {
+  const prefix = settings.invoicePrefix || "INV";
+  const { YYYY, YY } = invoiceYearTokens(settings, date);
+  const format = settings.invoiceFormat || legacyInvoiceFormat(settings);
+  const invoiceNumber = numberToken(nextNumber);
+
+  return format
+    .replaceAll("{PREFIX}", prefix)
+    .replaceAll("{YYYY}", YYYY)
+    .replaceAll("{YY}", YY)
+    .replaceAll("{NNNN}", invoiceNumber);
 }
 
 function calculateDueDate(settings, issueDate = new Date()) {
@@ -228,6 +305,9 @@ function mapSettings(row) {
   const flatSettings = {
     settingId: row.setting_id,
     invoicePrefix: row.invoice_prefix || defaultSettings.invoicePrefix,
+    invoiceYear: normalizeInvoiceYear(row.invoice_year || defaultSettings.invoiceYear),
+    separatorStyle: row.separator_style || defaultSettings.separatorStyle,
+    invoiceFormat: row.invoice_format || legacyInvoiceFormat(row),
     nextInvoiceNumber: numberValue(row.next_invoice_number, defaultSettings.nextInvoiceNumber),
     numberingStyle: row.numbering_style || defaultSettings.numberingStyle,
     dateFormat: row.date_format || defaultSettings.dateFormat,
@@ -279,6 +359,18 @@ function mapSettings(row) {
         row.show_company_details_on_invoice,
         defaultSettings.branding.showCompanyDetailsOnInvoice
       )
+    },
+    sequenceRules: {
+      yearlyReset: boolValue(row.yearly_reset_enabled, defaultSettings.sequenceRules.yearlyReset),
+      allowManualOverride: boolValue(row.manual_override_enabled, defaultSettings.sequenceRules.allowManualOverride),
+      lockNumberingAfterSent: boolValue(
+        row.lock_numbering_after_sent,
+        defaultSettings.sequenceRules.lockNumberingAfterSent
+      ),
+      preventDuplicateNumbers: boolValue(
+        row.prevent_duplicate_numbers,
+        defaultSettings.sequenceRules.preventDuplicateNumbers
+      )
     }
   };
 
@@ -293,12 +385,16 @@ function toDbRow(settings) {
   const general = { ...defaultSettings.general, ...(settings.general || {}) };
   const exportSettings = { ...defaultSettings.export, ...(settings.export || {}) };
   const branding = { ...defaultSettings.branding, ...(settings.branding || {}) };
+  const sequenceRules = { ...defaultSettings.sequenceRules, ...(settings.sequenceRules || {}) };
   const taxOption = optionLists.taxes.find((tax) => tax.value === general.defaultTax);
   const paymentTerm = general.paymentTerms || settings.paymentTerms || defaultSettings.paymentTerms;
   const lateFeeValue = numberValue(general.lateFeeValue, defaultSettings.general.lateFeeValue);
 
   return {
     invoice_prefix: settings.invoicePrefix || defaultSettings.invoicePrefix,
+    invoice_year: normalizeInvoiceYear(settings.invoiceYear || defaultSettings.invoiceYear),
+    separator_style: settings.separatorStyle || defaultSettings.separatorStyle,
+    invoice_format: settings.invoiceFormat || defaultSettings.invoiceFormat,
     next_invoice_number: numberValue(settings.nextInvoiceNumber, defaultSettings.nextInvoiceNumber),
     numbering_style: settings.numberingStyle || defaultSettings.numberingStyle,
     date_format: settings.dateFormat || defaultSettings.dateFormat,
@@ -323,6 +419,10 @@ function toDbRow(settings) {
     company_logo_url: branding.companyLogoUrl || "",
     brand_color: branding.brandColor || defaultSettings.branding.brandColor,
     show_company_details_on_invoice: branding.showCompanyDetailsOnInvoice ? 1 : 0,
+    yearly_reset_enabled: sequenceRules.yearlyReset ? 1 : 0,
+    manual_override_enabled: sequenceRules.allowManualOverride ? 1 : 0,
+    lock_numbering_after_sent: sequenceRules.lockNumberingAfterSent ? 1 : 0,
+    prevent_duplicate_numbers: sequenceRules.preventDuplicateNumbers ? 1 : 0,
     company_name: settings.companyName || defaultSettings.companyName,
     company_address: settings.companyAddress || defaultSettings.companyAddress,
     support_email: settings.supportEmail || defaultSettings.supportEmail,
@@ -417,13 +517,61 @@ async function updateInvoiceLogo(companyLogoUrl) {
   });
 }
 
+async function addNumberingActivity(records = []) {
+  if (!records.length) return [];
+
+  await ensureInvoiceSettingsSchema();
+
+  const values = records.map((record) => [
+    record.settingId || null,
+    record.action,
+    record.oldValue ?? "",
+    record.newValue ?? "",
+    record.changedBy || "Admin",
+    record.notes || ""
+  ]);
+
+  await pool.query(
+    `INSERT INTO invoice_numbering_activity (
+      setting_id, action, old_value, new_value, changed_by, notes
+    ) VALUES ?`,
+    [values]
+  );
+
+  return listNumberingActivity();
+}
+
+async function listNumberingActivity(limit = 20) {
+  await ensureInvoiceSettingsSchema();
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 100));
+
+  const [rows] = await pool.execute(
+    `SELECT
+      activity_id AS id,
+      setting_id AS settingId,
+      action,
+      old_value AS oldValue,
+      new_value AS newValue,
+      changed_by AS changedBy,
+      notes,
+      created_at AS createdAt
+     FROM invoice_numbering_activity
+     ORDER BY created_at DESC, activity_id DESC
+     LIMIT ${safeLimit}`
+  );
+
+  return rows;
+}
+
 module.exports = {
+  addNumberingActivity,
   buildInvoiceNumber,
   calculateConfigurationStatus,
   calculateDueDate,
   defaultSettings,
   getInvoiceSettings,
   invoiceStatusWorkflow,
+  listNumberingActivity,
   missingInvoiceSettingsMessage,
   optionLists,
   saveInvoiceSettings,

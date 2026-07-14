@@ -1,105 +1,122 @@
 import {
-  Activity,
   AlertTriangle,
+  Banknote,
   BarChart3,
-  Bell,
   BellRing,
-  Bot,
   CalendarDays,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   Clock3,
   CreditCard,
-  DollarSign,
+  Download,
+  Eye,
   FileCheck2,
   FileText,
+  MoreHorizontal,
+  Pencil,
   Plus,
   RefreshCw,
-  Search,
   Send,
   Settings,
-  Target,
-  TrendingUp,
-  UserPlus
+  UserPlus,
+  XCircle
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { fetchAdminInvoicingDashboard } from "../../services/adminDashboardService.js";
 import { getStoredSession } from "../../services/sessionService.js";
 
-const refreshIntervalMs = 5 * 60 * 1000;
-const coral = "#F38978";
+const basePath = "/dashboard/invoicing/admin";
+const invoiceListPath = `${basePath}/invoices`;
+const emptyInvoiceMessage =
+  "No invoice data yet. Invoice summaries will appear here once Finance creates invoices.";
 
-const revenuePeriods = ["This Month", "This Quarter", "This Year", "Last 7 Days", "Last 30 Days"];
-
-const statusColors = {
-  Paid: "#4FB783",
-  Sent: "#FFB65C",
-  Viewed: "#D97706",
-  Overdue: "#F38978",
-  Draft: "#7FA7D8"
+const statusStyles = {
+  Draft: "bg-[#f2eee9] text-[#6f5b55]",
+  Sent: "bg-[#eaf2ff] text-[#3269a8]",
+  Viewed: "bg-[#e7f7f5] text-[#218178]",
+  Paid: "bg-[#e9f7ef] text-[#2f8758]",
+  Overdue: "bg-[#fff0eb] text-[#c94c3a]"
 };
+
+function formatCount(value) {
+  return new Intl.NumberFormat("en-SG").format(Number(value || 0));
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-SG", {
+    style: "currency",
+    currency: "SGD"
+  }).format(Number(value || 0));
+}
 
 function formatDate(value) {
   if (!value) return "-";
+
   return new Intl.DateTimeFormat("en-SG", {
-    dateStyle: "medium",
-    timeStyle: "short"
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "Asia/Singapore"
   }).format(new Date(value));
 }
 
-function formatDisplayDate(value) {
+function formatDateTime(value) {
+  if (!value) return "First login";
+
   return new Intl.DateTimeFormat("en-SG", {
+    month: "short",
     day: "numeric",
-    month: "long",
-    year: "numeric"
-  }).format(value);
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Singapore"
+  }).format(new Date(value));
 }
 
 function formatWeekday(value) {
   return new Intl.DateTimeFormat("en-SG", {
-    weekday: "long"
+    weekday: "long",
+    timeZone: "Asia/Singapore"
   }).format(value);
 }
 
-function getGreeting() {
-  const hour = new Date().getHours();
-
-  if (hour < 12) return "Good Morning";
-  if (hour < 18) return "Good Afternoon";
-  return "Good Evening";
+function formatClock(value) {
+  return new Intl.DateTimeFormat("en-SG", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Singapore"
+  }).format(value);
 }
 
-function formatCount(value, fallback = "0") {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return fallback;
-  }
-
-  return new Intl.NumberFormat("en-SG").format(Number(value));
-}
-
-function PlaceholderValue() {
-  return <span className="text-[#8d7b76]">Pending data</span>;
-}
-
-function EmptyState({ children }) {
-  return (
-    <div className="rounded-xl border border-dashed border-[#f0c9bf] bg-[#fff6f2] px-4 py-7 text-center text-sm text-[#7b6660]">
-      {children}
-    </div>
+function getGreeting(date) {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-SG", {
+      hour: "numeric",
+      hour12: false,
+      timeZone: "Asia/Singapore"
+    }).format(date)
   );
+
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
 }
 
-function Panel({ title, action, children, className = "", icon: Icon }) {
+function daysLeftLabel(daysLeft) {
+  const days = Number(daysLeft || 0);
+
+  if (days <= 0) return "Today";
+  if (days === 1) return "1 day";
+  return `${days} days`;
+}
+
+function Panel({ title, action, children, className = "" }) {
   return (
-    <section className={`h-full rounded-xl border border-[#f0d2ca] bg-white/95 p-5 shadow-[0_10px_28px_rgba(37,30,31,0.06)] ${className}`}>
+    <section className={`rounded-xl border border-[#f0d2ca] bg-white/95 p-5 shadow-[0_10px_28px_rgba(37,30,31,0.06)] ${className}`}>
       <div className="mb-4 flex items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-2">
-          {Icon ? <Icon size={18} className="shrink-0 text-[#F38978]" /> : null}
-          <h3 className="truncate text-[15px] font-bold text-[#251E1F]">{title}</h3>
-        </div>
+        <h3 className="text-[15px] font-bold text-[#251E1F]">{title}</h3>
         {action}
       </div>
       {children}
@@ -107,182 +124,227 @@ function Panel({ title, action, children, className = "", icon: Icon }) {
   );
 }
 
-function MiniSelect({ value, onChange }) {
+function EmptyState({ compact = false }) {
   return (
-    <label className="relative inline-flex items-center">
-      <span className="sr-only">Revenue trend period</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="appearance-none rounded-full border border-[#f0d2ca] bg-[#fff8f5] py-1.5 pl-3 pr-8 text-xs font-semibold text-[#251E1F] outline-none transition focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/20"
-      >
-        {revenuePeriods.map((period) => (
-          <option key={period} value={period}>
-            {period}
-          </option>
-        ))}
-      </select>
-      <ChevronDown size={14} className="pointer-events-none absolute right-3 text-[#8d7b76]" />
-    </label>
+    <div className={`rounded-xl border border-dashed border-[#f0c9bf] bg-[#fff8f5] text-center text-sm text-[#7b6660] ${compact ? "px-4 py-5" : "px-5 py-8"}`}>
+      {emptyInvoiceMessage}
+    </div>
   );
 }
 
-function MetricCard({ label, value, note, icon: Icon, accent = coral, available = true }) {
+function KpiCard({ title, value, note, icon: Icon, to, accent }) {
   return (
-    <article className="min-h-[148px] rounded-xl border border-[#f0d2ca] bg-white/95 p-4 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
-      <div
-        className="mb-4 flex h-10 w-10 items-center justify-center rounded-full"
-        style={{ backgroundColor: `${accent}22`, color: accent }}
-      >
-        <Icon size={20} strokeWidth={2.2} />
+    <Link
+      to={to}
+      className="min-h-[126px] rounded-xl border border-[#f0d2ca] bg-white/95 p-4 shadow-[0_10px_28px_rgba(37,30,31,0.06)] transition hover:-translate-y-0.5 hover:border-[#F38978]"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+          style={{ backgroundColor: `${accent}1f`, color: accent }}
+        >
+          <Icon size={18} />
+        </span>
+        <ChevronRight size={15} className="text-[#c4aaa2]" />
       </div>
-      <p className="min-h-9 text-sm font-semibold leading-tight text-[#251E1F]">{label}</p>
-      <p className="mt-2 text-2xl font-bold tracking-tight text-[#251E1F]">
-        {available ? value : "-"}
-      </p>
-      <p className={`mt-2 text-[11px] font-medium leading-tight ${available ? "text-[#4d9a73]" : "text-[#8d7b76]"}`}>
-        {note}
-      </p>
-    </article>
+      <p className="mt-4 min-h-9 text-[13px] font-bold leading-tight text-[#251E1F]">{title}</p>
+      <p className="mt-2 text-[1.55rem] font-bold leading-tight tracking-normal text-[#251E1F]">{value}</p>
+      <p className="mt-2 text-[11px] font-semibold text-[#7b6660]">{note}</p>
+    </Link>
   );
 }
 
-function ActionItem({ icon: Icon, label, value, color = coral, available = true }) {
+function FocusRow({ icon: Icon, label, count, to, accent }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg bg-[#fff5f1] px-3 py-2">
+    <Link
+      to={to}
+      className="flex items-center gap-3 rounded-lg bg-[#fff8f5] px-3 py-3 transition hover:bg-[#fff0eb]"
+    >
       <span
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white"
-        style={{ backgroundColor: color }}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+        style={{ backgroundColor: `${accent}1f`, color: accent }}
       >
-        <Icon size={14} />
+        <Icon size={16} />
       </span>
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#251E1F]">{label}</span>
-      <span className="text-sm font-bold text-[#251E1F]">{available ? value : "-"}</span>
+      <span className="text-sm font-bold text-[#251E1F]">{formatCount(count)}</span>
       <ChevronRight size={15} className="text-[#b89a92]" />
-    </div>
+    </Link>
   );
 }
 
-function ReminderStat({ label, value, icon: Icon, tint = "#F38978", available = true }) {
+function QuickAction({ icon: Icon, label, to }) {
   return (
-    <div className="rounded-lg bg-[#fff3ef] p-4">
-      <p className="text-xs font-semibold text-[#251E1F]">{label}</p>
-      <div className="mt-4 flex items-end justify-between gap-3">
-        <p className="text-2xl font-bold text-[#251E1F]">{available ? value : "-"}</p>
-        <Icon size={18} style={{ color: tint }} />
-      </div>
-    </div>
+    <Link
+      to={to}
+      className="flex min-h-[58px] items-center gap-3 rounded-lg border border-[#ead3cc] bg-[#fff8f5] px-3 py-3 text-sm font-bold text-[#251E1F] transition hover:border-[#F38978] hover:bg-white hover:text-[#F38978]"
+    >
+      <Icon size={17} className="shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <ChevronRight size={15} />
+    </Link>
   );
 }
 
-function DonutChart({ statuses, total }) {
-  const radius = 46;
-  const circumference = 2 * Math.PI * radius;
-  let runningOffset = 0;
+function StatusBadge({ status }) {
+  const normalized = statusStyles[status] ? status : "Draft";
 
   return (
-    <div className="relative mx-auto h-52 w-52">
-      <svg viewBox="0 0 128 128" className="h-full w-full">
-        <circle cx="64" cy="64" r={radius} fill="none" stroke="#f7e2db" strokeWidth="18" />
-        {statuses.map((item) => {
-          const segment = total > 0 ? (item.count / total) * circumference : 0;
-          const dashOffset = runningOffset;
-          runningOffset += segment;
-
-          return (
-            <circle
-              key={item.status}
-              cx="64"
-              cy="64"
-              r={radius}
-              fill="none"
-              stroke={item.color}
-              strokeWidth="18"
-              strokeLinecap="butt"
-              strokeDasharray={`${segment} ${circumference}`}
-              strokeDashoffset={-dashOffset}
-              transform="rotate(-90 64 64)"
-            />
-          );
-        })}
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <p className="text-2xl font-bold text-[#251E1F]">{formatCount(total)}</p>
-        <p className="mt-1 text-xs font-semibold text-[#7b6660]">Total</p>
-      </div>
-    </div>
+    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${statusStyles[normalized]}`}>
+      {normalized}
+    </span>
   );
 }
 
-function CashFlowRow({ label, icon: Icon, tone }) {
+function InvoiceActionMenu({ invoice }) {
+  const status = invoice.status;
+
   return (
-    <div className={`flex items-center justify-between rounded-lg px-4 py-3 ${tone}`}>
-      <div className="flex items-center gap-3">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/70 text-[#F38978]">
-          <Icon size={15} />
-        </span>
-        <span className="text-sm font-semibold text-[#251E1F]">{label}</span>
+    <details className="relative">
+      <summary className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg border border-[#ead3cc] bg-white text-[#514440] transition hover:border-[#F38978] hover:text-[#F38978]">
+        <MoreHorizontal size={16} />
+      </summary>
+      <div className="absolute right-0 z-20 mt-2 w-48 rounded-lg border border-[#ead3cc] bg-white p-2 text-sm shadow-xl shadow-[#251E1F]/10">
+        <Link className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-[#fff8f5]" to={`${invoiceListPath}/${invoice.id}`}>
+          <Eye size={15} /> View Invoice
+        </Link>
+        {status === "Draft" ? (
+          <Link className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-[#fff8f5]" to={`${invoiceListPath}/${invoice.id}/edit`}>
+            <Pencil size={15} /> Edit Invoice
+          </Link>
+        ) : null}
+        {status === "Draft" || status === "Sent" ? (
+          <Link className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-[#fff8f5]" to={`${invoiceListPath}/${invoice.id}/send`}>
+            <Send size={15} /> Send Invoice
+          </Link>
+        ) : null}
+        {["Sent", "Viewed", "Overdue"].includes(status) ? (
+          <>
+            <Link className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-[#fff8f5]" to={`${basePath}/reminder-settings?invoiceId=${invoice.id}`}>
+              <BellRing size={15} /> Send Reminder
+            </Link>
+            <Link className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-[#fff8f5]" to={`${basePath}/payments/record?invoiceId=${invoice.id}`}>
+              <CreditCard size={15} /> Record Payment
+            </Link>
+          </>
+        ) : null}
+        <button
+          type="button"
+          disabled
+          title="PDF download is coming soon."
+          className="flex w-full cursor-not-allowed items-center gap-2 rounded-md px-3 py-2 text-left text-[#9b837c]"
+        >
+          <Download size={15} /> Download PDF
+        </button>
       </div>
-      <PlaceholderValue />
-    </div>
+    </details>
   );
 }
 
-function QuickAction({ icon: Icon, label, to, title }) {
-  const content = (
-    <>
-      <Icon size={18} />
-      <span>{label}</span>
-    </>
-  );
-
-  if (to) {
-    return (
-      <Link
-        to={to}
-        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#ead3cc] bg-white px-4 py-2 text-xs font-semibold text-[#251E1F] transition hover:border-[#F38978] hover:text-[#F38978]"
-      >
-        {content}
-      </Link>
-    );
+function UpcomingDueInvoicesTable({ invoices }) {
+  if (!invoices.length) {
+    return <EmptyState compact />;
   }
 
   return (
-    <button
-      type="button"
-      disabled
-      title={title}
-      className="inline-flex min-h-11 cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-[#ead3cc] bg-[#fff8f5] px-4 py-2 text-xs font-semibold text-[#8d7b76]"
-    >
-      {content}
-    </button>
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-left text-sm">
+        <thead>
+          <tr className="border-y border-[#f0d2ca] bg-[#fff8f5] text-xs uppercase text-[#7b6660]">
+            <th className="px-3 py-3">Invoice #</th>
+            <th className="px-3 py-3">Customer</th>
+            <th className="px-3 py-3">Due Date</th>
+            <th className="px-3 py-3">Amount</th>
+            <th className="px-3 py-3">Days Left</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invoices.map((invoice) => (
+            <tr key={invoice.id} className="border-b border-[#f4ded7] transition hover:bg-[#fff8f5]">
+              <td className="px-3 py-3 font-bold text-[#251E1F]">
+                <Link to={`${invoiceListPath}/${invoice.id}`}>{invoice.invoiceNo || "-"}</Link>
+              </td>
+              <td className="px-3 py-3 text-[#514440]">{invoice.customerName || "-"}</td>
+              <td className="px-3 py-3 text-[#514440]">{formatDate(invoice.dueDate)}</td>
+              <td className="px-3 py-3 font-semibold text-[#251E1F]">{formatCurrency(invoice.amount)}</td>
+              <td className="px-3 py-3">
+                <span className="rounded-full bg-[#fff0eb] px-2.5 py-1 text-xs font-bold text-[#c94c3a]">
+                  {daysLeftLabel(invoice.daysLeft)}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RecentInvoicesTable({ invoices }) {
+  if (!invoices.length) {
+    return <EmptyState />;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-left text-sm">
+        <thead>
+          <tr className="border-y border-[#f0d2ca] bg-[#fff8f5] text-xs uppercase text-[#7b6660]">
+            <th className="px-4 py-3">Invoice #</th>
+            <th className="px-4 py-3">Customer</th>
+            <th className="px-4 py-3">Status</th>
+            <th className="px-4 py-3">Issue Date</th>
+            <th className="px-4 py-3">Due Date</th>
+            <th className="px-4 py-3">Amount</th>
+            <th className="px-4 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invoices.map((invoice) => (
+            <tr key={invoice.id} className="border-b border-[#f4ded7] transition hover:bg-[#fff8f5]">
+              <td className="px-4 py-3 font-bold text-[#251E1F]">
+                <Link to={`${invoiceListPath}/${invoice.id}`}>{invoice.invoiceNo || "-"}</Link>
+              </td>
+              <td className="px-4 py-3 text-[#514440]">{invoice.customerName || "-"}</td>
+              <td className="px-4 py-3"><StatusBadge status={invoice.status} /></td>
+              <td className="px-4 py-3 text-[#514440]">{formatDate(invoice.issueDate)}</td>
+              <td className="px-4 py-3 text-[#514440]">{formatDate(invoice.dueDate)}</td>
+              <td className="px-4 py-3 font-semibold text-[#251E1F]">{formatCurrency(invoice.amount)}</td>
+              <td className="px-4 py-3">
+                <div className="flex justify-end">
+                  <InvoiceActionMenu invoice={invoice} />
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
 export default function AdminDashboardHomePage() {
+  const session = getStoredSession();
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [lastUpdated, setLastUpdated] = useState(null);
-  const [revenuePeriod, setRevenuePeriod] = useState("This Month");
-  const actionRequiredRef = useRef(null);
-  const quickActionsRef = useRef(null);
-  const session = getStoredSession();
-  const today = new Date();
+  const [now, setNow] = useState(new Date());
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
 
-  async function loadDashboard(isBackgroundRefresh = false) {
-    if (isBackgroundRefresh) {
+  async function loadDashboard(isRefresh = false) {
+    if (isRefresh) {
       setRefreshing(true);
     } else {
       setLoading(true);
     }
+
     setError("");
 
     try {
       const data = await fetchAdminInvoicingDashboard();
       setDashboard(data);
-      setLastUpdated(new Date());
+      setLastRefreshedAt(new Date());
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -293,109 +355,93 @@ export default function AdminDashboardHomePage() {
 
   useEffect(() => {
     loadDashboard();
-    const intervalId = window.setInterval(() => loadDashboard(true), refreshIntervalMs);
+  }, []);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNow(new Date()), 60 * 1000);
     return () => window.clearInterval(intervalId);
   }, []);
 
-  const statusCountMap = useMemo(() => {
-    return (dashboard?.invoiceStatusDistribution || []).reduce((items, item) => {
-      items[String(item.status || "").toLowerCase()] = Number(item.count || 0);
-      return items;
-    }, {});
-  }, [dashboard?.invoiceStatusDistribution]);
+  const admin = dashboard?.admin || session?.user || {};
+  const adminName = admin.name || session?.user?.name || "Admin";
+  const summary = dashboard?.summary || {};
+  const todayFocus = dashboard?.todayFocus || {};
+  const upcomingDueInvoices = dashboard?.upcomingDueInvoices || [];
+  const recentInvoices = dashboard?.recentInvoices || [];
+  const hasInvoiceData = Number(summary.totalInvoices || 0) > 0;
 
-  const invoiceStatusItems = useMemo(() => {
-    return [
-      { status: "Draft", count: Number(statusCountMap.draft || 0), color: statusColors.Draft },
-      { status: "Sent", count: Number(statusCountMap.sent || 0), color: statusColors.Sent },
-      { status: "Viewed", count: Number(statusCountMap.viewed || 0), color: statusColors.Viewed },
-      { status: "Paid", count: Number(statusCountMap.paid || 0), color: statusColors.Paid },
-      { status: "Overdue", count: Number(statusCountMap.overdue || dashboard?.overdueInvoices || 0), color: statusColors.Overdue }
-    ];
-  }, [dashboard?.overdueInvoices, statusCountMap]);
-
-  const invoiceStatusTotal = useMemo(() => {
-    return invoiceStatusItems.reduce((sum, item) => sum + item.count, 0);
-  }, [invoiceStatusItems]);
-
-  const userName = session?.user?.name || "Admin";
-  const overdueInvoices = Number(dashboard?.overdueInvoices || 0);
-  const draftInvoices = Number(statusCountMap.draft || 0);
-  const sentInvoices = Number(statusCountMap.sent || 0);
-  const viewedInvoices = Number(statusCountMap.viewed || 0);
-
-  const metricCards = [
+  const kpiCards = useMemo(() => [
     {
-      label: "Total Invoices",
-      value: formatCount(invoiceStatusTotal),
-      note: "From invoice status data",
+      title: "Total Invoices",
+      value: formatCount(summary.totalInvoices),
+      note: "All invoice records",
       icon: FileText,
-      accent: coral,
-      available: true
+      to: invoiceListPath,
+      accent: "#F38978"
     },
     {
-      label: "Total Revenue",
-      value: "-",
-      note: "Pending data",
-      icon: DollarSign,
-      accent: "#FFB65C",
-      available: false
+      title: "Draft",
+      value: formatCount(summary.draft),
+      note: "Not sent yet",
+      icon: FileCheck2,
+      to: `${invoiceListPath}?status=draft`,
+      accent: "#7FA7D8"
     },
     {
-      label: "Outstanding",
-      value: "-",
-      note: "Pending data",
-      icon: AlertTriangle,
-      accent: coral,
-      available: false
-    },
-    {
-      label: "Paid Today",
-      value: "-",
-      note: "Pending data",
-      icon: CreditCard,
-      accent: "#4FB783",
-      available: false
-    },
-    {
-      label: "Sent",
-      value: formatCount(sentInvoices),
-      note: "From invoice status data",
+      title: "Sent",
+      value: formatCount(summary.sent),
+      note: "Sent to customers",
       icon: Send,
-      accent: "#FFB65C",
-      available: true
+      to: `${invoiceListPath}?status=sent`,
+      accent: "#4F8FD8"
     },
     {
-      label: "Viewed",
-      value: formatCount(viewedInvoices),
-      note: "From invoice status data",
-      icon: FileCheck2,
-      accent: "#D97706",
-      available: true
+      title: "Viewed",
+      value: formatCount(summary.viewed),
+      note: "Viewed by customers",
+      icon: Eye,
+      to: `${invoiceListPath}?status=viewed`,
+      accent: "#35A69B"
     },
     {
-      label: "Overdue",
-      value: formatCount(overdueInvoices),
-      note: "From live invoice data",
-      icon: Clock3,
-      accent: coral,
-      available: true
+      title: "Paid",
+      value: formatCount(summary.paid),
+      note: "Fully paid",
+      icon: CheckCircle2,
+      to: `${invoiceListPath}?status=paid`,
+      accent: "#F38978"
     },
     {
-      label: "Draft",
-      value: formatCount(draftInvoices),
-      note: "From invoice status data",
-      icon: FileCheck2,
-      accent: "#7FA7D8",
-      available: true
+      title: "Overdue",
+      value: formatCount(summary.overdue),
+      note: "Past due date",
+      icon: XCircle,
+      to: `${invoiceListPath}?status=overdue`,
+      accent: "#F38978"
+    },
+    {
+      title: "Total Revenue",
+      value: formatCurrency(summary.totalRevenue),
+      note: "Paid invoices",
+      icon: Banknote,
+      to: `${basePath}/reports?metric=revenue`,
+      accent: "#B5833B"
+    },
+    {
+      title: "Outstanding Amount",
+      value: formatCurrency(summary.outstandingAmount),
+      note: "Sent, viewed, overdue",
+      icon: AlertTriangle,
+      to: `${invoiceListPath}?filter=outstanding`,
+      accent: "#D97706"
     }
-  ];
+  ], [summary]);
 
   if (loading) {
     return (
-      <section className="-m-4 min-h-[calc(100vh-5rem)] bg-[#fff6f2] p-6 text-[#251E1F] sm:-m-6">
+      <section className="-m-4 min-h-[calc(100vh-5rem)] p-6 text-[#251E1F] sm:-m-6">
         <div className="rounded-xl border border-[#f0d2ca] bg-white/90 p-8 text-center shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
-          Loading dashboard data...
+          Loading dashboard overview...
         </div>
       </section>
     );
@@ -410,70 +456,35 @@ export default function AdminDashboardHomePage() {
       }}
     >
       <div className="mx-auto max-w-[1600px] space-y-4">
-        <header className="flex flex-col gap-5 px-0 py-1 xl:flex-row xl:items-center xl:justify-between">
-          <div className="min-w-0">
-            <h2 className="text-2xl font-bold tracking-tight text-[#251E1F]">
-              {getGreeting()}, {userName}!
+        <div className="flex flex-col gap-4 border-b border-[#f0d2ca] bg-white/40 pb-5 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold tracking-normal text-[#251E1F]">
+              {getGreeting(now)}, {adminName}
             </h2>
             <p className="mt-1 text-sm text-[#6f5b55]">
               Here's what's happening with your invoicing today.
             </p>
           </div>
 
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="border-[#f0c9bf] sm:border-l sm:pl-8">
-                <p className="text-sm font-bold text-[#251E1F]">{formatWeekday(today)}</p>
-                <p className="mt-1 text-sm text-[#6f5b55]">{formatDisplayDate(today)}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex items-center gap-3 border-[#f0c9bf] sm:border-l sm:pl-8">
+              <CalendarDays size={22} className="text-[#251E1F]" />
+              <div>
+                <p className="text-sm font-bold text-[#251E1F]">{formatDate(now)}</p>
+                <p className="mt-1 text-sm text-[#6f5b55]">{formatWeekday(now)} | {formatClock(now)}</p>
               </div>
-              <div className="border-[#f0c9bf] sm:border-l sm:pl-8">
-                <p className="text-sm font-semibold text-[#6f5b55]">Last Login</p>
+            </div>
+            <div className="flex items-center gap-3 border-[#f0c9bf] sm:border-l sm:pl-8">
+              <Clock3 size={22} className="text-[#251E1F]" />
+              <div>
+                <p className="text-sm font-bold text-[#251E1F]">Last login</p>
                 <p className="mt-1 text-sm text-[#6f5b55]">
-                  {session?.user?.lastLogin ? formatDate(session.user.lastLogin) : "Not available"}
+                  {formatDateTime(admin.lastLoginAt || session?.user?.lastLoginAt)}
                 </p>
               </div>
             </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-transparent text-[#251E1F]"
-                aria-label="Search"
-              >
-                <Search size={21} />
-              </button>
-              <button
-                type="button"
-                className="relative flex h-11 w-11 items-center justify-center rounded-full bg-transparent text-[#251E1F]"
-                aria-label="Notifications"
-              >
-                <Bell size={20} />
-                {dashboard?.auditEventsToday ? (
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[#F38978] px-1 text-[10px] font-bold text-white">
-                    {formatCount(dashboard.auditEventsToday)}
-                  </span>
-                ) : null}
-              </button>
-              <button
-                type="button"
-                onClick={() => quickActionsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#F38978] px-5 text-sm font-bold text-white shadow-[0_12px_25px_rgba(243,137,120,0.35)] transition hover:bg-[#e87562]"
-              >
-                <Activity size={16} />
-                Quick Actions
-                <ChevronDown size={14} />
-              </button>
-              <button
-                type="button"
-                onClick={() => loadDashboard(true)}
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-white/70 text-[#F38978] shadow-sm"
-                aria-label="Refresh dashboard"
-              >
-                <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
-              </button>
-            </div>
           </div>
-        </header>
+        </div>
 
         {error ? (
           <div className="rounded-xl border border-[#F38978]/30 bg-white px-4 py-3 text-sm font-semibold text-[#b64d3b]">
@@ -481,197 +492,62 @@ export default function AdminDashboardHomePage() {
           </div>
         ) : null}
 
-        {dashboard?.missingTables?.length ? (
-          <div className="rounded-xl border border-[#ffb65c]/40 bg-white px-4 py-3 text-sm font-semibold text-[#8a5b18]">
-            Some dashboard sections are empty because these tables are missing: {dashboard.missingTables.join(", ")}.
-          </div>
-        ) : null}
+        {!hasInvoiceData ? <EmptyState /> : null}
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-8">
-          {metricCards.map((card) => (
-            <MetricCard key={card.label} {...card} />
+          {kpiCards.map((card) => (
+            <KpiCard key={card.title} {...card} />
           ))}
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[1fr_1.12fr_0.98fr]">
-          <Panel
-            title="Action Required"
-            action={<button type="button" className="text-xs font-bold text-[#F38978]">View All</button>}
-          >
-            <div ref={actionRequiredRef} className="space-y-2">
-              <ActionItem icon={AlertTriangle} label="Overdue Invoices" value={formatCount(overdueInvoices)} available color={coral} />
-              <ActionItem icon={BellRing} label="Reminder Failed" value="-" available={false} color="#FFB65C" />
-              <ActionItem icon={Clock3} label="Awaiting Approval" value="-" available={false} color="#FFB65C" />
-              <ActionItem icon={CreditCard} label="Payments to Verify" value="-" available={false} color="#7FA7D8" />
-              <ActionItem icon={CheckCircle2} label="Refund Requests" value="-" available={false} color="#4FB783" />
-            </div>
-          </Panel>
-
-          <Panel title="Reminder Summary" action={<span className="text-xs font-bold text-[#251E1F]">Today</span>}>
-            <div className="grid gap-3 sm:grid-cols-4">
-              <ReminderStat label="Scheduled" value={formatCount(dashboard?.reminderJobs || 0)} icon={CalendarDays} tint={coral} />
-              <ReminderStat label="Sent" value="-" icon={Send} tint="#B5833B" available={false} />
-              <ReminderStat label="Pending" value="-" icon={Clock3} tint="#7FA7D8" available={false} />
-              <ReminderStat label="Failed" value="-" icon={AlertTriangle} tint={coral} available={false} />
-            </div>
-            <div className="mt-7">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm font-semibold text-[#251E1F]">Success Rate</span>
-                <span className="text-sm font-bold text-[#8d7b76]">Pending data</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-[#f8ddd5]">
-                <div className="h-full w-0 rounded-full bg-[#F38978]" />
-              </div>
-            </div>
-          </Panel>
-
+        <div className="grid gap-4 xl:grid-cols-[0.9fr_1.55fr_0.85fr]">
           <Panel title="Today's Focus">
-            <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left xl:flex-col xl:text-center 2xl:flex-row 2xl:text-left">
-              <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-[#fff2ee]">
-                <div className="absolute h-20 w-20 rounded-full border-2 border-[#F38978]" />
-                <div className="absolute h-12 w-12 rounded-full border-2 border-[#F38978]" />
-                <Target size={44} className="text-[#F38978]" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-base font-bold text-[#251E1F]">Stay on top of important tasks</p>
-                <p className="mt-2 text-sm leading-6 text-[#6f5b55]">
-                  {overdueInvoices > 0
-                    ? `There are ${formatCount(overdueInvoices)} overdue invoices in the current dashboard data.`
-                    : "No overdue invoices are shown in the current dashboard data."}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => actionRequiredRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
-                  className="mt-5 rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-bold text-white shadow-[0_12px_25px_rgba(243,137,120,0.28)] transition hover:bg-[#e87562]"
-                >
-                  View Action Required
-                </button>
-              </div>
-            </div>
-          </Panel>
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-[0.43fr_0.57fr]">
-          <Panel title="Invoice Status" action={<span className="text-xs font-bold text-[#251E1F]">This Month</span>}>
-            <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">
-              <DonutChart statuses={invoiceStatusItems} total={invoiceStatusTotal} />
-              <div className="space-y-3">
-                {invoiceStatusItems.map((item) => {
-                  const percentage = invoiceStatusTotal > 0 ? Math.round((item.count / invoiceStatusTotal) * 100) : 0;
-
-                  return (
-                    <div key={item.status} className="grid grid-cols-[1fr_auto] items-center gap-4 text-sm">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
-                        <span className="truncate font-semibold text-[#251E1F]">{item.status}</span>
-                      </div>
-                      <span className="text-right text-[#6f5b55]">
-                        {percentage}% ({formatCount(item.count)})
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </Panel>
-
-          <Panel title="Revenue Trend" icon={TrendingUp} action={<MiniSelect value={revenuePeriod} onChange={setRevenuePeriod} />}>
-            <div className="flex min-h-[230px] flex-col justify-center rounded-xl border border-dashed border-[#f0c9bf] bg-[#fff8f5] p-6">
-              <div className="grid h-28 grid-rows-4 gap-4 opacity-70">
-                <span className="border-t border-[#efd5cd]" />
-                <span className="border-t border-[#efd5cd]" />
-                <span className="border-t border-[#efd5cd]" />
-                <span className="border-t border-[#efd5cd]" />
-              </div>
-              <div className="-mt-20 flex flex-col items-center text-center">
-                <BarChart3 size={36} className="text-[#F38978]" />
-                <p className="mt-4 text-sm font-bold text-[#251E1F]">
-                  Revenue trend data is not available yet.
-                </p>
-                <p className="mt-2 text-xs text-[#7b6660]">
-                  Selected period: {revenuePeriod}
-                </p>
-              </div>
-            </div>
-          </Panel>
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-[0.95fr_0.95fr_1.12fr_1.28fr]">
-          <Panel title="Cash Flow Overview">
-            <div className="space-y-3">
-              <CashFlowRow label="Incoming" icon={DollarSign} tone="bg-[#edf8f1]" />
-              <CashFlowRow label="Outstanding" icon={AlertTriangle} tone="bg-[#fff0eb]" />
-              <CashFlowRow label="Net Cash" icon={CreditCard} tone="bg-[#eef5ff]" />
+            <div className="space-y-2">
+              <FocusRow icon={AlertTriangle} label="Overdue Invoices" count={todayFocus.overdueInvoices} to={`${invoiceListPath}?status=overdue`} accent="#F38978" />
+              <FocusRow icon={BellRing} label="Reminder Failed" count={todayFocus.reminderFailed} to={`${basePath}/reminder-settings?filter=failed`} accent="#D97706" />
+              <FocusRow icon={FileCheck2} label="Draft Invoices Not Sent" count={todayFocus.draftInvoicesNotSent} to={`${invoiceListPath}?status=draft`} accent="#7FA7D8" />
+              <FocusRow icon={CreditCard} label="Payments to Verify" count={todayFocus.paymentsToVerify} to={`${basePath}/payments?status=pending-verification`} accent="#35A69B" />
+              <FocusRow icon={XCircle} label="Validation Errors" count={todayFocus.validationErrors} to={`${basePath}/dashboard/validation-summary`} accent="#F38978" />
             </div>
           </Panel>
 
           <Panel
-            title="Recent Activities"
-            action={dashboard?.recentActivities?.length ? <span className="text-xs font-bold text-[#F38978]">View All</span> : null}
+            title="Upcoming Due Invoices"
+            action={<Link to={`${invoiceListPath}?filter=upcoming-due`} className="text-xs font-bold text-[#F38978]">View all</Link>}
           >
-            {dashboard?.recentActivities?.length ? (
-              <div className="space-y-3">
-                {dashboard.recentActivities.slice(0, 4).map((activity) => (
-                  <div key={activity.id} className="flex gap-3">
-                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#fff0eb] text-[#F38978]">
-                      <Activity size={15} />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-[#251E1F]">{activity.action}</p>
-                      <p className="mt-0.5 truncate text-xs text-[#7b6660]">
-                        {activity.entityType} {activity.entityId ? `#${activity.entityId}` : ""} by {activity.actorName}
-                      </p>
-                      <p className="mt-0.5 text-xs text-[#a48d86]">{formatDate(activity.createdAt)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState>No recent system activities yet.</EmptyState>
-            )}
+            <UpcomingDueInvoicesTable invoices={upcomingDueInvoices} />
           </Panel>
 
-          <Panel title="Upcoming Due Invoices" action={<span className="text-xs font-bold text-[#F38978]">View All</span>}>
-            <EmptyState>No upcoming due invoice data available yet.</EmptyState>
+          <Panel title="Quick Actions" className="xl:row-span-2">
+            <div className="space-y-3">
+              <QuickAction icon={Plus} label="Create Invoice" to={`${invoiceListPath}/create`} />
+              <QuickAction icon={Send} label="Send Reminder" to={`${basePath}/reminder-settings`} />
+              <QuickAction icon={UserPlus} label="New Customer" to={`${basePath}/customers/create`} />
+              <QuickAction icon={CreditCard} label="Record Payment" to={`${basePath}/payments/record`} />
+              <QuickAction icon={BarChart3} label="Generate Report" to={`${basePath}/reports`} />
+              <QuickAction icon={Settings} label="Reminder Settings" to={`${basePath}/reminder-settings`} />
+            </div>
           </Panel>
-
-          <Panel title="Top Outstanding Customers" action={<span className="text-xs font-bold text-[#F38978]">View All</span>}>
-            <EmptyState>No outstanding customer data available yet.</EmptyState>
+          <Panel
+            title="Recent Invoices"
+            className="xl:col-span-2"
+            action={<Link to={`${invoiceListPath}?sort=latest`} className="text-xs font-bold text-[#F38978]">View all</Link>}
+          >
+            <RecentInvoicesTable invoices={recentInvoices} />
           </Panel>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
-          <Panel title="AI Insights" icon={Bot}>
-            <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-[#fff0eb] text-[#F38978]">
-                <Bot size={30} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold leading-6 text-[#251E1F]">
-                  AI insights will appear here once invoice and reminder analytics are connected.
-                </p>
-                <p className="mt-1 text-xs text-[#7b6660]">
-                  No AI backend or analytics endpoint is connected for this dashboard yet.
-                </p>
-              </div>
-            </div>
-          </Panel>
-
-          <Panel title="Quick Actions">
-            <div ref={quickActionsRef} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-              <QuickAction icon={Plus} label="Create Invoice" title="Create Invoice route is not available yet." />
-              <QuickAction icon={Send} label="Send Reminder" to="/dashboard/invoicing/admin/reminder-settings" />
-              <QuickAction icon={UserPlus} label="New Customer" title="New Customer route is not available yet." />
-              <QuickAction icon={CreditCard} label="Record Payment" title="Record Payment route is not available yet." />
-              <QuickAction icon={BarChart3} label="Generate Report" to="/dashboard/invoicing/admin/reports" />
-              <QuickAction icon={Settings} label="Reminder Settings" to="/dashboard/invoicing/admin/reminder-settings" />
-            </div>
-          </Panel>
+        <div className="flex items-center justify-end gap-3 text-xs font-medium text-[#7b6660]">
+          <span>Last refreshed: {lastRefreshedAt ? formatDateTime(lastRefreshedAt) : "-"}</span>
+          <button
+            type="button"
+            onClick={() => loadDashboard(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-[#ead3cc] bg-white px-3 py-2 font-bold text-[#251E1F] transition hover:border-[#F38978] hover:text-[#F38978]"
+          >
+            <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+            Refresh
+          </button>
         </div>
-
-        <p className="text-right text-xs font-medium text-[#7b6660]">
-          Last updated: {lastUpdated ? formatDate(lastUpdated) : "-"}
-        </p>
       </div>
     </section>
   );

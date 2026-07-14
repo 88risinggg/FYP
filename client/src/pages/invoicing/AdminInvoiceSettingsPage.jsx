@@ -3,10 +3,13 @@ import {
   CheckCircle2,
   ChevronDown,
   Circle,
+  Clock3,
   FileSpreadsheet,
   FileText,
+  Hash,
   ImageUp,
   Info,
+  ListChecks,
   Loader2,
   Palette,
   RotateCcw,
@@ -31,7 +34,6 @@ const tabs = [
   { label: "Numbering", slug: "numbering" },
   { label: "Template", slug: "template" },
   { label: "Email", slug: "email" },
-  { label: "Reminders", slug: "reminders" },
   { label: "Payments", slug: "payments" },
   { label: "Bulk Upload", slug: "bulk-upload" },
   { label: "Automation", slug: "automation" }
@@ -45,10 +47,17 @@ const emptyOptions = {
   paymentTerms: [],
   lateFeeTypes: [],
   pdfPaperSizes: [],
-  excelFormats: []
+  excelFormats: [],
+  separatorStyles: [],
+  invoiceFormats: []
 };
 
 const defaultForm = {
+  invoicePrefix: "",
+  invoiceYear: "",
+  separatorStyle: "",
+  invoiceFormat: "",
+  nextInvoiceNumber: 1,
   general: {
     defaultCurrency: "",
     defaultLanguage: "",
@@ -70,6 +79,12 @@ const defaultForm = {
     companyLogoUrl: "",
     brandColor: "#F38978",
     showCompanyDetailsOnInvoice: true
+  },
+  sequenceRules: {
+    yearlyReset: true,
+    allowManualOverride: false,
+    lockNumberingAfterSent: true,
+    preventDuplicateNumbers: true
   }
 };
 
@@ -118,6 +133,29 @@ const exportSelectFields = [
   { label: "Excel Format", section: "export", field: "excelFormat", optionsKey: "excelFormats" }
 ];
 
+const sequenceRuleFields = [
+  {
+    label: "Yearly Reset",
+    note: "Restart the invoice sequence when the saved invoice year changes.",
+    field: "yearlyReset"
+  },
+  {
+    label: "Allow Manual Override",
+    note: "Permit approved admins to adjust generated numbers before sending.",
+    field: "allowManualOverride"
+  },
+  {
+    label: "Lock Numbering After Sent",
+    note: "Prevent number edits once an invoice has been sent.",
+    field: "lockNumberingAfterSent"
+  },
+  {
+    label: "Prevent Duplicate Numbers",
+    note: "Block saving when another invoice already has the same number.",
+    field: "preventDuplicateNumbers"
+  }
+];
+
 const buttonClasses = {
   primary:
     "flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#F38978] px-4 py-3 text-sm font-bold text-white shadow-[0_12px_25px_rgba(243,137,120,0.35)] transition hover:bg-[#e87562] disabled:cursor-not-allowed disabled:opacity-70",
@@ -127,7 +165,7 @@ const buttonClasses = {
 
 const bannerClasses = {
   error: "rounded-xl border border-[#F38978]/35 bg-white px-4 py-3 text-sm font-semibold text-[#b64d3b]",
-  success: "rounded-xl border border-[#4FB783]/30 bg-white px-4 py-3 text-sm font-semibold text-[#347a57]"
+  success: "rounded-xl border border-[#F38978]/30 bg-white px-4 py-3 text-sm font-semibold text-[#b64d3b]"
 };
 
 function cloneSettings(settings) {
@@ -140,8 +178,55 @@ function normalizeSettings(settings) {
     ...(settings || {}),
     general: { ...defaultForm.general, ...(settings?.general || {}) },
     export: { ...defaultForm.export, ...(settings?.export || {}) },
-    branding: { ...defaultForm.branding, ...(settings?.branding || {}) }
+    branding: { ...defaultForm.branding, ...(settings?.branding || {}) },
+    sequenceRules: { ...defaultForm.sequenceRules, ...(settings?.sequenceRules || {}) }
   };
+}
+
+function padInvoiceNumber(value) {
+  const parsed = Number(value);
+  const safeValue = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
+  return String(safeValue).padStart(4, "0");
+}
+
+function buildInvoiceNumber(settings, nextNumber = settings.nextInvoiceNumber) {
+  const prefix = settings.invoicePrefix || "";
+  const year = String(settings.invoiceYear || "");
+  const format = settings.invoiceFormat || "";
+
+  return format
+    .replaceAll("{PREFIX}", prefix)
+    .replaceAll("{YYYY}", year)
+    .replaceAll("{YY}", year.slice(-2))
+    .replaceAll("{NNNN}", padInvoiceNumber(nextNumber));
+}
+
+function separatorFromFormat(format) {
+  if (format?.includes("/")) return "slash";
+  if (format?.includes("-")) return "hyphen";
+  return "none";
+}
+
+function formatForSeparator(currentFormat, separatorStyle) {
+  if (separatorStyle === "none") return "{PREFIX}{YYYY}{NNNN}";
+
+  const separator = separatorStyle === "slash" ? "/" : "-";
+  const usesShortYear = currentFormat?.includes("{YY}") && !currentFormat?.includes("{YYYY}");
+  const startsWithYear = separatorStyle === "hyphen" && currentFormat?.startsWith("{YYYY}");
+
+  if (startsWithYear) return `{YYYY}${separator}{PREFIX}${separator}{NNNN}`;
+  return `{PREFIX}${separator}${usesShortYear ? "{YY}" : "{YYYY}"}${separator}{NNNN}`;
+}
+
+function formatDateTime(value) {
+  if (!value) return "Not saved yet";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not saved yet";
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(date);
 }
 
 function buildLogoUrl(value) {
@@ -225,7 +310,7 @@ function Toggle({ checked, onChange, label, note }) {
         onChange={(event) => onChange(event.target.checked)}
         className="peer sr-only"
       />
-      <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${checked ? "bg-[#4FB783]" : "bg-[#dcc8c1]"}`}>
+      <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${checked ? "bg-[#F38978]" : "bg-[#dcc8c1]"}`}>
         <span className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition ${checked ? "translate-x-5" : ""}`} />
       </span>
     </label>
@@ -258,7 +343,7 @@ function SettingsCard({ title, icon: Icon, children }) {
 }
 
 function StatusIcon({ status }) {
-  if (status === "completed") return <CheckCircle2 size={15} className="text-[#4FB783]" />;
+  if (status === "completed") return <CheckCircle2 size={15} className="text-[#F38978]" />;
   if (status === "warning") return <AlertTriangle size={15} className="text-[#FFB65C]" />;
   return <XCircle size={15} className="text-[#F38978]" />;
 }
@@ -280,7 +365,7 @@ function ConfigurationStatusPanel({ status }) {
               cy="54"
               r="42"
               fill="none"
-              stroke="#4FB783"
+              stroke="#F38978"
               strokeLinecap="round"
               strokeWidth="12"
               strokeDasharray={circumference}
@@ -410,6 +495,181 @@ function WorkflowPanel({ workflow }) {
   );
 }
 
+function NumberingPreviewPanel({ form, previewNumbers }) {
+  return (
+    <SettingsCard title="Numbering Preview" icon={Hash}>
+      <div className="space-y-3">
+        {previewNumbers.map((invoiceNumber) => (
+          <div
+            key={invoiceNumber}
+            className="rounded-lg border border-[#ead3cc] bg-[#fff8f5] px-3 py-2 text-sm font-bold text-[#251E1F]"
+          >
+            {invoiceNumber}
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 rounded-lg border border-[#ead3cc] bg-white px-3 py-3">
+        <p className="text-xs font-bold text-[#7b6660]">Format</p>
+        <p className="mt-1 break-all text-sm font-bold text-[#251E1F]">{form.invoiceFormat || "Not selected"}</p>
+      </div>
+    </SettingsCard>
+  );
+}
+
+function RecentNumberingActivity({ activity }) {
+  return (
+    <SettingsCard title="Recent Numbering Activity" icon={Clock3}>
+      <div className="overflow-x-auto">
+        <table className="min-w-[760px] w-full text-left text-sm">
+          <thead className="border-b border-[#f0d2ca] text-xs font-bold uppercase text-[#7b6660]">
+            <tr>
+              <th className="px-3 py-3">Date &amp; Time</th>
+              <th className="px-3 py-3">Action</th>
+              <th className="px-3 py-3">Old Value</th>
+              <th className="px-3 py-3">New Value</th>
+              <th className="px-3 py-3">Changed By</th>
+              <th className="px-3 py-3">Notes</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#f5e2dc]">
+            {activity.length === 0 ? (
+              <tr>
+                <td colSpan="6" className="px-3 py-8 text-center text-sm font-semibold text-[#7b6660]">
+                  No numbering activity yet.
+                </td>
+              </tr>
+            ) : (
+              activity.map((item) => (
+                <tr key={item.id} className="align-top">
+                  <td className="whitespace-nowrap px-3 py-3 font-semibold text-[#251E1F]">
+                    {formatDateTime(item.createdAt)}
+                  </td>
+                  <td className="px-3 py-3 font-semibold text-[#251E1F]">{item.action}</td>
+                  <td className="px-3 py-3 text-[#7b6660]">{item.oldValue}</td>
+                  <td className="px-3 py-3 font-semibold text-[#251E1F]">{item.newValue}</td>
+                  <td className="px-3 py-3 text-[#7b6660]">{item.changedBy}</td>
+                  <td className="px-3 py-3 text-[#7b6660]">{item.notes || "-"}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </SettingsCard>
+  );
+}
+
+function NumberingTab({
+  form,
+  options,
+  configurationStatus,
+  previewNumbers,
+  activity,
+  lastSavedAt,
+  saving,
+  uploading,
+  onCancel,
+  onRootFieldChange,
+  onSeparatorChange,
+  onFormatChange,
+  onSequenceRuleChange
+}) {
+  const examplePreview = buildInvoiceNumber(form);
+
+  return (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="space-y-5">
+        <SettingsCard title="Numbering Format" icon={Hash}>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Field label="Invoice Prefix">
+              <input
+                type="text"
+                value={form.invoicePrefix}
+                onChange={(event) => onRootFieldChange("invoicePrefix", event.target.value.toUpperCase())}
+                className="h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm font-semibold text-[#251E1F] outline-none transition focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/20"
+              />
+            </Field>
+            <Field label="Year">
+              <input
+                type="number"
+                min="1900"
+                max="9999"
+                value={form.invoiceYear}
+                onChange={(event) => onRootFieldChange("invoiceYear", event.target.value)}
+                className="h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm font-semibold text-[#251E1F] outline-none transition focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/20"
+              />
+            </Field>
+            <Field label="Separator Style">
+              <SelectField
+                value={form.separatorStyle}
+                onChange={onSeparatorChange}
+                options={options.separatorStyles}
+              />
+            </Field>
+            <Field label="Invoice Format">
+              <SelectField
+                value={form.invoiceFormat}
+                onChange={onFormatChange}
+                options={options.invoiceFormats}
+              />
+            </Field>
+            <Field label="Next Invoice Number" note="Usually read-only because the system calculates the next available number automatically.">
+              <input
+                type="number"
+                min="1"
+                readOnly={!form.sequenceRules.allowManualOverride}
+                value={form.nextInvoiceNumber}
+                onChange={(event) => onRootFieldChange("nextInvoiceNumber", event.target.value)}
+                className={`h-11 w-full rounded-lg border border-[#ead3cc] px-3 text-sm font-semibold text-[#251E1F] outline-none transition focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/20 ${
+                  form.sequenceRules.allowManualOverride ? "bg-white" : "bg-[#fff8f5]"
+                }`}
+              />
+            </Field>
+            <Field label="Example Preview">
+              <div className="flex h-11 items-center rounded-lg border border-[#ead3cc] bg-[#fff8f5] px-3 text-sm font-bold text-[#251E1F]">
+                {examplePreview}
+              </div>
+            </Field>
+          </div>
+        </SettingsCard>
+
+        <SettingsCard title="Sequence Rules" icon={ListChecks}>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {sequenceRuleFields.map((rule) => (
+              <Toggle
+                key={rule.field}
+                label={rule.label}
+                note={rule.note}
+                checked={form.sequenceRules[rule.field]}
+                onChange={(value) => onSequenceRuleChange(rule.field, value)}
+              />
+            ))}
+          </div>
+        </SettingsCard>
+
+        <RecentNumberingActivity activity={activity} />
+      </div>
+
+      <aside className="space-y-5">
+        <ConfigurationStatusPanel status={configurationStatus} />
+        <NumberingPreviewPanel form={form} previewNumbers={previewNumbers} />
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/95 p-4 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
+          <p className="mb-3 text-xs font-bold text-[#7b6660]">Last saved</p>
+          <p className="mb-4 text-sm font-bold text-[#251E1F]">{formatDateTime(lastSavedAt)}</p>
+          <button type="submit" disabled={saving || uploading} className={buttonClasses.primary}>
+            {saving ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}
+            {saving ? "Saving..." : "Save & Publish Settings"}
+          </button>
+          <button type="button" onClick={onCancel} disabled={saving || uploading} className={buttonClasses.secondary}>
+            <RotateCcw size={16} />
+            Cancel
+          </button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
 function TabPlaceholder({ label }) {
   return (
     <section className="rounded-xl border border-dashed border-[#f0c9bf] bg-white/90 p-8 text-center text-sm font-semibold text-[#7b6660]">
@@ -441,6 +701,7 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
   const [savedForm, setSavedForm] = useState(defaultForm);
   const [options, setOptions] = useState(emptyOptions);
   const [configurationStatus, setConfigurationStatus] = useState(null);
+  const [numberingActivity, setNumberingActivity] = useState([]);
   const [workflow, setWorkflow] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -455,6 +716,17 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
     : "/dashboard/invoicing/admin/invoice-settings";
 
   const logoUrl = useMemo(() => buildLogoUrl(form.branding.companyLogoUrl), [form.branding.companyLogoUrl]);
+  const numberingPreview = useMemo(() => {
+    const startNumber = Number(form.nextInvoiceNumber) || 1;
+    return Array.from({ length: 5 }, (_, index) => buildInvoiceNumber(form, startNumber + index));
+  }, [form]);
+  const numberingOptions = useMemo(() => ({
+    ...options,
+    invoiceFormats: options.invoiceFormats.map((option) => ({
+      ...option,
+      label: `${option.value} -> ${buildInvoiceNumber({ ...form, invoiceFormat: option.value })}`
+    }))
+  }), [form, options]);
 
   async function loadSettings() {
     setLoading(true);
@@ -468,6 +740,7 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
       setSavedForm(cloneSettings(nextSettings));
       setOptions({ ...emptyOptions, ...(data.options || {}) });
       setConfigurationStatus(data.configurationStatus || null);
+      setNumberingActivity(data.numberingActivity || []);
       setWorkflow(data.invoiceStatusWorkflow || []);
     } catch (error) {
       setErrors([error.message]);
@@ -490,6 +763,39 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
     }));
   }
 
+  function setRootField(field, value) {
+    setForm((current) => ({
+      ...current,
+      [field]: value
+    }));
+  }
+
+  function setSequenceRule(field, value) {
+    setForm((current) => ({
+      ...current,
+      sequenceRules: {
+        ...current.sequenceRules,
+        [field]: value
+      }
+    }));
+  }
+
+  function handleSeparatorChange(value) {
+    setForm((current) => ({
+      ...current,
+      separatorStyle: value,
+      invoiceFormat: formatForSeparator(current.invoiceFormat, value)
+    }));
+  }
+
+  function handleFormatChange(value) {
+    setForm((current) => ({
+      ...current,
+      invoiceFormat: value,
+      separatorStyle: separatorFromFormat(value)
+    }));
+  }
+
   function validateForm() {
     const nextErrors = [];
     if (!form.general.defaultCurrency) nextErrors.push("Default currency is required.");
@@ -502,6 +808,13 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
     }
     if (!form.export.pdfPaperSize) nextErrors.push("PDF paper size is required.");
     if (!form.export.excelFormat) nextErrors.push("Excel format is required.");
+    if (!form.invoicePrefix) nextErrors.push("Invoice prefix is required.");
+    if (!/^\d{4}$/.test(String(form.invoiceYear || ""))) nextErrors.push("Enter a valid four-digit invoice year.");
+    if (!form.separatorStyle) nextErrors.push("Separator style is required.");
+    if (!form.invoiceFormat) nextErrors.push("Invoice format is required.");
+    if (!Number.isInteger(Number(form.nextInvoiceNumber)) || Number(form.nextInvoiceNumber) < 1) {
+      nextErrors.push("Next invoice number must be 1 or higher.");
+    }
     return nextErrors;
   }
 
@@ -525,6 +838,7 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
       setForm(cloneSettings(savedSettings));
       setSavedForm(cloneSettings(savedSettings));
       setConfigurationStatus(data.configurationStatus || null);
+      setNumberingActivity(data.numberingActivity || []);
       setWorkflow(data.invoiceStatusWorkflow || workflow);
       setMessage(data.message || "Invoice settings saved.");
     } catch (error) {
@@ -644,7 +958,23 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
           <MessageBanner type="success">{message}</MessageBanner>
         ) : null}
 
-        {currentTab !== "general" ? (
+        {currentTab === "numbering" ? (
+          <NumberingTab
+            form={form}
+            options={numberingOptions}
+            configurationStatus={configurationStatus}
+            previewNumbers={numberingPreview}
+            activity={numberingActivity}
+            lastSavedAt={savedForm.updatedAt}
+            saving={saving}
+            uploading={uploading}
+            onCancel={handleCancel}
+            onRootFieldChange={setRootField}
+            onSeparatorChange={handleSeparatorChange}
+            onFormatChange={handleFormatChange}
+            onSequenceRuleChange={setSequenceRule}
+          />
+        ) : currentTab !== "general" ? (
           <TabPlaceholder label={currentTabConfig.label} />
         ) : (
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -762,7 +1092,7 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
               </SettingsCard>
 
               <div className="flex items-start gap-3 rounded-xl border border-[#cfe8d9] bg-white/95 p-4 text-sm text-[#527260] shadow-[0_10px_28px_rgba(37,30,31,0.04)]">
-                <Info size={18} className="mt-0.5 shrink-0 text-[#4FB783]" />
+                <Info size={18} className="mt-0.5 shrink-0 text-[#F38978]" />
                 <p>
                   These settings apply to new invoices. Individual invoice flows can override them when a future invoice creation page provides that control.
                 </p>

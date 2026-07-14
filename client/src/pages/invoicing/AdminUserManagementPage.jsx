@@ -425,8 +425,8 @@ export default function AdminUserManagementPage() {
   );
 
   const kpiCards = [
-    { label: "Total Users", value: summary.totalUsers, icon: Users, accent: "#2D7C83" },
-    { label: "Active Users", value: summary.activeUsers, icon: UserCheck, accent: "#4FB783" },
+    { label: "Total Users", value: summary.totalUsers, icon: Users, accent: "#F38978" },
+    { label: "Active Users", value: summary.activeUsers, icon: UserCheck, accent: "#e87562" },
     { label: "Pending Invitations", value: summary.pendingInvitations, icon: UserPlus, accent: "#F0B23E" },
     { label: "Suspended Accounts", value: summary.suspendedAccounts, icon: UserMinus, accent: "#F26E5F" }
   ];
@@ -435,7 +435,7 @@ export default function AdminUserManagementPage() {
     <section className="space-y-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-normal text-[#15565b]">
+          <h2 className="text-3xl font-bold tracking-normal text-[#251E1F]">
             Manage User Accounts
           </h2>
           <p className="mt-1 text-sm text-[#7b6660]">
@@ -557,7 +557,7 @@ export default function AdminUserManagementPage() {
           <button
             type="button"
             onClick={applyFilters}
-            className="mt-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#2D7C83] px-4 py-2 text-sm font-bold text-white shadow-lg shadow-[#2D7C83]/15 hover:bg-[#25666c]"
+            className="mt-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#F38978] px-4 py-2 text-sm font-bold text-white shadow-lg shadow-[#F38978]/15 hover:bg-[#e87562]"
           >
             <Filter size={16} />
             Apply
@@ -604,7 +604,7 @@ export default function AdminUserManagementPage() {
                   <tr key={user.userId} className="text-[#251E1F]">
                     <td className="whitespace-nowrap px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2D7C83]/12 text-xs font-bold text-[#2D7C83]">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F38978]/12 text-xs font-bold text-[#F38978]">
                           {getInitials(user.name)}
                         </div>
                         <span className="font-bold">{user.name}</span>
@@ -612,7 +612,7 @@ export default function AdminUserManagementPage() {
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-[#6f4f47]">{user.email}</td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      <span className="rounded-md border border-[#b8d9dc] bg-[#eaf6f7] px-2 py-1 text-xs font-bold text-[#15565b]">
+                      <span className="rounded-md border border-[#f3c6bc] bg-[#fff0eb] px-2 py-1 text-xs font-bold text-[#b64d3b]">
                         {user.roleName}
                       </span>
                     </td>
@@ -747,7 +747,7 @@ export default function AdminUserManagementPage() {
                 const percentage = totalAccessUsers
                   ? Math.round((Number(role.userCount || 0) / totalAccessUsers) * 100)
                   : 0;
-                const colors = ["#2D7C83", "#79A77A", "#F0B23E", "#F26E5F"];
+                const colors = ["#F38978", "#e87562", "#F0B23E", "#F26E5F"];
                 const color = colors[index % colors.length];
 
                 return (

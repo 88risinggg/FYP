@@ -2,10 +2,12 @@ const fs = require("fs/promises");
 const path = require("path");
 
 const {
+  addNumberingActivity,
   calculateConfigurationStatus,
   defaultSettings,
   getInvoiceSettings,
   invoiceStatusWorkflow,
+  listNumberingActivity,
   optionLists,
   saveInvoiceSettings,
   updateInvoiceLogo
@@ -14,7 +16,7 @@ const { getClientIp, logAuditEvent } = require("../models/auditLogModel");
 
 const uploadDirectory = path.join(__dirname, "..", "..", "public", "uploads", "invoice-logos");
 
-function buildPayload(settings, isConfigured) {
+async function buildPayload(settings, isConfigured) {
   const effectiveSettings = settings || defaultSettings;
 
   return {
@@ -22,6 +24,7 @@ function buildPayload(settings, isConfigured) {
     options: optionLists,
     configurationStatus: calculateConfigurationStatus(effectiveSettings),
     invoiceStatusWorkflow,
+    numberingActivity: await listNumberingActivity(),
     isConfigured: Boolean(isConfigured)
   };
 }
@@ -30,10 +33,16 @@ function normalizeSettings(body) {
   const general = body.general || {};
   const exportSettings = body.export || {};
   const branding = body.branding || {};
+  const sequenceRules = body.sequenceRules || {};
 
   return {
     ...defaultSettings,
     ...body,
+    invoicePrefix: String(body.invoicePrefix || defaultSettings.invoicePrefix).trim().toUpperCase(),
+    invoiceYear: String(body.invoiceYear || defaultSettings.invoiceYear).replace(/\D/g, ""),
+    separatorStyle: String(body.separatorStyle || defaultSettings.separatorStyle).trim(),
+    invoiceFormat: String(body.invoiceFormat || defaultSettings.invoiceFormat).trim(),
+    nextInvoiceNumber: Number(body.nextInvoiceNumber),
     general: {
       ...defaultSettings.general,
       ...general,
@@ -61,6 +70,20 @@ function normalizeSettings(body) {
       companyLogoUrl: String(branding.companyLogoUrl || "").trim(),
       brandColor: String(branding.brandColor || defaultSettings.branding.brandColor).trim(),
       showCompanyDetailsOnInvoice: Boolean(branding.showCompanyDetailsOnInvoice)
+    },
+    sequenceRules: {
+      ...defaultSettings.sequenceRules,
+      ...sequenceRules,
+      yearlyReset: Boolean(sequenceRules.yearlyReset ?? defaultSettings.sequenceRules.yearlyReset),
+      allowManualOverride: Boolean(
+        sequenceRules.allowManualOverride ?? defaultSettings.sequenceRules.allowManualOverride
+      ),
+      lockNumberingAfterSent: Boolean(
+        sequenceRules.lockNumberingAfterSent ?? defaultSettings.sequenceRules.lockNumberingAfterSent
+      ),
+      preventDuplicateNumbers: Boolean(
+        sequenceRules.preventDuplicateNumbers ?? defaultSettings.sequenceRules.preventDuplicateNumbers
+      )
     }
   };
 }
@@ -102,7 +125,66 @@ function validateSettings(settings) {
   if (!hasOption(optionLists.excelFormats, exportSettings.excelFormat)) {
     errors.push("Excel format is required.");
   }
+  if (!settings.invoicePrefix) {
+    errors.push("Invoice prefix is required.");
+  }
+  if (!/^\d{4}$/.test(String(settings.invoiceYear || ""))) {
+    errors.push("Enter a valid four-digit invoice year.");
+  }
+  if (!hasOption(optionLists.separatorStyles, settings.separatorStyle)) {
+    errors.push("Separator style is invalid.");
+  }
+  if (!hasOption(optionLists.invoiceFormats, settings.invoiceFormat)) {
+    errors.push("Invoice format is invalid.");
+  }
+  if (!Number.isInteger(Number(settings.nextInvoiceNumber)) || Number(settings.nextInvoiceNumber) < 1) {
+    errors.push("Next invoice number must be 1 or higher.");
+  }
   return errors;
+}
+
+const numberingActivityFields = [
+  { field: "invoicePrefix", label: "Invoice Prefix" },
+  { field: "invoiceYear", label: "Year" },
+  { field: "separatorStyle", label: "Separator Style" },
+  { field: "invoiceFormat", label: "Invoice Format" },
+  { field: "nextInvoiceNumber", label: "Next Invoice Number" },
+  { field: "sequenceRules.yearlyReset", label: "Yearly Reset" },
+  { field: "sequenceRules.allowManualOverride", label: "Allow Manual Override" },
+  { field: "sequenceRules.lockNumberingAfterSent", label: "Lock Numbering After Sent" },
+  { field: "sequenceRules.preventDuplicateNumbers", label: "Prevent Duplicate Numbers" }
+];
+
+function valueAtPath(source, fieldPath) {
+  return fieldPath.split(".").reduce((value, key) => value?.[key], source);
+}
+
+function displayValue(value) {
+  if (typeof value === "boolean") return value ? "Enabled" : "Disabled";
+  if (value === undefined || value === null || value === "") return "Not set";
+  return String(value);
+}
+
+function buildNumberingActivityRecords(previousSettings, nextSettings, savedSettings, changedBy) {
+  const previous = previousSettings || defaultSettings;
+
+  return numberingActivityFields
+    .map((config) => {
+      const oldValue = valueAtPath(previous, config.field);
+      const newValue = valueAtPath(nextSettings, config.field);
+
+      if (displayValue(oldValue) === displayValue(newValue)) return null;
+
+      return {
+        settingId: savedSettings.settingId,
+        action: `Updated ${config.label}`,
+        oldValue: displayValue(oldValue),
+        newValue: displayValue(newValue),
+        changedBy,
+        notes: "Saved from Invoice Settings > Numbering"
+      };
+    })
+    .filter(Boolean);
 }
 
 function handleSettingsError(error, res, fallbackMessage) {
@@ -114,7 +196,7 @@ function handleSettingsError(error, res, fallbackMessage) {
 async function getSettings(req, res) {
   try {
     const settings = await getInvoiceSettings();
-    res.json(buildPayload(settings, Boolean(settings)));
+    res.json(await buildPayload(settings, Boolean(settings)));
   } catch (error) {
     handleSettingsError(error, res, "Unable to load invoice settings.");
   }
@@ -129,7 +211,14 @@ async function putSettings(req, res) {
       return res.status(400).json({ message: errors[0], errors });
     }
 
+    const previousSettings = await getInvoiceSettings();
     const saved = await saveInvoiceSettings(settings);
+    const changedBy = req.user?.email || "Admin";
+    const numberingActivity = buildNumberingActivityRecords(previousSettings, settings, saved, changedBy);
+
+    if (numberingActivity.length > 0) {
+      await addNumberingActivity(numberingActivity);
+    }
 
     await logAuditEvent({
       userId: req.user?.userId,
@@ -142,7 +231,7 @@ async function putSettings(req, res) {
     });
 
     res.json({
-      ...buildPayload(saved, true),
+      ...(await buildPayload(saved, true)),
       message: "Invoice settings saved."
     });
   } catch (error) {
