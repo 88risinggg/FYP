@@ -11,10 +11,9 @@ const { allowRoles } = require("../middleware/rolesMiddleware");
 const router = express.Router();
 
 router.use(authenticateToken);
-router.use(allowRoles("Admin", "Finance"));
 
-router.get("/runs", getFinancePayrollRuns);
-router.post("/runs/from-staff", createRunFromStaffDatabase);
-router.put("/runs/:runId", saveFinancePayrollRun);
+router.get("/runs", allowRoles("Admin", "Finance", "HR"), getFinancePayrollRuns);
+router.post("/runs/from-staff", allowRoles("Admin", "Finance", "HR"), createRunFromStaffDatabase);
+router.put("/runs/:runId", allowRoles("Admin", "Finance"), saveFinancePayrollRun);
 
 module.exports = router;

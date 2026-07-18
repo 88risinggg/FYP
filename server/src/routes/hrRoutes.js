@@ -10,12 +10,17 @@ const { addAudit } = require("../services/audit");
 const { pool } = require("../config/db");
 const { parseFile, extractStaffNames, titleCase } = require("../services/importParser");
 const { calculatePayslipsFromRows } = require("../services/payrollCalculation");
+const { DEFAULT_PAYROLL_RULES_2026 } = require("../services/statutoryPayrollEngine");
 const { authenticateToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/rolesMiddleware");
 const { validateUpload } = require("../services/uploadValidationService");
 const { commitUpload } = require("../services/uploadCommitService");
 require("../models/advanceModel");
 const { createNotificationInternal } = require("../controllers/notificationController");
+const {
+  createFinancePayrollRunFromStaff,
+  listFinancePayrollRuns
+} = require("../models/financePayrollModel");
 
 const router = express.Router();
 
@@ -842,8 +847,12 @@ router.post("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), async 
     }
 
     const [result] = await pool.query(
-      'INSERT INTO payroll_run (payroll_month, payroll_year, status, created_by, created_at) VALUES (?, ?, ?, ?, NOW())',
-      [numMonth, numYear, 'Draft', req.user.userId]
+      'INSERT INTO payroll_run (payroll_month, payroll_year, status, configuration_json, created_at) VALUES (?, ?, ?, ?, NOW())',
+      [numMonth, numYear, 'Draft', JSON.stringify({
+        rules: DEFAULT_PAYROLL_RULES_2026,
+        submittedBy: req.user.email,
+        submittedAt: new Date().toISOString()
+      })]
     );
 
     const [rows] = await pool.query('SELECT * FROM payroll_run WHERE payroll_run_id = ? LIMIT 1', [result.insertId]);
@@ -859,10 +868,9 @@ router.post("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), async 
 router.get("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), async (_req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT pr.*, u.name AS created_by_name,
+      `SELECT pr.*,
         (SELECT COUNT(*) FROM payroll p WHERE p.payroll_run_id = pr.payroll_run_id) AS total_payslips
        FROM payroll_run pr
-       LEFT JOIN user u ON pr.created_by = u.user_id
        ORDER BY pr.payroll_year DESC, pr.payroll_month DESC`
     );
     return res.json(rows);
@@ -874,10 +882,9 @@ router.get("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), async (
 router.get("/payroll-run/:id", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT pr.*, u.name AS created_by_name,
+      `SELECT pr.*,
         (SELECT COUNT(*) FROM payroll p WHERE p.payroll_run_id = pr.payroll_run_id) AS total_payslips
        FROM payroll_run pr
-       LEFT JOIN user u ON pr.created_by = u.user_id
        WHERE pr.payroll_run_id = ? LIMIT 1`,
       [req.params.id]
     );
@@ -898,21 +905,24 @@ router.get("/payroll-run/:id/payslips", authenticateToken, allowRoles("Admin", "
     if (!runCheck.length) return res.status(404).json({ message: "Payroll run not found" });
 
     const [rows] = await pool.query(
-      `SELECT 
+      `SELECT
         p.payroll_id,
         p.staff_employee_id AS employee_id,
         s.name AS staff_name,
         s.email,
-        s.department_id,
+        s.department_name,
         s.base_salary,
+        p.gross_salary,
         p.total_allowances,
         p.total_deductions,
+        p.employee_cpf,
+        p.employer_cpf,
+        p.mbmf_amount,
         p.net_salary,
-        ps.payslip_id,
-        ps.status AS payslip_status
+        p.payroll_id AS payslip_id,
+        p.payslip_status
       FROM payroll p
       JOIN staff s ON s.employee_id = p.staff_employee_id
-      LEFT JOIN payslip ps ON ps.payroll_payroll_id = p.payroll_id
       WHERE p.payroll_run_id = ?
       ORDER BY p.staff_employee_id ASC`,
       [req.params.id]
@@ -952,10 +962,9 @@ router.put("/payroll-run/:id/lock", authenticateToken, allowRoles("Admin", "HR")
 
     // 4. Return enriched payroll run (same shape as GET /payroll-run/:id)
     const [updated] = await pool.query(
-      `SELECT pr.*, u.name AS created_by_name,
+      `SELECT pr.*,
         (SELECT COUNT(*) FROM payroll p WHERE p.payroll_run_id = pr.payroll_run_id) AS total_payslips
        FROM payroll_run pr
-       LEFT JOIN user u ON pr.created_by = u.user_id
        WHERE pr.payroll_run_id = ? LIMIT 1`,
       [req.params.id]
     );
@@ -1006,7 +1015,11 @@ router.post(
 
       // Use payroll calculation service to generate payslips
       const { created: generatedPayslips, skipped } = calculatePayslipsFromRows(
-        rows,
+        rows.map((row) => ({
+          ...row,
+          payroll_month: payrollRun.payroll_month,
+          payroll_year: payrollRun.payroll_year
+        })),
         staffFromDb,
         payrollRateConfig,
         String(payroll_run_id),
@@ -1030,79 +1043,31 @@ router.post(
             continue;
           }
 
-          // Insert payroll record
-          const [payrollResult] = await conn.query(
-            `INSERT INTO payroll 
-              (staff_employee_id, payroll_month, payroll_year, payroll_run_id, total_allowances, total_deductions, net_salary)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          // The payroll row is also the payslip record in the consolidated schema.
+          await conn.query(
+            `INSERT INTO payroll (
+              staff_employee_id, payroll_month, payroll_year, payroll_run_id,
+              gross_salary, total_allowances, total_deductions, employee_cpf,
+              employer_cpf, mbmf_amount, deduction_breakdown, net_salary,
+              source, payslip_status
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'upload_automated_2026', ?)`,
             [
               slip.employee_id,
               payrollRun.payroll_month,
               payrollRun.payroll_year,
               payroll_run_id,
-              slip.allowance || 0,
+              slip.gross_salary,
+              (slip.services_commission || 0) + (slip.product_commission || 0) +
+                (slip.credit_commission || 0) + (slip.allowance || 0),
               slip.total_deductions || 0,
-              slip.net_pay || 0
+              slip.cpf_employee_deduction || 0,
+              slip.cpf_employer_contribution || 0,
+              slip.mbmf_amount || 0,
+              JSON.stringify(slip.deduction_breakdown || {}),
+              slip.net_pay || 0,
+              slip.status
             ]
           );
-
-          // Insert payslip record
-          await conn.query(
-            'INSERT INTO payslip (payroll_payroll_id, status, generated_at) VALUES (?, ?, NOW())',
-            [payrollResult.insertId, 'draft']
-          );
-
-          // Insert allowance line items if any
-          if (slip.allowance > 0) {
-            await conn.query(
-              'INSERT INTO payroll_allowance (payroll_payroll_id, allowance_type, amount) VALUES (?, ?, ?)',
-              [payrollResult.insertId, 'Allowance', slip.allowance]
-            );
-          }
-          if (slip.services_commission > 0) {
-            await conn.query(
-              'INSERT INTO payroll_allowance (payroll_payroll_id, allowance_type, amount) VALUES (?, ?, ?)',
-              [payrollResult.insertId, 'Services Commission', slip.services_commission]
-            );
-          }
-          if (slip.product_commission > 0) {
-            await conn.query(
-              'INSERT INTO payroll_allowance (payroll_payroll_id, allowance_type, amount) VALUES (?, ?, ?)',
-              [payrollResult.insertId, 'Product Commission', slip.product_commission]
-            );
-          }
-          if (slip.credit_commission > 0) {
-            await conn.query(
-              'INSERT INTO payroll_allowance (payroll_payroll_id, allowance_type, amount) VALUES (?, ?, ?)',
-              [payrollResult.insertId, 'Credit Commission', slip.credit_commission]
-            );
-          }
-
-          // Insert deduction line items if any
-          if (slip.cpf_employee_deduction > 0) {
-            await conn.query(
-              'INSERT INTO payroll_deduction (payroll_payroll_id, deduction_type, amount) VALUES (?, ?, ?)',
-              [payrollResult.insertId, 'CPF Employee', slip.cpf_employee_deduction]
-            );
-          }
-          if (slip.loan_deduction > 0) {
-            await conn.query(
-              'INSERT INTO payroll_deduction (payroll_payroll_id, deduction_type, amount) VALUES (?, ?, ?)',
-              [payrollResult.insertId, 'Loan', slip.loan_deduction]
-            );
-          }
-          if (slip.other_deduction > 0) {
-            await conn.query(
-              'INSERT INTO payroll_deduction (payroll_payroll_id, deduction_type, amount) VALUES (?, ?, ?)',
-              [payrollResult.insertId, 'Other', slip.other_deduction]
-            );
-          }
-          if (slip.donation_amount > 0) {
-            await conn.query(
-              'INSERT INTO payroll_deduction (payroll_payroll_id, deduction_type, amount) VALUES (?, ?, ?)',
-              [payrollResult.insertId, slip.donation_fund || 'Donation', slip.donation_amount]
-            );
-          }
 
           savedPayslips.push(slip);
         }
@@ -1148,7 +1113,54 @@ router.post(
 
 // ----- Quick Generate: Create payslips from DB data (no file upload needed) -----
 // Uses base_salary from staff table + CPF/SDL calculation
-router.post("/payslips/quick-generate", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+router.post("/payslips/quick-generate", authenticateToken, allowRoles("Admin", "HR"), async (req, res, next) => {
+  try {
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const rawMonth = req.body?.period_month;
+    const month = Number.isInteger(Number(rawMonth))
+      ? Number(rawMonth)
+      : monthNames.findIndex((item) => item.toLowerCase() === String(rawMonth).toLowerCase()) + 1;
+    const year = Number(req.body?.period_year);
+    if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 2000) {
+      return res.status(400).json({ message: "Valid payroll month and year are required." });
+    }
+
+    const result = await createFinancePayrollRunFromStaff({
+      month,
+      year,
+      userId: req.user.userId,
+      userEmail: req.user.email
+    });
+    if (result.noActiveStaff) return res.status(400).json({ message: "No active staff found in database" });
+    const run = result.run;
+    const generated = run.employees.filter((employee) => !employee.complianceExceptions?.length);
+    const held = run.employees.filter((employee) => employee.complianceExceptions?.length);
+    return res.status(201).json({
+      message: "Payroll calculated successfully from staff records",
+      payroll_run_id: Number(run.id),
+      generated_count: generated.length,
+      skipped_count: held.length,
+      generated,
+      skipped: held.map((employee) => ({
+        employee_id: employee.staffEmployeeId,
+        name: employee.name,
+        reason: employee.complianceExceptions.join("; ")
+      })),
+      summary: {
+        total_gross: run.employees.reduce((sum, employee) => sum + Number(employee.grossPay || 0) + Number(employee.allowances || 0), 0).toFixed(2),
+        total_deductions: run.employees.reduce((sum, employee) => sum + Number(employee.deductions || 0), 0).toFixed(2),
+        total_net: run.employees.reduce((sum, employee) => sum + Number(employee.netPay || 0), 0).toFixed(2)
+      }
+    });
+  } catch (error) {
+    if (error.code === "DUPLICATE_PAYROLL_RUN") return res.status(409).json({ message: error.message });
+    return next(error);
+  }
+});
+
+// Legacy implementation retained temporarily for reference. The route above
+// handles requests first and uses the central statutory calculation engine.
+router.post("/legacy-payslips/quick-generate", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
   try {
     const { period_month, period_year } = req.body || {};
     if (!period_month || !period_year) {
@@ -1298,7 +1310,62 @@ router.post("/payslips/quick-generate", authenticateToken, allowRoles("Admin", "
 });
 
 // ----- Payslip Retrieval -----
-router.get("/payslips", authenticateToken, allowRoles("Admin", "HR", "Finance", "Staff"), async (req, res) => {
+router.get("/payslips", authenticateToken, allowRoles("Admin", "HR", "Finance", "Staff"), async (req, res, next) => {
+  try {
+    const conditions = [];
+    const params = [];
+    if (req.user.role === "Finance") conditions.push("p.payslip_status IN ('finance_pending','finance_approved','Approved')");
+    if (req.user.role === "Staff") {
+      conditions.push("s.user_user_id = ? AND p.payslip_status IN ('Sent','sent_to_staff')");
+      params.push(req.user.userId);
+    }
+    if (req.query.month) { conditions.push("p.payroll_month = ?"); params.push(Number(req.query.month)); }
+    if (req.query.year) { conditions.push("p.payroll_year = ?"); params.push(Number(req.query.year)); }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const [rows] = await pool.query(
+      `SELECT
+        p.payroll_id AS payslip_id, p.payroll_id, p.payslip_status AS status,
+        p.created_at AS generated_at, p.payslip_sent_at AS sent_to_staff_at,
+        p.payroll_month AS period_month, p.payroll_year AS period_year,
+        p.gross_salary, p.net_salary AS net_pay, p.total_allowances,
+        p.total_deductions, p.employee_cpf, p.employer_cpf, p.mbmf_amount,
+        p.deduction_breakdown, s.name AS staff_name, s.employee_id,
+        s.email AS staff_email, s.base_salary, s.department_name
+       FROM payroll p
+       JOIN staff s ON s.employee_id = p.staff_employee_id
+       ${where}
+       ORDER BY p.created_at DESC, p.payroll_id DESC`,
+      params
+    );
+    return res.json(rows);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+  const [result] = await pool.query(
+    `UPDATE payroll SET payslip_status = 'finance_pending'
+     WHERE payroll_id = ? AND payslip_status = 'Draft'`,
+    [req.params.id]
+  );
+  if (!result.affectedRows) return res.status(409).json({ message: "Only compliant draft payslips can be sent to Finance" });
+  return res.json({ message: "Payslip sent to Finance" });
+});
+
+router.put("/payslips/:id/send-to-staff", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+  const [result] = await pool.query(
+    `UPDATE payroll SET payslip_status = 'sent_to_staff', payslip_sent_at = NOW()
+     WHERE payroll_id = ? AND payslip_status IN ('Approved','finance_approved')`,
+    [req.params.id]
+  );
+  if (!result.affectedRows) return res.status(409).json({ message: "Finance approval is required before sending the payslip" });
+  return res.json({ message: "Payslip sent to staff" });
+});
+
+// Legacy table-based retrieval remains below under a non-public path while
+// other HR branch screens are migrated to the consolidated payroll table.
+router.get("/legacy-payslips", authenticateToken, allowRoles("Admin", "HR", "Finance", "Staff"), async (req, res) => {
   // HR/Admin sees all payslips, Finance sees only pending/approved ones, Staff sees only their sent payslips
   // Optional query params: ?month=7&year=2026 to filter by period
   try {

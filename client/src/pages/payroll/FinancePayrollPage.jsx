@@ -36,12 +36,17 @@ import {
   saveFinancePayrollRun
 } from "../../services/financePayrollService.js";
 import {
+  canAdvanceFinancePayrollRun,
+  getFinanceWorkflowState
+} from "../../utils/financePayrollWorkflow.js";
+import {
   setupModernTreasuryRecipients,
   submitModernTreasuryTransfer
 } from "../../services/payrollPaymentService.js";
 import { getStoredSession } from "../../services/sessionService.js";
 import {
   createDefaultFinancePayrollConfig,
+  getShgBandAmount,
   resolveFinancePayrollConfig
 } from "../../utils/payrollRules.js";
 import FinanceRequestsPage from "./FinanceRequestsPage.jsx";
@@ -672,7 +677,9 @@ function getPayrollDeductionRule(label) {
 
 function isEmployeeMbmfEligible(employee) {
   const configuredReligion = normalizePayrollLabel(adminCpfConfiguration.mbmf?.applicableReligion || "Muslim");
-  return adminCpfConfiguration.mbmf?.enabled && normalizePayrollLabel(employee.religion) === configuredReligion;
+  const staffReligion = normalizePayrollLabel(employee.religion);
+  const eligibleReligions = configuredReligion === "muslim" ? ["muslim", "islam"] : [configuredReligion];
+  return adminCpfConfiguration.mbmf?.enabled && eligibleReligions.includes(staffReligion);
 }
 
 function getMbmfWageBase(employee) {
@@ -685,7 +692,7 @@ function getMbmfSkipReason(employee) {
 
   if (!adminCpfConfiguration.mbmf?.enabled) return "MBMF is disabled in Admin settings";
   if (!staffReligion) return "Religion is not recorded";
-  if (normalizePayrollLabel(staffReligion) !== normalizePayrollLabel(applicableReligion)) {
+  if (!isEmployeeMbmfEligible(employee)) {
     return `Religion is not ${applicableReligion}`;
   }
 
@@ -694,12 +701,11 @@ function getMbmfSkipReason(employee) {
 
 function getExpectedMbmfEmployeeAmount(employee) {
   if (!isEmployeeMbmfEligible(employee)) return 0;
-  return getMbmfWageBase(employee) * (Number(adminCpfConfiguration.mbmf?.employeeRate || 0) / 100);
+  return getShgBandAmount("MBMF", getMbmfWageBase(employee));
 }
 
 function getExpectedMbmfEmployerAmount(employee) {
-  if (!isEmployeeMbmfEligible(employee)) return 0;
-  return getMbmfWageBase(employee) * (Number(adminCpfConfiguration.mbmf?.employerRate || 0) / 100);
+  return 0;
 }
 
 function getMbmfDeductionAmount(employee) {
@@ -765,7 +771,7 @@ function getEmployeeReviewDeductionItems(employee) {
     ...nonMbmfItems,
     {
       label: "Employee MBMF",
-      rate: mbmfReview.eligible ? `${adminCpfConfiguration.mbmf?.employeeRate ?? 0}%` : "Skipped",
+      rate: mbmfReview.eligible ? "CPF Board wage band" : "Skipped",
       amount: mbmfReview.employeeAmount,
       calculated: true
     }
@@ -789,7 +795,7 @@ function getEmployeeReviewEmployerItems(employee) {
     ...getEmployeeEmployerItems(employee),
     {
       label: "Employer MBMF",
-      rate: mbmfReview.eligible ? `${adminCpfConfiguration.mbmf?.employerRate ?? 0}%` : "Skipped",
+      rate: "Not applicable",
       amount: mbmfReview.employerAmount,
       calculated: true
     }
@@ -889,7 +895,7 @@ function getComplianceRules() {
 }
 
 function getEmployeeExceptions(employee) {
-  const exceptions = [];
+  const exceptions = [...(employee.complianceExceptions || [])];
   const complianceRules = getComplianceRules();
   const netPay = getEmployeeNetPay(employee);
   const totalEarnings = getEmployeeTotalEarnings(employee);
@@ -936,9 +942,9 @@ function getEmployeeExceptions(employee) {
 }
 
 function getEmployeeFinanceStatus(employee) {
+  if (getEmployeeExceptions(employee).length) return "Hold";
   if (employee.financeStatus) return employee.financeStatus;
-
-  return getEmployeeExceptions(employee).length ? "Hold" : "Ready";
+  return "Ready";
 }
 
 function getRunExceptions(run) {
@@ -1057,20 +1063,15 @@ function getComplianceSummary(run) {
 // -----------------------------------------------------------------------------
 
 function canApprovePayrollRun(run) {
-  return (run?.employees || []).every((employee) => getEmployeeFinanceStatus(employee) === "Approved");
+  const employees = run?.employees || [];
+  return employees.length > 0 && employees.every((employee) => getEmployeeFinanceStatus(employee) === "Approved");
 }
 
 function getCompletedSteps(run) {
+  const state = getFinanceWorkflowState(run);
   return {
-    reviewed: Boolean(run?.reviewedAt || run?.approvedAt || run?.paidAt),
-    approved: Boolean(run?.approvedAt || run?.paidAt),
-    paid: Boolean(run?.paymentFileGeneratedAt && run?.paidAt),
-    payslipsSent: Boolean(run?.payslipsSentAt),
-    cpfLogged: Boolean(run?.cpfSubmissionLoggedAt),
-    otherDeductionsLogged: Boolean(run?.otherDeductionsLoggedAt),
+    ...state,
     statutoryDeductionsLogged: Boolean(run?.cpfSubmissionLoggedAt && run?.otherDeductionsLoggedAt),
-    ledgerRecorded: Boolean(run?.ledgerRecordedAt || run?.xeroRecordedAt),
-    reconciled: Boolean(run?.reconciledAt)
   };
 }
 
@@ -1490,7 +1491,7 @@ function AdminCpfConfigPanel() {
     ["Monthly Wage Ceiling", formatMoney(adminCpfConfiguration.monthlyWageCeiling)],
     ["Effective From", adminCpfConfiguration.effectiveFrom],
     ["Payment Due", adminCpfConfiguration.paymentDue],
-    ["MBMF Rule", adminCpfConfiguration.mbmf?.enabled ? `${adminCpfConfiguration.mbmf.employeeRate}% ${adminCpfConfiguration.mbmf.applicableReligion} staff only` : "Disabled"]
+    ["MBMF Rule", adminCpfConfiguration.mbmf?.enabled ? `CPF Board wage bands; ${adminCpfConfiguration.mbmf.applicableReligion} staff only` : "Disabled"]
   ];
   const componentRows = Object.entries(adminCpfConfiguration.componentRules);
   const deductionRows = Object.entries(adminCpfConfiguration.deductionRules || {});
@@ -1575,11 +1576,11 @@ function AdminCpfConfigPanel() {
             </div>
             <div className="flex justify-between gap-3">
               <span>Employee rate</span>
-              <span className="font-semibold text-[#251E1F]">{adminCpfConfiguration.mbmf?.employeeRate ?? 0}%</span>
+              <span className="font-semibold text-[#251E1F]">CPF Board wage band</span>
             </div>
             <div className="flex justify-between gap-3">
               <span>Employer rate</span>
-              <span className="font-semibold text-[#251E1F]">{adminCpfConfiguration.mbmf?.employerRate ?? 0}%</span>
+              <span className="font-semibold text-[#251E1F]">Not applicable</span>
             </div>
             <div className="flex justify-between gap-3">
               <span>Wage ceiling</span>
@@ -1885,7 +1886,14 @@ function DashboardView({ onAdvanceRun, onSelectRun, payrollRuns, selectedRun }) 
   const selectedTotals = getRunTotals(selectedRun);
   const selectedApprovedStaff = selectedRun.employees.filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length;
   const selectedExceptionCount = getRunExceptions(selectedRun).length;
-  const completedSteps = Object.values(getCompletedSteps(selectedRun)).filter(Boolean).length;
+  const workflowSteps = getCompletedSteps(selectedRun);
+  const workflowChecklist = [
+    { label: "Payroll reviewed and approved", completed: workflowSteps.reviewed && workflowSteps.approved },
+    { label: "Payment processed", completed: workflowSteps.paid },
+    { label: "Payslips sent to employees", completed: workflowSteps.payslipsSent },
+    { label: "Payroll recorded in internal ledger", completed: workflowSteps.ledgerRecorded },
+    { label: "Payroll reconciled", completed: workflowSteps.reconciled }
+  ];
   const updateStatsMode = (mode) => {
     const runDate = getPayrollRunDate(selectedRun);
     setStatsFilter({
@@ -1941,16 +1949,10 @@ function DashboardView({ onAdvanceRun, onSelectRun, payrollRuns, selectedRun }) 
             </div>
           </div>
           <div className="mt-6 space-y-3 text-sm text-[#7b6660]">
-            {[
-              "Payroll reviewed and approved",
-              "Payment processed",
-              "Payroll recorded in internal ledger",
-              "Payslips sent to employees",
-              "Reports generated"
-            ].map((item, index) => (
-              <div key={item} className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-3">
-                <CheckCircle2 size={17} className={index < completedSteps ? "text-[#7CFFB2]" : "text-[#7b6660]/50"} />
-                <span>{item}</span>
+            {workflowChecklist.map((item) => (
+              <div key={item.label} className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-3">
+                <CheckCircle2 size={17} className={item.completed ? "text-[#7CFFB2]" : "text-[#7b6660]/50"} />
+                <span>{item.label}</span>
               </div>
             ))}
           </div>
@@ -3647,7 +3649,9 @@ export default function FinancePayrollPage() {
     const transition = transitions[stepKey];
 
     if (!transition) return;
-    if (stepKey === "approved" && !canApprovePayrollRun(selectedRun)) return;
+    if (!canAdvanceFinancePayrollRun(selectedRun, stepKey, {
+      allEmployeesApproved: canApprovePayrollRun(selectedRun)
+    })) return;
 
     updateSelectedRun((run) => ({
       ...run,

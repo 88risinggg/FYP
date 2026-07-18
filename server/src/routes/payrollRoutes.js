@@ -58,7 +58,7 @@ router.put("/payslips/:id/finance-approve", authenticateToken, allowRoles("Admin
     const { pool } = require("../config/db");
     const payslipId = req.params.id;
 
-    const [rows] = await pool.query('SELECT * FROM payslip WHERE payslip_id = ? LIMIT 1', [payslipId]);
+    const [rows] = await pool.query('SELECT *, payroll_id AS payslip_id, payslip_status AS status FROM payroll WHERE payroll_id = ? LIMIT 1', [payslipId]);
     if (!rows.length) {
       return res.status(404).json({ message: "Payslip not found" });
     }
@@ -69,7 +69,7 @@ router.put("/payslips/:id/finance-approve", authenticateToken, allowRoles("Admin
     }
 
     await pool.query(
-      "UPDATE payslip SET status = 'finance_approved', updated_at = NOW() WHERE payslip_id = ?",
+      "UPDATE payroll SET payslip_status = 'finance_approved' WHERE payroll_id = ?",
       [payslipId]
     );
 
@@ -86,7 +86,7 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("Admin
     const { pool } = require("../config/db");
     const payslipId = req.params.id;
 
-    const [rows] = await pool.query('SELECT * FROM payslip WHERE payslip_id = ? LIMIT 1', [payslipId]);
+    const [rows] = await pool.query('SELECT *, payroll_id AS payslip_id, payslip_status AS status FROM payroll WHERE payroll_id = ? LIMIT 1', [payslipId]);
     if (!rows.length) {
       return res.status(404).json({ message: "Payslip not found" });
     }
@@ -97,7 +97,7 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("Admin
     }
 
     await pool.query(
-      "UPDATE payslip SET status = 'finance_pending', updated_at = NOW() WHERE payslip_id = ?",
+      "UPDATE payroll SET payslip_status = 'finance_pending' WHERE payroll_id = ?",
       [payslipId]
     );
 
@@ -116,7 +116,7 @@ router.put("/payslips/bulk-send-to-finance", authenticateToken, allowRoles("Admi
 
     let targetIds = [];
     if (allDrafts) {
-      const [rows] = await pool.query("SELECT payslip_id FROM payslip WHERE status = 'draft'");
+      const [rows] = await pool.query("SELECT payroll_id AS payslip_id FROM payroll WHERE payslip_status = 'Draft'");
       targetIds = rows.map(r => r.payslip_id);
     } else {
       if (!Array.isArray(payslip_ids) || payslip_ids.length === 0) {
@@ -130,7 +130,7 @@ router.put("/payslips/bulk-send-to-finance", authenticateToken, allowRoles("Admi
     }
 
     const [result] = await pool.query(
-      "UPDATE payslip SET status = 'finance_pending', updated_at = NOW() WHERE payslip_id IN (?) AND status = 'draft'",
+      "UPDATE payroll SET payslip_status = 'finance_pending' WHERE payroll_id IN (?) AND payslip_status = 'Draft'",
       [targetIds]
     );
 
@@ -161,7 +161,7 @@ router.put("/payslips/:id/finance-reject", authenticateToken, allowRoles("Admin"
       return res.status(400).json({ message: "Rejection reason is required" });
     }
 
-    const [rows] = await pool.query('SELECT * FROM payslip WHERE payslip_id = ? LIMIT 1', [payslipId]);
+    const [rows] = await pool.query('SELECT *, payroll_id AS payslip_id, payslip_status AS status FROM payroll WHERE payroll_id = ? LIMIT 1', [payslipId]);
     if (!rows.length) {
       return res.status(404).json({ message: "Payslip not found" });
     }
@@ -172,7 +172,7 @@ router.put("/payslips/:id/finance-reject", authenticateToken, allowRoles("Admin"
     }
 
     await pool.query(
-      "UPDATE payslip SET status = 'draft', updated_at = NOW() WHERE payslip_id = ?",
+      "UPDATE payroll SET payslip_status = 'Draft' WHERE payroll_id = ?",
       [payslipId]
     );
 

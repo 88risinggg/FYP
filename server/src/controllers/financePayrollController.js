@@ -1,9 +1,11 @@
 const {
   createFinancePayrollRunFromStaff,
+  getPayrollRunComplianceErrors,
   listFinancePayrollRuns,
   upsertFinancePayrollRun
 } = require("../models/financePayrollModel");
 const { logAuditEvent, getClientIp } = require("../models/auditLogModel");
+const { validateFinancePayrollRun } = require("../services/financePayrollWorkflow");
 
 async function getFinancePayrollRuns(req, res) {
   try {
@@ -48,6 +50,9 @@ async function createRunFromStaffDatabase(req, res) {
 
     res.status(201).json({ run: result.run });
   } catch (error) {
+    if (error.code === "DUPLICATE_PAYROLL_RUN") {
+      return res.status(409).json({ message: error.message });
+    }
     res.status(500).json({ message: "Failed to create Finance payroll run from staff database." });
   }
 }
@@ -60,9 +65,39 @@ async function saveFinancePayrollRun(req, res) {
       return res.status(400).json({ message: "Valid payroll run payload is required." });
     }
 
+    const workflowErrors = validateFinancePayrollRun(run);
+    if (workflowErrors.length) {
+      return res.status(400).json({
+        code: "INVALID_PAYROLL_WORKFLOW",
+        message: workflowErrors[0],
+        errors: workflowErrors
+      });
+    }
+
+    if (run.approvedAt) {
+      const complianceErrors = await getPayrollRunComplianceErrors(Number(run.id));
+      if (complianceErrors.length) {
+        return res.status(409).json({
+          code: "PAYROLL_COMPLIANCE_HOLD",
+          message: "Payroll cannot be approved while compliance exceptions remain.",
+          errors: complianceErrors
+        });
+      }
+    }
+
     const savedRun = await upsertFinancePayrollRun({
       run,
       userId: req.user?.userId
+    });
+
+    await logAuditEvent({
+      userId: req.user?.userId || null,
+      userName: req.user?.email,
+      activityType: "Payroll",
+      actionDescription: `Updated payroll run ${run.id} to ${run.status}`,
+      affectedRecord: run.id,
+      status: "Success",
+      ipAddress: getClientIp(req)
     });
 
     res.json({ run: savedRun });

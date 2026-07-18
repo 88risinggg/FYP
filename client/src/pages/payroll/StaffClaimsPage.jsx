@@ -1,22 +1,8 @@
 import { useEffect, useState } from "react";
 import { FileCheck2, Loader2, Paperclip, ReceiptText, Upload } from "lucide-react";
 import { CLAIM_TYPES, getClaims, openClaimProof, submitClaim } from "../../services/claimService.js";
-
-const statusLabels = {
-  pending_hr: "Pending HR",
-  hr_approved: "Awaiting Finance",
-  hr_rejected: "Rejected by HR",
-  released: "Reimbursed",
-  finance_rejected: "Returned by Finance"
-};
-
-const statusStyles = {
-  pending_hr: "border-amber-300/30 bg-amber-300/10 text-amber-200",
-  hr_approved: "border-cyan-300/30 bg-cyan-300/10 text-cyan-200",
-  hr_rejected: "border-red-300/30 bg-red-300/10 text-red-200",
-  released: "border-emerald-300/30 bg-emerald-300/10 text-emerald-200",
-  finance_rejected: "border-red-300/30 bg-red-300/10 text-red-200"
-};
+import ClaimWorkflowProgress from "../../components/payroll/ClaimWorkflowProgress.jsx";
+import { CLAIM_STATUS_LABELS, CLAIM_STATUS_STYLES } from "../../utils/claimWorkflow.js";
 
 export default function StaffClaimsPage() {
   const [claims, setClaims] = useState([]);
@@ -97,8 +83,9 @@ export default function StaffClaimsPage() {
             <div key={claim.claim_id} className="rounded-xl border border-[#f0d2ca] bg-black/10 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div><p className="font-semibold text-[#251E1F]">{claim.claim_type} · ${Number(claim.amount).toFixed(2)}</p><p className="mt-1 text-xs text-[#7b6660]">{new Date(claim.expense_date).toLocaleDateString("en-SG")} · {claim.description}</p></div>
-                <span className={`rounded-full border px-3 py-1 text-xs ${statusStyles[claim.status]}`}>{statusLabels[claim.status]}</span>
+                <span className={`rounded-full border px-3 py-1 text-xs ${CLAIM_STATUS_STYLES[claim.status] || "border-[#f0d2ca] text-[#7b6660]"}`}>{CLAIM_STATUS_LABELS[claim.status] || claim.status}</span>
               </div>
+              <ClaimWorkflowProgress status={claim.status} />
               <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
                 <button onClick={() => openClaimProof(claim.claim_id).catch((error) => setMessage({ type: "error", text: error.message }))} className="inline-flex items-center gap-1 text-[#F38978] hover:text-[#251E1F]"><Paperclip size={14} />{claim.proof_original_name}</button>
                 {claim.hr_comments && <span className="text-[#7b6660]">HR: {claim.hr_comments}</span>}

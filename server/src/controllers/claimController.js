@@ -3,6 +3,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { pool } = require("../config/db");
 const { createNotificationInternal } = require("./notificationController");
+const { getClaimTransition } = require("../services/claimWorkflow");
 
 const CLAIM_TYPES = ["Medical", "Transport", "Meal", "Internet", "Office Purchase", "Business Travel", "Other"];
 const selectClaim = `
@@ -111,15 +112,15 @@ async function listClaims(req, res) {
 
 async function reviewByHr(req, res) {
   const action = req.params.action;
-  if (!["approve", "reject"].includes(action)) return res.status(404).json({ message: "Invalid action" });
+  const transition = getClaimTransition("HR", action);
+  if (!transition) return res.status(404).json({ message: "Invalid HR claim action" });
   const comments = String(req.body?.comments || "").trim();
   if (action === "reject" && !comments) return res.status(400).json({ message: "A rejection reason is required" });
   try {
-    const status = action === "approve" ? "hr_approved" : "hr_rejected";
     const [result] = await pool.query(
       `UPDATE expense_claim SET status = ?, hr_reviewed_by = ?, hr_reviewed_at = NOW(), hr_comments = ?
        WHERE claim_id = ? AND status = 'pending_hr'`,
-      [status, req.user.userId, comments || null, req.params.id]
+      [transition.to, req.user.userId, comments || null, req.params.id]
     );
     if (!result.affectedRows) return res.status(409).json({ message: "Claim is missing or has already been reviewed" });
     await notifyClaimOwner(
@@ -136,22 +137,22 @@ async function reviewByHr(req, res) {
 
 async function processByFinance(req, res) {
   const action = req.params.action;
-  if (!["release", "reject"].includes(action)) return res.status(404).json({ message: "Invalid action" });
+  const transition = getClaimTransition("Finance", action);
+  if (!transition) return res.status(404).json({ message: "Invalid Finance claim action" });
   const comments = String(req.body?.comments || "").trim();
   const paymentReference = String(req.body?.payment_reference || "").trim();
   if (action === "release" && !paymentReference) return res.status(400).json({ message: "Payment reference is required" });
   if (action === "reject" && !comments) return res.status(400).json({ message: "A rejection reason is required" });
   try {
-    const status = action === "release" ? "released" : "finance_rejected";
     const [result] = await pool.query(
       `UPDATE expense_claim SET status = ?, finance_processed_by = ?, finance_processed_at = NOW(),
        finance_comments = ?, payment_reference = ? WHERE claim_id = ? AND status = 'hr_approved'`,
-      [status, req.user.userId, comments || null, paymentReference || null, req.params.id]
+      [transition.to, req.user.userId, comments || null, paymentReference || null, req.params.id]
     );
     if (!result.affectedRows) return res.status(409).json({ message: "Claim is missing or is not awaiting Finance" });
     await notifyClaimOwner(
       req.params.id,
-      action === "release" ? "Claim reimbursement released" : "Claim returned by Finance",
+      action === "release" ? "Claim reimbursement released" : "Claim rejected by Finance",
       action === "release" ? `Your reimbursement was released. Reference: ${paymentReference}` : comments
     );
     const [rows] = await pool.query(`${selectClaim} WHERE ec.claim_id = ?`, [req.params.id]);

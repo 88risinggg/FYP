@@ -35,7 +35,9 @@ export async function apiRequest(path, options = {}) {
     });
     const data = await response.json().catch(() => ({}));
 
-    if ((response.status === 401 || response.status === 403) && getStoredSession()) {
+    const sessionMustEnd = response.status === 401 || data.code === "ACCOUNT_DISABLED";
+
+    if (sessionMustEnd && getStoredSession()) {
       forceLogout();
       throw new Error(data.message || "Session expired. Please log in again.");
     }
@@ -50,9 +52,6 @@ export async function apiRequest(path, options = {}) {
       throw error;
     }
 
-    if (getStoredSession()) {
-      forceLogout();
-    }
     throw new Error("Server is unavailable");
   }
 }
@@ -68,11 +67,9 @@ export function startHealthCheck() {
       return;
     }
 
-    try {
-      await fetch(`${API_BASE_URL}/api/health`, { method: "GET" });
-    } catch {
-      forceLogout();
-    }
+    // A failed health check means the server or network is temporarily
+    // unavailable. It must not invalidate an otherwise valid user session.
+    await fetch(`${API_BASE_URL}/api/health`, { method: "GET" }).catch(() => null);
   }, 5000);
 }
 

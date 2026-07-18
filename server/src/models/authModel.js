@@ -9,7 +9,7 @@ const { pool } = require("../config/db");
 
 /**
  * Find a user by their email address.
- * Joins the user table with the role table to retrieve the role name.
+ * Reads the role directly from the consolidated user table.
  *
  * @param {string} email - The email address to search for.
  * @returns {Object|null} User object with user_id, email, name, password (hashed), status, and role_name. Returns null if not found.
@@ -22,9 +22,8 @@ async function findUserByEmail(email) {
       user.name,
       user.password,
       user.status,
-      role.role_name
+      user.role_name
     FROM user
-    JOIN role ON user.role_id = role.role_id
     WHERE LOWER(user.email) = LOWER(?)`,
     [email]
   );
