@@ -11,6 +11,7 @@ const { exportInvoicesExcel } = require("../controllers/exportController");
 const { authenticateToken } = require("../middleware/authMiddleware");
 const { generateInvoicePDF } = require("../services/pdfService");
 const { sendWhatsAppReminder } = require("../services/whatsappService");
+const { sendManualReminder } = require("../services/invoiceReminderService");
 const { pool } = require("../config/db");
 
 const router = express.Router();
@@ -27,13 +28,15 @@ router.post("/:id/send", sendInvoice);
 
 /**
  * GET /api/invoices/:id/pdf
- * Download invoice as PDF.
+ * Download invoice as PDF with payment URL and QR code.
+ * Generates a real Stripe Checkout URL if the stored one is a placeholder.
  */
 router.get("/:id/pdf", async (req, res) => {
   try {
     const invoiceId = Number(req.params.id);
     const [rows] = await pool.query(
       `SELECT i.invoice_id, i.invoiceId, i.status, i.issue_date, i.due_date, i.total_amount,
+              i.payment_url, i.qr_code_url,
               c.name AS customer_name, c.email AS customer_email, c.address AS customer_address
        FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id
        WHERE i.invoice_id = ? LIMIT 1`,
@@ -51,7 +54,47 @@ router.get("/:id/pdf", async (req, res) => {
     );
     invoice.items = items;
 
-    const pdfBuffer = await generateInvoicePDF(invoice);
+    // Generate real Stripe URL if placeholder or missing (for unpaid invoices)
+    const isPayable = !["Paid", "Cancelled", "Refunded"].includes(invoice.status);
+    let paymentUrl = invoice.payment_url;
+    let qrCodeDataUri = invoice.qr_code_url;
+
+    if (isPayable) {
+      const isPlaceholder = !paymentUrl || /cs_test_(sent|viewed|overdue|paid)_/.test(paymentUrl);
+      if (isPlaceholder) {
+        try {
+          const { createCheckoutSession } = require("../services/stripeService");
+          const result = await createCheckoutSession({
+            invoice_id: invoice.invoice_id,
+            invoiceId: invoice.invoiceId,
+            total_amount: invoice.total_amount,
+            customer_email: invoice.customer_email
+          });
+          paymentUrl = result.paymentUrl;
+
+          // Persist the real URL
+          await pool.query(
+            "UPDATE invoice SET payment_url = ?, stripe_session_id = ? WHERE invoice_id = ?",
+            [paymentUrl, result.sessionId, invoiceId]
+          ).catch(() => {});
+        } catch (err) {
+          console.error("[PDF] Stripe session creation failed:", err.message);
+        }
+      }
+
+      // Generate QR code from the payment URL
+      if (paymentUrl && !qrCodeDataUri) {
+        try {
+          const { generateQRCode } = require("../services/qrCodeService");
+          qrCodeDataUri = await generateQRCode(paymentUrl);
+        } catch { /* non-critical */ }
+      }
+    }
+
+    const pdfBuffer = await generateInvoicePDF(invoice, {
+      paymentUrl: isPayable ? paymentUrl : null,
+      qrCodeDataUri: isPayable ? qrCodeDataUri : null
+    });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${invoice.invoiceId}.pdf"`);
     res.send(pdfBuffer);
@@ -92,6 +135,52 @@ router.post("/:id/whatsapp", async (req, res) => {
     res.json({ message: "WhatsApp notification sent.", result });
   } catch (error) {
     res.status(500).json({ message: "Failed to send WhatsApp.", detail: error.message });
+  }
+});
+
+/**
+ * POST /api/invoices/:id/reminder
+ * Manually send a payment reminder for an invoice.
+ */
+router.post("/:id/reminder", async (req, res) => {
+  try {
+    const invoiceId = Number(req.params.id);
+    if (!invoiceId) {
+      return res.status(400).json({ message: "Invalid invoice ID." });
+    }
+
+    const result = await sendManualReminder(invoiceId, req.user?.userId);
+    if (!result.success) {
+      return res.status(400).json({ message: result.message });
+    }
+
+    res.json({ message: result.message });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to send reminder.", detail: error.message });
+  }
+});
+
+/**
+ * GET /api/invoices/:id/reminders
+ * Get reminder history for a specific invoice.
+ */
+router.get("/:id/reminders", async (req, res) => {
+  try {
+    const invoiceId = Number(req.params.id);
+    const [logs] = await pool.query(
+      `SELECT reminder_type, delivery_status, customer_email, sent_at, error_message
+       FROM invoice_reminder_log
+       WHERE invoice_id = ?
+       ORDER BY sent_at DESC
+       LIMIT 50`,
+      [invoiceId]
+    );
+    res.json({ reminders: logs });
+  } catch (error) {
+    if (error.code === "ER_NO_SUCH_TABLE") {
+      return res.json({ reminders: [] });
+    }
+    res.status(500).json({ message: "Failed to fetch reminder history.", detail: error.message });
   }
 });
 

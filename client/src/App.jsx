@@ -11,6 +11,7 @@ import AdminPayrollPage from "./pages/payroll/AdminPayrollPage.jsx";
 import FinancePayrollPage from "./pages/payroll/FinancePayrollPage.jsx";
 import HRPayrollPage from "./pages/payroll/HRPayrollPage.jsx";
 import StaffPayrollPage from "./pages/payroll/StaffPayrollPage.jsx";
+import SettingsPage from "./pages/settings/SettingsPage.jsx";
 import { startHealthCheck, stopHealthCheck } from "./services/apiClient.js";
 import { getStoredSession } from "./services/sessionService.js";
 
@@ -205,6 +206,14 @@ export default function App() {
           <StaffPayrollRoute>
             <StaffPayrollPage />
           </StaffPayrollRoute>
+        }
+      />
+      <Route
+        path="/dashboard/settings"
+        element={
+          <ProtectedRoute>
+            <SettingsPage />
+          </ProtectedRoute>
         }
       />
     </Routes>

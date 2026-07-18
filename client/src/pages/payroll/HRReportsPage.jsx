@@ -36,12 +36,13 @@ const TABS = [
 
 const DEPARTMENTS = [
   { id: "", label: "All Departments" },
-  { id: "1", label: "Admin" },
-  { id: "2", label: "HR" },
-  { id: "3", label: "Finance" },
-  { id: "4", label: "Operations" },
-  { id: "5", label: "Sales" },
-  { id: "6", label: "IT" },
+  { id: "1", label: "Human Resources" },
+  { id: "2", label: "Finance & Accounting" },
+  { id: "3", label: "Sales" },
+  { id: "4", label: "Customer Service" },
+  { id: "5", label: "Operations" },
+  { id: "6", label: "Management" },
+  { id: "7", label: "IT / System Administrator" },
 ];
 
 const LEAVE_TYPES = [
@@ -70,9 +71,9 @@ function getCurrentYear() {
 
 // ─── Summary Card Component ─────────────────────────────────────────────────
 
-function SummaryCard({ icon: Icon, label, value, color = "purple" }) {
+function SummaryCard({ icon: Icon, label, value, color = "coral" }) {
   const colorMap = {
-    purple: "from-[#7B2FF7]/20 to-[#9D4EDD]/10 border-[#7B2FF7]/30 text-[#C77DFF]",
+    coral: "from-[#2D7C83]/20 to-[#F38978]/10 border-[#2D7C83]/30 text-[#F38978]",
     green: "from-emerald-500/20 to-emerald-600/10 border-emerald-500/30 text-emerald-400",
     blue: "from-blue-500/20 to-blue-600/10 border-blue-500/30 text-blue-400",
     amber: "from-amber-500/20 to-amber-600/10 border-amber-500/30 text-amber-400",
@@ -82,12 +83,12 @@ function SummaryCard({ icon: Icon, label, value, color = "purple" }) {
   return (
     <div className={`rounded-xl border bg-gradient-to-br p-4 ${colorMap[color]}`}>
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/5">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/80">
           <Icon size={20} />
         </div>
         <div>
-          <p className="text-xs text-[#d8c6e8]/60">{label}</p>
-          <p className="text-lg font-bold text-white">{value}</p>
+          <p className="text-xs text-[#7b6660]/60">{label}</p>
+          <p className="text-lg font-bold text-[#251E1F]">{value}</p>
         </div>
       </div>
     </div>
@@ -100,20 +101,20 @@ function PayrollFilters({ filters, onChange }) {
   return (
     <div className="flex flex-wrap items-center gap-3">
       <div>
-        <label className="mb-1 block text-xs text-[#d8c6e8]/60">Month</label>
+        <label className="mb-1 block text-xs text-[#7b6660]/60">Month</label>
         <input
           type="month"
           value={filters.month || ""}
           onChange={(e) => onChange({ ...filters, month: e.target.value })}
-          className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#7B2FF7]"
+          className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#2D7C83]"
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-[#d8c6e8]/60">Year</label>
+        <label className="mb-1 block text-xs text-[#7b6660]/60">Year</label>
         <select
           value={filters.year || ""}
           onChange={(e) => onChange({ ...filters, year: e.target.value })}
-          className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#7B2FF7]"
+          className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#2D7C83]"
         >
           <option value="">All Years</option>
           {Array.from({ length: 5 }, (_, i) => getCurrentYear() - i).map((y) => (
@@ -122,11 +123,11 @@ function PayrollFilters({ filters, onChange }) {
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-[#d8c6e8]/60">Department</label>
+        <label className="mb-1 block text-xs text-[#7b6660]/60">Department</label>
         <select
           value={filters.departmentId || ""}
           onChange={(e) => onChange({ ...filters, departmentId: e.target.value })}
-          className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#7B2FF7]"
+          className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#2D7C83]"
         >
           {DEPARTMENTS.map((d) => (
             <option key={d.id} value={d.id}>{d.label}</option>
@@ -141,11 +142,11 @@ function LeaveFilters({ filters, onChange }) {
   return (
     <div className="flex flex-wrap items-center gap-3">
       <div>
-        <label className="mb-1 block text-xs text-[#d8c6e8]/60">Year</label>
+        <label className="mb-1 block text-xs text-[#7b6660]/60">Year</label>
         <select
           value={filters.year || ""}
           onChange={(e) => onChange({ ...filters, year: e.target.value })}
-          className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#7B2FF7]"
+          className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#2D7C83]"
         >
           <option value="">All Years</option>
           {Array.from({ length: 5 }, (_, i) => getCurrentYear() - i).map((y) => (
@@ -154,11 +155,11 @@ function LeaveFilters({ filters, onChange }) {
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-[#d8c6e8]/60">Department</label>
+        <label className="mb-1 block text-xs text-[#7b6660]/60">Department</label>
         <select
           value={filters.departmentId || ""}
           onChange={(e) => onChange({ ...filters, departmentId: e.target.value })}
-          className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#7B2FF7]"
+          className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#2D7C83]"
         >
           {DEPARTMENTS.map((d) => (
             <option key={d.id} value={d.id}>{d.label}</option>
@@ -166,11 +167,11 @@ function LeaveFilters({ filters, onChange }) {
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-[#d8c6e8]/60">Leave Type</label>
+        <label className="mb-1 block text-xs text-[#7b6660]/60">Leave Type</label>
         <select
           value={filters.leaveType || ""}
           onChange={(e) => onChange({ ...filters, leaveType: e.target.value })}
-          className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#7B2FF7]"
+          className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#2D7C83]"
         >
           <option value="">All Types</option>
           {LEAVE_TYPES.filter(Boolean).map((t) => (
@@ -179,11 +180,11 @@ function LeaveFilters({ filters, onChange }) {
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-[#d8c6e8]/60">Status</label>
+        <label className="mb-1 block text-xs text-[#7b6660]/60">Status</label>
         <select
           value={filters.status || ""}
           onChange={(e) => onChange({ ...filters, status: e.target.value })}
-          className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#7B2FF7]"
+          className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#2D7C83]"
         >
           <option value="">All Statuses</option>
           {LEAVE_STATUSES.filter(Boolean).map((s) => (
@@ -199,11 +200,11 @@ function EmployeeFilters({ filters, onChange }) {
   return (
     <div className="flex flex-wrap items-center gap-3">
       <div>
-        <label className="mb-1 block text-xs text-[#d8c6e8]/60">Department</label>
+        <label className="mb-1 block text-xs text-[#7b6660]/60">Department</label>
         <select
           value={filters.departmentId || ""}
           onChange={(e) => onChange({ ...filters, departmentId: e.target.value })}
-          className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#7B2FF7]"
+          className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#2D7C83]"
         >
           {DEPARTMENTS.map((d) => (
             <option key={d.id} value={d.id}>{d.label}</option>
@@ -211,11 +212,11 @@ function EmployeeFilters({ filters, onChange }) {
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-[#d8c6e8]/60">Status</label>
+        <label className="mb-1 block text-xs text-[#7b6660]/60">Status</label>
         <select
           value={filters.status || ""}
           onChange={(e) => onChange({ ...filters, status: e.target.value })}
-          className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#7B2FF7]"
+          className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#2D7C83]"
         >
           <option value="">All</option>
           {EMPLOYEE_STATUSES.filter(Boolean).map((s) => (
@@ -231,11 +232,11 @@ function LoanFilters({ filters, onChange }) {
   return (
     <div className="flex flex-wrap items-center gap-3">
       <div>
-        <label className="mb-1 block text-xs text-[#d8c6e8]/60">Status</label>
+        <label className="mb-1 block text-xs text-[#7b6660]/60">Status</label>
         <select
           value={filters.status || ""}
           onChange={(e) => onChange({ ...filters, status: e.target.value })}
-          className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#7B2FF7]"
+          className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#2D7C83]"
         >
           <option value="">All</option>
           {LOAN_STATUSES.filter(Boolean).map((s) => (
@@ -251,11 +252,11 @@ function AdvanceFilters({ filters, onChange }) {
   return (
     <div className="flex flex-wrap items-center gap-3">
       <div>
-        <label className="mb-1 block text-xs text-[#d8c6e8]/60">Status</label>
+        <label className="mb-1 block text-xs text-[#7b6660]/60">Status</label>
         <select
           value={filters.status || ""}
           onChange={(e) => onChange({ ...filters, status: e.target.value })}
-          className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#7B2FF7]"
+          className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#2D7C83]"
         >
           <option value="">All</option>
           {LOAN_STATUSES.filter(Boolean).map((s) => (
@@ -264,12 +265,12 @@ function AdvanceFilters({ filters, onChange }) {
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-[#d8c6e8]/60">Month</label>
+        <label className="mb-1 block text-xs text-[#7b6660]/60">Month</label>
         <input
           type="month"
           value={filters.month || ""}
           onChange={(e) => onChange({ ...filters, month: e.target.value })}
-          className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#7B2FF7]"
+          className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#2D7C83]"
         />
       </div>
     </div>
@@ -282,7 +283,7 @@ function PayrollSummary({ summary }) {
   if (!summary) return null;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      <SummaryCard icon={DollarSign} label="Total Gross Pay" value={`$${Number(summary.totalGrossPay || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`} color="purple" />
+      <SummaryCard icon={DollarSign} label="Total Gross Pay" value={`$${Number(summary.totalGrossPay || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`} color="coral" />
       <SummaryCard icon={TrendingUp} label="Total Net Pay" value={`$${Number(summary.totalNetPay || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`} color="green" />
       <SummaryCard icon={BarChart3} label="Total Deductions" value={`$${Number(summary.totalDeductions || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`} color="rose" />
       <SummaryCard icon={Users} label="Employees" value={summary.employeeCount || 0} color="blue" />
@@ -295,7 +296,7 @@ function LeaveSummary({ summary }) {
   if (!summary) return null;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      <SummaryCard icon={ClipboardList} label="Total Applications" value={summary.totalApplications || 0} color="purple" />
+      <SummaryCard icon={ClipboardList} label="Total Applications" value={summary.totalApplications || 0} color="coral" />
       <SummaryCard icon={Calendar} label="Approved" value={summary.approved || 0} color="green" />
       <SummaryCard icon={AlertCircle} label="Pending" value={summary.pending || 0} color="amber" />
       <SummaryCard icon={AlertCircle} label="Rejected" value={summary.rejected || 0} color="rose" />
@@ -308,7 +309,7 @@ function EmployeeSummary({ summary }) {
   if (!summary) return null;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-      <SummaryCard icon={Users} label="Total Employees" value={summary.totalEmployees || 0} color="purple" />
+      <SummaryCard icon={Users} label="Total Employees" value={summary.totalEmployees || 0} color="coral" />
       <SummaryCard icon={Users} label="Active" value={summary.activeCount || 0} color="green" />
       <SummaryCard icon={Users} label="Inactive" value={summary.inactiveCount || 0} color="rose" />
       <SummaryCard icon={BarChart3} label="Departments" value={summary.departmentBreakdown?.length || 0} color="blue" />
@@ -320,7 +321,7 @@ function LoanSummary({ summary }) {
   if (!summary) return null;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-      <SummaryCard icon={Briefcase} label="Total Loans" value={summary.totalLoans || 0} color="purple" />
+      <SummaryCard icon={Briefcase} label="Total Loans" value={summary.totalLoans || 0} color="coral" />
       <SummaryCard icon={DollarSign} label="Disbursed" value={`$${Number(summary.totalDisbursed || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`} color="green" />
       <SummaryCard icon={TrendingUp} label="Outstanding" value={`$${Number(summary.totalOutstanding || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`} color="amber" />
       <SummaryCard icon={DollarSign} label="Repaid" value={`$${Number(summary.totalRepaid || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`} color="blue" />
@@ -332,7 +333,7 @@ function AdvanceSummary({ summary }) {
   if (!summary) return null;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      <SummaryCard icon={HandCoins} label="Total Requests" value={summary.totalRequests || 0} color="purple" />
+      <SummaryCard icon={HandCoins} label="Total Requests" value={summary.totalRequests || 0} color="coral" />
       <SummaryCard icon={HandCoins} label="Approved" value={summary.totalApproved || 0} color="green" />
       <SummaryCard icon={AlertCircle} label="Pending" value={summary.totalPending || 0} color="amber" />
       <SummaryCard icon={AlertCircle} label="Rejected" value={summary.totalRejected || 0} color="rose" />
@@ -425,7 +426,7 @@ function StatusBadge({ status }) {
   };
 
   const statusStr = status != null ? String(status) : "";
-  const colorClass = colors[statusStr.toLowerCase()] || "bg-white/10 text-[#d8c6e8] border-white/20";
+  const colorClass = colors[statusStr.toLowerCase()] || "bg-white/80 text-[#7b6660] border-[#ead3cc]";
 
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${colorClass}`}>
@@ -440,12 +441,12 @@ function ReportTable({ columns, rows }) {
   if (!rows || rows.length === 0) return null;
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-white/10 bg-white/[0.02]">
+    <div className="overflow-x-auto rounded-xl border border-[#f0d2ca] bg-white/[0.02]">
       <table className="w-full text-left text-sm">
         <thead>
-          <tr className="border-b border-white/10 bg-white/[0.04]">
+          <tr className="border-b border-[#f0d2ca] bg-white/80">
             {columns.map((col) => (
-              <th key={col.key} className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[#d8c6e8]/70">
+              <th key={col.key} className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[#7b6660]/70">
                 {col.label}
               </th>
             ))}
@@ -453,9 +454,9 @@ function ReportTable({ columns, rows }) {
         </thead>
         <tbody>
           {rows.map((row, idx) => (
-            <tr key={idx} className="border-b border-white/5 transition hover:bg-white/[0.03]">
+            <tr key={idx} className="border-b border-[#f0d2ca] transition hover:bg-[#FDD9CD]/45">
               {columns.map((col) => (
-                <td key={col.key} className="px-4 py-3 text-[#d8c6e8]">
+                <td key={col.key} className="px-4 py-3 text-[#7b6660]">
                   {col.format === "status" ? (
                     <StatusBadge status={row[col.key]} />
                   ) : (
@@ -622,7 +623,7 @@ export default function HRReportsPage({ embedded = false }) {
   const reportContent = (
     <div className="space-y-6">
         {/* Tab Navigation */}
-        <div className="flex flex-wrap gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+        <div className="flex flex-wrap gap-1 rounded-xl border border-[#f0d2ca] bg-white/80 p-1">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.key;
@@ -632,8 +633,8 @@ export default function HRReportsPage({ embedded = false }) {
                 onClick={() => setActiveTab(tab.key)}
                 className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
                   isActive
-                    ? "bg-[#7B2FF7] text-white shadow-lg shadow-[#7B2FF7]/25"
-                    : "text-[#d8c6e8]/70 hover:bg-white/[0.06] hover:text-white"
+                    ? "bg-[#2D7C83] text-[#251E1F] shadow-lg shadow-[#2D7C83]/25"
+                    : "text-[#7b6660]/70 hover:bg-white/80 hover:text-[#251E1F]"
                 }`}
               >
                 <Icon size={16} />
@@ -644,13 +645,13 @@ export default function HRReportsPage({ embedded = false }) {
         </div>
 
         {/* Filter Controls & Export Buttons */}
-        <div className="flex flex-wrap items-end justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+        <div className="flex flex-wrap items-end justify-between gap-4 rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
           {renderFilters()}
           <div className="flex items-end gap-2">
             <button
               onClick={() => handleExport("excel")}
               disabled={exporting || loading || !reportData?.rows?.length}
-              className="flex items-center gap-2 rounded-lg bg-[#7B2FF7] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#6B1FE7] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 rounded-lg bg-[#2D7C83] px-4 py-2 text-sm font-medium text-[#251E1F] transition hover:bg-[#23656b] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FileSpreadsheet size={16} />
               {exporting ? "Exporting..." : "Export Excel"}
@@ -658,7 +659,7 @@ export default function HRReportsPage({ embedded = false }) {
             <button
               onClick={() => handleExport("csv")}
               disabled={exporting || loading || !reportData?.rows?.length}
-              className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-medium text-[#d8c6e8] transition hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#7b6660] transition hover:bg-[#FDD9CD]/45 hover:text-[#251E1F] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download size={16} />
               {exporting ? "Exporting..." : "Export CSV"}
@@ -683,8 +684,8 @@ export default function HRReportsPage({ embedded = false }) {
         {/* Loading State */}
         {loading && (
           <div className="flex flex-col items-center justify-center gap-3 py-16">
-            <Loader2 size={32} className="animate-spin text-[#7B2FF7]" />
-            <p className="text-sm text-[#d8c6e8]/60">Loading report data...</p>
+            <Loader2 size={32} className="animate-spin text-[#2D7C83]" />
+            <p className="text-sm text-[#7b6660]/60">Loading report data...</p>
           </div>
         )}
 
@@ -698,17 +699,17 @@ export default function HRReportsPage({ embedded = false }) {
             {reportData?.rows?.length > 0 ? (
               <div className="mt-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-sm text-[#d8c6e8]/60">
+                  <p className="text-sm text-[#7b6660]/60">
                     Showing {reportData.rows.length} record{reportData.rows.length !== 1 ? "s" : ""}
                   </p>
                 </div>
                 <ReportTable columns={getColumns()} rows={reportData.rows} />
               </div>
             ) : reportData && (
-              <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] py-16">
-                <FileText size={40} className="text-[#d8c6e8]/30" />
-                <p className="text-sm text-[#d8c6e8]/60">No data found for the selected filters</p>
-                <p className="text-xs text-[#d8c6e8]/40">Try adjusting your filter criteria</p>
+              <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/[0.02] py-16">
+                <FileText size={40} className="text-[#7b6660]/30" />
+                <p className="text-sm text-[#7b6660]/60">No data found for the selected filters</p>
+                <p className="text-xs text-[#7b6660]/40">Try adjusting your filter criteria</p>
               </div>
             )}
           </>

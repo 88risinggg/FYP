@@ -12,7 +12,11 @@ const pool = mysql.createPool({
   ssl: useSsl ? { rejectUnauthorized: true } : undefined,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 30000,
+  maxIdle: 5,
+  idleTimeout: 60000
 });
 
 async function testDatabaseConnection() {

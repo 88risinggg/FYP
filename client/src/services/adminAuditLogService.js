@@ -49,3 +49,4 @@ export async function exportAuditLogs(filters = {}) {
 
   return response.blob();
 }
+

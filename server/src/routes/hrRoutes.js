@@ -888,6 +888,42 @@ router.get("/payroll-run/:id", authenticateToken, allowRoles("Admin", "HR"), asy
   }
 });
 
+// GET /api/hr/payroll-run/:id/payslips — Get all staff payroll records for a run, sorted by employee_id ASC
+router.get("/payroll-run/:id/payslips", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+  try {
+    const [runCheck] = await pool.query(
+      "SELECT payroll_run_id FROM payroll_run WHERE payroll_run_id = ? LIMIT 1",
+      [req.params.id]
+    );
+    if (!runCheck.length) return res.status(404).json({ message: "Payroll run not found" });
+
+    const [rows] = await pool.query(
+      `SELECT 
+        p.payroll_id,
+        p.staff_employee_id AS employee_id,
+        s.name AS staff_name,
+        s.email,
+        s.department_id,
+        s.base_salary,
+        p.total_allowances,
+        p.total_deductions,
+        p.net_salary,
+        ps.payslip_id,
+        ps.status AS payslip_status
+      FROM payroll p
+      JOIN staff s ON s.employee_id = p.staff_employee_id
+      LEFT JOIN payslip ps ON ps.payroll_payroll_id = p.payroll_id
+      WHERE p.payroll_run_id = ?
+      ORDER BY p.staff_employee_id ASC`,
+      [req.params.id]
+    );
+
+    return res.json(rows);
+  } catch (err) {
+    return res.status(500).json({ message: "Failed to fetch payroll run details", error: err.message });
+  }
+});
+
 router.put("/payroll-run/:id/lock", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
   try {
     // 1. Fetch current payroll run

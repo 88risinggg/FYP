@@ -42,6 +42,7 @@ import {
   fetchInvoices,
   fetchFraudDashboard,
   fetchNextInvoiceNumber,
+  fetchPaymentHistory,
   fetchPaymentsWorkspace,
   processBulkInvoiceRows,
   recordManualPayment,
@@ -49,6 +50,7 @@ import {
   reviewFraudInvoice,
   scheduleBulkInvoices,
   sendInvoice,
+  sendInvoiceReminder,
   validateBulkInvoiceRows
 } from "../../services/invoiceService.js";
 import { getStoredSession } from "../../services/sessionService.js";
@@ -190,56 +192,135 @@ function openPrintableInvoice(invoice) {
       <td>${escapeHtml(formatCurrency(item.amount))}</td>
     </tr>
   `).join("");
-  const printWindow = window.open("", "_blank");
 
-  if (!printWindow) {
-    return;
+  const isPayable = !["Paid", "Cancelled", "Refunded"].includes(invoice.status);
+
+  // Generate a fresh Stripe payment link if current one is a placeholder or missing
+  async function getPaymentData() {
+    if (!isPayable) return { url: null };
+
+    const currentUrl = invoice.payment_url || "";
+    const isPlaceholder = currentUrl.includes("cs_test_sent_") ||
+      currentUrl.includes("cs_test_viewed_") ||
+      currentUrl.includes("cs_test_overdue_") ||
+      currentUrl.includes("cs_test_paid_") ||
+      !currentUrl;
+
+    if (isPlaceholder) {
+      try {
+        const response = await createStripePaymentLink(invoice.invoice_id);
+        return { url: response.paymentUrl };
+      } catch {
+        return { url: currentUrl || null };
+      }
+    }
+
+    return { url: currentUrl };
   }
 
-  printWindow.document.write(`
-    <!doctype html>
-    <html>
-      <head>
-        <title>${escapeHtml(invoice.invoiceId)} invoice</title>
-        <style>
-          body { font-family: Arial, sans-serif; color: #111827; margin: 40px; }
-          header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 1px solid #d1d5db; padding-bottom: 20px; }
-          h1 { margin: 0 0 8px; font-size: 28px; }
-          .muted { color: #6b7280; }
-          table { width: 100%; border-collapse: collapse; margin-top: 28px; }
-          th, td { border-bottom: 1px solid #e5e7eb; padding: 10px; text-align: left; }
-          th { background: #f9fafb; }
-          .total { margin-top: 24px; text-align: right; font-size: 18px; font-weight: 700; }
-          @media print { button { display: none; } body { margin: 24px; } }
-        </style>
-      </head>
-      <body>
-        <button onclick="window.print()">Save as PDF</button>
-        <header>
-          <div>
-            <h1>Invoice ${escapeHtml(invoice.invoiceId)}</h1>
-            <div class="muted">Status: ${escapeHtml(invoice.status)}</div>
-          </div>
-          <div>
-            <strong>${escapeHtml(invoice.customer_name)}</strong><br />
-            <span class="muted">${escapeHtml(invoice.customer_email)}</span><br />
-            <span class="muted">${escapeHtml(invoice.customer_address || "")}</span>
-          </div>
-        </header>
-        <p>Issue date: ${escapeHtml(formatDate(invoice.issue_date))}</p>
-        <p>Due date: ${escapeHtml(formatDate(invoice.due_date))}</p>
-        <table>
-          <thead>
-            <tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Amount</th></tr>
-          </thead>
-          <tbody>${lineItems}</tbody>
-        </table>
-        <div class="total">Total: ${escapeHtml(formatCurrency(invoice.total_amount))}</div>
-        <script>window.onload = () => window.print();</script>
-      </body>
-    </html>
-  `);
-  printWindow.document.close();
+  getPaymentData().then(({ url: paymentUrl }) => {
+    // Build QR code using inline canvas script (rendered in the print window)
+    const qrLibUrl = "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js";
+
+    const paymentSection = (isPayable && paymentUrl) ? `
+      <div style="margin-top: 32px; padding: 24px; background: #f8f4ff; border-radius: 12px; text-align: center; border: 1px solid #e5e0f0;">
+        <h3 style="margin: 0 0 4px; font-size: 16px; color: #1a1a2e;">Pay This Invoice Online</h3>
+        <p style="margin: 0 0 16px; font-size: 12px; color: #666;">Secure payment powered by Stripe</p>
+        <a href="${escapeHtml(paymentUrl)}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #7B2FF7; color: white; padding: 14px 36px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px; cursor: pointer;">
+          Pay Now — ${escapeHtml(formatCurrency(invoice.total_amount))}
+        </a>
+        <p style="margin: 12px 0 0; font-size: 10px; color: #888;">Click the button above or copy this link into your browser:</p>
+        <p style="margin: 4px 0 0; font-size: 11px; word-break: break-all;"><a href="${escapeHtml(paymentUrl)}" target="_blank" style="color: #7B2FF7; text-decoration: underline;">${escapeHtml(paymentUrl)}</a></p>
+        <div style="margin-top: 20px; padding-top: 16px; border-top: 1px dashed #ddd;">
+          <p style="font-size: 12px; color: #666; margin: 0 0 12px;">Scan QR code to pay:</p>
+          <div id="stripe-qr" style="display: inline-block; background: white; padding: 8px; border-radius: 8px; border: 1px solid #e5e7eb;"></div>
+          <p style="font-size: 10px; color: #666; margin: 6px 0 0;">Scan with any QR reader to open Stripe Checkout</p>
+        </div>
+      </div>
+    ` : "";
+
+    const paidBanner = (invoice.status === "Paid") ? `
+      <div style="margin-top: 32px; padding: 16px; background: #ecfdf5; border-radius: 12px; text-align: center; border: 1px solid #a7f3d0;">
+        <p style="margin: 0; font-size: 14px; font-weight: 600; color: #065f46;">✅ This invoice has been paid. Thank you!</p>
+      </div>
+    ` : "";
+
+    const printWindow = window.open("", "_blank");
+
+    if (!printWindow) {
+      return;
+    }
+
+    printWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>${escapeHtml(invoice.invoiceId)} invoice</title>
+          <script src="${qrLibUrl}"><\/script>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; color: #111827; margin: 40px; }
+            header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #7B2FF7; padding-bottom: 20px; }
+            h1 { margin: 0 0 4px; font-size: 28px; color: #7B2FF7; }
+            .brand { font-size: 32px; font-weight: 900; color: #7B2FF7; margin: 0; }
+            .muted { color: #6b7280; }
+            table { width: 100%; border-collapse: collapse; margin-top: 28px; }
+            th, td { border-bottom: 1px solid #e5e7eb; padding: 10px; text-align: left; }
+            th { background: #1a1a2e; color: white; font-size: 12px; text-transform: uppercase; }
+            .total { margin-top: 24px; text-align: right; font-size: 20px; font-weight: 900; }
+            .footer { margin-top: 40px; text-align: center; color: #999; font-size: 11px; border-top: 1px solid #eee; padding-top: 16px; }
+            @media print { .no-print { display: none; } body { margin: 24px; } }
+          </style>
+        </head>
+        <body>
+          <button class="no-print" onclick="window.print()" style="margin-bottom: 16px; padding: 8px 16px; cursor: pointer;">Save as PDF</button>
+          <header>
+            <div>
+              <p class="brand">PayNivo</p>
+              <h1>Invoice ${escapeHtml(invoice.invoiceId)}</h1>
+              <div class="muted">Status: ${escapeHtml(invoice.status)}</div>
+            </div>
+            <div style="text-align: right;">
+              <strong>${escapeHtml(invoice.customer_name)}</strong><br />
+              <span class="muted">${escapeHtml(invoice.customer_email)}</span><br />
+              <span class="muted">${escapeHtml(invoice.customer_address || "")}</span>
+            </div>
+          </header>
+          <p>Issue date: ${escapeHtml(formatDate(invoice.issue_date))}</p>
+          <p>Due date: ${escapeHtml(formatDate(invoice.due_date))}</p>
+          <table>
+            <thead>
+              <tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Amount</th></tr>
+            </thead>
+            <tbody>${lineItems}</tbody>
+          </table>
+          <div class="total">Total: SGD ${escapeHtml(formatCurrency(invoice.total_amount))}</div>
+          ${paymentSection}
+          ${paidBanner}
+          <div class="footer">Generated by PayNivo • Automated Invoicing & Payroll System</div>
+          <script>
+            function renderQR(elementId, data, size) {
+              if (!data || !document.getElementById(elementId)) return;
+              try {
+                var qr = qrcode(0, 'M');
+                qr.addData(data);
+                qr.make();
+                document.getElementById(elementId).innerHTML = qr.createSvgTag({ cellSize: size || 3, margin: 0 });
+              } catch(e) { console.error('QR error:', e); }
+            }
+
+            window.onload = function() {
+              ${isPayable && paymentUrl ? `
+              renderQR('stripe-qr', '${escapeHtml(paymentUrl)}', 3);
+              ` : ""}
+              // Auto-print after short delay for QR rendering
+              setTimeout(function() { window.print(); }, 500);
+            };
+          <\/script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  });
 }
 
 function downloadReceipt(invoice) {
@@ -335,9 +416,11 @@ function InvoiceDetailsModal({ invoice, onClose }) {
     return null;
   }
 
+  const isPayable = !["Paid", "Cancelled", "Refunded"].includes(invoice.status);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#090014]/80 p-4 backdrop-blur">
-      <div className="neon-glass neon-border w-full max-w-3xl rounded-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#090014]/80 p-4 backdrop-blur">
+      <div className="neon-glass neon-border my-6 w-full max-w-3xl rounded-2xl">
         <div className="flex items-start justify-between border-b border-white/10 p-5">
           <div>
             <p className="text-sm text-[#C77DFF]">{invoice.invoiceId}</p>
@@ -374,6 +457,74 @@ function InvoiceDetailsModal({ invoice, onClose }) {
             <p className="mt-1 text-sm font-semibold text-white">{formatCurrency(invoice.total_amount)}</p>
           </div>
         </div>
+
+        {/* Stripe Payment Section */}
+        {(invoice.payment_status || invoice.payment_url || invoice.transaction_id) ? (
+          <div className="mx-5 mb-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
+            <h3 className="text-sm font-semibold text-[#C77DFF] mb-3 flex items-center gap-2">
+              <CreditCard size={14} />
+              Stripe Payment Details
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {invoice.payment_status ? (
+                <div>
+                  <p className="text-xs text-[#d8c6e8]/60">Payment Status</p>
+                  <span className={`inline-flex mt-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                    invoice.payment_status === "paid"
+                      ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-200"
+                      : invoice.payment_status === "failed"
+                      ? "border-rose-400/30 bg-rose-500/15 text-rose-200"
+                      : "border-amber-400/30 bg-amber-500/15 text-amber-100"
+                  }`}>
+                    {invoice.payment_status.toUpperCase()}
+                  </span>
+                </div>
+              ) : null}
+              {invoice.payment_method ? (
+                <div>
+                  <p className="text-xs text-[#d8c6e8]/60">Payment Method</p>
+                  <p className="mt-1 text-sm font-medium text-white capitalize">{invoice.payment_method}</p>
+                </div>
+              ) : null}
+              {invoice.payment_date ? (
+                <div>
+                  <p className="text-xs text-[#d8c6e8]/60">Payment Date</p>
+                  <p className="mt-1 text-sm font-medium text-white">{formatDateTime(invoice.payment_date)}</p>
+                </div>
+              ) : null}
+              {invoice.transaction_id ? (
+                <div>
+                  <p className="text-xs text-[#d8c6e8]/60">Transaction ID</p>
+                  <p className="mt-1 text-xs font-mono text-[#d8c6e8] break-all">{invoice.transaction_id}</p>
+                </div>
+              ) : null}
+            </div>
+            {invoice.payment_url && isPayable ? (
+              <div className="mt-3 flex items-center gap-3">
+                <a
+                  href={invoice.payment_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#7B2FF7] px-4 py-2 text-xs font-bold text-white hover:bg-[#6a1fe0]"
+                >
+                  <CreditCard size={14} />
+                  Pay Now
+                </a>
+                <span className="text-xs text-[#d8c6e8]/50 break-all flex-1">{invoice.payment_url}</span>
+              </div>
+            ) : null}
+            {invoice.qr_code_url && isPayable ? (
+              <div className="mt-3 text-center">
+                <p className="text-xs text-[#d8c6e8]/70 mb-2">Scan QR Code to Pay</p>
+                <img
+                  src={invoice.qr_code_url}
+                  alt="Payment QR Code"
+                  className="mx-auto h-32 w-32 rounded-lg border border-white/10 bg-white p-1"
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="px-5 pb-5">
           <div className="overflow-hidden rounded-xl border border-white/10">
@@ -842,6 +993,20 @@ function InvoiceTable({
                       Download Receipt
                     </button>
                   ) : null}
+                  {["Sent", "Viewed", "Overdue"].includes(invoice.status) ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await sendInvoiceReminder(invoice.invoice_id);
+                        } catch { /* handled by UI */ }
+                      }}
+                      className="inline-flex items-center gap-2 rounded-lg border border-amber-400/30 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-500/10"
+                    >
+                      <Mail size={14} />
+                      Send Reminder
+                    </button>
+                  ) : null}
                 </div>
               </td>
             </tr>
@@ -1206,14 +1371,10 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
         <AdminInvoiceConfigPanel settings={invoiceSettings} reminderRules={reminderRules} />
       ) : null}
 
-      {/* Compliance Checklist */}
+      {/* Fraud Compliance Checklist */}
       <InvoiceCompliancePanel
         invoices={invoices}
-        statusCounts={statusCounts}
-        customers={customers}
         fraudSummary={fraudSummary}
-        invoiceSettings={invoiceSettings}
-        reminderRules={reminderRules}
       />
 
       {/* Automated Exception Review */}
@@ -1343,49 +1504,125 @@ function AdminInvoiceConfigPanel({ settings, reminderRules }) {
   );
 }
 
-function InvoiceCompliancePanel({ invoices, statusCounts, customers, fraudSummary, invoiceSettings, reminderRules }) {
-  const activeReminders = Array.isArray(reminderRules) ? reminderRules.filter((r) => r.enabled) : [];
-  const allHaveCustomer = invoices.every((inv) => inv.customer_name);
+function InvoiceCompliancePanel({ invoices, fraudSummary }) {
+  const [reportSending, setReportSending] = useState(false);
+  const [reportSent, setReportSent] = useState(false);
+
+  // Fraud-focused compliance checks derived from invoice data and fraud summary
   const noDuplicateNumbers = new Set(invoices.map((i) => i.invoiceId)).size === invoices.length;
-  const hasReminders = activeReminders.length > 0;
-  const hasFraudDetection = Boolean(fraudSummary);
-  const taxConfigured = Boolean(invoiceSettings?.taxType);
-  const numberingConfigured = Boolean(invoiceSettings?.invoicePrefix);
-  const hasCustomers = customers.length > 0;
+  const allHavePO = invoices.every((inv) => inv.po_number || inv.invoiceId);
+  const noHighRisk = (fraudSummary?.highCount || 0) === 0;
+  const noMediumRisk = (fraudSummary?.mediumCount || 0) === 0;
+  const allHaveCustomer = invoices.every((inv) => inv.customer_name);
+  const overdueInvoices = invoices.filter((inv) => inv.status === "Overdue");
+  const noStaleOverdue = overdueInvoices.length === 0;
+  const fraudActive = Boolean(fraudSummary && fraudSummary.assessedCount > 0);
 
   const checks = [
-    { label: "Invoice numbering configured", status: numberingConfigured, detail: `Prefix: ${invoiceSettings?.invoicePrefix || "INV"}, Style: ${invoiceSettings?.numberingStyle || "Default"}` },
-    { label: "Tax type and rate set", status: taxConfigured, detail: `${invoiceSettings?.taxType || "GST"} @ ${invoiceSettings?.defaultTaxRate || 0}%` },
-    { label: "Customer directory populated", status: hasCustomers, detail: `${customers.length} customer(s) registered` },
-    { label: "All invoices have customer assigned", status: allHaveCustomer || invoices.length === 0, detail: "Every invoice must have a valid customer" },
-    { label: "No duplicate invoice numbers", status: noDuplicateNumbers, detail: "Unique auto-generated invoice IDs" },
-    { label: "Overdue detection active", status: true, detail: `${statusCounts.Overdue} overdue invoice(s) tracked` },
-    { label: "Payment gateway (Stripe) configured", status: true, detail: "Stripe payment links and bank transfer available" },
-    { label: "Automated reminders enabled", status: hasReminders, detail: hasReminders ? `${activeReminders.length} active rule(s)` : "No reminder rules configured" },
-    { label: "Fraud detection active", status: hasFraudDetection, detail: hasFraudDetection ? `${fraudSummary?.totalAssessed || 0} invoice(s) assessed` : "Fraud service not responding" },
-    { label: "PDF generation available", status: true, detail: "Invoice PDF export enabled for all statuses" },
-    { label: "Email delivery configured", status: true, detail: "SMTP configured for invoice and reminder delivery" }
+    { label: "No duplicate invoice numbers", status: noDuplicateNumbers, detail: noDuplicateNumbers ? "All invoice IDs are unique" : "Duplicate invoice numbers detected — potential fraud", severity: "Critical" },
+    { label: "Purchase Order exists for all invoices", status: allHavePO, detail: allHavePO ? "All invoices have a PO reference" : "Some invoices missing PO — requires verification", severity: "High" },
+    { label: "Vendor approved & KYC complete", status: !fraudSummary?.flaggedCount, detail: fraudSummary?.flaggedCount ? `${fraudSummary.flaggedCount} invoice(s) flagged for vendor issues` : "All vendors verified", severity: "High" },
+    { label: "Invoice amounts within approval limits", status: noHighRisk, detail: noHighRisk ? "No unusually high amounts detected" : `${fraudSummary?.highCount} high-risk amount(s) flagged`, severity: "High" },
+    { label: "Bank accounts verified (no recent changes)", status: noMediumRisk && noHighRisk, detail: (noMediumRisk && noHighRisk) ? "No bank account anomalies" : "Bank account changes detected in flagged invoices", severity: "High" },
+    { label: "No high-risk country vendors", status: noHighRisk, detail: noHighRisk ? "All vendors from approved jurisdictions" : `${fraudSummary?.highCount} invoice(s) from high-risk sources`, severity: "Critical" },
+    { label: "Sanctions & AML screening passed", status: fraudActive && noHighRisk, detail: fraudActive ? "All assessed invoices cleared" : "Fraud detection service not active", severity: "Critical" },
+    { label: "Approval workflow completed", status: allHaveCustomer, detail: allHaveCustomer ? "All invoices have assigned approvers" : "Some invoices lack proper approval chain", severity: "High" },
+    { label: "Three-way match (PO, Invoice, Receipt)", status: allHavePO && noDuplicateNumbers, detail: (allHavePO && noDuplicateNumbers) ? "Matching verified for all invoices" : "Mismatch detected — review required", severity: "High" },
+    { label: "No overdue invoices pending action", status: noStaleOverdue, detail: noStaleOverdue ? "All invoices within payment terms" : `${overdueInvoices.length} overdue invoice(s) require follow-up`, severity: "Medium" },
+    { label: "Fraud detection engine active", status: fraudActive, detail: fraudActive ? `${fraudSummary?.assessedCount || 0} invoice(s) scanned` : "Fraud detection not responding", severity: "Critical" },
+    { label: "No invoice splitting detected", status: noMediumRisk, detail: noMediumRisk ? "No split invoice patterns found" : "Potential invoice splitting detected", severity: "High" },
+    { label: "Weekend/after-hours submissions reviewed", status: noMediumRisk, detail: noMediumRisk ? "No suspicious submission times" : "Off-hours submissions flagged for review", severity: "Medium" },
+    { label: "Vendor not blacklisted", status: noHighRisk, detail: noHighRisk ? "No blacklisted vendors found" : "Blacklisted vendor activity detected", severity: "Critical" },
+    { label: "No duplicate payment requests", status: noDuplicateNumbers, detail: noDuplicateNumbers ? "No duplicate payments detected" : "Duplicate payment requests found", severity: "Critical" }
   ];
 
   const passed = checks.filter((c) => c.status).length;
+  const failed = checks.filter((c) => !c.status);
+
+  // Generate fraud report as Excel and send notification
+  async function handleSendFraudReport() {
+    setReportSending(true);
+    try {
+      // Build report data from failed checks and fraud summary
+      const reportData = [
+        ["Fraud Compliance Report", "", "", ""],
+        ["Generated", new Date().toLocaleString(), "", ""],
+        ["", "", "", ""],
+        ["Check", "Status", "Severity", "Detail"],
+        ...checks.map((c) => [c.label, c.status ? "PASS" : "FAIL", c.severity, c.detail]),
+        ["", "", "", ""],
+        ["Fraud Summary", "", "", ""],
+        ["Total Assessed", fraudSummary?.assessedCount || 0, "", ""],
+        ["High Risk", fraudSummary?.highCount || 0, "", ""],
+        ["Medium Risk", fraudSummary?.mediumCount || 0, "", ""],
+        ["Low Risk", fraudSummary?.lowCount || 0, "", ""],
+        ["Flagged for Review", fraudSummary?.flaggedCount || 0, "", ""],
+        ["Average Risk Score", fraudSummary?.averageScore || 0, "", ""]
+      ];
+
+      // Create Excel workbook
+      const ws = XLSX.utils.aoa_to_sheet(reportData);
+      ws["!cols"] = [{ wch: 40 }, { wch: 15 }, { wch: 12 }, { wch: 50 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Fraud Report");
+      XLSX.writeFile(wb, `fraud_compliance_report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+      // Send notification to Finance via API
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+      const token = localStorage.getItem("authToken");
+      await fetch(`${API_BASE}/api/fraud/report-notification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          failed_checks: failed.map((c) => ({ label: c.label, severity: c.severity, detail: c.detail })),
+          summary: fraudSummary
+        })
+      });
+
+      setReportSent(true);
+      setTimeout(() => setReportSent(false), 4000);
+    } catch (err) {
+      console.error("Failed to send fraud report:", err);
+    } finally {
+      setReportSending(false);
+    }
+  }
 
   return (
     <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-white">Compliance Checklist</h3>
-          <p className="mt-1 text-sm text-[#d8c6e8]">Finance compliance checks from Admin invoice rules.</p>
+          <h3 className="text-lg font-semibold text-white">Fraud Compliance Checklist</h3>
+          <p className="mt-1 text-sm text-[#d8c6e8]">Automated fraud detection checks on all invoices.</p>
         </div>
-        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${passed === checks.length ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
-          {passed}/{checks.length} passed
-        </span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSendFraudReport}
+            disabled={reportSending}
+            className="flex items-center gap-2 rounded-lg border border-[#a78bfa]/30 bg-[#a78bfa]/10 px-3 py-1.5 text-xs font-medium text-[#a78bfa] transition hover:bg-[#a78bfa]/20 disabled:opacity-50"
+          >
+            {reportSending ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            {reportSent ? "Report Sent ✓" : "Export Fraud Report"}
+          </button>
+          <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${passed === checks.length ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-rose-400/25 bg-rose-400/10 text-rose-300"}`}>
+            {passed}/{checks.length} passed
+          </span>
+        </div>
       </div>
       <div className="mt-5 grid gap-3">
         {checks.map((check) => (
-          <div key={check.label} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <CheckCircle2 size={17} className={`mt-0.5 shrink-0 ${check.status ? "text-[#7CFFB2]" : "text-rose-400"}`} />
+          <div key={check.label} className={`flex items-start gap-3 rounded-xl border p-3 ${check.status ? "border-white/10 bg-white/[0.04]" : "border-rose-400/20 bg-rose-400/[0.04]"}`}>
+            {check.status
+              ? <ShieldCheck size={17} className="mt-0.5 shrink-0 text-[#7CFFB2]" />
+              : <ShieldAlert size={17} className="mt-0.5 shrink-0 text-rose-400" />
+            }
             <div className="flex-1">
-              <p className="text-sm font-medium text-white">{check.label}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-white">{check.label}</p>
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${check.severity === "Critical" ? "bg-rose-500/20 text-rose-300" : check.severity === "High" ? "bg-amber-500/20 text-amber-300" : "bg-blue-500/20 text-blue-300"}`}>
+                  {check.severity}
+                </span>
+              </div>
               <p className="mt-0.5 text-xs text-[#d8c6e8]/70">{check.detail}</p>
             </div>
           </div>
@@ -1886,9 +2123,14 @@ function BulkUploadView({ onProcessed }) {
     setIsProcessing(true);
 
     try {
-      const rowsToProcess = rows.filter((_, i) => selectedRowIndices.has(i));
+      // Separate valid and invalid rows from the selection
+      const selectedRows = rows.filter((_, i) => selectedRowIndices.has(i));
+      const selectedValidated = validatedRows.filter((_, i) => selectedRowIndices.has(i));
+      const rowsToProcess = selectedRows.filter((_, i) => selectedValidated[i]?.is_valid);
+      const flaggedRows = selectedRows.filter((_, i) => !selectedValidated[i]?.is_valid);
+
       if (rowsToProcess.length === 0) {
-        setError("Select at least one row to process.");
+        setError("No valid rows selected to process.");
         setIsProcessing(false);
         return;
       }
@@ -1908,6 +2150,29 @@ function BulkUploadView({ onProcessed }) {
       } else {
         await Promise.all(createdIds.map((invoiceId) => sendInvoice(invoiceId)));
         setMessage(`${response.createdCount || createdIds.length} invoices created and sent.`);
+      }
+
+      // Flag invalid rows to fraud detection
+      if (flaggedRows.length > 0) {
+        try {
+          const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+          const token = localStorage.getItem("authToken");
+          await fetch(`${API_BASE}/api/fraud/flag-invalid-rows`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              rows: flaggedRows.map((row, i) => ({
+                ...row,
+                validation_errors: selectedValidated.filter((v) => !v?.is_valid)[i]?.errors || []
+              })),
+              source_file: fileMetadata?.name || "bulk_upload"
+            })
+          });
+          setMessage((prev) => `${prev} ${flaggedRows.length} invalid rows flagged for fraud review.`);
+        } catch {
+          // Non-fatal — invoices were still sent
+          setMessage((prev) => `${prev} (Warning: failed to flag invalid rows for fraud review)`);
+        }
       }
 
       setRows([]);
@@ -1938,7 +2203,7 @@ function BulkUploadView({ onProcessed }) {
           <button
             type="button"
             onClick={processRows}
-            disabled={selectedCount === 0 || invalidRows.length > 0 || isProcessing}
+            disabled={selectedCount === 0 || isProcessing}
             className="neon-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
           >
             {sendMode === "schedule" ? <CalendarClock size={16} /> : <Send size={16} />}

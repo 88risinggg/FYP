@@ -100,3 +100,21 @@ export function reassessFraudInvoice(invoiceId, metadata = {}) {
 export function fetchInvoiceReports() {
   return apiRequest("/api/reports/invoices");
 }
+
+export function fetchPaymentHistory(invoiceId) {
+  return apiRequest(`/api/payments/history/${invoiceId}`);
+}
+
+export function fetchStripeConfig() {
+  return apiRequest("/api/payments/stripe-config");
+}
+
+export function sendInvoiceReminder(invoiceId) {
+  return apiRequest(`/api/invoices/${invoiceId}/reminder`, {
+    method: "POST"
+  });
+}
+
+export function fetchReminderHistory(invoiceId) {
+  return apiRequest(`/api/invoices/${invoiceId}/reminders`);
+}

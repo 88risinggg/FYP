@@ -61,17 +61,17 @@ export default class GlobalCrashBoundary extends React.Component {
 
     return (
       <div className="neon-page flex min-h-screen items-center justify-center px-6 py-10">
-        <div className="neon-glass neon-border w-full max-w-3xl rounded-2xl p-8 text-white">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]">Client Recovery Helper</p>
+        <div className="neon-glass neon-border w-full max-w-3xl rounded-2xl p-8 text-[#251E1F]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Client Recovery Helper</p>
           <h1 className="mt-2 text-2xl font-semibold">The page crashed, but diagnostics are available.</h1>
-          <p className="mt-3 text-sm text-[#d8c6e8]">
-            Source: <span className="font-semibold text-white">{this.state.source || "unknown"}</span>
+          <p className="mt-3 text-sm text-[#7b6660]">
+            Source: <span className="font-semibold text-[#251E1F]">{this.state.source || "unknown"}</span>
           </p>
-          <p className="mt-1 text-sm text-[#d8c6e8]">
-            Route: <span className="font-semibold break-all text-white">{window.location.pathname}</span>
+          <p className="mt-1 text-sm text-[#7b6660]">
+            Route: <span className="font-semibold break-all text-[#251E1F]">{window.location.pathname}</span>
           </p>
 
-          <div className="mt-6 rounded-xl border border-white/10 bg-black/30 p-4 text-sm text-[#f1e6ff]">
+          <div className="mt-6 rounded-xl border border-[#f0d2ca] bg-black/30 p-4 text-sm text-[#f1e6ff]">
             {errorMessage}
           </div>
 
@@ -79,7 +79,7 @@ export default class GlobalCrashBoundary extends React.Component {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="rounded-lg bg-[#C77DFF] px-4 py-2 text-sm font-semibold text-white hover:bg-[#b866ff]"
+              className="rounded-lg bg-[#F38978] px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]"
             >
               Reload Page
             </button>
@@ -90,7 +90,7 @@ export default class GlobalCrashBoundary extends React.Component {
                 localStorage.removeItem("authUser");
                 window.location.href = "/login";
               }}
-              className="rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+              className="rounded-lg border border-[#ead3cc] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
             >
               Reset Session
             </button>

@@ -10,6 +10,7 @@ import {
   Search,
   Settings,
   Shield,
+  User,
   UserCog,
   Users,
   X
@@ -86,6 +87,7 @@ export default function DashboardLayout({
   const displayRole = profileRole || roleProfile?.role || user?.role || "User";
   const [searchQuery, setSearchQuery] = useState("");
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [fetchedNotifications, setFetchedNotifications] = useState(null);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
 
@@ -274,23 +276,69 @@ export default function DashboardLayout({
             )}
           </div>
 
-          <div className="flex items-center gap-3 rounded-lg px-2 py-1.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#C77DFF]/15 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
-              <UserCog size={20} />
-            </div>
-            <div className="hidden leading-tight sm:block">
-              <p className="text-sm font-semibold text-white">{displayName}</p>
-              <p className="text-xs text-[#d8c6e8]/75">{displayRole}</p>
-            </div>
+          <div className="relative flex items-center gap-3 rounded-lg px-2 py-1.5">
             <button
               type="button"
-              onClick={handleLogout}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-rose-500/15 hover:text-rose-300"
-              aria-label="Logout"
-              title="Logout"
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="flex items-center gap-3 rounded-lg transition hover:bg-white/[0.06]"
             >
-              <LogOut size={18} />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#C77DFF]/15 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
+                <UserCog size={20} />
+              </div>
+              <div className="hidden leading-tight sm:block">
+                <p className="text-sm font-semibold text-white">{displayName}</p>
+                <p className="text-xs text-[#d8c6e8]/75">{displayRole}</p>
+              </div>
             </button>
+
+            {/* Profile Dropdown Menu */}
+            {showProfileMenu && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setShowProfileMenu(false)} />
+                <div className="absolute right-0 top-14 z-30 w-56 rounded-xl border border-white/10 bg-[#120022] shadow-2xl shadow-purple-950/40">
+                  <div className="border-b border-white/10 px-4 py-3">
+                    <p className="text-sm font-semibold text-white">{displayName}</p>
+                    <p className="text-xs text-[#d8c6e8]/60">{displayRole}</p>
+                  </div>
+                  <div className="py-1.5">
+                    <button
+                      type="button"
+                      onClick={() => { setShowProfileMenu(false); navigate("/dashboard/settings"); }}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#d8c6e8] transition hover:bg-white/[0.06] hover:text-white"
+                    >
+                      <User size={15} />
+                      My Profile
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowProfileMenu(false); navigate("/dashboard/settings"); }}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#d8c6e8] transition hover:bg-white/[0.06] hover:text-white"
+                    >
+                      <Settings size={15} />
+                      Settings
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowProfileMenu(false); navigate("/dashboard/settings"); }}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#d8c6e8] transition hover:bg-white/[0.06] hover:text-white"
+                    >
+                      <Shield size={15} />
+                      Security
+                    </button>
+                  </div>
+                  <div className="border-t border-white/10 py-1.5">
+                    <button
+                      type="button"
+                      onClick={() => { setShowProfileMenu(false); handleLogout(); }}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-rose-400 transition hover:bg-rose-500/10 hover:text-rose-300"
+                    >
+                      <LogOut size={15} />
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </header>
 

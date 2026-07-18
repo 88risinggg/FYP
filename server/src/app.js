@@ -24,6 +24,7 @@ const payrollRoutes = require("./routes/payrollRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
 const hrReportRoutes = require("./routes/hrReportRoutes");
 const adminUserRoutes = require("./routes/adminUserRoutes");
+const adminRoleRoutes = require("./routes/adminRoleRoutes");
 const adminReminderRoutes = require("./routes/adminReminderRoutes");
 const adminAuditLogRoutes = require("./routes/adminAuditLogRoutes");
 const singpassRoutes = require("./routes/singpassRoutes");
@@ -32,6 +33,8 @@ const otpAuthRoutes = require("./routes/otpAuthRoutes");
 const publicRoutes = require("./routes/publicRoutes");
 const financePayrollRoutes = require("./routes/financePayrollRoutes");
 const claimRoutes = require("./routes/claimRoutes");
+const settingsRoutes = require("./routes/settingsRoutes");
+const financeDashboardRoutes = require("./routes/financeDashboardRoutes");
 
 const app = express();
 
@@ -45,7 +48,20 @@ const allowedOrigins = [
 
 app.use(cors({ origin: allowedOrigins }));
 app.use(compression());
-app.use(express.json());
+
+// Stripe webhook needs raw body for signature verification
+app.use("/api/payments/stripe/webhook", express.raw({ type: "application/json" }));
+app.use((req, res, next) => {
+  if (req.originalUrl === "/api/payments/stripe/webhook") {
+    req.rawBody = req.body;
+    try {
+      req.body = JSON.parse(req.body.toString());
+    } catch { /* leave as-is */ }
+  }
+  next();
+});
+
+app.use(express.json({ limit: "5mb" }));
 
 // Static file serving for payslip PDF downloads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
@@ -78,11 +94,18 @@ app.use("/api/claims", claimRoutes);
 
 // Routes — Admin module
 app.use("/api/admin/users", adminUserRoutes);
+app.use("/api/admin/roles", adminRoleRoutes);
 app.use("/api/admin/invoicing", adminReminderRoutes);
 app.use("/api/admin/invoicing/audit-logs", adminAuditLogRoutes);
 app.use("/api/auth/singpass", singpassRoutes);
 app.use("/api/auth/google", googleAuthRoutes);
 app.use("/api/auth/otp", otpAuthRoutes);
+
+// Routes — Settings module
+app.use("/api/settings", settingsRoutes);
+
+// Routes — Finance Dashboard
+app.use("/api/finance", financeDashboardRoutes);
 
 // 404 handler
 app.use((req, res) => {

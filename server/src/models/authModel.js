@@ -25,7 +25,7 @@ async function findUserByEmail(email) {
       role.role_name
     FROM user
     JOIN role ON user.role_id = role.role_id
-    WHERE user.email = ?`,
+    WHERE LOWER(user.email) = LOWER(?)`,
     [email]
   );
 

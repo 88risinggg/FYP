@@ -153,8 +153,8 @@ export default function StaffProfile({ onProfileSaved }) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {[1,2,3,4].map(i => (
           <div key={i} className="space-y-2">
-            <div className="h-3 w-16 rounded bg-white/5 animate-pulse" />
-            <div className="h-10 rounded-md bg-white/5 animate-pulse" />
+            <div className="h-3 w-16 rounded bg-white/80 animate-pulse" />
+            <div className="h-10 rounded-md bg-white/80 animate-pulse" />
           </div>
         ))}
       </div>
@@ -197,8 +197,8 @@ export default function StaffProfile({ onProfileSaved }) {
       )}
 
       {/* Personal Info */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-        <h3 className="mb-3 text-lg font-semibold text-white">Personal Info</h3>
+      <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+        <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">Personal Info</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <DisplayField label="Name" value={profile?.name || "-"} />
           <DisplayField label="Email" value={profile?.email || "-"} />
@@ -208,8 +208,8 @@ export default function StaffProfile({ onProfileSaved }) {
       </div>
 
       {/* Bank Details */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-        <h3 className="mb-3 text-lg font-semibold text-white">Bank Details</h3>
+      <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+        <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">Bank Details</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <DisplayField label="Bank" value={profile?.bank || "-"} />
           <DisplayField label="Account No." value={profile?.account_no || "-"} />
@@ -217,8 +217,8 @@ export default function StaffProfile({ onProfileSaved }) {
       </div>
 
       {/* Employment Info (read-only) */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-        <h3 className="mb-3 text-lg font-semibold text-white">Employment Info</h3>
+      <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+        <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">Employment Info</h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <DisplayField label="Department" value={profile?.department || "-"} />
           <DisplayField label="Base Salary" value={profile?.salary ? `$${Number(profile.salary).toFixed(2)}` : "-"} />
@@ -226,31 +226,31 @@ export default function StaffProfile({ onProfileSaved }) {
           <DisplayField label="Hire Date" value={profile?.hire_date ? new Date(profile.hire_date).toLocaleDateString() : "-"} />
           <DisplayField label="Date of Birth" value={profile?.date_of_birth ? new Date(profile.date_of_birth).toLocaleDateString() : "-"} />
         </div>
-        <p className="mt-3 text-xs text-[#d8c6e8]/60">Managed by HR. Contact HR to request changes to employment details.</p>
+        <p className="mt-3 text-xs text-[#7b6660]/60">Managed by HR. Contact HR to request changes to employment details.</p>
       </div>
 
       {/* Emergency Contacts */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-        <h3 className="mb-3 text-lg font-semibold text-white">Emergency Contacts</h3>
+      <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+        <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">Emergency Contacts</h3>
 
         {contactsLoading ? (
           <div className="space-y-3">
-            <div className="h-4 rounded bg-white/5 animate-pulse" style={{ width: "70%" }} />
-            <div className="h-4 rounded bg-white/5 animate-pulse" style={{ width: "50%" }} />
+            <div className="h-4 rounded bg-white/80 animate-pulse" style={{ width: "70%" }} />
+            <div className="h-4 rounded bg-white/80 animate-pulse" style={{ width: "50%" }} />
           </div>
         ) : contacts.length === 0 && !showAddForm && !editingContact ? (
-          <p className="text-sm text-[#d8c6e8]/60">No emergency contacts added yet</p>
+          <p className="text-sm text-[#7b6660]/60">No emergency contacts added yet</p>
         ) : (
           <div className="space-y-3">
             {contacts.map(contact => (
-              <div key={contact.contact_id} className="rounded-lg border border-white/10 bg-black/10 px-4 py-3">
+              <div key={contact.contact_id} className="rounded-lg border border-[#f0d2ca] bg-black/10 px-4 py-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-medium text-white">
+                    <p className="text-sm font-medium text-[#251E1F]">
                       {contact.name}
-                      <span className="ml-2 text-xs text-[#d8c6e8]/60">{contact.relationship}</span>
+                      <span className="ml-2 text-xs text-[#7b6660]/60">{contact.relationship}</span>
                     </p>
-                    <p className="mt-0.5 text-xs text-[#d8c6e8]">{contact.phone}</p>
+                    <p className="mt-0.5 text-xs text-[#7b6660]">{contact.phone}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     {contact.is_primary === 1 && (
@@ -259,7 +259,7 @@ export default function StaffProfile({ onProfileSaved }) {
                     <button
                       type="button"
                       onClick={() => handleEditContact(contact)}
-                      className="text-xs text-[#d8c6e8] hover:text-white"
+                      className="text-xs text-[#7b6660] hover:text-[#251E1F]"
                     >
                       Edit
                     </button>
@@ -282,7 +282,7 @@ export default function StaffProfile({ onProfileSaved }) {
           <button
             type="button"
             onClick={() => { resetContactForm(); setShowAddForm(true); }}
-            className="mt-3 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
+            className="mt-3 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
           >
             + Add Contact
           </button>
@@ -290,45 +290,45 @@ export default function StaffProfile({ onProfileSaved }) {
 
         {/* Add/Edit form */}
         {(showAddForm || editingContact) && (
-          <div className="mt-4 rounded-lg border border-white/10 bg-black/10 p-4 space-y-3">
-            <p className="text-sm font-medium text-white">{editingContact ? 'Edit Contact' : 'Add Emergency Contact'}</p>
+          <div className="mt-4 rounded-lg border border-[#f0d2ca] bg-black/10 p-4 space-y-3">
+            <p className="text-sm font-medium text-[#251E1F]">{editingContact ? 'Edit Contact' : 'Add Emergency Contact'}</p>
 
             {contactError && (
               <p className="text-xs text-red-400">{contactError}</p>
             )}
 
             <label className="block">
-              <span className="text-xs text-[#d8c6e8]">Name</span>
+              <span className="text-xs text-[#7b6660]">Name</span>
               <input
                 type="text"
                 value={contactForm.name}
                 onChange={e => setContactForm(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="Contact full name"
-                className="mt-1 w-full rounded-md border border-white/10 px-3 py-2 text-white bg-transparent placeholder:text-white/20"
+                className="mt-1 w-full rounded-md border border-[#f0d2ca] px-3 py-2 text-[#251E1F] bg-transparent placeholder:text-[#251E1F]/20"
               />
             </label>
 
             <label className="block">
-              <span className="text-xs text-[#d8c6e8]">Relationship</span>
+              <span className="text-xs text-[#7b6660]">Relationship</span>
               <input
                 type="text"
                 value={contactForm.relationship}
                 onChange={e => setContactForm(prev => ({ ...prev, relationship: e.target.value }))}
                 placeholder="e.g. Spouse, Parent, Sibling"
-                className="mt-1 w-full rounded-md border border-white/10 px-3 py-2 text-white bg-transparent placeholder:text-white/20"
+                className="mt-1 w-full rounded-md border border-[#f0d2ca] px-3 py-2 text-[#251E1F] bg-transparent placeholder:text-[#251E1F]/20"
               />
             </label>
 
             <label className="block">
-              <span className="text-xs text-[#d8c6e8]">Phone</span>
+              <span className="text-xs text-[#7b6660]">Phone</span>
               <input
                 type="text"
                 value={contactForm.phone}
                 onChange={e => setContactForm(prev => ({ ...prev, phone: e.target.value }))}
                 placeholder="+65 9123 4567"
-                className="mt-1 w-full rounded-md border border-white/10 px-3 py-2 text-white bg-transparent placeholder:text-white/20"
+                className="mt-1 w-full rounded-md border border-[#f0d2ca] px-3 py-2 text-[#251E1F] bg-transparent placeholder:text-[#251E1F]/20"
               />
-              <p className="mt-1 text-[10px] text-[#d8c6e8]/50">Singapore format: +65 XXXX XXXX</p>
+              <p className="mt-1 text-[10px] text-[#7b6660]/50">Singapore format: +65 XXXX XXXX</p>
             </label>
 
             <label className="flex items-center gap-2 cursor-pointer">
@@ -336,23 +336,23 @@ export default function StaffProfile({ onProfileSaved }) {
                 type="checkbox"
                 checked={contactForm.is_primary}
                 onChange={e => setContactForm(prev => ({ ...prev, is_primary: e.target.checked }))}
-                className="rounded border-white/20 bg-transparent"
+                className="rounded border-[#ead3cc] bg-transparent"
               />
-              <span className="text-xs text-[#d8c6e8]">Set as primary contact</span>
+              <span className="text-xs text-[#7b6660]">Set as primary contact</span>
             </label>
 
             <div className="flex gap-3 pt-1">
               <button
                 type="button"
                 onClick={resetContactForm}
-                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
+                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSaveContact}
-                className="flex-1 rounded-lg bg-[#7B2FF7] px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
+                className="flex-1 rounded-lg bg-[#2D7C83] px-4 py-2 text-sm font-semibold text-[#251E1F] hover:brightness-110"
               >
                 {editingContact ? 'Update' : 'Save'}
               </button>
@@ -366,7 +366,7 @@ export default function StaffProfile({ onProfileSaved }) {
         <button
           type="button"
           onClick={() => setShowEditModal(true)}
-          className="rounded-lg bg-[#7B2FF7] px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110"
+          className="rounded-lg bg-[#2D7C83] px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110"
         >
           Edit Profile
         </button>
@@ -471,9 +471,9 @@ function EditProfileModal({ profile, token, userId, onClose, onSaved, onError })
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="rounded-2xl border border-white/10 bg-[#12071f] p-6 shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <p className="text-lg font-semibold text-white">Edit Profile</p>
-        <p className="mt-1 text-sm text-[#d8c6e8]">
+      <div className="rounded-2xl border border-[#f0d2ca] bg-[#fff3ee] p-6 shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <p className="text-lg font-semibold text-[#251E1F]">Edit Profile</p>
+        <p className="mt-1 text-sm text-[#7b6660]">
           Update your personal and bank details. Relevant departments will be notified of changes.
         </p>
 
@@ -489,8 +489,8 @@ function EditProfileModal({ profile, token, userId, onClose, onSaved, onError })
           </div>
 
           {/* Divider */}
-          <div className="border-t border-white/10 pt-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-[#d8c6e8] mb-3">Bank Details</p>
+          <div className="border-t border-[#f0d2ca] pt-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-[#7b6660] mb-3">Bank Details</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <ModalField label="Bank Name" name="bank" value={form.bank} onChange={handleChange} error={errors.bank} placeholder="e.g. DBS, OCBC, UOB" />
               <ModalField label="Account Number" name="account_no" value={form.account_no} onChange={handleChange} error={errors.account_no} placeholder="e.g. 012-345678-9" />
@@ -503,7 +503,7 @@ function EditProfileModal({ profile, token, userId, onClose, onSaved, onError })
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/10"
+            className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
           >
             Cancel
           </button>
@@ -511,7 +511,7 @@ function EditProfileModal({ profile, token, userId, onClose, onSaved, onError })
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 rounded-lg bg-[#7B2FF7] px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
+            className="flex-1 rounded-lg bg-[#2D7C83] px-4 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-60"
           >
             {saving ? 'Saving…' : 'Save Changes'}
           </button>
@@ -524,9 +524,9 @@ function EditProfileModal({ profile, token, userId, onClose, onSaved, onError })
 /* ─── Shared Components ─── */
 function DisplayField({ label, value }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-black/10 px-4 py-3">
-      <p className="text-xs uppercase tracking-wide text-[#d8c6e8]">{label}</p>
-      <p className="mt-1 text-sm font-medium text-white">{value}</p>
+    <div className="rounded-lg border border-[#f0d2ca] bg-black/10 px-4 py-3">
+      <p className="text-xs uppercase tracking-wide text-[#7b6660]">{label}</p>
+      <p className="mt-1 text-sm font-medium text-[#251E1F]">{value}</p>
     </div>
   );
 }
@@ -534,15 +534,15 @@ function DisplayField({ label, value }) {
 function ModalField({ label, name, type = "text", value, onChange, error, placeholder }) {
   return (
     <label className="block">
-      <span className="text-xs text-[#d8c6e8]">{label}</span>
+      <span className="text-xs text-[#7b6660]">{label}</span>
       <input
         name={name}
         type={type}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className={`mt-1 w-full rounded-md border px-3 py-2 text-white bg-transparent placeholder:text-white/20 ${
-          error ? "border-red-400/60" : "border-white/10"
+        className={`mt-1 w-full rounded-md border px-3 py-2 text-[#251E1F] bg-transparent placeholder:text-[#251E1F]/20 ${
+          error ? "border-red-400/60" : "border-[#f0d2ca]"
         }`}
       />
       {error && <p className="mt-1 text-xs text-red-400">{error}</p>}

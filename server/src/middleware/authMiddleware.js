@@ -32,7 +32,7 @@ async function authenticateToken(req, res, next) {
 
     const user = rows[0];
 
-    if (!user || Number(user.status) !== 1) {
+    if (!user || !(user.status === 1 || user.status === "1" || (typeof user.status === "string" && user.status.toLowerCase() === "active"))) {
       return res.status(403).json({
         message: "Account is disabled or no longer available"
       });

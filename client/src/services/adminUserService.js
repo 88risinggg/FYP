@@ -67,3 +67,4 @@ export function resetAdminUserPassword(userId, password) {
     body: JSON.stringify({ password })
   });
 }
+

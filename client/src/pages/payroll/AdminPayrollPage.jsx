@@ -312,7 +312,7 @@ const statutorySchemeSettings = [
 function ActionButton({ icon: Icon, children, variant = "primary", onClick, disabled = false }) {
   const className =
     variant === "secondary"
-      ? "inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+      ? "inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
       : "neon-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold";
 
   return (
@@ -366,7 +366,7 @@ function formatMoney(value) {
 
 function EmptyState({ message }) {
   return (
-    <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.03] p-6 text-sm text-[#d8c6e8]">
+    <div className="rounded-xl border border-dashed border-[#f0d2ca] bg-white/80 p-6 text-sm text-[#7b6660]">
       {message}
     </div>
   );
@@ -377,12 +377,12 @@ function PageShell({ heading, children, actions, updatedAt }) {
     <section>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#C77DFF]/80">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#F38978]/80">
             Admin Payroll Workflow
           </p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">{heading}</h2>
-          <p className="mt-2 flex items-center gap-2 text-sm text-[#d8c6e8]">
-            <CalendarDays size={15} className="text-[#C77DFF]" />
+          <h2 className="mt-2 text-2xl font-semibold text-[#251E1F]">{heading}</h2>
+          <p className="mt-2 flex items-center gap-2 text-sm text-[#7b6660]">
+            <CalendarDays size={15} className="text-[#F38978]" />
             Last updated: {updatedAt ? formatDateTime(updatedAt) : "Not updated"}
           </p>
         </div>
@@ -537,7 +537,7 @@ function getStatusBadgeClass(status) {
     return "border-[#7DD3FC]/25 bg-[#7DD3FC]/10 text-[#BAE6FD]";
   }
 
-  return "border-white/10 bg-white/[0.06] text-[#d8c6e8]";
+  return "border-[#f0d2ca] bg-white/80 text-[#7b6660]";
 }
 
 function WorkflowCard({ data, onNavigate, step }) {
@@ -548,39 +548,39 @@ function WorkflowCard({ data, onNavigate, step }) {
   return (
     <article className="neon-glass neon-border rounded-2xl p-5">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#C77DFF]/12 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978] ring-1 ring-[#F38978]/25">
           <Icon size={24} />
         </div>
         <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(status)}`}>
           {status}
         </span>
       </div>
-      <h3 className="mt-5 text-base font-semibold text-white">{step.title}</h3>
-      <div className="mt-3 grid gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-xs text-[#d8c6e8]">
+      <h3 className="mt-5 text-base font-semibold text-[#251E1F]">{step.title}</h3>
+      <div className="mt-3 grid gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 p-3 text-xs text-[#7b6660]">
         <div className="flex items-center justify-between gap-3">
           <span>Owner</span>
-          <span className="font-semibold text-white">{step.owner}</span>
+          <span className="font-semibold text-[#251E1F]">{step.owner}</span>
         </div>
         <div className="flex items-center justify-between gap-3">
           <span>Records</span>
-          <span className="font-semibold text-white">{meta.count}</span>
+          <span className="font-semibold text-[#251E1F]">{meta.count}</span>
         </div>
         <div className="flex items-center justify-between gap-3">
           <span>Last Updated</span>
-          <span className="font-semibold text-white">{meta.lastUpdated ? formatDateTime(meta.lastUpdated) : "Not updated"}</span>
+          <span className="font-semibold text-[#251E1F]">{meta.lastUpdated ? formatDateTime(meta.lastUpdated) : "Not updated"}</span>
         </div>
       </div>
-      <ul className="mt-3 space-y-2 text-sm text-[#d8c6e8]">
+      <ul className="mt-3 space-y-2 text-sm text-[#7b6660]">
         {step.details.map((detail) => (
           <li key={detail} className="flex gap-2">
-            <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#C77DFF]" />
+            <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#F38978]" />
             <span>{detail}</span>
           </li>
         ))}
       </ul>
       <button
         type="button"
-        className="mt-5 w-full rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#C77DFF]/18"
+        className="mt-5 w-full rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#F38978]/18"
         onClick={() => onNavigate(step.path)}
       >
         {step.action}
@@ -593,8 +593,8 @@ function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout })
   const stats = data?.stats || {};
   const dashboardUpdates = getDashboardUpdateSegments(data);
   const dashboardStats = [
-    { label: "Active Users", value: stats.activeUsers ?? 0, tone: "text-[#C77DFF]", updatedAt: getLatestTimestamp(data?.users) },
-    { label: "Payroll Rules", value: stats.payrollRules ?? 0, tone: "text-white", updatedAt: getLatestTimestamp(data?.settings) },
+    { label: "Active Users", value: stats.activeUsers ?? 0, tone: "text-[#F38978]", updatedAt: getLatestTimestamp(data?.users) },
+    { label: "Payroll Rules", value: stats.payrollRules ?? 0, tone: "text-[#251E1F]", updatedAt: getLatestTimestamp(data?.settings) },
     { label: "Payslip Layouts", value: stats.payslipLayouts ?? 0, tone: "text-[#7CFFB2]", updatedAt: getLatestTimestamp(data?.layouts) },
     { label: "Admin Logs", value: stats.adminLogs ?? 0, tone: "text-[#FFB86B]", updatedAt: getLatestTimestamp(data?.auditLogs) }
   ];
@@ -614,10 +614,10 @@ function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout })
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {dashboardStats.map((stat) => (
           <div key={stat.label} className="neon-glass rounded-2xl p-5">
-            <p className="text-sm text-[#d8c6e8]">{stat.label}</p>
+            <p className="text-sm text-[#7b6660]">{stat.label}</p>
             <p className={`mt-3 text-3xl font-semibold ${stat.tone}`}>{stat.value}</p>
-            <p className="mt-3 flex items-center gap-2 text-xs text-[#d8c6e8]/80">
-              <CalendarDays size={14} className="text-[#C77DFF]" />
+            <p className="mt-3 flex items-center gap-2 text-xs text-[#7b6660]/80">
+              <CalendarDays size={14} className="text-[#F38978]" />
               {stat.updatedAt ? `Updated ${formatDateTime(stat.updatedAt)}` : "No update date"}
             </p>
           </div>
@@ -627,19 +627,19 @@ function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout })
       <section className="mt-6 neon-glass neon-border rounded-2xl p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-white">Overall Update Timeline</h3>
-            <p className="mt-1 text-sm text-[#d8c6e8]">Last changed date for each admin payroll segment.</p>
+            <h3 className="text-lg font-semibold text-[#251E1F]">Overall Update Timeline</h3>
+            <p className="mt-1 text-sm text-[#7b6660]">Last changed date for each admin payroll segment.</p>
           </div>
-          <p className="text-sm font-semibold text-[#C77DFF]">
+          <p className="text-sm font-semibold text-[#F38978]">
             Latest: {formatDateTime(getLatestTimestamp(dashboardUpdates.map((item) => ({ updated_at: item.updatedAt }))))}
           </p>
         </div>
         <div className="mt-5 grid gap-3 md:grid-cols-5">
           {dashboardUpdates.map((item) => (
-            <div key={item.label} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-              <p className="text-sm font-semibold text-white">{item.label}</p>
-              <p className="mt-1 text-xs text-[#d8c6e8]">{item.records}</p>
-              <p className="mt-3 text-xs font-semibold text-[#C77DFF]">
+            <div key={item.label} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+              <p className="text-sm font-semibold text-[#251E1F]">{item.label}</p>
+              <p className="mt-1 text-xs text-[#7b6660]">{item.records}</p>
+              <p className="mt-3 text-xs font-semibold text-[#F38978]">
                 {item.updatedAt ? formatDateTime(item.updatedAt) : "Not updated"}
               </p>
             </div>
@@ -658,12 +658,12 @@ function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout })
 
         <aside className="neon-glass neon-border rounded-2xl p-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#7B2FF7]/20 text-[#C77DFF]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#2D7C83]/20 text-[#F38978]">
               <Palette size={21} />
             </div>
             <div>
-              <h3 className="font-semibold text-white">Payslip Layout Control</h3>
-              <p className="text-sm text-[#d8c6e8]">Admin manages the templates Finance uses when generating payslips.</p>
+              <h3 className="font-semibold text-[#251E1F]">Payslip Layout Control</h3>
+              <p className="text-sm text-[#7b6660]">Admin manages the templates Finance uses when generating payslips.</p>
             </div>
           </div>
           <div className="mt-6 space-y-3">
@@ -675,7 +675,7 @@ function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout })
               Set Latest as Default
             </ActionButton>
           </div>
-          <div className="mt-6 rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 p-4 text-sm text-[#eadcff]">
+          <div className="mt-6 rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 p-4 text-sm text-[#eadcff]">
             Finance keeps payroll data submission. Admin only controls setup, access and reusable payslip designs.
           </div>
         </aside>
@@ -758,9 +758,9 @@ function UsersRolesView({
         <div className="grid gap-4 md:grid-cols-4">
           {roleSummary.map((role) => (
             <div key={role.role_id} className="neon-glass rounded-2xl p-5">
-              <p className="text-sm text-[#d8c6e8]">{role.role_name}</p>
-              <p className="mt-3 text-3xl font-semibold text-white">{role.user_count}</p>
-              <p className="mt-2 text-sm text-[#d8c6e8]/80">{role.description || "Role access"}</p>
+              <p className="text-sm text-[#7b6660]">{role.role_name}</p>
+              <p className="mt-3 text-3xl font-semibold text-[#251E1F]">{role.user_count}</p>
+              <p className="mt-2 text-sm text-[#7b6660]/80">{role.description || "Role access"}</p>
             </div>
           ))}
         </div>
@@ -768,28 +768,28 @@ function UsersRolesView({
         <div className="neon-glass neon-border rounded-2xl p-6">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-white">User & Staff Directory</h3>
-              <p className="mt-1 text-sm text-[#d8c6e8]">
+              <h3 className="text-lg font-semibold text-[#251E1F]">User & Staff Directory</h3>
+              <p className="mt-1 text-sm text-[#7b6660]">
                 {filteredUsers.length} of {users.length} user(s) shown
               </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3 xl:w-[46rem]">
-              <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5">
-                <Search size={16} className="text-[#C77DFF]" />
+              <label className="flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2.5">
+                <Search size={16} className="text-[#F38978]" />
                 <input
                   type="search"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="Search users..."
-                  className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[#d8c6e8]/60"
+                  className="min-w-0 flex-1 bg-transparent text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/60"
                 />
               </label>
 
               <select
                 value={roleFilter}
                 onChange={(event) => setRoleFilter(event.target.value)}
-                className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+                className="rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none"
               >
                 {roles.map((role) => (
                   <option key={role} value={role}>{role} roles</option>
@@ -799,7 +799,7 @@ function UsersRolesView({
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
-                className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+                className="rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none"
               >
                 {["All", "Active", "Inactive"].map((status) => (
                   <option key={status} value={status}>{status} status</option>
@@ -810,9 +810,9 @@ function UsersRolesView({
 
           <div className="mt-5 overflow-x-auto">
             <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-              <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
+              <thead className="text-xs uppercase tracking-wide text-[#F38978]/80">
                 <tr>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">
+                  <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">
                     <input
                       type="checkbox"
                       checked={manageableFilteredUsers.length > 0 && manageableFilteredUsers.every((user) => selectedUserIds.includes(user.user_id))}
@@ -820,13 +820,13 @@ function UsersRolesView({
                       aria-label="Select visible users"
                     />
                   </th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">User</th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Role</th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Employee Code</th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Department</th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Base Salary</th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Status</th>
-                  <th className="border-b border-white/10 px-4 py-3 font-semibold">Action</th>
+                  <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">User</th>
+                  <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Role</th>
+                  <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Employee Code</th>
+                  <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Department</th>
+                  <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Base Salary</th>
+                  <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Status</th>
+                  <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -837,10 +837,10 @@ function UsersRolesView({
                   return (
                     <tr
                       key={user.user_id}
-                      className="cursor-pointer text-[#d8c6e8] transition hover:bg-white/[0.04]"
+                      className="cursor-pointer text-[#7b6660] transition hover:bg-[#FDD9CD]/45"
                       onClick={() => setManagedUser(user)}
                     >
-                      <td className="border-b border-white/10 px-4 py-4" onClick={(event) => event.stopPropagation()}>
+                      <td className="border-b border-[#f0d2ca] px-4 py-4" onClick={(event) => event.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selectedUserIds.includes(user.user_id)}
@@ -849,23 +849,23 @@ function UsersRolesView({
                           aria-label={`Select ${user.name}`}
                         />
                       </td>
-                      <td className="border-b border-white/10 px-4 py-4">
-                        <p className="font-semibold text-white">{user.name}</p>
-                        <p className="mt-1 text-xs text-[#d8c6e8]/75">{user.email}</p>
+                      <td className="border-b border-[#f0d2ca] px-4 py-4">
+                        <p className="font-semibold text-[#251E1F]">{user.name}</p>
+                        <p className="mt-1 text-xs text-[#7b6660]/75">{user.email}</p>
                       </td>
-                      <td className="border-b border-white/10 px-4 py-4">{user.role_name}</td>
-                      <td className="border-b border-white/10 px-4 py-4">{user.employee_code || "Not linked"}</td>
-                      <td className="border-b border-white/10 px-4 py-4">{user.department_name || "Not linked"}</td>
-                      <td className="border-b border-white/10 px-4 py-4">{formatMoney(user.base_salary)}</td>
-                      <td className="border-b border-white/10 px-4 py-4">
+                      <td className="border-b border-[#f0d2ca] px-4 py-4">{user.role_name}</td>
+                      <td className="border-b border-[#f0d2ca] px-4 py-4">{user.employee_code || "Not linked"}</td>
+                      <td className="border-b border-[#f0d2ca] px-4 py-4">{user.department_name || "Not linked"}</td>
+                      <td className="border-b border-[#f0d2ca] px-4 py-4">{formatMoney(user.base_salary)}</td>
+                      <td className="border-b border-[#f0d2ca] px-4 py-4">
                         <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isActive ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
                           {isActive ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td className="border-b border-white/10 px-4 py-4">
+                      <td className="border-b border-[#f0d2ca] px-4 py-4">
                         <button
                           type="button"
-                          className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm font-semibold text-white hover:bg-white/10"
+                          className="rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
                           onClick={(event) => {
                             event.stopPropagation();
                             setManagedUser(user);
@@ -978,21 +978,21 @@ function BulkAccessModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#090014]/80 px-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#fff8f5]/80 px-4 backdrop-blur-sm">
       <section className="neon-glass neon-border max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl p-6">
-        <div className="flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-4 border-b border-[#f0d2ca] pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#C77DFF]/15 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F38978]/15 text-[#F38978] ring-1 ring-[#F38978]/25">
               <ShieldCheck size={26} />
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-white">Bulk Access Settings</h3>
-              <p className="mt-1 text-sm text-[#d8c6e8]">Update role or account status for selected users.</p>
+              <h3 className="text-xl font-semibold text-[#251E1F]">Bulk Access Settings</h3>
+              <p className="mt-1 text-sm text-[#7b6660]">Update role or account status for selected users.</p>
             </div>
           </div>
           <button
             type="button"
-            className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+            className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
             onClick={onClose}
           >
             Close
@@ -1000,18 +1000,18 @@ function BulkAccessModal({
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-            <p className="text-sm text-[#d8c6e8]">Selected Users</p>
-            <p className="mt-2 text-3xl font-semibold text-white">{selectedCount}</p>
-            <p className="mt-2 text-xs text-[#d8c6e8]/75">{activeCount} active / {inactiveCount} inactive</p>
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+            <p className="text-sm text-[#7b6660]">Selected Users</p>
+            <p className="mt-2 text-3xl font-semibold text-[#251E1F]">{selectedCount}</p>
+            <p className="mt-2 text-xs text-[#7b6660]/75">{activeCount} active / {inactiveCount} inactive</p>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 md:col-span-2">
-            <p className="text-sm font-semibold text-white">Selection</p>
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4 md:col-span-2">
+            <p className="text-sm font-semibold text-[#251E1F]">Selection</p>
             <div className="mt-4 flex flex-wrap gap-3">
               <button
                 type="button"
-                className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+                className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
                 onClick={() => onSelectionChange(filteredIds)}
                 disabled={!filteredIds.length}
               >
@@ -1019,7 +1019,7 @@ function BulkAccessModal({
               </button>
               <button
                 type="button"
-                className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+                className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
                 onClick={() => onSelectionChange([])}
                 disabled={!selectedCount}
               >
@@ -1030,14 +1030,14 @@ function BulkAccessModal({
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-            <p className="text-sm font-semibold text-white">Apply Role</p>
-            <p className="mt-2 text-sm text-[#d8c6e8]">Assign one role to every selected user.</p>
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+            <p className="text-sm font-semibold text-[#251E1F]">Apply Role</p>
+            <p className="mt-2 text-sm text-[#7b6660]">Assign one role to every selected user.</p>
             <div className="mt-4 flex gap-2">
               <select
                 value={selectedRoleId}
                 onChange={(event) => setSelectedRoleId(event.target.value)}
-                className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm font-semibold text-white outline-none"
+                className="min-w-0 flex-1 rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm font-semibold text-[#251E1F] outline-none"
               >
                 <option value="">Choose role</option>
                 {roles.map((role) => (
@@ -1046,7 +1046,7 @@ function BulkAccessModal({
               </select>
               <button
                 type="button"
-                className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={applyBulkRole}
                 disabled={isSubmitting || !selectedRoleId || !selectedCount}
               >
@@ -1055,9 +1055,9 @@ function BulkAccessModal({
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-            <p className="text-sm font-semibold text-white">Account Status</p>
-            <p className="mt-2 text-sm text-[#d8c6e8]">Activate or deactivate all selected user accounts.</p>
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+            <p className="text-sm font-semibold text-[#251E1F]">Account Status</p>
+            <p className="mt-2 text-sm text-[#7b6660]">Activate or deactivate all selected user accounts.</p>
             <div className="mt-4 flex flex-wrap gap-3">
               <button
                 type="button"
@@ -1079,18 +1079,18 @@ function BulkAccessModal({
           </div>
         </div>
 
-        <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.04] p-4">
-          <p className="text-sm font-semibold text-white">Selected Users Preview</p>
+        <div className="mt-5 rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+          <p className="text-sm font-semibold text-[#251E1F]">Selected Users Preview</p>
           <div className="mt-3 max-h-56 overflow-y-auto">
             {selectedUsers.length ? (
               <div className="divide-y divide-white/10">
                 {selectedUsers.map((user) => (
                   <div key={user.user_id} className="flex flex-col gap-1 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="font-semibold text-white">{user.name}</p>
-                      <p className="text-xs text-[#d8c6e8]/75">{user.email}</p>
+                      <p className="font-semibold text-[#251E1F]">{user.name}</p>
+                      <p className="text-xs text-[#7b6660]/75">{user.email}</p>
                     </div>
-                    <p className="text-[#d8c6e8]">{user.role_name} / {Number(user.status) === 1 ? "Active" : "Inactive"}</p>
+                    <p className="text-[#7b6660]">{user.role_name} / {Number(user.status) === 1 ? "Active" : "Inactive"}</p>
                   </div>
                 ))}
               </div>
@@ -1106,9 +1106,9 @@ function BulkAccessModal({
 
 function ProfileField({ label, value }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/75">{label}</p>
-      <p className="mt-2 text-sm font-semibold text-white">{value || "Not linked"}</p>
+    <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/75">{label}</p>
+      <p className="mt-2 text-sm font-semibold text-[#251E1F]">{value || "Not linked"}</p>
     </div>
   );
 }
@@ -1167,17 +1167,17 @@ function AddUserModal({ availableStaff = [], onClose, onCreateUser, roles = [] }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#090014]/80 px-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#fff8f5]/80 px-4 backdrop-blur-sm">
       <section className="neon-glass neon-border max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl p-6">
-        <div className="flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-4 border-b border-[#f0d2ca] pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#C77DFF]/80">Admin User Access</p>
-            <h3 className="mt-2 text-xl font-semibold text-white">Add New User</h3>
-            <p className="mt-1 text-sm text-[#d8c6e8]">Create a login account and link it to an existing staff profile when needed.</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#F38978]/80">Admin User Access</p>
+            <h3 className="mt-2 text-xl font-semibold text-[#251E1F]">Add New User</h3>
+            <p className="mt-1 text-sm text-[#7b6660]">Create a login account and link it to an existing staff profile when needed.</p>
           </div>
           <button
             type="button"
-            className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+            className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
             onClick={onClose}
           >
             Close
@@ -1186,11 +1186,11 @@ function AddUserModal({ availableStaff = [], onClose, onCreateUser, roles = [] }
 
         <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
           <label className="grid gap-2">
-            <span className="text-sm font-semibold text-white">Link Staff Profile</span>
+            <span className="text-sm font-semibold text-[#251E1F]">Link Staff Profile</span>
             <select
               value={formData.staffEmployeeId}
               onChange={(event) => handleStaffChange(event.target.value)}
-              className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+              className="rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none"
             >
               <option value="">No staff link</option>
               {availableStaff.map((staff) => (
@@ -1203,31 +1203,31 @@ function AddUserModal({ availableStaff = [], onClose, onCreateUser, roles = [] }
 
           <div className="grid gap-4 md:grid-cols-2">
             <label className="grid gap-2">
-              <span className="text-sm font-semibold text-white">Name</span>
+              <span className="text-sm font-semibold text-[#251E1F]">Name</span>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(event) => updateField("name", event.target.value)}
-                className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+                className="rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none"
                 required
               />
             </label>
             <label className="grid gap-2">
-              <span className="text-sm font-semibold text-white">Email</span>
+              <span className="text-sm font-semibold text-[#251E1F]">Email</span>
               <input
                 type="email"
                 value={formData.email}
                 onChange={(event) => updateField("email", event.target.value)}
-                className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+                className="rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none"
                 required
               />
             </label>
             <label className="grid gap-2">
-              <span className="text-sm font-semibold text-white">Role</span>
+              <span className="text-sm font-semibold text-[#251E1F]">Role</span>
               <select
                 value={formData.roleId}
                 onChange={(event) => updateField("roleId", event.target.value)}
-                className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+                className="rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none"
                 required
               >
                 {roles.map((role) => (
@@ -1236,11 +1236,11 @@ function AddUserModal({ availableStaff = [], onClose, onCreateUser, roles = [] }
               </select>
             </label>
             <label className="grid gap-2">
-              <span className="text-sm font-semibold text-white">Status</span>
+              <span className="text-sm font-semibold text-[#251E1F]">Status</span>
               <select
                 value={formData.status}
                 onChange={(event) => updateField("status", event.target.value)}
-                className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+                className="rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none"
               >
                 <option value="1">Active</option>
                 <option value="0">Inactive</option>
@@ -1257,14 +1257,14 @@ function AddUserModal({ availableStaff = [], onClose, onCreateUser, roles = [] }
           {temporaryPassword ? (
             <div className="rounded-xl border border-[#7CFFB2]/25 bg-[#7CFFB2]/10 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-[#7CFFB2]">Temporary Password</p>
-              <p className="mt-2 break-all font-mono text-sm text-white">{temporaryPassword}</p>
+              <p className="mt-2 break-all font-mono text-sm text-[#251E1F]">{temporaryPassword}</p>
             </div>
           ) : null}
 
-          <div className="flex flex-wrap justify-end gap-3 border-t border-white/10 pt-5">
+          <div className="flex flex-wrap justify-end gap-3 border-t border-[#f0d2ca] pt-5">
             <button
               type="button"
-              className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+              className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
               onClick={onClose}
             >
               Done
@@ -1334,24 +1334,24 @@ function UserManagementModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#090014]/80 px-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#fff8f5]/80 px-4 backdrop-blur-sm">
       <section className="neon-glass neon-border max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl p-6">
-        <div className="flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-4 border-b border-[#f0d2ca] pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#C77DFF]/15 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F38978]/15 text-[#F38978] ring-1 ring-[#F38978]/25">
               <UserCog size={26} />
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-white">Manage {user.name}</h3>
-              <p className="mt-1 text-sm text-[#d8c6e8]">{user.email}</p>
+              <h3 className="text-xl font-semibold text-[#251E1F]">Manage {user.name}</h3>
+              <p className="mt-1 text-sm text-[#7b6660]">{user.email}</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-[#d8c6e8]">
+                <span className="rounded-full border border-[#f0d2ca] bg-white/80 px-3 py-1 text-xs font-semibold text-[#7b6660]">
                   {user.role_name}
                 </span>
                 <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isActive ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
                   {isActive ? "Active account" : "Inactive account"}
                 </span>
-                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${hasStaffProfile ? "border-[#C77DFF]/25 bg-[#C77DFF]/10 text-[#eadcff]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
+                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${hasStaffProfile ? "border-[#F38978]/25 bg-[#F38978]/10 text-[#eadcff]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
                   {hasStaffProfile ? "Staff profile linked" : "No staff profile"}
                 </span>
               </div>
@@ -1359,7 +1359,7 @@ function UserManagementModal({
           </div>
           <button
             type="button"
-            className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+            className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
             onClick={onClose}
           >
             Close
@@ -1368,16 +1368,16 @@ function UserManagementModal({
 
         <div className="mt-6 space-y-6">
           <div>
-            <h4 className="font-semibold text-white">Admin Actions</h4>
+            <h4 className="font-semibold text-[#251E1F]">Admin Actions</h4>
             <div className="mt-4 grid gap-4 lg:grid-cols-3">
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-sm font-semibold text-white">Reset Password</p>
-                <p className="mt-2 text-sm text-[#d8c6e8]">
+              <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+                <p className="text-sm font-semibold text-[#251E1F]">Reset Password</p>
+                <p className="mt-2 text-sm text-[#7b6660]">
                   Generates a temporary password for the user. Share it through a secure channel.
                 </p>
                 <button
                   type="button"
-                  className="mt-4 rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mt-4 rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={handleResetPassword}
                   disabled={isSubmitting}
                 >
@@ -1386,19 +1386,19 @@ function UserManagementModal({
                 {temporaryPassword ? (
                   <div className="mt-4 rounded-xl border border-[#7CFFB2]/25 bg-[#7CFFB2]/10 p-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-[#7CFFB2]">Temporary Password</p>
-                    <p className="mt-2 break-all font-mono text-sm text-white">{temporaryPassword}</p>
+                    <p className="mt-2 break-all font-mono text-sm text-[#251E1F]">{temporaryPassword}</p>
                   </div>
                 ) : null}
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-sm font-semibold text-white">Account Status</p>
-                <p className="mt-2 text-sm text-[#d8c6e8]">
+              <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+                <p className="text-sm font-semibold text-[#251E1F]">Account Status</p>
+                <p className="mt-2 text-sm text-[#7b6660]">
                   Disable access for inactive users. Self-deactivation is blocked.
                 </p>
                 <button
                   type="button"
-                  className="mt-4 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mt-4 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45 disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={handleStatusUpdate}
                   disabled={isSubmitting || isCurrentUser}
                 >
@@ -1406,16 +1406,16 @@ function UserManagementModal({
                 </button>
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-sm font-semibold text-white">Role Access</p>
-                <p className="mt-2 text-sm text-[#d8c6e8]">
+              <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+                <p className="text-sm font-semibold text-[#251E1F]">Role Access</p>
+                <p className="mt-2 text-sm text-[#7b6660]">
                   Change module access by assigning a different role. Self-role changes are blocked.
                 </p>
                 <div className="mt-4 flex gap-2">
                   <select
                     value={selectedRoleId}
                     onChange={(event) => setSelectedRoleId(event.target.value)}
-                    className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm font-semibold text-white outline-none"
+                    className="min-w-0 flex-1 rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm font-semibold text-[#251E1F] outline-none"
                     disabled={isCurrentUser}
                   >
                     {roles.map((role) => (
@@ -1424,7 +1424,7 @@ function UserManagementModal({
                   </select>
                   <button
                     type="button"
-                    className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={handleRoleUpdate}
                     disabled={isSubmitting || isCurrentUser || Number(selectedRoleId) === Number(user.role_id)}
                   >
@@ -1436,7 +1436,7 @@ function UserManagementModal({
           </div>
 
           <div>
-            <h4 className="font-semibold text-white">Account Details</h4>
+            <h4 className="font-semibold text-[#251E1F]">Account Details</h4>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <ProfileField label="User ID" value={user.user_id} />
               <ProfileField label="Role" value={user.role_name} />
@@ -1446,7 +1446,7 @@ function UserManagementModal({
           </div>
 
           <div>
-            <h4 className="font-semibold text-white">Employee Details</h4>
+            <h4 className="font-semibold text-[#251E1F]">Employee Details</h4>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <ProfileField label="Employee ID" value={user.employee_id} />
               <ProfileField label="Employee Code" value={user.employee_code} />
@@ -1494,23 +1494,23 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
           {layouts.length ? (
             <div className="grid gap-4 md:grid-cols-3">
               {layouts.map((layout) => (
-              <article key={layout.layout_id} className="rounded-xl border border-white/10 bg-white/[0.04] p-5">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#C77DFF]/12 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
+              <article key={layout.layout_id} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978] ring-1 ring-[#F38978]/25">
                   <FileText size={22} />
                 </div>
-                <h3 className="mt-4 font-semibold text-white">{layout.layout_name}</h3>
-                <p className="mt-2 text-sm text-[#d8c6e8]">{layout.file_type} template</p>
+                <h3 className="mt-4 font-semibold text-[#251E1F]">{layout.layout_name}</h3>
+                <p className="mt-2 text-sm text-[#7b6660]">{layout.file_type} template</p>
                 <div className="mt-4 flex items-center justify-between gap-3 text-xs">
-                  <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 font-semibold text-[#d8c6e8]">
+                  <span className="rounded-full border border-[#f0d2ca] bg-white/80 px-3 py-1 font-semibold text-[#7b6660]">
                     {Number(layout.is_default) === 1 ? "Default" : layout.status}
                   </span>
-                  <span className="text-[#d8c6e8]/80">{formatDate(layout.updated_at)}</span>
+                  <span className="text-[#7b6660]/80">{formatDate(layout.updated_at)}</span>
                 </div>
                 <div className="mt-5 flex gap-2">
-                  <button type="button" className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm font-semibold text-white hover:bg-white/10" onClick={() => window.open(layout.file_path, "_blank")}>
+                  <button type="button" className="rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45" onClick={() => window.open(layout.file_path, "_blank")}>
                     Preview
                   </button>
-                  <button type="button" className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-3 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18" onClick={() => onSetDefaultLayout(layout.layout_id)}>
+                  <button type="button" className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18" onClick={() => onSetDefaultLayout(layout.layout_id)}>
                     Set Default
                   </button>
                 </div>
@@ -1523,19 +1523,19 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
         </div>
 
         <aside className="neon-glass neon-border rounded-2xl p-6">
-          <Palette size={26} className="text-[#C77DFF]" />
-          <h3 className="mt-4 font-semibold text-white">Layout Import Requirements</h3>
-          <ul className="mt-4 space-y-3 text-sm text-[#d8c6e8]">
+          <Palette size={26} className="text-[#F38978]" />
+          <h3 className="mt-4 font-semibold text-[#251E1F]">Layout Import Requirements</h3>
+          <ul className="mt-4 space-y-3 text-sm text-[#7b6660]">
             <li className="flex gap-2">
-              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#C77DFF]" />
+              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#F38978]" />
               <span>Template name and version</span>
             </li>
             <li className="flex gap-2">
-              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#C77DFF]" />
+              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#F38978]" />
               <span>PDF or HTML layout file</span>
             </li>
             <li className="flex gap-2">
-              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#C77DFF]" />
+              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#F38978]" />
               <span>Sample data preview before activation</span>
             </li>
           </ul>
@@ -1569,12 +1569,12 @@ function SettingEditor({ definition, setting, onSave }) {
   return (
     <div className="neon-glass neon-border rounded-2xl p-5">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#C77DFF]/12 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978] ring-1 ring-[#F38978]/25">
           <Settings size={20} />
         </div>
         <div>
-          <h4 className="font-semibold text-white">{definition.label}</h4>
-          <p className="mt-1 text-sm text-[#d8c6e8]">{definition.description}</p>
+          <h4 className="font-semibold text-[#251E1F]">{definition.label}</h4>
+          <p className="mt-1 text-sm text-[#7b6660]">{definition.description}</p>
         </div>
       </div>
 
@@ -1583,16 +1583,16 @@ function SettingEditor({ definition, setting, onSave }) {
         value={value}
         onChange={(event) => setValue(event.target.value)}
         placeholder={definition.placeholder}
-        className="mt-5 w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none placeholder:text-[#d8c6e8]/50 focus:border-[#C77DFF]/50"
+        className="mt-5 w-full rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2.5 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]/50"
       />
 
       <div className="mt-4 flex items-center justify-between gap-3">
-        <p className="text-xs text-[#d8c6e8]/70">
+        <p className="text-xs text-[#7b6660]/70">
           {setting?.updated_at ? `Updated ${formatDate(setting.updated_at)}` : "Not configured"}
         </p>
         <button
           type="button"
-          className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
           onClick={handleSave}
           disabled={isSaving || !value.trim()}
         >
@@ -1607,8 +1607,8 @@ function SettingsSection({ definitions, settingsByKey, title, subtitle, onSave }
   return (
     <section className="space-y-4">
       <div>
-        <h3 className="text-lg font-semibold text-white">{title}</h3>
-        <p className="mt-1 text-sm text-[#d8c6e8]">{subtitle}</p>
+        <h3 className="text-lg font-semibold text-[#251E1F]">{title}</h3>
+        <p className="mt-1 text-sm text-[#7b6660]">{subtitle}</p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {definitions.map((definition) => (
@@ -1631,7 +1631,7 @@ function SettingInput({ value, onChange, placeholder }) {
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none placeholder:text-[#d8c6e8]/50 focus:border-[#C77DFF]/50"
+      className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]/50"
     />
   );
 }
@@ -1683,34 +1683,34 @@ function CpfRateTable({ onSave, settingsByKey }) {
 
   return (
     <section className="neon-glass neon-border overflow-hidden rounded-2xl">
-      <div className="border-b border-white/10 px-5 py-4">
-        <h3 className="text-lg font-semibold text-white">CPF Age-Tier Rates</h3>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Set employee and employer CPF percentage rates by age tier.</p>
+      <div className="border-b border-[#f0d2ca] px-5 py-4">
+        <h3 className="text-lg font-semibold text-[#251E1F]">CPF Age-Tier Rates</h3>
+        <p className="mt-1 text-sm text-[#7b6660]">Set employee and employer CPF percentage rates by age tier.</p>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-[44rem] w-full border-separate border-spacing-0 text-left text-sm">
-          <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
+          <thead className="text-xs uppercase tracking-wide text-[#F38978]/80">
             <tr>
-              <th className="border-b border-white/10 px-4 py-3">Age Group</th>
-              <th className="border-b border-white/10 px-4 py-3">Employee CPF %</th>
-              <th className="border-b border-white/10 px-4 py-3">Employer CPF %</th>
-              <th className="border-b border-white/10 px-4 py-3">Action</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Age Group</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Employee CPF %</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Employer CPF %</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Action</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.slug}>
-                <td className="border-b border-white/10 px-4 py-4 font-semibold text-white">{row.ageGroup}</td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4 font-semibold text-[#251E1F]">{row.ageGroup}</td>
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <SettingInput value={row.employeeRate} onChange={(value) => updateRow(row.slug, "employeeRate", value)} />
                 </td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <SettingInput value={row.employerRate} onChange={(value) => updateRow(row.slug, "employerRate", value)} />
                 </td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <button
                     type="button"
-                    className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => saveRow(row)}
                     disabled={savingSlug === row.slug}
                   >
@@ -1779,53 +1779,53 @@ function WageComponentTable({ onSave, settingsByKey }) {
 
   return (
     <section className="neon-glass neon-border overflow-hidden rounded-2xl">
-      <div className="border-b border-white/10 px-5 py-4">
-        <h3 className="text-lg font-semibold text-white">Earning Component Classification</h3>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Define which earning components feed CPF and how each wage type is classified.</p>
+      <div className="border-b border-[#f0d2ca] px-5 py-4">
+        <h3 className="text-lg font-semibold text-[#251E1F]">Earning Component Classification</h3>
+        <p className="mt-1 text-sm text-[#7b6660]">Define which earning components feed CPF and how each wage type is classified.</p>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-[58rem] w-full border-separate border-spacing-0 text-left text-sm">
-          <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
+          <thead className="text-xs uppercase tracking-wide text-[#F38978]/80">
             <tr>
-              <th className="border-b border-white/10 px-4 py-3">Component Name</th>
-              <th className="border-b border-white/10 px-4 py-3">CPF Applicable</th>
-              <th className="border-b border-white/10 px-4 py-3">Wage Type</th>
-              <th className="border-b border-white/10 px-4 py-3">Remarks</th>
-              <th className="border-b border-white/10 px-4 py-3">Action</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Component Name</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">CPF Applicable</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Wage Type</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Remarks</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Action</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.slug}>
-                <td className="border-b border-white/10 px-4 py-4 font-semibold text-white">{row.component}</td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4 font-semibold text-[#251E1F]">{row.component}</td>
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <select
                     value={row.includeCpf}
                     onChange={(event) => updateRow(row.slug, "includeCpf", event.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                    className="w-full rounded-lg border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm text-[#251E1F] outline-none"
                   >
                     <option value="Yes">Yes</option>
                     <option value="No">No</option>
                   </select>
                 </td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <select
                     value={row.wageType}
                     onChange={(event) => updateRow(row.slug, "wageType", event.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                    className="w-full rounded-lg border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm text-[#251E1F] outline-none"
                   >
                     <option value="Ordinary Wage">Ordinary Wage</option>
                     <option value="Additional Wage">Additional Wage</option>
                     <option value="Non-CPF">Non-CPF</option>
                   </select>
                 </td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <SettingInput value={row.remarks} onChange={(value) => updateRow(row.slug, "remarks", value)} />
                 </td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <button
                     type="button"
-                    className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => saveRow(row)}
                     disabled={savingSlug === row.slug}
                   >
@@ -1900,31 +1900,31 @@ function DeductionComponentTable({ onSave, settingsByKey }) {
 
   return (
     <section className="neon-glass neon-border overflow-hidden rounded-2xl">
-      <div className="border-b border-white/10 px-5 py-4">
-        <h3 className="text-lg font-semibold text-white">Deduction Component Classification</h3>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Define deduction treatment for net pay and CPF wage base validation.</p>
+      <div className="border-b border-[#f0d2ca] px-5 py-4">
+        <h3 className="text-lg font-semibold text-[#251E1F]">Deduction Component Classification</h3>
+        <p className="mt-1 text-sm text-[#7b6660]">Define deduction treatment for net pay and CPF wage base validation.</p>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-[66rem] w-full border-separate border-spacing-0 text-left text-sm">
-          <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
+          <thead className="text-xs uppercase tracking-wide text-[#F38978]/80">
             <tr>
-              <th className="border-b border-white/10 px-4 py-3">Deduction Name</th>
-              <th className="border-b border-white/10 px-4 py-3">Type</th>
-              <th className="border-b border-white/10 px-4 py-3">Affects Net Pay</th>
-              <th className="border-b border-white/10 px-4 py-3">Affects CPF Wage Base</th>
-              <th className="border-b border-white/10 px-4 py-3">Remarks</th>
-              <th className="border-b border-white/10 px-4 py-3">Action</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Deduction Name</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Type</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Affects Net Pay</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Affects CPF Wage Base</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Remarks</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Action</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.slug}>
-                <td className="border-b border-white/10 px-4 py-4 font-semibold text-white">{row.deduction}</td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4 font-semibold text-[#251E1F]">{row.deduction}</td>
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <select
                     value={row.type}
                     onChange={(event) => updateRow(row.slug, "type", event.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                    className="w-full rounded-lg border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm text-[#251E1F] outline-none"
                   >
                     <option value="Statutory">Statutory</option>
                     <option value="Loan">Loan</option>
@@ -1932,33 +1932,33 @@ function DeductionComponentTable({ onSave, settingsByKey }) {
                     <option value="Other">Other</option>
                   </select>
                 </td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <select
                     value={row.affectsNetPay}
                     onChange={(event) => updateRow(row.slug, "affectsNetPay", event.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                    className="w-full rounded-lg border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm text-[#251E1F] outline-none"
                   >
                     <option value="Yes">Yes</option>
                     <option value="No">No</option>
                   </select>
                 </td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <select
                     value={row.affectsCpfWageBase}
                     onChange={(event) => updateRow(row.slug, "affectsCpfWageBase", event.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                    className="w-full rounded-lg border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm text-[#251E1F] outline-none"
                   >
                     <option value="Yes">Yes</option>
                     <option value="No">No</option>
                   </select>
                 </td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <SettingInput value={row.remarks} onChange={(value) => updateRow(row.slug, "remarks", value)} />
                 </td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <button
                     type="button"
-                    className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => saveRow(row)}
                     disabled={savingSlug === row.slug}
                   >
@@ -2027,45 +2027,45 @@ function EmployerContributionTable({ onSave, settingsByKey }) {
 
   return (
     <section className="neon-glass neon-border overflow-hidden rounded-2xl">
-      <div className="border-b border-white/10 px-5 py-4">
-        <h3 className="text-lg font-semibold text-white">Employer Contribution Items</h3>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Define employer-side statutory and payroll cost items for Finance review.</p>
+      <div className="border-b border-[#f0d2ca] px-5 py-4">
+        <h3 className="text-lg font-semibold text-[#251E1F]">Employer Contribution Items</h3>
+        <p className="mt-1 text-sm text-[#7b6660]">Define employer-side statutory and payroll cost items for Finance review.</p>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-[52rem] w-full border-separate border-spacing-0 text-left text-sm">
-          <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
+          <thead className="text-xs uppercase tracking-wide text-[#F38978]/80">
             <tr>
-              <th className="border-b border-white/10 px-4 py-3">Item</th>
-              <th className="border-b border-white/10 px-4 py-3">Type</th>
-              <th className="border-b border-white/10 px-4 py-3">Basis</th>
-              <th className="border-b border-white/10 px-4 py-3">Remarks</th>
-              <th className="border-b border-white/10 px-4 py-3">Action</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Item</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Type</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Basis</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Remarks</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Action</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.slug}>
-                <td className="border-b border-white/10 px-4 py-4 font-semibold text-white">{row.item}</td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4 font-semibold text-[#251E1F]">{row.item}</td>
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <select
                     value={row.type}
                     onChange={(event) => updateRow(row.slug, "type", event.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                    className="w-full rounded-lg border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm text-[#251E1F] outline-none"
                   >
                     <option value="Statutory">Statutory</option>
                     <option value="Other">Other</option>
                   </select>
                 </td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <SettingInput value={row.basis} onChange={(value) => updateRow(row.slug, "basis", value)} />
                 </td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <SettingInput value={row.remarks} onChange={(value) => updateRow(row.slug, "remarks", value)} />
                 </td>
-                <td className="border-b border-white/10 px-4 py-4">
+                <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <button
                     type="button"
-                    className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => saveRow(row)}
                     disabled={savingSlug === row.slug}
                   >
@@ -2205,8 +2205,8 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
   return (
     <section className="space-y-4">
       <div>
-        <h3 className="text-lg font-semibold text-white">MBMF Contribution Rules</h3>
-        <p className="mt-1 text-sm text-[#d8c6e8]">
+        <h3 className="text-lg font-semibold text-[#251E1F]">MBMF Contribution Rules</h3>
+        <p className="mt-1 text-sm text-[#7b6660]">
           Configure MBMF so payroll applies it only to employees whose staff religion is Muslim.
         </p>
       </div>
@@ -2215,13 +2215,13 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
             <section className="neon-glass neon-border rounded-2xl p-5">
-              <h4 className="font-semibold text-white">1. Enable MBMF</h4>
+              <h4 className="font-semibold text-[#251E1F]">1. Enable MBMF</h4>
               <div className="mt-5 flex items-center justify-between gap-3">
-                <span className="text-sm text-[#d8c6e8]">Enable MBMF Contribution</span>
+                <span className="text-sm text-[#7b6660]">Enable MBMF Contribution</span>
                 <select
                   value={form.enabled}
                   onChange={(event) => updateForm("enabled", event.target.value)}
-                  className="rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                  className="rounded-lg border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm text-[#251E1F] outline-none"
                 >
                   <option value="Enabled">Enabled</option>
                   <option value="Disabled">Disabled</option>
@@ -2233,31 +2233,31 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
             </section>
 
             <section className="neon-glass neon-border rounded-2xl p-5">
-              <h4 className="font-semibold text-white">2. Contribution Rates</h4>
+              <h4 className="font-semibold text-[#251E1F]">2. Contribution Rates</h4>
               <div className="mt-4 space-y-3">
                 <SettingInput value={form.effectiveFrom} onChange={(value) => updateForm("effectiveFrom", value)} placeholder="Effective date" />
                 <select
                   value={form.rateType}
                   onChange={(event) => updateForm("rateType", event.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                  className="w-full rounded-lg border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm text-[#251E1F] outline-none"
                 >
                   <option value="Percentage of Gross Salary">Percentage of Gross Salary</option>
                   <option value="Fixed Amount">Fixed Amount</option>
                 </select>
                 <SettingInput value={form.employeeRate} onChange={(value) => updateForm("employeeRate", value)} placeholder="Employee rate %" />
                 <SettingInput value={form.employerRate} onChange={(value) => updateForm("employerRate", value)} placeholder="Employer rate %" />
-                <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-[#d8c6e8]">
-                  Total Rate: <span className="font-semibold text-white">{(employeeRate + employerRate).toFixed(2)}%</span>
+                <div className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#7b6660]">
+                  Total Rate: <span className="font-semibold text-[#251E1F]">{(employeeRate + employerRate).toFixed(2)}%</span>
                 </div>
               </div>
             </section>
 
             <section className="neon-glass neon-border rounded-2xl p-5">
-              <h4 className="font-semibold text-white">3. Wage Ceiling</h4>
+              <h4 className="font-semibold text-[#251E1F]">3. Wage Ceiling</h4>
               <div className="mt-4 space-y-3">
                 <select
                   value="Monthly Wage Ceiling"
-                  className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                  className="w-full rounded-lg border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm text-[#251E1F] outline-none"
                   disabled
                 >
                   <option value="Monthly Wage Ceiling">Monthly Wage Ceiling</option>
@@ -2272,7 +2272,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
 
           <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
             <section className="neon-glass neon-border rounded-2xl p-5">
-              <h4 className="font-semibold text-white">4. Map GL Accounts</h4>
+              <h4 className="font-semibold text-[#251E1F]">4. Map GL Accounts</h4>
               <div className="mt-4 grid gap-3">
                 <SettingInput value={form.employerExpenseAccount} onChange={(value) => updateForm("employerExpenseAccount", value)} />
                 <SettingInput value={form.employeePayableAccount} onChange={(value) => updateForm("employeePayableAccount", value)} />
@@ -2282,13 +2282,13 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
             </section>
 
             <section className="neon-glass neon-border rounded-2xl p-5">
-              <h4 className="font-semibold text-white">5. Save & Apply</h4>
+              <h4 className="font-semibold text-[#251E1F]">5. Save & Apply</h4>
               <div className="mt-4 rounded-xl border border-[#7CFFB2]/25 bg-[#7CFFB2]/10 p-4 text-sm text-[#D8FFE6]">
                 Saved MBMF settings are applied to eligible Muslim employees only.
               </div>
               <button
                 type="button"
-                className="mt-5 rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-5 rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={saveMbmfSettings}
                 disabled={isSaving}
               >
@@ -2298,30 +2298,30 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
           </div>
 
           <section className="neon-glass neon-border overflow-hidden rounded-2xl">
-            <div className="border-b border-white/10 px-5 py-4">
-              <h4 className="font-semibold text-white">Contribution Calculation Example</h4>
+            <div className="border-b border-[#f0d2ca] px-5 py-4">
+              <h4 className="font-semibold text-[#251E1F]">Contribution Calculation Example</h4>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-[52rem] w-full border-separate border-spacing-0 text-left text-sm">
-                <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
+                <thead className="text-xs uppercase tracking-wide text-[#F38978]/80">
                   <tr>
-                    <th className="border-b border-white/10 px-4 py-3">Gross Salary</th>
-                    <th className="border-b border-white/10 px-4 py-3">Wage Ceiling</th>
-                    <th className="border-b border-white/10 px-4 py-3">Salary Considered</th>
-                    <th className="border-b border-white/10 px-4 py-3">Employee</th>
-                    <th className="border-b border-white/10 px-4 py-3">Employer</th>
-                    <th className="border-b border-white/10 px-4 py-3">Total</th>
+                    <th className="border-b border-[#f0d2ca] px-4 py-3">Gross Salary</th>
+                    <th className="border-b border-[#f0d2ca] px-4 py-3">Wage Ceiling</th>
+                    <th className="border-b border-[#f0d2ca] px-4 py-3">Salary Considered</th>
+                    <th className="border-b border-[#f0d2ca] px-4 py-3">Employee</th>
+                    <th className="border-b border-[#f0d2ca] px-4 py-3">Employer</th>
+                    <th className="border-b border-[#f0d2ca] px-4 py-3">Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {examples.map((example) => (
                     <tr key={example.grossSalary}>
-                      <td className="border-b border-white/10 px-4 py-3 text-white">{formatMoney(example.grossSalary)}</td>
-                      <td className="border-b border-white/10 px-4 py-3 text-[#d8c6e8]">{formatMoney(ceiling)}</td>
-                      <td className="border-b border-white/10 px-4 py-3 text-[#d8c6e8]">{formatMoney(example.salaryConsidered)}</td>
-                      <td className="border-b border-white/10 px-4 py-3 text-[#d8c6e8]">{formatMoney(example.employeeAmount)}</td>
-                      <td className="border-b border-white/10 px-4 py-3 text-[#d8c6e8]">{formatMoney(example.employerAmount)}</td>
-                      <td className="border-b border-white/10 px-4 py-3 font-semibold text-white">{formatMoney(example.total)}</td>
+                      <td className="border-b border-[#f0d2ca] px-4 py-3 text-[#251E1F]">{formatMoney(example.grossSalary)}</td>
+                      <td className="border-b border-[#f0d2ca] px-4 py-3 text-[#7b6660]">{formatMoney(ceiling)}</td>
+                      <td className="border-b border-[#f0d2ca] px-4 py-3 text-[#7b6660]">{formatMoney(example.salaryConsidered)}</td>
+                      <td className="border-b border-[#f0d2ca] px-4 py-3 text-[#7b6660]">{formatMoney(example.employeeAmount)}</td>
+                      <td className="border-b border-[#f0d2ca] px-4 py-3 text-[#7b6660]">{formatMoney(example.employerAmount)}</td>
+                      <td className="border-b border-[#f0d2ca] px-4 py-3 font-semibold text-[#251E1F]">{formatMoney(example.total)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2332,23 +2332,23 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
 
         <aside className="space-y-4">
           <section className="neon-glass neon-border rounded-2xl p-5">
-            <h4 className="font-semibold text-white">Applicability</h4>
-            <div className="mt-4 rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 p-4">
-              <p className="text-sm font-semibold text-white">Applicable To</p>
-              <p className="mt-1 text-sm text-[#d8c6e8]">All employees where staff.religion = {form.applicableReligion}</p>
+            <h4 className="font-semibold text-[#251E1F]">Applicability</h4>
+            <div className="mt-4 rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 p-4">
+              <p className="text-sm font-semibold text-[#251E1F]">Applicable To</p>
+              <p className="mt-1 text-sm text-[#7b6660]">All employees where staff.religion = {form.applicableReligion}</p>
             </div>
             <div className="mt-4 grid gap-3 text-sm">
-              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                <span className="text-[#d8c6e8]">Total Staff</span>
-                <span className="font-semibold text-white">{eligibility?.totalStaff ?? 0}</span>
+              <div className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3">
+                <span className="text-[#7b6660]">Total Staff</span>
+                <span className="font-semibold text-[#251E1F]">{eligibility?.totalStaff ?? 0}</span>
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                <span className="text-[#d8c6e8]">Eligible {form.applicableReligion} Staff</span>
+              <div className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3">
+                <span className="text-[#7b6660]">Eligible {form.applicableReligion} Staff</span>
                 <span className="font-semibold text-[#7CFFB2]">{eligibility?.eligibleMuslimEmployees ?? 0}</span>
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                <span className="text-[#d8c6e8]">Not Applied</span>
-                <span className="font-semibold text-white">{eligibility?.nonEligibleEmployees ?? 0}</span>
+              <div className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3">
+                <span className="text-[#7b6660]">Not Applied</span>
+                <span className="font-semibold text-[#251E1F]">{eligibility?.nonEligibleEmployees ?? 0}</span>
               </div>
             </div>
             {!eligibility?.hasReligionColumn ? (
@@ -2357,13 +2357,13 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
               </p>
             ) : null}
             {eligibility?.sampleEmployees?.length ? (
-              <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-sm font-semibold text-white">Eligible Staff Preview</p>
-                <div className="mt-3 space-y-2 text-sm text-[#d8c6e8]">
+              <div className="mt-4 rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+                <p className="text-sm font-semibold text-[#251E1F]">Eligible Staff Preview</p>
+                <div className="mt-3 space-y-2 text-sm text-[#7b6660]">
                   {eligibility.sampleEmployees.map((employee) => (
                     <div key={employee.employee_id} className="flex items-center justify-between gap-3">
                       <span>{employee.name || employee.employee_code || `Employee ${employee.employee_id}`}</span>
-                      <span className="font-semibold text-white">{employee.religion}</span>
+                      <span className="font-semibold text-[#251E1F]">{employee.religion}</span>
                     </div>
                   ))}
                 </div>
@@ -2372,8 +2372,8 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
           </section>
 
           <section className="neon-glass neon-border rounded-2xl p-5">
-            <h4 className="font-semibold text-white">Process Flow</h4>
-            <ol className="mt-4 space-y-3 text-sm text-[#d8c6e8]">
+            <h4 className="font-semibold text-[#251E1F]">Process Flow</h4>
+            <ol className="mt-4 space-y-3 text-sm text-[#7b6660]">
               <li>1. Payroll reads staff religion from the employee database.</li>
               <li>2. MBMF is calculated only when religion is Muslim.</li>
               <li>3. Non-Muslim employees are skipped automatically.</li>
@@ -2398,12 +2398,12 @@ function CpfCeilingPanel({ onSave, settingsByKey }) {
         onSave={onSave}
       />
       <section className="neon-glass neon-border rounded-2xl p-5">
-        <h3 className="text-lg font-semibold text-white">Wage Ceiling History</h3>
+        <h3 className="text-lg font-semibold text-[#251E1F]">Wage Ceiling History</h3>
         <div className="mt-4 space-y-3">
           {cpfCeilingHistory.map(([effectiveFrom, ceiling]) => (
-            <div key={effectiveFrom} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm">
-              <span className="text-[#d8c6e8]">{effectiveFrom}</span>
-              <span className="font-semibold text-white">SGD {ceiling}</span>
+            <div key={effectiveFrom} className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3 text-sm">
+              <span className="text-[#7b6660]">{effectiveFrom}</span>
+              <span className="font-semibold text-[#251E1F]">SGD {ceiling}</span>
             </div>
           ))}
         </div>
@@ -2481,22 +2481,22 @@ function SelfHelpGroupRulesPanel({ onSave, settingsByKey, users = [] }) {
 
   return (
     <section className="neon-glass neon-border overflow-hidden rounded-2xl">
-      <div className="border-b border-white/10 px-5 py-4">
-        <h3 className="text-lg font-semibold text-white">Community Fund Contribution Rules</h3>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Configure CDAC, SINDA and ECF using staff race fields. MBMF remains in its dedicated religion-based panel.</p>
+      <div className="border-b border-[#f0d2ca] px-5 py-4">
+        <h3 className="text-lg font-semibold text-[#251E1F]">Community Fund Contribution Rules</h3>
+        <p className="mt-1 text-sm text-[#7b6660]">Configure CDAC, SINDA and ECF using staff race fields. MBMF remains in its dedicated religion-based panel.</p>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-[82rem] w-full border-separate border-spacing-0 text-left text-sm">
-          <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
+          <thead className="text-xs uppercase tracking-wide text-[#F38978]/80">
             <tr>
-              <th className="border-b border-white/10 px-4 py-3">Scheme</th>
-              <th className="border-b border-white/10 px-4 py-3">Enabled</th>
-              <th className="border-b border-white/10 px-4 py-3">Effective From</th>
-              <th className="border-b border-white/10 px-4 py-3">Eligibility</th>
-              <th className="border-b border-white/10 px-4 py-3">Eligible Staff</th>
-              <th className="border-b border-white/10 px-4 py-3">Rule</th>
-              <th className="border-b border-white/10 px-4 py-3">Payable Account</th>
-              <th className="border-b border-white/10 px-4 py-3">Action</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Scheme</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Enabled</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Effective From</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Eligibility</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Eligible Staff</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Rule</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Payable Account</th>
+              <th className="border-b border-[#f0d2ca] px-4 py-3">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -2505,49 +2505,49 @@ function SelfHelpGroupRulesPanel({ onSave, settingsByKey, users = [] }) {
 
               return (
                 <tr key={row.key}>
-                  <td className="border-b border-white/10 px-4 py-4">
-                    <p className="font-semibold text-white">{row.label}</p>
-                    <p className="mt-1 text-xs text-[#d8c6e8]">{row.description}</p>
+                  <td className="border-b border-[#f0d2ca] px-4 py-4">
+                    <p className="font-semibold text-[#251E1F]">{row.label}</p>
+                    <p className="mt-1 text-xs text-[#7b6660]">{row.description}</p>
                   </td>
-                  <td className="border-b border-white/10 px-4 py-4">
+                  <td className="border-b border-[#f0d2ca] px-4 py-4">
                     <select
                       value={row.enabled}
                       onChange={(event) => updateRow(row.key, "enabled", event.target.value)}
-                      className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                      className="w-full rounded-lg border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm text-[#251E1F] outline-none"
                     >
                       <option value="Enabled">Enabled</option>
                       <option value="Disabled">Disabled</option>
                     </select>
                   </td>
-                  <td className="border-b border-white/10 px-4 py-4">
+                  <td className="border-b border-[#f0d2ca] px-4 py-4">
                     <input
                       type="date"
                       value={row.effectiveFrom}
                       onChange={(event) => updateRow(row.key, "effectiveFrom", event.target.value)}
-                      className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none"
+                      className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none"
                     />
                   </td>
-                  <td className="border-b border-white/10 px-4 py-4">
+                  <td className="border-b border-[#f0d2ca] px-4 py-4">
                     <SettingInput
                       value={row.eligibilityValue}
                       onChange={(value) => updateRow(row.key, "eligibilityValue", value)}
                       placeholder={row.eligibilityField}
                     />
-                    <p className="mt-1 text-xs text-[#d8c6e8]/80">staff.{row.eligibilityField}</p>
+                    <p className="mt-1 text-xs text-[#7b6660]/80">staff.{row.eligibilityField}</p>
                   </td>
-                  <td className="border-b border-white/10 px-4 py-4 text-[#d8c6e8]">
-                    <span className="font-semibold text-white">{eligibleUsers.length}</span> staff
+                  <td className="border-b border-[#f0d2ca] px-4 py-4 text-[#7b6660]">
+                    <span className="font-semibold text-[#251E1F]">{eligibleUsers.length}</span> staff
                   </td>
-                  <td className="border-b border-white/10 px-4 py-4">
+                  <td className="border-b border-[#f0d2ca] px-4 py-4">
                     <SettingInput value={row.contributionRule} onChange={(value) => updateRow(row.key, "contributionRule", value)} />
                   </td>
-                  <td className="border-b border-white/10 px-4 py-4">
+                  <td className="border-b border-[#f0d2ca] px-4 py-4">
                     <SettingInput value={row.payableAccount} onChange={(value) => updateRow(row.key, "payableAccount", value)} />
                   </td>
-                  <td className="border-b border-white/10 px-4 py-4">
+                  <td className="border-b border-[#f0d2ca] px-4 py-4">
                     <button
                       type="button"
-                      className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
                       onClick={() => saveRow(row)}
                       disabled={savingKey === row.key}
                     >
@@ -2583,8 +2583,8 @@ function SettingsView({ mbmfEligibility, onUpdateSetting, settings = [], users =
     >
       <div id="payroll-settings-start" className="space-y-8">
         <section className="neon-glass neon-border rounded-2xl p-5">
-          <h3 className="text-lg font-semibold text-white">Operational Payroll Settings</h3>
-          <p className="mt-1 text-sm text-[#d8c6e8]">
+          <h3 className="text-lg font-semibold text-[#251E1F]">Operational Payroll Settings</h3>
+          <p className="mt-1 text-sm text-[#7b6660]">
             CPF rates, wage ceilings, SDL and self-help fund rules are managed in Compliance Rules.
           </p>
         </section>
@@ -2660,17 +2660,17 @@ function ComplianceRulesView({ mbmfEligibility, onUpdateSetting, settings = [], 
         <section className="neon-glass neon-border rounded-2xl p-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-white">Singapore Payroll Compliance Baseline</h3>
-              <p className="mt-1 text-sm text-[#d8c6e8]">Editable defaults for CPF, SDL, levy treatment and contribution rules.</p>
+              <h3 className="text-lg font-semibold text-[#251E1F]">Singapore Payroll Compliance Baseline</h3>
+              <p className="mt-1 text-sm text-[#7b6660]">Editable defaults for CPF, SDL, levy treatment and contribution rules.</p>
             </div>
-            <p className="text-sm font-semibold text-[#C77DFF]">Verified for 2026 payroll periods</p>
+            <p className="text-sm font-semibold text-[#F38978]">Verified for 2026 payroll periods</p>
           </div>
           <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
             {complianceUpdates.map((item) => (
-              <div key={item.label} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-sm font-semibold text-white">{item.label}</p>
-                <p className="mt-2 text-xs leading-5 text-[#d8c6e8]">{item.value}</p>
-                <p className="mt-3 text-xs font-semibold text-[#C77DFF]">
+              <div key={item.label} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+                <p className="text-sm font-semibold text-[#251E1F]">{item.label}</p>
+                <p className="mt-2 text-xs leading-5 text-[#7b6660]">{item.value}</p>
+                <p className="mt-3 text-xs font-semibold text-[#F38978]">
                   {item.updatedAt ? `Edited ${formatDateTime(item.updatedAt)}` : "Using default rule"}
                 </p>
               </div>
@@ -2776,15 +2776,15 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
     <section className="neon-glass neon-border rounded-2xl p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-white">Custom Compliance Rules</h3>
-          <p className="mt-1 text-sm text-[#d8c6e8]">Add company-specific payroll compliance rules and keep their effective dates visible.</p>
+          <h3 className="text-lg font-semibold text-[#251E1F]">Custom Compliance Rules</h3>
+          <p className="mt-1 text-sm text-[#7b6660]">Add company-specific payroll compliance rules and keep their effective dates visible.</p>
         </div>
-        <p className="text-sm font-semibold text-[#C77DFF]">{customRules.length} custom rule(s)</p>
+        <p className="text-sm font-semibold text-[#F38978]">{customRules.length} custom rule(s)</p>
       </div>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-          <h4 className="font-semibold text-white">{editingKey ? "Edit Rule" : "Add Rule"}</h4>
+        <div className="rounded-2xl border border-[#f0d2ca] bg-white/80 p-5">
+          <h4 className="font-semibold text-[#251E1F]">{editingKey ? "Edit Rule" : "Add Rule"}</h4>
           <div className="mt-4 grid gap-3">
             <SettingInput value={form.title} onChange={(value) => updateForm("title", value)} placeholder="Rule title" />
             <div className="grid gap-3 sm:grid-cols-2">
@@ -2793,7 +2793,7 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
                 type="date"
                 value={form.effectiveFrom}
                 onChange={(event) => updateForm("effectiveFrom", event.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-[#C77DFF]/50"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#F38978]/50"
               />
             </div>
             <textarea
@@ -2801,14 +2801,14 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
               onChange={(event) => updateForm("ruleText", event.target.value)}
               placeholder="Rule details"
               rows={5}
-              className="w-full resize-y rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none placeholder:text-[#d8c6e8]/50 focus:border-[#C77DFF]/50"
+              className="w-full resize-y rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]/50"
             />
             <div className="grid gap-3 sm:grid-cols-2">
               <SettingInput value={form.source} onChange={(value) => updateForm("source", value)} placeholder="Source or reference" />
               <select
                 value={form.status}
                 onChange={(event) => updateForm("status", event.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-[#1d0b2f] px-3 py-2 text-sm text-white outline-none"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm text-[#251E1F] outline-none"
               >
                 <option value="Active">Active</option>
                 <option value="Draft">Draft</option>
@@ -2818,7 +2818,7 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={saveRule}
                 disabled={isSaving || !form.title.trim() || !form.ruleText.trim()}
               >
@@ -2827,7 +2827,7 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
               {editingKey ? (
                 <button
                   type="button"
-                  className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+                  className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
                   onClick={resetForm}
                 >
                   Cancel
@@ -2840,31 +2840,31 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
         <div className="space-y-3">
           {customRules.length ? (
             customRules.map((rule) => (
-              <article key={rule.settingKey} className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
+              <article key={rule.settingKey} className="rounded-2xl border border-[#f0d2ca] bg-white/80 p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="font-semibold text-white">{rule.title}</h4>
-                      <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-[#d8c6e8]">
+                      <h4 className="font-semibold text-[#251E1F]">{rule.title}</h4>
+                      <span className="rounded-full border border-[#f0d2ca] bg-white/80 px-3 py-1 text-xs font-semibold text-[#7b6660]">
                         {rule.status}
                       </span>
                     </div>
-                    <p className="mt-2 text-sm text-[#d8c6e8]">{rule.ruleText}</p>
+                    <p className="mt-2 text-sm text-[#7b6660]">{rule.ruleText}</p>
                   </div>
                   <button
                     type="button"
-                    className="shrink-0 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+                    className="shrink-0 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
                     onClick={() => startEdit(rule)}
                   >
                     Edit
                   </button>
                 </div>
-                <div className="mt-4 grid gap-3 text-xs text-[#d8c6e8] sm:grid-cols-3">
-                  <span>Category: <span className="font-semibold text-white">{rule.category}</span></span>
-                  <span>Effective: <span className="font-semibold text-white">{rule.effectiveFrom ? formatDate(rule.effectiveFrom) : "Not set"}</span></span>
-                  <span>Updated: <span className="font-semibold text-white">{formatDateTime(rule.updatedAt)}</span></span>
+                <div className="mt-4 grid gap-3 text-xs text-[#7b6660] sm:grid-cols-3">
+                  <span>Category: <span className="font-semibold text-[#251E1F]">{rule.category}</span></span>
+                  <span>Effective: <span className="font-semibold text-[#251E1F]">{rule.effectiveFrom ? formatDate(rule.effectiveFrom) : "Not set"}</span></span>
+                  <span>Updated: <span className="font-semibold text-[#251E1F]">{formatDateTime(rule.updatedAt)}</span></span>
                 </div>
-                {rule.source ? <p className="mt-3 text-xs text-[#C77DFF]">Source: {rule.source}</p> : null}
+                {rule.source ? <p className="mt-3 text-xs text-[#F38978]">Source: {rule.source}</p> : null}
               </article>
             ))
           ) : (
@@ -2908,51 +2908,51 @@ function PayrollMonitorView({ payrollRuns = [] }) {
         </>
       }
     >
-      <div className="mb-5 grid gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 md:grid-cols-[1fr_1fr_1fr_auto]">
+      <div className="mb-5 grid gap-3 rounded-2xl border border-[#f0d2ca] bg-white/80 p-4 md:grid-cols-[1fr_1fr_1fr_auto]">
         <label className="space-y-2">
-          <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">
+          <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
             <Filter size={14} />
             Date Filter
           </span>
           <select
             value={periodMode}
             onChange={(event) => setPeriodMode(event.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+            className="w-full rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none"
           >
             <option value="all">All payroll periods</option>
             <option value="range">From date to date</option>
           </select>
         </label>
         <label className="space-y-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">From Date</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">From Date</span>
           <input
             type="date"
             value={fromDate}
             disabled={periodMode === "all"}
             onChange={(event) => setFromDate(event.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none disabled:opacity-50"
+            className="w-full rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none disabled:opacity-50"
           />
         </label>
         <label className="space-y-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">To Date</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">To Date</span>
           <input
             type="date"
             value={toDate}
             min={fromDate}
             disabled={periodMode === "all"}
             onChange={(event) => setToDate(event.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none disabled:opacity-50"
+            className="w-full rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none disabled:opacity-50"
           />
         </label>
         <div className="flex items-end">
-          <div className="rounded-xl border border-[#C77DFF]/25 bg-[#C77DFF]/10 px-4 py-2.5 text-sm font-semibold text-white">
+          <div className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2.5 text-sm font-semibold text-[#251E1F]">
             {filteredRuns.length} of {payrollRuns.length} run(s)
           </div>
         </div>
       </div>
 
       <div className="neon-glass neon-border overflow-hidden rounded-2xl">
-        <div className="grid grid-cols-5 gap-4 border-b border-white/10 px-6 py-4 text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">
+        <div className="grid grid-cols-5 gap-4 border-b border-[#f0d2ca] px-6 py-4 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
           <span>Pay Period</span>
           <span>Updated</span>
           <span>Employees</span>
@@ -2961,15 +2961,15 @@ function PayrollMonitorView({ payrollRuns = [] }) {
         </div>
         {filteredRuns.length ? (
           filteredRuns.map((run) => (
-            <div key={run.payroll_run_id} className="grid grid-cols-5 gap-4 border-b border-white/10 px-6 py-4 text-sm last:border-b-0">
+            <div key={run.payroll_run_id} className="grid grid-cols-5 gap-4 border-b border-[#f0d2ca] px-6 py-4 text-sm last:border-b-0">
               <div>
-                <p className="font-semibold text-white">{formatPayrollPeriod(run)}</p>
-                <p className="mt-1 text-[#d8c6e8]">Created by {run.created_by_name || "Unknown"}</p>
+                <p className="font-semibold text-[#251E1F]">{formatPayrollPeriod(run)}</p>
+                <p className="mt-1 text-[#7b6660]">Created by {run.created_by_name || "Unknown"}</p>
               </div>
-              <p className="text-[#d8c6e8]">{formatDateTime(run.updated_at || run.created_at)}</p>
-              <p className="text-[#d8c6e8]">{run.employee_count}</p>
-              <p className="text-white">{run.status}</p>
-              <button type="button" className="justify-self-start rounded-xl bg-white/[0.06] px-4 py-2 font-semibold text-white hover:bg-white/10" onClick={() => setSelectedRun(run)}>
+              <p className="text-[#7b6660]">{formatDateTime(run.updated_at || run.created_at)}</p>
+              <p className="text-[#7b6660]">{run.employee_count}</p>
+              <p className="text-[#251E1F]">{run.status}</p>
+              <button type="button" className="justify-self-start rounded-xl bg-white/80 px-4 py-2 font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45" onClick={() => setSelectedRun(run)}>
                 Review
               </button>
             </div>
@@ -2981,15 +2981,15 @@ function PayrollMonitorView({ payrollRuns = [] }) {
         )}
       </div>
       {selectedRun ? (
-        <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-sm text-[#d8c6e8]">
+        <div className="mt-5 rounded-2xl border border-[#f0d2ca] bg-white/80 p-5 text-sm text-[#7b6660]">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="font-semibold text-white">{formatPayrollPeriod(selectedRun)}</p>
+              <p className="font-semibold text-[#251E1F]">{formatPayrollPeriod(selectedRun)}</p>
               <p className="mt-1">Finance status: {selectedRun.status}</p>
             </div>
             <button
               type="button"
-              className="w-fit rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 font-semibold text-white hover:bg-white/10"
+              className="w-fit rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
               onClick={() => setSelectedRun(null)}
             >
               Close
@@ -3066,15 +3066,15 @@ function AuditLogsView({ auditLogs = [] }) {
     >
       <div className="grid gap-4 md:grid-cols-3">
         <div className="neon-glass rounded-2xl p-5">
-          <p className="text-sm text-[#d8c6e8]">Total Events</p>
-          <p className="mt-3 text-3xl font-semibold text-white">{auditLogs.length}</p>
+          <p className="text-sm text-[#7b6660]">Total Events</p>
+          <p className="mt-3 text-3xl font-semibold text-[#251E1F]">{auditLogs.length}</p>
         </div>
         <div className="neon-glass rounded-2xl p-5">
-          <p className="text-sm text-[#d8c6e8]">Visible Events</p>
-          <p className="mt-3 text-3xl font-semibold text-[#C77DFF]">{filteredLogs.length}</p>
+          <p className="text-sm text-[#7b6660]">Visible Events</p>
+          <p className="mt-3 text-3xl font-semibold text-[#F38978]">{filteredLogs.length}</p>
         </div>
         <div className="neon-glass rounded-2xl p-5">
-          <p className="text-sm text-[#d8c6e8]">Entity Types</p>
+          <p className="text-sm text-[#7b6660]">Entity Types</p>
           <p className="mt-3 text-3xl font-semibold text-[#7CFFB2]">{Math.max(entityTypes.length - 1, 0)}</p>
         </div>
       </div>
@@ -3082,26 +3082,26 @@ function AuditLogsView({ auditLogs = [] }) {
       <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-white">Activity Trail</h3>
-            <p className="mt-1 text-sm text-[#d8c6e8]">Search and filter admin changes with exact timestamps.</p>
+            <h3 className="text-lg font-semibold text-[#251E1F]">Activity Trail</h3>
+            <p className="mt-1 text-sm text-[#7b6660]">Search and filter admin changes with exact timestamps.</p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-[1fr_14rem] lg:w-[38rem]">
-            <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5">
-              <Search size={16} className="text-[#C77DFF]" />
+            <label className="flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2.5">
+              <Search size={16} className="text-[#F38978]" />
               <input
                 type="search"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Search action, user, entity..."
-                className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[#d8c6e8]/60"
+                className="min-w-0 flex-1 bg-transparent text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/60"
               />
             </label>
 
             <select
               value={entityFilter}
               onChange={(event) => setEntityFilter(event.target.value)}
-              className="rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+              className="rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none"
             >
               {entityTypes.map((entityType) => (
                 <option key={entityType} value={entityType}>{entityType} entities</option>
@@ -3112,29 +3112,29 @@ function AuditLogsView({ auditLogs = [] }) {
 
         <div className="mt-5 overflow-x-auto">
           <table className="min-w-[56rem] w-full border-separate border-spacing-0 text-left text-sm">
-            <thead className="text-xs uppercase tracking-wide text-[#C77DFF]/80">
+            <thead className="text-xs uppercase tracking-wide text-[#F38978]/80">
               <tr>
-                <th className="border-b border-white/10 px-4 py-3 font-semibold">Timestamp</th>
-                <th className="border-b border-white/10 px-4 py-3 font-semibold">Action</th>
-                <th className="border-b border-white/10 px-4 py-3 font-semibold">Area</th>
-                <th className="border-b border-white/10 px-4 py-3 font-semibold">Entity ID</th>
-                <th className="border-b border-white/10 px-4 py-3 font-semibold">Performed By</th>
+                <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Timestamp</th>
+                <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Action</th>
+                <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Area</th>
+                <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Entity ID</th>
+                <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Performed By</th>
               </tr>
             </thead>
             <tbody>
               {filteredLogs.map((log) => (
-                <tr key={log.log_id || `${log.entity_type}-${log.entity_id}-${log.created_at}`} className="text-[#d8c6e8] transition hover:bg-white/[0.04]">
-                  <td className="border-b border-white/10 px-4 py-4 font-semibold text-white">
+                <tr key={log.log_id || `${log.entity_type}-${log.entity_id}-${log.created_at}`} className="text-[#7b6660] transition hover:bg-[#FDD9CD]/45">
+                  <td className="border-b border-[#f0d2ca] px-4 py-4 font-semibold text-[#251E1F]">
                     {formatDateTime(log.created_at)}
                   </td>
-                  <td className="border-b border-white/10 px-4 py-4">{log.action || "System activity"}</td>
-                  <td className="border-b border-white/10 px-4 py-4">
-                    <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-[#d8c6e8]">
+                  <td className="border-b border-[#f0d2ca] px-4 py-4">{log.action || "System activity"}</td>
+                  <td className="border-b border-[#f0d2ca] px-4 py-4">
+                    <span className="rounded-full border border-[#f0d2ca] bg-white/80 px-3 py-1 text-xs font-semibold text-[#7b6660]">
                       {formatAuditArea(log.entity_type)}
                     </span>
                   </td>
-                  <td className="border-b border-white/10 px-4 py-4">{log.entity_id || "-"}</td>
-                  <td className="border-b border-white/10 px-4 py-4">{log.user_name || "System"}</td>
+                  <td className="border-b border-[#f0d2ca] px-4 py-4">{log.entity_id || "-"}</td>
+                  <td className="border-b border-[#f0d2ca] px-4 py-4">{log.user_name || "System"}</td>
                 </tr>
               ))}
             </tbody>
@@ -3261,15 +3261,15 @@ function PayslipsApprovalView() {
       <div className="neon-glass neon-border rounded-2xl p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-lg font-semibold text-white">Payslips Pending Final Approval</h3>
-            <p className="mt-1 text-sm text-[#d8c6e8]">
+            <h3 className="text-lg font-semibold text-[#251E1F]">Payslips Pending Final Approval</h3>
+            <p className="mt-1 text-sm text-[#7b6660]">
               Review payslips approved by Finance. Final approval will send them to staff.
             </p>
           </div>
           <button
             type="button"
             onClick={fetchPayslips}
-            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
+            className="rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
           >
             Refresh
           </button>
@@ -3290,7 +3290,7 @@ function PayslipsApprovalView() {
 
       <div className="neon-glass neon-border overflow-hidden rounded-2xl">
         {loading ? (
-          <div className="flex items-center gap-3 p-6 text-[#d8c6e8]">
+          <div className="flex items-center gap-3 p-6 text-[#7b6660]">
             <Loader2 className="animate-spin" size={18} />
             Loading payslips...
           </div>
@@ -3299,12 +3299,12 @@ function PayslipsApprovalView() {
             <div className="mb-3 inline-block rounded-full bg-emerald-500/10 p-3">
               <CheckCircle2 className="text-emerald-300" size={24} />
             </div>
-            <p className="text-sm text-[#d8c6e8]">No payslips pending final approval</p>
+            <p className="text-sm text-[#7b6660]">No payslips pending final approval</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-white/10 bg-white/5 text-[#d8c6e8]">
+              <thead className="border-b border-[#f0d2ca] bg-white/80 text-[#7b6660]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Payslip ID</th>
                   <th className="px-4 py-3 font-medium">Staff Name</th>
@@ -3317,19 +3317,19 @@ function PayslipsApprovalView() {
               </thead>
               <tbody>
                 {payslips.map((payslip) => (
-                  <tr key={payslip.payslip_id} className="border-b border-white/5 text-white">
-                    <td className="px-4 py-3 text-xs text-[#d8c6e8]">{payslip.payslip_id}</td>
+                  <tr key={payslip.payslip_id} className="border-b border-[#f0d2ca] text-[#251E1F]">
+                    <td className="px-4 py-3 text-xs text-[#7b6660]">{payslip.payslip_id}</td>
                     <td className="px-4 py-3">{payslip.staff_name}</td>
-                    <td className="px-4 py-3 text-[#d8c6e8]">
+                    <td className="px-4 py-3 text-[#7b6660]">
                       {payslip.period_month} {payslip.period_year}
                     </td>
-                    <td className="px-4 py-3 text-[#d8c6e8]">
+                    <td className="px-4 py-3 text-[#7b6660]">
                       ${Number(payslip.gross_salary || 0).toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-emerald-300">
                       ${Number(payslip.net_pay || 0).toFixed(2)}
                     </td>
-                    <td className="px-4 py-3 text-xs text-[#d8c6e8]">
+                    <td className="px-4 py-3 text-xs text-[#7b6660]">
                       {payslip.finance_approved_by || "-"}
                     </td>
                     <td className="px-4 py-3">
@@ -3365,16 +3365,16 @@ function PayslipsApprovalView() {
           <div className="neon-glass neon-border m-4 w-full max-w-md rounded-2xl p-6">
             <div className="mb-4 flex items-center gap-3">
               <AlertCircle className="text-red-300" size={20} />
-              <h3 className="text-lg font-semibold text-white">Reject Payslip</h3>
+              <h3 className="text-lg font-semibold text-[#251E1F]">Reject Payslip</h3>
             </div>
-            <p className="mb-4 text-sm text-[#d8c6e8]">
+            <p className="mb-4 text-sm text-[#7b6660]">
               Please provide a reason for rejecting this payslip.
             </p>
             <textarea
               value={rejectReason}
               onChange={(event) => setRejectReason(event.target.value)}
               placeholder="Enter rejection reason..."
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30"
+              className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] placeholder-white/30"
               rows={4}
             />
             <div className="mt-6 flex gap-3">
@@ -3392,7 +3392,7 @@ function PayslipsApprovalView() {
                   setRejectingPayslipId(null);
                   setRejectReason("");
                 }}
-                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
+                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
               >
                 Cancel
               </button>
@@ -3632,13 +3632,13 @@ function ReportPreviewModal({ data, report, onClose }) {
   }, [data, fromDate, periodMode, report, toDate]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#090014]/80 px-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#fff8f5]/80 px-4 backdrop-blur-sm">
       <section className="neon-glass neon-border flex max-h-[92vh] w-full max-w-5xl flex-col rounded-2xl p-6">
-        <div className="flex flex-col gap-4 border-b border-white/10 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 border-b border-[#f0d2ca] pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#C77DFF]/80">PDF Preview</p>
-            <h3 className="mt-2 text-xl font-semibold text-white">{report}</h3>
-            <p className="mt-1 text-sm text-[#d8c6e8]">{getPeriodLabel(periodMode, fromDate, toDate)}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#F38978]/80">PDF Preview</p>
+            <h3 className="mt-2 text-xl font-semibold text-[#251E1F]">{report}</h3>
+            <p className="mt-1 text-sm text-[#7b6660]">{getPeriodLabel(periodMode, fromDate, toDate)}</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <a
@@ -3651,50 +3651,50 @@ function ReportPreviewModal({ data, report, onClose }) {
             </a>
             <button
               type="button"
-              className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+              className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
               onClick={onClose}
             >
               Close
             </button>
           </div>
         </div>
-        <div className="mt-5 grid gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-4 md:grid-cols-3">
+        <div className="mt-5 grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 md:grid-cols-3">
           <label className="space-y-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">Period Type</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">Period Type</span>
             <select
               value={periodMode}
               onChange={(event) => setPeriodMode(event.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+              className="w-full rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none"
             >
               <option value="range">From Date to Date</option>
               <option value="single">On This Day</option>
             </select>
           </label>
           <label className="space-y-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
               {periodMode === "single" ? "Date" : "From Date"}
             </span>
             <input
               type="date"
               value={fromDate}
               onChange={(event) => setFromDate(event.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+              className="w-full rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none"
             />
           </label>
           {periodMode === "range" ? (
             <label className="space-y-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">To Date</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">To Date</span>
               <input
                 type="date"
                 value={toDate}
                 min={fromDate}
                 onChange={(event) => setToDate(event.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#1d0b2f] px-3 py-2.5 text-sm font-semibold text-white outline-none"
+                className="w-full rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none"
               />
             </label>
           ) : null}
         </div>
-        <div className="mt-5 min-h-0 flex-1 overflow-hidden rounded-xl border border-white/10 bg-white">
+        <div className="mt-5 min-h-0 flex-1 overflow-hidden rounded-xl border border-[#f0d2ca] bg-white">
           {pdfUrl ? (
             <iframe title={`${report} preview`} src={pdfUrl} className="h-[68vh] w-full" />
           ) : null}
@@ -3742,12 +3742,12 @@ function ReportsView({ data }) {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {reportCards.map((report) => (
           <div key={report.title} className="neon-glass neon-border rounded-2xl p-6">
-            <FileBarChart size={24} className="text-[#C77DFF]" />
-            <h3 className="mt-4 font-semibold text-white">{report.title}</h3>
-            <p className="mt-2 text-sm text-[#d8c6e8]">{report.description}</p>
+            <FileBarChart size={24} className="text-[#F38978]" />
+            <h3 className="mt-4 font-semibold text-[#251E1F]">{report.title}</h3>
+            <p className="mt-2 text-sm text-[#7b6660]">{report.description}</p>
             <button
               type="button"
-              className="mt-5 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+              className="mt-5 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
               onClick={() => setSelectedReport(report.title)}
             >
               Open
@@ -4001,7 +4001,7 @@ export default function AdminPayrollPage() {
       searchPlaceholder="Search payroll, staff, approvals..."
     >
       {isLoading ? (
-        <div className="neon-glass neon-border rounded-2xl p-6 text-sm text-[#d8c6e8]">
+        <div className="neon-glass neon-border rounded-2xl p-6 text-sm text-[#7b6660]">
           Loading admin payroll data...
         </div>
       ) : null}

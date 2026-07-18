@@ -61,8 +61,8 @@ const defaultForm = {
 
 function statusPill(enabled) {
   return enabled
-    ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-200"
-    : "border-rose-300/30 bg-rose-400/10 text-rose-200";
+    ? "border-[#b8d9c6] bg-[#e9f7ef] text-[#2f8758]"
+    : "border-[#f3c6bc] bg-[#fff0eb] text-[#c55245]";
 }
 
 function formatDate(value) {
@@ -233,8 +233,8 @@ export default function AdminReminderSettingsPage() {
     <section className="space-y-6">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="text-sm font-medium text-[#C77DFF]">Admin Manage Automated Reminder Settings</p>
-          <h2 className="mt-1 text-2xl font-semibold text-white">
+          <p className="text-sm font-medium text-[#F38978]">Admin Manage Automated Reminder Settings</p>
+          <h2 className="mt-1 text-2xl font-semibold text-[#251E1F]">
             Automated Invoicing System - Reminder Settings
           </h2>
         </div>
@@ -264,10 +264,10 @@ export default function AdminReminderSettingsPage() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm text-[#d8c6e8]">{card.label}</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">{card.value}</p>
+                  <p className="text-sm text-[#7b6660]">{card.label}</p>
+                  <p className="mt-2 text-2xl font-semibold text-[#251E1F]">{card.value}</p>
                 </div>
-                <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#C77DFF]/15 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
+                <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#F38978]/15 text-[#F38978] ring-1 ring-[#F38978]/25">
                   <Icon size={21} />
                 </div>
               </div>
@@ -277,14 +277,14 @@ export default function AdminReminderSettingsPage() {
       </div>
 
       {errors.length > 0 ? (
-        <div className="rounded-lg border border-rose-300/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+        <div className="rounded-lg border border-[#f3c6bc] bg-[#fff0eb] px-4 py-3 text-sm text-[#c55245]">
           {errors.map((error) => (
             <p key={error}>{error}</p>
           ))}
         </div>
       ) : null}
       {message ? (
-        <div className="rounded-lg border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
+        <div className="rounded-lg border border-[#b8d9c6] bg-[#e9f7ef] px-4 py-3 text-sm text-[#2f8758]">
           {message}
         </div>
       ) : null}
@@ -293,22 +293,22 @@ export default function AdminReminderSettingsPage() {
         <div className="space-y-6">
           <div className="neon-glass neon-border rounded-lg p-5">
             <div className="mb-5 flex items-center gap-3">
-              <CalendarClock className="text-[#C77DFF]" size={22} />
-              <h3 className="text-lg font-semibold text-white">Reminder Configuration</h3>
+              <CalendarClock className="text-[#F38978]" size={22} />
+              <h3 className="text-lg font-semibold text-[#251E1F]">Reminder Configuration</h3>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.05] px-4 py-3">
-                <span className="text-sm font-medium text-white">Enable automated reminders</span>
+              <label className="flex items-center justify-between rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-4 py-3">
+                <span className="text-sm font-medium text-[#251E1F]">Enable automated reminders</span>
                 <input
                   type="checkbox"
                   checked={form.enabled}
                   onChange={(event) => setField("enabled", event.target.checked)}
-                  className="h-5 w-5 accent-[#C77DFF]"
+                  className="h-5 w-5 accent-[#F38978]"
                 />
               </label>
               <label>
-                <span className="text-sm text-[#d8c6e8]">Reminder frequency</span>
-                <select value={form.frequency} onChange={(event) => setField("frequency", event.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-[#140026] px-3 py-2 text-sm text-white outline-none">
+                <span className="text-sm text-[#7b6660]">Reminder frequency</span>
+                <select value={form.frequency} onChange={(event) => setField("frequency", event.target.value)} className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2 text-sm text-[#251E1F] outline-none">
                   <option value="">Select frequency</option>
                   <option value="Daily">Daily</option>
                   <option value="Weekdays">Weekdays</option>
@@ -316,12 +316,12 @@ export default function AdminReminderSettingsPage() {
                 </select>
               </label>
               <label>
-                <span className="text-sm text-[#d8c6e8]">Reminder time</span>
-                <input type="time" value={form.reminderTime} onChange={(event) => setField("reminderTime", event.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none" />
+                <span className="text-sm text-[#7b6660]">Reminder time</span>
+                <input type="time" value={form.reminderTime} onChange={(event) => setField("reminderTime", event.target.value)} className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2 text-sm text-[#251E1F] outline-none" />
               </label>
               <label>
-                <span className="text-sm text-[#d8c6e8]">Time zone</span>
-                <select value={form.timezone} onChange={(event) => setField("timezone", event.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-[#140026] px-3 py-2 text-sm text-white outline-none">
+                <span className="text-sm text-[#7b6660]">Time zone</span>
+                <select value={form.timezone} onChange={(event) => setField("timezone", event.target.value)} className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2 text-sm text-[#251E1F] outline-none">
                   <option value="">Select time zone</option>
                   <option value="Asia/Singapore">Asia/Singapore</option>
                   <option value="UTC">UTC</option>
@@ -329,15 +329,15 @@ export default function AdminReminderSettingsPage() {
                 </select>
               </label>
               <div className="md:col-span-2 grid gap-3 sm:grid-cols-2">
-                <label className="rounded-lg border border-emerald-300/20 bg-emerald-400/10 p-4">
-                  <input type="radio" checked={form.deliveryChannel === "Email"} onChange={() => setField("deliveryChannel", "Email")} className="mr-2 accent-[#C77DFF]" />
-                  <span className="font-semibold text-white">Email enabled</span>
-                  <p className="mt-1 text-xs text-emerald-100">Priority notification channel</p>
+                <label className="rounded-lg border border-[#b8d9c6] bg-[#e9f7ef] p-4">
+                  <input type="radio" checked={form.deliveryChannel === "Email"} onChange={() => setField("deliveryChannel", "Email")} className="mr-2 accent-[#F38978]" />
+                  <span className="font-semibold text-[#251E1F]">Email enabled</span>
+                  <p className="mt-1 text-xs text-[#2f8758]">Priority notification channel</p>
                 </label>
-                <label className="rounded-lg border border-white/10 bg-white/[0.04] p-4 opacity-70">
+                <label className="rounded-lg border border-[#f0d2ca] bg-[#fff8f5] p-4 opacity-70">
                   <input type="checkbox" disabled className="mr-2" />
-                  <span className="font-semibold text-white">WhatsApp optional</span>
-                  <p className="mt-1 text-xs text-[#d8c6e8]">Future enhancement only</p>
+                  <span className="font-semibold text-[#251E1F]">WhatsApp optional</span>
+                  <p className="mt-1 text-xs text-[#7b6660]">Future enhancement only</p>
                 </label>
               </div>
             </div>
@@ -345,27 +345,27 @@ export default function AdminReminderSettingsPage() {
 
           <div className="neon-glass neon-border rounded-lg p-5">
             <div className="mb-5 flex items-center gap-3">
-              <Clock3 className="text-[#C77DFF]" size={22} />
-              <h3 className="text-lg font-semibold text-white">Overdue Reminder Intervals</h3>
+              <Clock3 className="text-[#F38978]" size={22} />
+              <h3 className="text-lg font-semibold text-[#251E1F]">Overdue Reminder Intervals</h3>
             </div>
             <div className="grid gap-4 md:grid-cols-3">
               <label>
-                <span className="text-sm text-[#d8c6e8]">1st reminder days overdue</span>
-                <input type="number" min="1" value={form.firstReminderDays} onChange={(event) => setField("firstReminderDays", event.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none" />
+                <span className="text-sm text-[#7b6660]">1st reminder days overdue</span>
+                <input type="number" min="1" value={form.firstReminderDays} onChange={(event) => setField("firstReminderDays", event.target.value)} className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2 text-sm text-[#251E1F] outline-none" />
               </label>
               <label>
-                <span className="text-sm text-[#d8c6e8]">2nd reminder days overdue</span>
-                <input type="number" min="2" value={form.secondReminderDays} onChange={(event) => setField("secondReminderDays", event.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none" />
+                <span className="text-sm text-[#7b6660]">2nd reminder days overdue</span>
+                <input type="number" min="2" value={form.secondReminderDays} onChange={(event) => setField("secondReminderDays", event.target.value)} className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2 text-sm text-[#251E1F] outline-none" />
               </label>
               <label>
-                <span className="text-sm text-[#d8c6e8]">Final reminder days overdue</span>
-                <input type="number" min="3" value={form.finalReminderDays} onChange={(event) => setField("finalReminderDays", event.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none" />
+                <span className="text-sm text-[#7b6660]">Final reminder days overdue</span>
+                <input type="number" min="3" value={form.finalReminderDays} onChange={(event) => setField("finalReminderDays", event.target.value)} className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2 text-sm text-[#251E1F] outline-none" />
               </label>
             </div>
           </div>
 
           <div className="neon-glass neon-border rounded-lg p-5">
-            <h3 className="text-lg font-semibold text-white">Reminder Options</h3>
+            <h3 className="text-lg font-semibold text-[#251E1F]">Reminder Options</h3>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {[
                 ["unpaidOnly", "Send reminders to unpaid invoices only"],
@@ -373,8 +373,8 @@ export default function AdminReminderSettingsPage() {
                 ["excludeCancelled", "Exclude cancelled invoices"],
                 ["includePdf", "Include invoice PDF attachment"]
               ].map(([field, label]) => (
-                <label key={field} className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-white">
-                  <input type="checkbox" checked={form[field]} onChange={(event) => setField(field, event.target.checked)} className="h-4 w-4 accent-[#C77DFF]" />
+                <label key={field} className="flex items-center gap-3 rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-4 py-3 text-sm text-[#251E1F]">
+                  <input type="checkbox" checked={form[field]} onChange={(event) => setField(field, event.target.checked)} className="h-4 w-4 accent-[#F38978]" />
                   {label}
                 </label>
               ))}
@@ -383,13 +383,13 @@ export default function AdminReminderSettingsPage() {
 
           <div className="neon-glass neon-border rounded-lg p-5">
             <div className="mb-5 flex items-center justify-between gap-4">
-              <h3 className="text-lg font-semibold text-white">Email Template</h3>
+              <h3 className="text-lg font-semibold text-[#251E1F]">Email Template</h3>
               <div className="flex gap-2">
-                <button type="button" onClick={() => setShowPreview((current) => !current)} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold text-[#d8c6e8] hover:bg-white/10 hover:text-white">
+                <button type="button" onClick={() => setShowPreview((current) => !current)} className="inline-flex items-center gap-2 rounded-lg border border-[#f0d2ca] px-3 py-2 text-sm font-semibold text-[#7b6660] hover:bg-white/80 hover:text-[#251E1F]">
                   <Eye size={15} />
                   Preview
                 </button>
-                <button type="button" onClick={handleTestEmail} className="inline-flex items-center gap-2 rounded-lg border border-[#C77DFF]/30 bg-[#C77DFF]/15 px-3 py-2 text-sm font-semibold text-white hover:bg-[#C77DFF]/25">
+                <button type="button" onClick={handleTestEmail} className="inline-flex items-center gap-2 rounded-lg border border-[#F38978]/30 bg-[#F38978]/15 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/25">
                   <Send size={15} />
                   Send Test
                 </button>
@@ -397,33 +397,33 @@ export default function AdminReminderSettingsPage() {
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <label>
-                <span className="text-sm text-[#d8c6e8]">Template name</span>
-                <input value={form.templateName} onChange={(event) => setField("templateName", event.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none" />
+                <span className="text-sm text-[#7b6660]">Template name</span>
+                <input value={form.templateName} onChange={(event) => setField("templateName", event.target.value)} className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2 text-sm text-[#251E1F] outline-none" />
               </label>
               <label>
-                <span className="text-sm text-[#d8c6e8]">Test recipient email</span>
-                <input type="email" value={form.testEmail} onChange={(event) => setField("testEmail", event.target.value)} placeholder="admin@example.com" className="mt-1 w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none placeholder:text-[#d8c6e8]/60" />
+                <span className="text-sm text-[#7b6660]">Test recipient email</span>
+                <input type="email" value={form.testEmail} onChange={(event) => setField("testEmail", event.target.value)} placeholder="admin@example.com" className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/60" />
               </label>
               <label className="md:col-span-2">
-                <span className="text-sm text-[#d8c6e8]">Email subject</span>
-                <input value={form.emailSubject} onChange={(event) => setField("emailSubject", event.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none" />
+                <span className="text-sm text-[#7b6660]">Email subject</span>
+                <input value={form.emailSubject} onChange={(event) => setField("emailSubject", event.target.value)} className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2 text-sm text-[#251E1F] outline-none" />
               </label>
               <label className="md:col-span-2">
-                <span className="text-sm text-[#d8c6e8]">Email body</span>
-                <textarea rows="8" value={form.emailBody} onChange={(event) => setField("emailBody", event.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none" />
+                <span className="text-sm text-[#7b6660]">Email body</span>
+                <textarea rows="8" value={form.emailBody} onChange={(event) => setField("emailBody", event.target.value)} className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2 text-sm text-[#251E1F] outline-none" />
               </label>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               {placeholders.map((placeholder) => (
-                <button key={placeholder} type="button" onClick={() => setField("emailBody", `${form.emailBody} ${placeholder}`)} className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-[#d8c6e8] hover:bg-white/10 hover:text-white">
+                <button key={placeholder} type="button" onClick={() => setField("emailBody", `${form.emailBody} ${placeholder}`)} className="rounded-full border border-[#f0d2ca] bg-[#fff8f5] px-3 py-1 text-xs font-semibold text-[#7b6660] hover:bg-white/80 hover:text-[#251E1F]">
                   {placeholder}
                 </button>
               ))}
             </div>
             {showPreview ? (
-              <div className="mt-5 rounded-lg border border-white/10 bg-black/20 p-4">
-                <p className="text-sm font-semibold text-white">{renderPreview(form.emailSubject, form)}</p>
-                <pre className="mt-3 whitespace-pre-wrap text-sm text-[#d8c6e8]">{renderPreview(form.emailBody, form)}</pre>
+              <div className="mt-5 rounded-lg border border-[#f0d2ca] bg-[#fff3ee] p-4">
+                <p className="text-sm font-semibold text-[#251E1F]">{renderPreview(form.emailSubject, form)}</p>
+                <pre className="mt-3 whitespace-pre-wrap text-sm text-[#7b6660]">{renderPreview(form.emailBody, form)}</pre>
               </div>
             ) : null}
           </div>
@@ -431,21 +431,21 @@ export default function AdminReminderSettingsPage() {
 
         <aside className="space-y-6">
           <div className="neon-glass neon-border rounded-lg p-5">
-            <h3 className="text-lg font-semibold text-white">Reminder Timeline Preview</h3>
+            <h3 className="text-lg font-semibold text-[#251E1F]">Reminder Timeline Preview</h3>
             <div className="mt-5 space-y-4">
               {timeline.map((item, index) => {
                 const Icon = item.icon;
                 return (
                   <div key={item.label} className="flex gap-3">
                     <div className="flex flex-col items-center">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#C77DFF]/15 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F38978]/15 text-[#F38978] ring-1 ring-[#F38978]/25">
                         <Icon size={18} />
                       </div>
-                      {index < timeline.length - 1 ? <div className="h-8 w-px bg-white/15" /> : null}
+                      {index < timeline.length - 1 ? <div className="h-8 w-px bg-[#fff3ee]" /> : null}
                     </div>
                     <div>
-                      <p className="font-semibold text-white">{item.label}</p>
-                      <p className="text-sm text-[#d8c6e8]">{item.value}</p>
+                      <p className="font-semibold text-[#251E1F]">{item.label}</p>
+                      <p className="text-sm text-[#7b6660]">{item.value}</p>
                     </div>
                   </div>
                 );
@@ -460,12 +460,12 @@ export default function AdminReminderSettingsPage() {
       </form>
 
       <div className="neon-glass neon-border overflow-hidden rounded-lg">
-        <div className="border-b border-white/10 px-5 py-4">
-          <h3 className="text-lg font-semibold text-white">Reminder Schedule Rules</h3>
+        <div className="border-b border-[#f0d2ca] px-5 py-4">
+          <h3 className="text-lg font-semibold text-[#251E1F]">Reminder Schedule Rules</h3>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10 text-left text-sm">
-            <thead className="bg-white/[0.04] text-xs uppercase tracking-wide text-[#d8c6e8]">
+          <table className="min-w-full divide-y divide-[#f0d2ca] text-left text-sm">
+            <thead className="bg-[#fff8f5] text-xs uppercase tracking-wide text-[#7b6660]">
               <tr>
                 <th className="px-4 py-3">Rule Name</th>
                 <th className="px-4 py-3">Target Invoices</th>
@@ -476,24 +476,24 @@ export default function AdminReminderSettingsPage() {
                 <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-[#f0d2ca]">
               {loading ? (
-                <tr><td colSpan="7" className="px-4 py-10 text-center text-[#d8c6e8]">Loading reminder rules...</td></tr>
+                <tr><td colSpan="7" className="px-4 py-10 text-center text-[#7b6660]">Loading reminder rules...</td></tr>
               ) : settings.length === 0 ? (
-                <tr><td colSpan="7" className="px-4 py-12 text-center text-[#d8c6e8]">No reminder rules configured yet.</td></tr>
+                <tr><td colSpan="7" className="px-4 py-12 text-center text-[#7b6660]">No reminder rules configured yet.</td></tr>
               ) : settings.map((setting) => (
-                <tr key={setting.id} className="text-[#f7efff]">
+                <tr key={setting.id} className="text-[#514440]">
                   <td className="px-4 py-4 font-medium">{setting.ruleName}</td>
-                  <td className="px-4 py-4 text-[#d8c6e8]">Unpaid overdue invoices</td>
+                  <td className="px-4 py-4 text-[#7b6660]">Unpaid overdue invoices</td>
                   <td className="px-4 py-4">{setting.firstReminderDays}, {setting.secondReminderDays}, {setting.finalReminderDays || "-"} days</td>
                   <td className="px-4 py-4">{setting.frequency} at {setting.reminderTime}</td>
                   <td className="px-4 py-4">{setting.deliveryChannel}</td>
                   <td className="px-4 py-4"><span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusPill(setting.enabled)}`}>{setting.enabled ? "Active" : "Disabled"}</span></td>
                   <td className="px-4 py-4">
                     <div className="flex gap-1">
-                      <button type="button" onClick={() => handleEdit(setting)} className="rounded-lg p-2 text-[#d8c6e8] hover:bg-white/10 hover:text-white" title="Edit rule"><Pencil size={16} /></button>
-                      <button type="button" onClick={() => handleStatus(setting)} className="rounded-lg p-2 text-[#d8c6e8] hover:bg-white/10 hover:text-white" title="Enable or disable rule">{setting.enabled ? <XCircle size={16} /> : <CheckCircle2 size={16} />}</button>
-                      <button type="button" onClick={() => handleDelete(setting)} className="rounded-lg p-2 text-rose-200 hover:bg-rose-400/10" title="Delete rule"><Trash2 size={16} /></button>
+                      <button type="button" onClick={() => handleEdit(setting)} className="rounded-lg p-2 text-[#7b6660] hover:bg-white/80 hover:text-[#251E1F]" title="Edit rule"><Pencil size={16} /></button>
+                      <button type="button" onClick={() => handleStatus(setting)} className="rounded-lg p-2 text-[#7b6660] hover:bg-white/80 hover:text-[#251E1F]" title="Enable or disable rule">{setting.enabled ? <XCircle size={16} /> : <CheckCircle2 size={16} />}</button>
+                      <button type="button" onClick={() => handleDelete(setting)} className="rounded-lg p-2 text-[#c55245] hover:bg-[#fff0eb]" title="Delete rule"><Trash2 size={16} /></button>
                     </div>
                   </td>
                 </tr>
@@ -504,12 +504,12 @@ export default function AdminReminderSettingsPage() {
       </div>
 
       <div className="neon-glass neon-border overflow-hidden rounded-lg">
-        <div className="border-b border-white/10 px-5 py-4">
-          <h3 className="text-lg font-semibold text-white">Reminder Logs</h3>
+        <div className="border-b border-[#f0d2ca] px-5 py-4">
+          <h3 className="text-lg font-semibold text-[#251E1F]">Reminder Logs</h3>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10 text-left text-sm">
-            <thead className="bg-white/[0.04] text-xs uppercase tracking-wide text-[#d8c6e8]">
+          <table className="min-w-full divide-y divide-[#f0d2ca] text-left text-sm">
+            <thead className="bg-[#fff8f5] text-xs uppercase tracking-wide text-[#7b6660]">
               <tr>
                 <th className="px-4 py-3">Invoice Number</th>
                 <th className="px-4 py-3">Client Email</th>
@@ -520,18 +520,18 @@ export default function AdminReminderSettingsPage() {
                 <th className="px-4 py-3">Error Message</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-[#f0d2ca]">
               {logs.length === 0 ? (
-                <tr><td colSpan="7" className="px-4 py-12 text-center text-[#d8c6e8]">No reminder delivery logs yet.</td></tr>
+                <tr><td colSpan="7" className="px-4 py-12 text-center text-[#7b6660]">No reminder delivery logs yet.</td></tr>
               ) : logs.map((log) => (
-                <tr key={log.id} className="text-[#f7efff]">
+                <tr key={log.id} className="text-[#514440]">
                   <td className="px-4 py-4">{log.invoiceNumber}</td>
-                  <td className="px-4 py-4 text-[#d8c6e8]">{log.clientEmail}</td>
+                  <td className="px-4 py-4 text-[#7b6660]">{log.clientEmail}</td>
                   <td className="px-4 py-4">{log.reminderType}</td>
                   <td className="px-4 py-4">{log.deliveryChannel}</td>
                   <td className="px-4 py-4">{log.deliveryStatus}</td>
                   <td className="px-4 py-4">{formatDate(log.sentAt)}</td>
-                  <td className="px-4 py-4 text-rose-100">{log.errorMessage || "-"}</td>
+                  <td className="px-4 py-4 text-[#c55245]">{log.errorMessage || "-"}</td>
                 </tr>
               ))}
             </tbody>
@@ -541,3 +541,4 @@ export default function AdminReminderSettingsPage() {
     </section>
   );
 }
+

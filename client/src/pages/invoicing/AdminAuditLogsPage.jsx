@@ -32,16 +32,16 @@ function formatDate(value) {
 
 function statusClass(status) {
   const classes = {
-    Success: "border-emerald-300/30 bg-emerald-400/10 text-emerald-200",
-    Failed: "border-rose-300/30 bg-rose-400/10 text-rose-200",
-    Warning: "border-amber-300/30 bg-amber-400/10 text-amber-100",
-    Info: "border-sky-300/30 bg-sky-400/10 text-sky-100"
+    Success: "border-[#b8d9c6] bg-[#e9f7ef] text-[#2f8758]",
+    Failed: "border-[#f3c6bc] bg-[#fff0eb] text-[#c55245]",
+    Warning: "border-[#f4d59a] bg-[#fff4d8] text-[#9a6412]",
+    Info: "border-[#b8d9dc] bg-[#eaf6f7] text-[#15565b]"
   };
   return classes[status] || classes.Info;
 }
 
 function chartColor(index) {
-  return ["#C77DFF", "#38BDF8", "#34D399", "#F59E0B", "#FB7185"][index % 5];
+  return ["#F38978", "#38BDF8", "#34D399", "#F59E0B", "#FB7185"][index % 5];
 }
 
 export default function AdminAuditLogsPage() {
@@ -148,18 +148,18 @@ export default function AdminAuditLogsPage() {
     <section className="space-y-6">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="text-sm font-medium text-[#C77DFF]">Admin View Audit Logs</p>
-          <h2 className="mt-1 text-2xl font-semibold text-white">
+          <p className="text-sm font-medium text-[#F38978]">Admin View Audit Logs</p>
+          <h2 className="mt-1 text-2xl font-semibold text-[#251E1F]">
             Automated Invoicing System - Audit Logs
           </h2>
-          <p className="mt-2 text-sm text-[#d8c6e8]">
+          <p className="mt-2 text-sm text-[#7b6660]">
             Monitor user activities, system changes, and accountability events.
           </p>
         </div>
         <button
           type="button"
           onClick={() => loadAuditData(filters, true)}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/10"
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-4 py-2.5 text-sm font-semibold text-[#251E1F] hover:bg-white/80"
         >
           <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
           Refresh
@@ -172,18 +172,18 @@ export default function AdminAuditLogsPage() {
             type="date"
             value={filters.startDate}
             onChange={(event) => changeFilter("startDate", event.target.value)}
-            className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none"
+            className="rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2 text-sm text-[#251E1F] outline-none"
           />
           <input
             type="date"
             value={filters.endDate}
             onChange={(event) => changeFilter("endDate", event.target.value)}
-            className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none"
+            className="rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2 text-sm text-[#251E1F] outline-none"
           />
           <select
             value={filters.userId}
             onChange={(event) => changeFilter("userId", event.target.value)}
-            className="rounded-lg border border-white/10 bg-[#140026] px-3 py-2 text-sm text-white outline-none"
+            className="rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2 text-sm text-[#251E1F] outline-none"
           >
             <option value="">All users</option>
             {users.map((user) => (
@@ -193,26 +193,26 @@ export default function AdminAuditLogsPage() {
           <select
             value={filters.activityType}
             onChange={(event) => changeFilter("activityType", event.target.value)}
-            className="rounded-lg border border-white/10 bg-[#140026] px-3 py-2 text-sm text-white outline-none"
+            className="rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2 text-sm text-[#251E1F] outline-none"
           >
             <option value="">All activity types</option>
             {activityTypes.map((type) => (
               <option key={type} value={type}>{type}</option>
             ))}
           </select>
-          <label className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2">
-            <Search size={16} className="text-[#C77DFF]" />
+          <label className="flex items-center gap-2 rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2">
+            <Search size={16} className="text-[#F38978]" />
             <input
               value={filters.keyword}
               onChange={(event) => changeFilter("keyword", event.target.value)}
               placeholder="Search description, record, or user"
-              className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[#d8c6e8]/60"
+              className="w-full bg-transparent text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/60"
             />
           </label>
           <button
             type="button"
             onClick={clearFilters}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold text-[#d8c6e8] hover:bg-white/10 hover:text-white"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#f0d2ca] px-3 py-2 text-sm font-semibold text-[#7b6660] hover:bg-white/80 hover:text-[#251E1F]"
           >
             <FilterX size={16} />
             Clear
@@ -246,10 +246,10 @@ export default function AdminAuditLogsPage() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm text-[#d8c6e8]">{card.label}</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">{card.value}</p>
+                  <p className="text-sm text-[#7b6660]">{card.label}</p>
+                  <p className="mt-2 text-2xl font-semibold text-[#251E1F]">{card.value}</p>
                 </div>
-                <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#C77DFF]/15 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
+                <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#F38978]/15 text-[#F38978] ring-1 ring-[#F38978]/25">
                   <Icon size={21} />
                 </div>
               </div>
@@ -260,12 +260,12 @@ export default function AdminAuditLogsPage() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="neon-glass neon-border overflow-hidden rounded-lg">
-          <div className="border-b border-white/10 px-5 py-4">
-            <h3 className="text-lg font-semibold text-white">Audit Logs Table</h3>
+          <div className="border-b border-[#f0d2ca] px-5 py-4">
+            <h3 className="text-lg font-semibold text-[#251E1F]">Audit Logs Table</h3>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10 text-left text-sm">
-              <thead className="bg-white/[0.04] text-xs uppercase tracking-wide text-[#d8c6e8]">
+            <table className="min-w-full divide-y divide-[#f0d2ca] text-left text-sm">
+              <thead className="bg-[#fff8f5] text-xs uppercase tracking-wide text-[#7b6660]">
                 <tr>
                   <th className="px-4 py-3">Timestamp</th>
                   <th className="px-4 py-3">User</th>
@@ -275,17 +275,17 @@ export default function AdminAuditLogsPage() {
                   <th className="px-4 py-3">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/10">
+              <tbody className="divide-y divide-[#f0d2ca]">
                 {loading ? (
-                  <tr><td colSpan="6" className="px-4 py-10 text-center text-[#d8c6e8]">Loading audit records...</td></tr>
+                  <tr><td colSpan="6" className="px-4 py-10 text-center text-[#7b6660]">Loading audit records...</td></tr>
                 ) : logs.length === 0 ? (
-                  <tr><td colSpan="6" className="px-4 py-12 text-center text-[#d8c6e8]">No audit records found.</td></tr>
+                  <tr><td colSpan="6" className="px-4 py-12 text-center text-[#7b6660]">No audit records found.</td></tr>
                 ) : logs.map((log) => (
-                  <tr key={log.id} className="text-[#f7efff]">
-                    <td className="whitespace-nowrap px-4 py-4 text-[#d8c6e8]">{formatDate(log.createdAt)}</td>
+                  <tr key={log.id} className="text-[#514440]">
+                    <td className="whitespace-nowrap px-4 py-4 text-[#7b6660]">{formatDate(log.createdAt)}</td>
                     <td className="whitespace-nowrap px-4 py-4 font-medium">{log.userName}</td>
                     <td className="whitespace-nowrap px-4 py-4">{log.activityType}</td>
-                    <td className="whitespace-nowrap px-4 py-4 text-[#d8c6e8]">{log.affectedRecord || "-"}</td>
+                    <td className="whitespace-nowrap px-4 py-4 text-[#7b6660]">{log.affectedRecord || "-"}</td>
                     <td className="min-w-72 px-4 py-4">{log.actionDescription}</td>
                     <td className="whitespace-nowrap px-4 py-4">
                       <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClass(log.status)}`}>
@@ -302,25 +302,25 @@ export default function AdminAuditLogsPage() {
         <aside className="space-y-6">
           <section className="neon-glass neon-border rounded-lg p-5">
             <div className="mb-4 flex items-center gap-3">
-              <ShieldCheck size={21} className="text-[#C77DFF]" />
-              <h3 className="text-lg font-semibold text-white">Audit Retention Policy</h3>
+              <ShieldCheck size={21} className="text-[#F38978]" />
+              <h3 className="text-lg font-semibold text-[#251E1F]">Audit Retention Policy</h3>
             </div>
-            <p className="text-sm text-[#d8c6e8]">
+            <p className="text-sm text-[#7b6660]">
               Audit records should be retained for at least {summary.retentionMonths} months for accountability and investigation.
             </p>
-            <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.05] p-4">
-              <p className="text-sm text-[#d8c6e8]">Total logs count</p>
-              <p className="mt-1 text-3xl font-semibold text-white">{summary.totalLogs}</p>
+            <div className="mt-4 rounded-lg border border-[#f0d2ca] bg-[#fff8f5] p-4">
+              <p className="text-sm text-[#7b6660]">Total logs count</p>
+              <p className="mt-1 text-3xl font-semibold text-[#251E1F]">{summary.totalLogs}</p>
             </div>
           </section>
 
           <section className="neon-glass neon-border rounded-lg p-5">
             <div className="mb-4 flex items-center gap-3">
-              <Activity size={21} className="text-[#C77DFF]" />
-              <h3 className="text-lg font-semibold text-white">Activity Breakdown</h3>
+              <Activity size={21} className="text-[#F38978]" />
+              <h3 className="text-lg font-semibold text-[#251E1F]">Activity Breakdown</h3>
             </div>
             {summary.activityBreakdown.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-white/15 bg-white/[0.035] px-4 py-8 text-center text-sm text-[#d8c6e8]">
+              <div className="rounded-lg border border-dashed border-[#ead3cc] bg-[#fff8f5] px-4 py-8 text-center text-sm text-[#7b6660]">
                 No activity data yet.
               </div>
             ) : (
@@ -330,10 +330,10 @@ export default function AdminAuditLogsPage() {
                   return (
                     <div key={item.activityType}>
                       <div className="mb-2 flex justify-between gap-3 text-sm">
-                        <span className="text-white">{item.activityType}</span>
-                        <span className="text-[#d8c6e8]">{item.count}</span>
+                        <span className="text-[#251E1F]">{item.activityType}</span>
+                        <span className="text-[#7b6660]">{item.count}</span>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-white/[0.08]">
+                      <div className="h-2 overflow-hidden rounded-full bg-white/95">
                         <div
                           className="h-full rounded-full"
                           style={{ width: `${Math.max(percentage, 6)}%`, backgroundColor: chartColor(index) }}
@@ -347,11 +347,11 @@ export default function AdminAuditLogsPage() {
           </section>
 
           <section className="rounded-lg border border-amber-300/20 bg-amber-400/10 p-5">
-            <div className="mb-2 flex items-center gap-2 text-amber-100">
+            <div className="mb-2 flex items-center gap-2 text-[#9a6412]">
               <AlertTriangle size={18} />
               <p className="font-semibold">Security Monitoring</p>
             </div>
-            <p className="text-sm text-amber-100/85">
+            <p className="text-sm text-[#9a6412]/85">
               Failed login attempts and warning events help identify unauthorized access or sensitive system changes.
             </p>
           </section>
@@ -360,3 +360,4 @@ export default function AdminAuditLogsPage() {
     </section>
   );
 }
+

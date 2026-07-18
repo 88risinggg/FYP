@@ -71,9 +71,9 @@ export default function SingpassLoginPage() {
   const seconds = countdown % 60;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#0d0d1a] p-4">
+    <main className="flex min-h-screen items-center justify-center bg-[#fff8f5] p-4">
       <motion.div
-        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1a1a2e] p-8 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-[#f0d2ca] bg-white/95 p-8 shadow-2xl"
         initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: shouldReduceMotion ? 0 : 0.3 }}
@@ -82,7 +82,7 @@ export default function SingpassLoginPage() {
         <div className="flex items-center justify-between">
           <button
             onClick={() => navigate("/login")}
-            className="flex items-center gap-1 text-sm text-slate-400 transition hover:text-white"
+            className="flex items-center gap-1 text-sm text-slate-400 transition hover:text-[#251E1F]"
           >
             <ArrowLeft size={16} />
             Back
@@ -97,7 +97,7 @@ export default function SingpassLoginPage() {
               <path d="M7 15.5C7 14.67 7.67 14 8.5 14H11V17H8.5C7.67 17 7 16.33 7 15.5Z" fill="white"/>
               <path d="M13 14H15.5C16.33 14 17 14.67 17 15.5C17 16.33 16.33 17 15.5 17H13V14Z" fill="white"/>
             </svg>
-            <span className="text-lg font-semibold text-white">Singpass</span>
+            <span className="text-lg font-semibold text-[#251E1F]">Singpass</span>
           </div>
         </div>
 
@@ -111,7 +111,7 @@ export default function SingpassLoginPage() {
                 animate={{ opacity: 1 }}
                 exit={shouldReduceMotion ? undefined : { opacity: 0 }}
               >
-                <h2 className="text-xl font-semibold text-white">Scan with Singpass app</h2>
+                <h2 className="text-xl font-semibold text-[#251E1F]">Scan with Singpass app</h2>
                 <p className="mt-2 text-sm text-slate-400">
                   Open your Singpass app and scan the QR code below
                 </p>
@@ -215,7 +215,7 @@ export default function SingpassLoginPage() {
                 className="py-12"
               >
                 <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-slate-600 border-t-[#F4333D]" />
-                <h2 className="mt-6 text-xl font-semibold text-white">Verifying identity...</h2>
+                <h2 className="mt-6 text-xl font-semibold text-[#251E1F]">Verifying identity...</h2>
                 <p className="mt-2 text-sm text-slate-400">
                   Authenticating with Singpass
                 </p>
@@ -234,7 +234,7 @@ export default function SingpassLoginPage() {
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 </div>
-                <h2 className="mt-4 text-xl font-semibold text-white">Identity verified</h2>
+                <h2 className="mt-4 text-xl font-semibold text-[#251E1F]">Identity verified</h2>
                 <p className="mt-2 text-sm text-slate-400">Redirecting...</p>
               </motion.div>
             )}
@@ -252,10 +252,10 @@ export default function SingpassLoginPage() {
                     <line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
                 </div>
-                <h2 className="mt-4 text-xl font-semibold text-white">{error}</h2>
+                <h2 className="mt-4 text-xl font-semibold text-[#251E1F]">{error}</h2>
                 <button
                   onClick={handleRefresh}
-                  className="mt-4 flex items-center gap-2 mx-auto rounded-lg bg-[#F4333D]/20 px-4 py-2 text-sm text-white transition hover:bg-[#F4333D]/30"
+                  className="mt-4 flex items-center gap-2 mx-auto rounded-lg bg-[#F4333D]/20 px-4 py-2 text-sm text-[#251E1F] transition hover:bg-[#F4333D]/30"
                 >
                   <RefreshCw size={14} />
                   Get new QR code
@@ -266,7 +266,7 @@ export default function SingpassLoginPage() {
         </div>
 
         {/* Footer */}
-        <div className="mt-8 border-t border-white/10 pt-4 text-center text-xs text-slate-500">
+        <div className="mt-8 border-t border-[#f0d2ca] pt-4 text-center text-xs text-slate-500">
           Secured by Singpass · National Digital Identity
         </div>
       </motion.div>

@@ -177,7 +177,7 @@ export default function HRPublicHolidays() {
     return (
       <div className="space-y-4">
         {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-12 rounded-lg bg-white/5 animate-pulse" />
+          <div key={i} className="h-12 rounded-lg bg-white/80 animate-pulse" />
         ))}
       </div>
     );
@@ -201,12 +201,12 @@ export default function HRPublicHolidays() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C77DFF]/10 text-[#C77DFF]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F38978]/10 text-[#F38978]">
             <Calendar size={20} />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-white">Public Holidays</h3>
-            <p className="text-xs text-[#d8c6e8]">
+            <h3 className="text-lg font-semibold text-[#251E1F]">Public Holidays</h3>
+            <p className="text-xs text-[#7b6660]">
               Manage public holidays — leave calculations exclude active holidays automatically.
             </p>
           </div>
@@ -214,7 +214,7 @@ export default function HRPublicHolidays() {
         <button
           type="button"
           onClick={handleAdd}
-          className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#7B2FF7] to-[#9D4EDD] px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#9D4EDD]/20 transition hover:opacity-90"
+          className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#2D7C83] to-[#F38978] px-4 py-2.5 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/20 transition hover:opacity-90"
         >
           <Plus size={16} />
           Add Holiday
@@ -223,20 +223,20 @@ export default function HRPublicHolidays() {
 
       {/* Search */}
       <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#d8c6e8]/50" />
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b6660]/50" />
         <input
           type="text"
           placeholder="Search holidays by name, description, or date..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full rounded-lg border border-white/10 bg-white/5 py-2.5 pl-10 pr-4 text-sm text-white placeholder-[#d8c6e8]/40 outline-none focus:border-[#7B2FF7]/50 focus:ring-1 focus:ring-[#7B2FF7]/30"
+          className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 py-2.5 pl-10 pr-4 text-sm text-[#251E1F] placeholder-[#7b6660]/40 outline-none focus:border-[#2D7C83]/50 focus:ring-1 focus:ring-[#2D7C83]/30"
         />
       </div>
 
       {/* Add/Edit Form */}
       {showForm && (
-        <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-4">
-          <h4 className="text-sm font-semibold text-white">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 space-y-4">
+          <h4 className="text-sm font-semibold text-[#251E1F]">
             {editingId ? "Edit Public Holiday" : "Add New Public Holiday"}
           </h4>
 
@@ -248,7 +248,7 @@ export default function HRPublicHolidays() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-medium text-[#d8c6e8]">
+              <label className="mb-1 block text-xs font-medium text-[#7b6660]">
                 Holiday Name <span className="text-red-400">*</span>
               </label>
               <input
@@ -256,24 +256,24 @@ export default function HRPublicHolidays() {
                 value={formData.holiday_name}
                 onChange={(e) => setFormData({ ...formData, holiday_name: e.target.value })}
                 placeholder="e.g. National Day"
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder-[#d8c6e8]/40 outline-none focus:border-[#7B2FF7]/50"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2.5 text-sm text-[#251E1F] placeholder-[#7b6660]/40 outline-none focus:border-[#2D7C83]/50"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-[#d8c6e8]">
+              <label className="mb-1 block text-xs font-medium text-[#7b6660]">
                 Holiday Date <span className="text-red-400">*</span>
               </label>
               <input
                 type="date"
                 value={formData.holiday_date}
                 onChange={(e) => setFormData({ ...formData, holiday_date: e.target.value })}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-[#7B2FF7]/50 [color-scheme:dark]"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2.5 text-sm text-[#251E1F] outline-none focus:border-[#2D7C83]/50 [color-scheme:dark]"
               />
             </div>
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-[#d8c6e8]">
+            <label className="mb-1 block text-xs font-medium text-[#7b6660]">
               Description (optional)
             </label>
             <input
@@ -281,12 +281,12 @@ export default function HRPublicHolidays() {
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Optional description"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder-[#d8c6e8]/40 outline-none focus:border-[#7B2FF7]/50"
+              className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2.5 text-sm text-[#251E1F] placeholder-[#7b6660]/40 outline-none focus:border-[#2D7C83]/50"
             />
           </div>
 
           <div className="flex items-center gap-3">
-            <label className="text-xs font-medium text-[#d8c6e8]">Status:</label>
+            <label className="text-xs font-medium text-[#7b6660]">Status:</label>
             <button
               type="button"
               onClick={() => setFormData({ ...formData, status: formData.status === "Active" ? "Inactive" : "Active" })}
@@ -319,7 +319,7 @@ export default function HRPublicHolidays() {
             <button
               type="button"
               onClick={resetForm}
-              className="flex items-center gap-2 rounded-lg bg-white/5 px-4 py-2 text-sm font-medium text-[#d8c6e8] hover:bg-white/10"
+              className="flex items-center gap-2 rounded-lg bg-white/80 px-4 py-2 text-sm font-medium text-[#7b6660] hover:bg-[#FDD9CD]/45"
             >
               <X size={14} />
               Cancel
@@ -330,33 +330,33 @@ export default function HRPublicHolidays() {
 
       {/* Holidays Table */}
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-white/10 bg-white/5 p-10 text-center">
-          <Calendar size={32} className="mx-auto text-[#d8c6e8]/30" />
-          <p className="mt-3 text-sm text-[#d8c6e8]/50">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-10 text-center">
+          <Calendar size={32} className="mx-auto text-[#7b6660]/30" />
+          <p className="mt-3 text-sm text-[#7b6660]/50">
             {searchQuery ? "No holidays match your search." : "No public holidays configured yet."}
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
+        <div className="overflow-x-auto rounded-xl border border-[#f0d2ca] bg-white/80">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-white/10">
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[#d8c6e8]/60">Name</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[#d8c6e8]/60">Date</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[#d8c6e8]/60">Description</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[#d8c6e8]/60">Status</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[#d8c6e8]/60 text-right">Actions</th>
+              <tr className="border-b border-[#f0d2ca]">
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[#7b6660]/60">Name</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[#7b6660]/60">Date</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[#7b6660]/60">Description</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[#7b6660]/60">Status</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[#7b6660]/60 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((holiday) => (
                 <tr
                   key={holiday.holiday_id}
-                  className="border-b border-white/5 transition hover:bg-white/5"
+                  className="border-b border-[#f0d2ca] transition hover:bg-white/80"
                 >
-                  <td className="px-4 py-3 font-medium text-white">{holiday.holiday_name}</td>
-                  <td className="px-4 py-3 text-[#d8c6e8]">{formatDate(holiday.holiday_date)}</td>
-                  <td className="px-4 py-3 text-[#d8c6e8]/70">{holiday.description || "—"}</td>
+                  <td className="px-4 py-3 font-medium text-[#251E1F]">{holiday.holiday_name}</td>
+                  <td className="px-4 py-3 text-[#7b6660]">{formatDate(holiday.holiday_date)}</td>
+                  <td className="px-4 py-3 text-[#7b6660]/70">{holiday.description || "—"}</td>
                   <td className="px-4 py-3">
                     <StatusBadge active={isHolidayActive(holiday.status)} />
                   </td>
@@ -366,7 +366,7 @@ export default function HRPublicHolidays() {
                         type="button"
                         onClick={() => handleToggleStatus(holiday)}
                         title={isHolidayActive(holiday.status) ? "Deactivate" : "Activate"}
-                        className="rounded-lg p-1.5 text-[#d8c6e8] hover:bg-white/10 hover:text-white"
+                        className="rounded-lg p-1.5 text-[#7b6660] hover:bg-[#FDD9CD]/45 hover:text-[#251E1F]"
                       >
                         {isHolidayActive(holiday.status) ? <ToggleRight size={16} className="text-emerald-400" /> : <ToggleLeft size={16} className="text-gray-400" />}
                       </button>
@@ -374,7 +374,7 @@ export default function HRPublicHolidays() {
                         type="button"
                         onClick={() => handleEdit(holiday)}
                         title="Edit"
-                        className="rounded-lg p-1.5 text-[#d8c6e8] hover:bg-white/10 hover:text-white"
+                        className="rounded-lg p-1.5 text-[#7b6660] hover:bg-[#FDD9CD]/45 hover:text-[#251E1F]"
                       >
                         <Edit2 size={15} />
                       </button>
@@ -391,7 +391,7 @@ export default function HRPublicHolidays() {
                           <button
                             type="button"
                             onClick={() => setDeleteConfirmId(null)}
-                            className="rounded-lg bg-white/5 px-2 py-1 text-xs font-medium text-[#d8c6e8] hover:bg-white/10"
+                            className="rounded-lg bg-white/80 px-2 py-1 text-xs font-medium text-[#7b6660] hover:bg-[#FDD9CD]/45"
                           >
                             Cancel
                           </button>
@@ -401,7 +401,7 @@ export default function HRPublicHolidays() {
                           type="button"
                           onClick={() => setDeleteConfirmId(holiday.holiday_id)}
                           title="Delete"
-                          className="rounded-lg p-1.5 text-[#d8c6e8] hover:bg-red-500/20 hover:text-red-300"
+                          className="rounded-lg p-1.5 text-[#7b6660] hover:bg-red-500/20 hover:text-red-300"
                         >
                           <Trash2 size={15} />
                         </button>
@@ -416,7 +416,7 @@ export default function HRPublicHolidays() {
       )}
 
       {/* Summary Footer */}
-      <div className="flex items-center justify-between text-xs text-[#d8c6e8]/50">
+      <div className="flex items-center justify-between text-xs text-[#7b6660]/50">
         <span>
           {filtered.length} of {holidays.length} holiday{holidays.length !== 1 ? "s" : ""}
           {searchQuery ? " (filtered)" : ""}
