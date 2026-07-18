@@ -345,24 +345,10 @@ async function deleteProfileByUserId(req, res) {
  * Ensure the emergency_contact table exists.
  */
 async function ensureEmergencyContactTable() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS emergency_contact (
-      contact_id INT AUTO_INCREMENT PRIMARY KEY,
-      employee_id INT NOT NULL,
-      name VARCHAR(100) NOT NULL,
-      relationship VARCHAR(50) NOT NULL,
-      phone VARCHAR(20) NOT NULL,
-      is_primary TINYINT(1) DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (employee_id) REFERENCES staff(employee_id) ON DELETE CASCADE
-    )
-  `);
+  // Disabled - 11 table schema
 }
 
-// Run table creation on module load (silent fail if already exists)
-ensureEmergencyContactTable().catch(err => {
-  console.error("Emergency contact table init error:", err.message);
-});
+// Disabled
 
 /**
  * Helper: resolve employee_id from a userId (staff.user_user_id)

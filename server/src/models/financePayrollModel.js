@@ -1,17 +1,7 @@
 const { pool } = require("../config/db");
 
 async function ensureFinancePayrollTables() {
-  await pool.execute(
-    `CREATE TABLE IF NOT EXISTS finance_payroll_run (
-      run_id VARCHAR(80) PRIMARY KEY,
-      run_data LONGTEXT NOT NULL,
-      source VARCHAR(40) NOT NULL DEFAULT 'finance',
-      created_by INT NULL,
-      updated_by INT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )`
-  );
+  // Disabled - 11 table schema
 }
 
 function parseRunData(row) {

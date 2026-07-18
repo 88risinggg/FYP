@@ -4,28 +4,7 @@ const { pool } = require("../config/db");
  * Ensures the notification table exists and has up-to-date schema.
  */
 async function ensureNotificationTable() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS notification (
-      notification_id INT AUTO_INCREMENT PRIMARY KEY,
-      user_id INT NOT NULL,
-      type ENUM('payslip_available', 'payslip_approved', 'profile_updated', 'system') DEFAULT 'system',
-      title VARCHAR(255) NOT NULL,
-      message TEXT,
-      is_read TINYINT(1) DEFAULT 0,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES user(user_id) ON DELETE CASCADE
-    )
-  `);
-
-  // Ensure 'profile_updated' exists in the ENUM (handles tables created before this type was added)
-  try {
-    await pool.query(`
-      ALTER TABLE notification MODIFY COLUMN type
-      ENUM('payslip_available', 'payslip_approved', 'profile_updated', 'system') DEFAULT 'system'
-    `);
-  } catch (e) {
-    // Ignore if already correct
-  }
+  // Disabled - notification table already exists in 11-table schema
 }
 
 /**

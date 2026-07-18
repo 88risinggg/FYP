@@ -26,45 +26,7 @@ const roleSeeds = {
 };
 
 async function ensureRolePermissionConfig() {
-  await pool.execute(
-    `CREATE TABLE IF NOT EXISTS role_permission_config (
-      role_id INT PRIMARY KEY,
-      role_description VARCHAR(255) NOT NULL,
-      access_level VARCHAR(50) NOT NULL,
-      key_modules_json JSON NOT NULL,
-      permission_count INT NOT NULL DEFAULT 0,
-      is_active TINYINT NOT NULL DEFAULT 1,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      CONSTRAINT fk_role_permission_config_role
-        FOREIGN KEY (role_id) REFERENCES role(role_id)
-        ON DELETE CASCADE
-    )`
-  );
-
-  for (const roleName of allowedRoleNames) {
-    const seed = roleSeeds[roleName];
-    await pool.execute(
-      `INSERT INTO role_permission_config (
-        role_id, role_description, access_level, key_modules_json, permission_count, is_active
-      )
-      SELECT role_id, ?, ?, ?, ?, 1
-      FROM role
-      WHERE role_name = ?
-      ON DUPLICATE KEY UPDATE
-        role_description = VALUES(role_description),
-        access_level = VALUES(access_level),
-        key_modules_json = VALUES(key_modules_json),
-        permission_count = VALUES(permission_count)`,
-      [
-        seed.description,
-        seed.accessLevel,
-        JSON.stringify(seed.keyModules),
-        seed.keyModules.length,
-        roleName
-      ]
-    );
-  }
+  // Disabled - role_permission_config removed from 11-table schema
 }
 
 function parseModules(value) {
