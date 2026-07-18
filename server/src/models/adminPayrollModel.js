@@ -1,4 +1,88 @@
 const { pool } = require("../config/db");
+const { DEFAULT_PAYROLL_RULES_2026 } = require("../services/statutoryPayrollEngine");
+
+async function getAdminPayrollReportData() {
+  const [[[userStats]], [payrollRuns], [roleSummary], [users], [auditLogs]] = await Promise.all([
+    pool.execute("SELECT COUNT(*) AS activeUsers FROM user WHERE status = 1"),
+    pool.execute(
+      `SELECT
+        pr.payroll_run_id, pr.payroll_month, pr.payroll_year, pr.status,
+        pr.created_at, pr.updated_at, pr.approved_at, pr.payment_reference,
+        COUNT(p.payroll_id) AS employee_count,
+        COALESCE(SUM(COALESCE(p.net_salary, 0) + COALESCE(p.total_deductions, 0)), 0) AS gross_pay,
+        COALESCE(SUM(p.total_deductions), 0) AS total_deductions,
+        COALESCE(SUM(p.net_salary), 0) AS net_pay,
+        COALESCE(SUM(p.employee_cpf), 0) AS employee_cpf,
+        COALESCE(SUM(p.employer_cpf), 0) AS employer_cpf
+       FROM payroll_run pr
+       LEFT JOIN payroll p ON p.payroll_run_id = pr.payroll_run_id
+       GROUP BY pr.payroll_run_id, pr.payroll_month, pr.payroll_year, pr.status,
+                pr.created_at, pr.updated_at, pr.approved_at, pr.payment_reference
+       ORDER BY pr.payroll_year DESC, pr.payroll_month DESC, pr.payroll_run_id DESC`
+    ),
+    pool.execute(
+      `SELECT COALESCE(NULLIF(TRIM(role_name), ''), 'Unassigned') AS role_name,
+              COUNT(*) AS user_count
+       FROM user
+       GROUP BY COALESCE(NULLIF(TRIM(role_name), ''), 'Unassigned')
+       ORDER BY role_name`
+    ),
+    pool.execute(
+      `SELECT u.user_id, u.name, u.email, u.status,
+              COALESCE(NULLIF(TRIM(u.role_name), ''), 'Unassigned') AS role_name,
+              s.employee_code, s.department_name
+       FROM user u
+       LEFT JOIN staff s ON s.user_user_id = u.user_id
+       ORDER BY u.name`
+    ),
+    pool.execute(
+      `SELECT audit_log_id AS log_id, action_description AS action,
+              activity_type AS entity_type, affected_record AS entity_id,
+              created_at, COALESCE(user_name, 'System') AS user_name,
+              status
+       FROM audit_logs
+       ORDER BY created_at DESC
+       LIMIT 100`
+    )
+  ]);
+
+  const pendingApprovalCount = payrollRuns.filter(
+    (run) => !["Approved for Payment", "Payment Processed", "Payslips Sent", "Reconciled"].includes(run.status)
+  ).length;
+  const totals = payrollRuns.reduce(
+    (result, run) => ({
+      grossPay: result.grossPay + Number(run.gross_pay || 0),
+      deductions: result.deductions + Number(run.total_deductions || 0),
+      netPay: result.netPay + Number(run.net_pay || 0),
+      employeeCpf: result.employeeCpf + Number(run.employee_cpf || 0),
+      employerCpf: result.employerCpf + Number(run.employer_cpf || 0)
+    }),
+    { grossPay: 0, deductions: 0, netPay: 0, employeeCpf: 0, employerCpf: 0 }
+  );
+  const settings = Object.entries(DEFAULT_PAYROLL_RULES_2026).map(([key, value]) => ({
+    setting_key: `statutory_${key}`,
+    setting_value: String(value),
+    description: "Rules snapshot used by automated payroll runs"
+  }));
+
+  return {
+    stats: {
+      activeUsers: Number(userStats.activeUsers || 0),
+      payrollRules: settings.length,
+      payrollRuns: payrollRuns.length,
+      payrollRecords: payrollRuns.reduce((sum, run) => sum + Number(run.employee_count || 0), 0),
+      adminLogs: auditLogs.length,
+      ...totals
+    },
+    pendingApprovalCount,
+    payrollRuns,
+    roleSummary,
+    users,
+    auditLogs,
+    settings,
+    layouts: []
+  };
+}
 
 async function logAdminAction({ action, entityType, entityId, userId }) {
   await pool.execute(
@@ -474,6 +558,7 @@ module.exports = {
   createPayslipLayout,
   getUserById,
   getDashboardStats,
+  getAdminPayrollReportData,
   listAuditLogs,
   listAvailableStaffForUserCreation,
   listMbmfEligibilitySummary,

@@ -105,9 +105,18 @@ async function processReminderRule(rule) {
   }
 }
 
-function startReminderScheduler() {
+async function startReminderScheduler() {
   if (schedulerStarted) {
-    return;
+    return true;
+  }
+
+  try {
+    await listReminderSettings();
+  } catch (error) {
+    if (process.env.NODE_ENV !== "test") {
+      console.warn("Reminder scheduler disabled:", error.message);
+    }
+    return false;
   }
 
   schedulerStarted = true;
@@ -123,6 +132,8 @@ function startReminderScheduler() {
       }
     }
   });
+
+  return true;
 }
 
 module.exports = {

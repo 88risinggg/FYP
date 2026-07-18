@@ -143,7 +143,7 @@ const routeHeadings = {
 
 let adminCpfConfiguration = createDefaultFinancePayrollConfig();
 
-const workflowSteps = [
+const workflowStepDefinitions = [
   {
     key: "reviewed",
     title: "Exception Review",
@@ -561,11 +561,13 @@ function getAggregatePayrollStats(runs = []) {
         runs: result.runs + 1,
         totals: {
           grossPay: result.totals.grossPay + totals.grossPay,
+          allowances: result.totals.allowances + totals.allowances,
           deductions: result.totals.deductions + totals.deductions,
           employeeCpf: result.totals.employeeCpf + totals.employeeCpf,
           employeeMbmf: result.totals.employeeMbmf + totals.employeeMbmf,
           employerCpf: result.totals.employerCpf + totals.employerCpf,
           employerMbmf: result.totals.employerMbmf + totals.employerMbmf,
+          sdl: result.totals.sdl + totals.sdl,
           netPay: result.totals.netPay + totals.netPay
         }
       };
@@ -581,11 +583,13 @@ function getAggregatePayrollStats(runs = []) {
       runs: 0,
       totals: {
         grossPay: 0,
+        allowances: 0,
         deductions: 0,
         employeeCpf: 0,
         employeeMbmf: 0,
         employerCpf: 0,
         employerMbmf: 0,
+        sdl: 0,
         netPay: 0
       }
     }
@@ -604,6 +608,7 @@ function getAggregateAccountingTotals(runs = []) {
         employerCpf: result.employerCpf + totals.employerCpf,
         employeeMbmf: result.employeeMbmf + totals.employeeMbmf,
         employerMbmf: result.employerMbmf + totals.employerMbmf,
+        sdl: result.sdl + totals.sdl,
         otherDeductions: result.otherDeductions + totals.otherDeductions,
         totalDebit: result.totalDebit + totals.totalDebit,
         totalCredit: result.totalCredit + totals.totalCredit
@@ -616,6 +621,7 @@ function getAggregateAccountingTotals(runs = []) {
       employerCpf: 0,
       employeeMbmf: 0,
       employerMbmf: 0,
+      sdl: 0,
       otherDeductions: 0,
       totalDebit: 0,
       totalCredit: 0
@@ -820,6 +826,11 @@ function getEmployerCpfAmount(employee) {
   return Number(cpfItem?.amount ?? employee.employerCpf ?? 0);
 }
 
+function getEmployerSdlAmount(employee) {
+  const sdlItem = getEmployeeEmployerItems(employee).find((item) => normalizePayrollLabel(item.label).includes("sdl"));
+  return Number(sdlItem?.amount || 0);
+}
+
 function getEmployeeOtherDeductions(employee) {
   return getEmployeeTotalDeductions(employee) - getEmployeeCpfAmount(employee) - getExpectedMbmfEmployeeAmount(employee);
 }
@@ -837,6 +848,7 @@ function getRunTotals(run) {
       const employerCpf = getEmployerCpfAmount(employee);
       const employeeMbmf = getExpectedMbmfEmployeeAmount(employee);
       const employerMbmf = getExpectedMbmfEmployerAmount(employee);
+      const sdl = getEmployerSdlAmount(employee);
 
       return {
         grossPay: result.grossPay + basicPay,
@@ -846,6 +858,7 @@ function getRunTotals(run) {
         employerCpf: result.employerCpf + employerCpf,
         employeeMbmf: result.employeeMbmf + employeeMbmf,
         employerMbmf: result.employerMbmf + employerMbmf,
+        sdl: result.sdl + sdl,
         netPay: result.netPay + netPay
       };
     },
@@ -857,6 +870,7 @@ function getRunTotals(run) {
       employerCpf: 0,
       employeeMbmf: 0,
       employerMbmf: 0,
+      sdl: 0,
       netPay: 0
     }
   );
@@ -866,8 +880,8 @@ function getRunTotals(run) {
     ...totals,
     otherDeductions,
     salaryExpense: totals.grossPay + totals.allowances,
-    totalDebit: totals.grossPay + totals.allowances + totals.employerCpf + totals.employerMbmf,
-    totalCredit: totals.netPay + totals.employeeCpf + totals.employerCpf + totals.employeeMbmf + totals.employerMbmf + otherDeductions
+    totalDebit: totals.grossPay + totals.allowances + totals.employerCpf + totals.sdl,
+    totalCredit: totals.netPay + totals.employeeCpf + totals.employerCpf + totals.employeeMbmf + otherDeductions + totals.sdl
   };
 }
 
@@ -902,8 +916,11 @@ function getEmployeeExceptions(employee) {
   const cpfApplicableEarnings = getEmployeeCpfApplicableEarnings(employee);
   const cpfWageBase = Math.min(cpfApplicableEarnings, adminCpfConfiguration.monthlyWageCeiling);
   const cpfRateTier = getEmployeeCpfRateTier(employee);
-  const expectedEmployeeCpf = Math.round(cpfWageBase * (cpfRateTier.employeeOrdinaryRate / 100));
-  const expectedEmployerCpf = Math.round(cpfWageBase * (cpfRateTier.employerOrdinaryRate / 100));
+  const expectedEmployeeCpf = Math.floor(cpfWageBase * (cpfRateTier.employeeOrdinaryRate / 100));
+  const expectedTotalCpf = Math.round(
+    cpfWageBase * ((cpfRateTier.employeeOrdinaryRate + cpfRateTier.employerOrdinaryRate) / 100)
+  );
+  const expectedEmployerCpf = expectedTotalCpf - expectedEmployeeCpf;
   const employeeCpf = getEmployeeCpfAmount(employee);
   const employerCpf = getEmployerCpfAmount(employee);
   const expectedMbmf = getExpectedMbmfEmployeeAmount(employee);
@@ -1159,8 +1176,8 @@ function getCpfDeductionProcessRows(run) {
     {
       key: "mbmf",
       label: "MBMF Payable",
-      amount: totals.employeeMbmf + totals.employerMbmf,
-      detail: `Employee ${formatMoney(totals.employeeMbmf)} + employer ${formatMoney(totals.employerMbmf)}`,
+      amount: totals.employeeMbmf,
+      detail: `Employee wage-band deductions ${formatMoney(totals.employeeMbmf)}`,
       status: run?.cpfSubmissionLoggedAt ? "Logged with CPF" : "Pending",
       completedAt: run?.cpfSubmissionLoggedAt
     },
@@ -1749,10 +1766,9 @@ function AccountingImpact({ payrollRuns = [], run }) {
   };
   const rows = [
     ["Salary Expense", totals.salaryExpense, "Salary Payable / Bank", totals.netPay],
-    ["Employer CPF Expense", totals.employerCpf, "CPF Payable (Employee)", totals.employeeCpf],
-    [mbmf.employerExpenseAccount || "MBMF Employer Expense", totals.employerMbmf, "CPF Payable (Employer)", totals.employerCpf],
+    ["Employer CPF Expense", totals.employerCpf, "CPF Payable (Employee + Employer)", totals.employeeCpf + totals.employerCpf],
+    ["SDL Expense", totals.sdl, "SDL Payable", totals.sdl],
     ["", 0, mbmf.employeePayableAccount || "MBMF Payable (Employee)", totals.employeeMbmf],
-    ["", 0, mbmf.clearingAccount || "MBMF Payable Clearing", totals.employerMbmf],
     ["", 0, "Other Deduction Payable", totals.otherDeductions]
   ];
 
@@ -1886,13 +1902,13 @@ function DashboardView({ onAdvanceRun, onSelectRun, payrollRuns, selectedRun }) 
   const selectedTotals = getRunTotals(selectedRun);
   const selectedApprovedStaff = selectedRun.employees.filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length;
   const selectedExceptionCount = getRunExceptions(selectedRun).length;
-  const workflowSteps = getCompletedSteps(selectedRun);
+  const completedSteps = getCompletedSteps(selectedRun);
   const workflowChecklist = [
-    { label: "Payroll reviewed and approved", completed: workflowSteps.reviewed && workflowSteps.approved },
-    { label: "Payment processed", completed: workflowSteps.paid },
-    { label: "Payslips sent to employees", completed: workflowSteps.payslipsSent },
-    { label: "Payroll recorded in internal ledger", completed: workflowSteps.ledgerRecorded },
-    { label: "Payroll reconciled", completed: workflowSteps.reconciled }
+    { label: "Payroll reviewed and approved", completed: completedSteps.reviewed && completedSteps.approved },
+    { label: "Payment processed", completed: completedSteps.paid },
+    { label: "Payslips sent to employees", completed: completedSteps.payslipsSent },
+    { label: "Payroll recorded in internal ledger", completed: completedSteps.ledgerRecorded },
+    { label: "Payroll reconciled", completed: completedSteps.reconciled }
   ];
   const updateStatsMode = (mode) => {
     const runDate = getPayrollRunDate(selectedRun);
@@ -1932,7 +1948,7 @@ function DashboardView({ onAdvanceRun, onSelectRun, payrollRuns, selectedRun }) 
             <RunSelector payrollRuns={payrollRuns} selectedRunId={selectedRun?.id} onSelectRun={onSelectRun} />
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {workflowSteps.map((step) => (
+            {workflowStepDefinitions.map((step) => (
               <WorkflowCard key={step.key} run={selectedRun} step={step} />
             ))}
           </div>
@@ -2852,11 +2868,16 @@ function buildReportRows(selectedRun) {
   const approvedStaffCount = selectedRun.employees.filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length;
 
   return [
-    ["Payroll Summary", `${selectedRun.employees.length} employee(s)`, formatMoney(totals.netPay)],
+    ["Payroll Summary", `${selectedRun.employees.length} employee(s)`, `${formatMoney(totals.salaryExpense)} gross / ${formatMoney(totals.netPay)} net`],
+    ["Pay Run Summary", selectedRun.status || "Pending", formatPayrollPeriod(selectedRun)],
     ["Payment File", selectedRun.paymentFileGeneratedAt ? "Generated" : "Not generated", selectedRun.bankReference || "Pending bank reference"],
     ["Exception Summary", `${exceptionCount} exception(s)`, `${approvedStaffCount}/${selectedRun.employees.length} staff approved`],
+    ["CPF Summary", formatMoney(totals.employeeCpf + totals.employerCpf), `${formatMoney(totals.employeeCpf)} employee / ${formatMoney(totals.employerCpf)} employer`],
+    ["MBMF Summary", formatMoney(totals.employeeMbmf), "Employee wage-band deductions"],
+    ["Deduction Summary", formatMoney(totals.deductions), `${formatMoney(totals.otherDeductions)} non-statutory`],
     ["Compliance Checklist", `${getComplianceSummary(selectedRun).passed}/${getComplianceSummary(selectedRun).total} passed`, `${getComplianceSummary(selectedRun).failed} issue(s)`],
-    ["Cost to Company", formatMoney(totals.salaryExpense + totals.employerCpf + totals.employerMbmf), formatPayrollPeriod(selectedRun)]
+    ["Audit Trail", `${getAuditEntries(selectedRun).length} event(s)`, selectedRun.status || "Pending"],
+    ["Cost to Company", formatMoney(totals.salaryExpense + totals.employerCpf + totals.sdl), formatPayrollPeriod(selectedRun)]
   ];
 }
 
@@ -2893,7 +2914,7 @@ function getExceptionReportRows(selectedRun) {
 
 function getCpfReportRows(selectedRun) {
   return [
-    ["Employee", "CPF Tier", "CPF Wage", "Employee CPF", "Employer CPF", "Admin Rate"],
+    ["Employee", "CPF Tier", "CPF Wage", "Employee CPF", "Employer CPF", "2026 Rate"],
     ...selectedRun.employees.map((employee) => {
       const tier = getEmployeeCpfRateTier(employee);
 
@@ -2948,7 +2969,7 @@ function getDeductionReportRows(selectedRun) {
 
 function getMbmfReportRows(selectedRun) {
   return [
-    ["Employee", "Religion Source", "Eligible", "Employee MBMF", "Employer MBMF", "Reason", "Uploaded MBMF"],
+    ["Employee", "Religion Source", "Eligible", "Employee MBMF", "Reason", "Recorded MBMF"],
     ...selectedRun.employees.map((employee) => {
       const review = getMbmfReview(employee);
 
@@ -2957,8 +2978,7 @@ function getMbmfReportRows(selectedRun) {
         review.religionSource,
         review.eligible ? "Eligible" : "Not Eligible",
         formatMoney(review.employeeAmount),
-        formatMoney(review.employerAmount),
-        review.eligible ? "Religion matches Admin setting" : review.skipReason,
+        review.eligible ? "Muslim employee; CPF Board wage band" : review.skipReason,
         formatMoney(review.uploadedEmployeeAmount)
       ];
     })
@@ -2989,7 +3009,7 @@ function getAuditReportRows(selectedRun) {
 
 function getCostReportRows(selectedRun) {
   return [
-    ["Department", "Gross Pay", "Allowances", "Employer CPF", "Employer MBMF", "Cost"],
+    ["Department", "Basic Pay", "Allowances", "Employer CPF", "SDL", "Total Cost"],
     ...Object.values(
       selectedRun.employees.reduce((groups, employee) => {
         const key = employee.department || "Missing";
@@ -2998,7 +3018,7 @@ function getCostReportRows(selectedRun) {
           grossPay: 0,
           allowances: 0,
           employerCpf: 0,
-          employerMbmf: 0
+          sdl: 0
         };
 
         const totalEarnings = getEmployeeTotalEarnings(employee);
@@ -3009,7 +3029,7 @@ function getCostReportRows(selectedRun) {
         current.grossPay += basicPay;
         current.allowances += totalEarnings - basicPay;
         current.employerCpf += getEmployerCpfAmount(employee);
-        current.employerMbmf += getExpectedMbmfEmployerAmount(employee);
+        current.sdl += getEmployerSdlAmount(employee);
         groups[key] = current;
         return groups;
       }, {})
@@ -3018,8 +3038,8 @@ function getCostReportRows(selectedRun) {
       formatMoney(department.grossPay),
       formatMoney(department.allowances),
       formatMoney(department.employerCpf),
-      formatMoney(department.employerMbmf),
-      formatMoney(department.grossPay + department.allowances + department.employerCpf + department.employerMbmf)
+      formatMoney(department.sdl),
+      formatMoney(department.grossPay + department.allowances + department.employerCpf + department.sdl)
     ])
   ];
 }
@@ -3035,7 +3055,9 @@ function downloadReport(selectedRun, reportTitle) {
       summaryRows: [
         ["Payroll Period", formatPayrollPeriod(selectedRun), selectedRun.status],
         ["Employees", `${selectedRun.employees.length} employee(s)`, `${approvedStaffCount} approved`],
-        ["Gross Pay", formatMoney(totals.grossPay), "Before deductions"],
+        ["Basic Pay", formatMoney(totals.grossPay), "Base salary"],
+        ["Allowances", formatMoney(totals.allowances), "Payroll allowances"],
+        ["Gross Pay", formatMoney(totals.salaryExpense), "Before deductions"],
         ["Net Pay", formatMoney(totals.netPay), "Bank payment total"]
       ],
       tableRows: getStaffReportRows(selectedRun),
@@ -3066,7 +3088,7 @@ function downloadReport(selectedRun, reportTitle) {
       summaryRows: [
         ["Exceptions", `${exceptionCount} detected`, exceptionCount ? "Finance review required" : "Clear"],
         ["Staff Approved", `${approvedStaffCount}/${selectedRun.employees.length}`, canApprovePayrollRun(selectedRun) ? "Ready" : "Pending"],
-        ["CPF Source", adminCpfConfiguration.source, "Admin controlled"],
+        ["CPF Source", "PayNivo SG-2026 statutory snapshot", "Persisted with payroll run"],
         ["Payroll Lock", selectedRun.approvedAt ? "Locked" : "Unlocked", formatDateTime(selectedRun.approvedAt)]
       ],
       tableRows: getExceptionReportRows(selectedRun),
@@ -3075,26 +3097,24 @@ function downloadReport(selectedRun, reportTitle) {
     "CPF Summary": {
       filename: "cpf-summary",
       summaryRows: [
-        ["Employee CPF", formatMoney(totals.employeeCpf), "Admin age tier rates"],
-        ["Employer CPF", formatMoney(totals.employerCpf), "Admin age tier rates"],
-        ["CPF Wage Basis", "CPF-applicable earnings only", "Admin component rules"],
-        ["CPF Rate Tiers", `${adminCpfConfiguration.rateTiers.length} age group(s)`, "Read-only from Admin"],
+        ["Employee CPF", formatMoney(totals.employeeCpf), "2026 statutory age tier"],
+        ["Employer CPF", formatMoney(totals.employerCpf), "2026 statutory age tier"],
+        ["CPF Wage Basis", "CPF-applicable earnings only", "Ordinary wage ceiling applied"],
+        ["CPF Rate Tiers", `${adminCpfConfiguration.rateTiers.length} age group(s)`, "SG-2026 rules snapshot"],
         ["Wage Ceiling", formatMoney(adminCpfConfiguration.monthlyWageCeiling), adminCpfConfiguration.effectiveFrom],
         ["Payment Due", adminCpfConfiguration.paymentDue, "Admin controlled"]
       ],
       tableRows: getCpfReportRows(selectedRun),
-      footer: "CPF validation uses Admin component classification before applying CPF rates."
+      footer: "CPF figures reflect the SG-2026 payroll rules snapshot stored with the payroll run."
     },
     "MBMF Summary": {
       filename: "mbmf-summary",
       summaryRows: [
         ["Employee MBMF", formatMoney(totals.employeeMbmf), `${adminCpfConfiguration.mbmf?.applicableReligion || "Muslim"} staff only`],
-        ["Employer MBMF", formatMoney(totals.employerMbmf), "Employer contribution"],
-        ["Applicable Religion", adminCpfConfiguration.mbmf?.applicableReligion || "Muslim", "Read from Admin settings"],
-        ["Rate Type", adminCpfConfiguration.mbmf?.rateType || "Not configured", "Read from Admin settings"],
-        ["Employee Rate", `${adminCpfConfiguration.mbmf?.employeeRate ?? 0}%`, "Admin controlled"],
-        ["Employer Rate", `${adminCpfConfiguration.mbmf?.employerRate ?? 0}%`, "Admin controlled"],
-        ["Wage Ceiling", formatMoney(adminCpfConfiguration.mbmf?.monthlyWageCeiling), adminCpfConfiguration.mbmf?.effectiveFrom || "Not configured"]
+        ["Employer MBMF", formatMoney(0), "Not applicable"],
+        ["Applicable Religion", adminCpfConfiguration.mbmf?.applicableReligion || "Muslim", "Staff master record"],
+        ["Rate Type", "CPF Board wage bands", "Fixed amount by total wages"],
+        ["Effective Rules", "SG-2026", adminCpfConfiguration.mbmf?.effectiveFrom || "2026-01-01"]
       ],
       tableRows: getMbmfReportRows(selectedRun),
       footer: `MBMF validation applies only to staff records whose religion matches ${adminCpfConfiguration.mbmf?.applicableReligion || "Muslim"}.`
@@ -3103,7 +3123,7 @@ function downloadReport(selectedRun, reportTitle) {
       filename: "deduction-summary",
       summaryRows: [
         ["Total Deductions", formatMoney(totals.deductions), "CPF, loans and funds"],
-        ["Employee CPF", formatMoney(totals.employeeCpf), "Admin CPF settings"],
+        ["Employee CPF", formatMoney(totals.employeeCpf), "SG-2026 statutory rules"],
         ["Other Deductions", formatMoney(totals.otherDeductions), "Loans and recoveries"],
         ["Net Pay After Deductions", formatMoney(totals.netPay), "Payment amount"]
       ],
@@ -3114,7 +3134,7 @@ function downloadReport(selectedRun, reportTitle) {
       filename: "compliance-checklist",
       summaryRows: [
         ["Compliance Status", `${complianceSummary.passed}/${complianceSummary.total} checks passed`, complianceSummary.failed ? `${complianceSummary.failed} action required` : "Ready"],
-        ["CPF Source", adminCpfConfiguration.source, "Admin controlled"],
+        ["CPF Source", "PayNivo SG-2026 statutory snapshot", "Persisted with payroll run"],
         ["Payment Due", adminCpfConfiguration.paymentDue, "Reference deadline"],
         ["Payroll Lock", selectedRun.approvedAt ? "Locked" : "Unlocked", formatDateTime(selectedRun.approvedAt)]
       ],
@@ -3136,7 +3156,7 @@ function downloadReport(selectedRun, reportTitle) {
       filename: "payment-file-status",
       summaryRows: [
         ["Payment File", selectedRun.paymentFileGeneratedAt ? "Generated" : "Not generated", formatDateTime(selectedRun.paymentFileGeneratedAt)],
-        ["Payment Method", selectedRun.paymentMethod, selectedRun.bankReference || "Pending bank reference"],
+        ["Payment Method", selectedRun.paymentMethod || "GIRO", selectedRun.bankReference || "Pending bank reference"],
         ["Bank Total", formatMoney(totals.netPay), selectedRun.paidAt ? "Confirmed" : "Pending"],
         ["Approved Staff", `${approvedStaffCount} employee(s)`, "Included in payment"]
       ],
@@ -3148,7 +3168,8 @@ function downloadReport(selectedRun, reportTitle) {
       summaryRows: [
         ["Salary Expense", formatMoney(totals.salaryExpense), "Gross plus allowances"],
         ["Employer CPF", formatMoney(totals.employerCpf), "Company CPF cost"],
-        ["Total Cost", formatMoney(totals.salaryExpense + totals.employerCpf + totals.employerMbmf), formatPayrollPeriod(selectedRun)],
+        ["SDL", formatMoney(totals.sdl), "Employer levy"],
+        ["Total Cost", formatMoney(totals.salaryExpense + totals.employerCpf + totals.sdl), formatPayrollPeriod(selectedRun)],
         ["Ledger Status", getCompletedSteps(selectedRun).ledgerRecorded ? "Posted" : "Pending", formatDateTime(selectedRun.ledgerRecordedAt)]
       ],
       tableRows: getCostReportRows(selectedRun),
@@ -3160,7 +3181,7 @@ function downloadReport(selectedRun, reportTitle) {
   if (!config) return;
 
   downloadPdf(
-    `${selectedRun.id.toLowerCase()}-${config.filename}.pdf`,
+    `${String(selectedRun.id).toLowerCase()}-${config.filename}.pdf`,
     createPdfBlob({
       title: reportTitle,
       subtitle: `${formatPayrollPeriod(selectedRun)} / ${selectedRun.status}`,
@@ -3171,11 +3192,14 @@ function downloadReport(selectedRun, reportTitle) {
   );
 }
 
-function PayrollReportsView({ selectedRun }) {
+function PayrollReportsView({ onSelectRun, payrollRuns, selectedRun }) {
   const reportCards = buildReportRows(selectedRun);
 
   return (
-    <PageShell heading="Finance Reports">
+    <PageShell
+      heading="Finance Reports"
+      actions={<RunSelector payrollRuns={payrollRuns} selectedRunId={selectedRun?.id} onSelectRun={onSelectRun} />}
+    >
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {reportCards.map(([title, detail, value]) => (
           <article key={title} className="neon-glass neon-border rounded-2xl p-6">
@@ -3212,11 +3236,13 @@ function PayrollSummariesView({ payrollRuns, selectedRun }) {
   };
   const summaryRows = [
     ["Gross Pay", totals.grossPay],
+    ["Allowances", totals.allowances],
+    ["Total Gross Earnings", totals.grossPay + totals.allowances],
     ["Deductions", totals.deductions],
     ["Employee CPF", totals.employeeCpf],
     ["Employee MBMF", totals.employeeMbmf],
     ["Employer CPF", totals.employerCpf],
-    ["Employer MBMF", totals.employerMbmf],
+    ["SDL", totals.sdl],
     ["Net Pay", totals.netPay]
   ];
 
@@ -3306,7 +3332,15 @@ function FinancePayrollContent({
     );
   }
   if (pathname.endsWith("/notification-records")) return <NotificationRecordsView selectedRun={selectedRun} />;
-  if (pathname.endsWith("/payroll-reports")) return <PayrollReportsView selectedRun={selectedRun} />;
+  if (pathname.endsWith("/payroll-reports")) {
+    return (
+      <PayrollReportsView
+        onSelectRun={onSelectRun}
+        payrollRuns={payrollRuns}
+        selectedRun={selectedRun}
+      />
+    );
+  }
   if (pathname.endsWith("/payroll-summaries")) return <PayrollSummariesView payrollRuns={payrollRuns} selectedRun={selectedRun} />;
 
   return (
