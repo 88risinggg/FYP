@@ -20,13 +20,12 @@ async function authenticateToken(req, res, next) {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const [rows] = await pool.execute(
       `SELECT
-        user.user_id AS userId,
-        user.email,
-        user.status,
-        role.role_name AS role
-      FROM user
-      JOIN role ON user.role_id = role.role_id
-      WHERE user.user_id = ?`,
+        user_id AS userId,
+        email,
+        status,
+        role_name AS role
+      FROM \`user\`
+      WHERE user_id = ?`,
       [payload.userId]
     );
 

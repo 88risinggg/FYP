@@ -17,15 +17,14 @@ const { pool } = require("../config/db");
 async function findUserByEmail(email) {
   const [rows] = await pool.execute(
     `SELECT
-      user.user_id,
-      user.email,
-      user.name,
-      user.password,
-      user.status,
-      role.role_name
-    FROM user
-    JOIN role ON user.role_id = role.role_id
-    WHERE LOWER(user.email) = LOWER(?)`,
+      user_id,
+      email,
+      name,
+      password,
+      status,
+      role_name
+    FROM \`user\`
+    WHERE LOWER(email) = LOWER(?)`,
     [email]
   );
 
