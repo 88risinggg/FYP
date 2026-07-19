@@ -39,33 +39,6 @@ async function runMigration() {
     {
       name: "Add payment_date column",
       sql: "ALTER TABLE invoice ADD COLUMN payment_date DATETIME NULL"
-    },
-    {
-      name: "Create invoice_notification table",
-      sql: `CREATE TABLE IF NOT EXISTS invoice_notification (
-        notification_id INT AUTO_INCREMENT PRIMARY KEY,
-        type VARCHAR(50) NOT NULL,
-        title VARCHAR(255) NOT NULL,
-        message TEXT NOT NULL,
-        invoice_id INT NULL,
-        user_id INT NOT NULL,
-        is_read TINYINT(1) DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_user_id (user_id),
-        INDEX idx_is_read (is_read),
-        INDEX idx_created_at (created_at)
-      )`
-    },
-    {
-      name: "Create invoice_view_log table",
-      sql: `CREATE TABLE IF NOT EXISTS invoice_view_log (
-        view_id INT AUTO_INCREMENT PRIMARY KEY,
-        invoice_id INT NOT NULL,
-        viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        ip_address VARCHAR(45) NULL,
-        user_agent VARCHAR(512) NULL,
-        INDEX idx_invoice_id (invoice_id)
-      )`
     }
   ];
 

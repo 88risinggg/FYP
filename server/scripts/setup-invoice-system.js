@@ -73,45 +73,6 @@ async function runMigration() {
       console.log("[MIGRATE] payment_method ENUM:", e.message);
     }
 
-    // Create notification table
-    try {
-      await connection.query(`
-        CREATE TABLE IF NOT EXISTS invoice_notification (
-          notification_id INT AUTO_INCREMENT PRIMARY KEY,
-          type VARCHAR(50) NOT NULL,
-          title VARCHAR(255) NOT NULL,
-          message TEXT NOT NULL,
-          invoice_id INT NULL,
-          user_id INT NOT NULL,
-          is_read TINYINT(1) DEFAULT 0,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          INDEX idx_user_id (user_id),
-          INDEX idx_is_read (is_read),
-          INDEX idx_created_at (created_at)
-        )
-      `);
-      console.log("[MIGRATE] invoice_notification table ready.");
-    } catch (e) {
-      console.log("[MIGRATE] notification table:", e.message);
-    }
-
-    // Create view log table
-    try {
-      await connection.query(`
-        CREATE TABLE IF NOT EXISTS invoice_view_log (
-          view_id INT AUTO_INCREMENT PRIMARY KEY,
-          invoice_id INT NOT NULL,
-          viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          ip_address VARCHAR(45) NULL,
-          user_agent VARCHAR(512) NULL,
-          INDEX idx_invoice_id (invoice_id)
-        )
-      `);
-      console.log("[MIGRATE] invoice_view_log table ready.");
-    } catch (e) {
-      console.log("[MIGRATE] view_log table:", e.message);
-    }
-
     console.log("[MIGRATE] ✓ Schema migration complete.\n");
   } finally {
     connection.release();
@@ -128,7 +89,6 @@ async function resetDatabase() {
     // Delete in dependency order
     const tables = [
       { query: "DELETE FROM payment", label: "payments" },
-      { query: "DELETE FROM invoice_notification", label: "notifications" },
       { query: "DELETE FROM audit_logs WHERE entity_type IN ('invoice', 'payment')", label: "audit logs" }
     ];
 
@@ -145,12 +105,6 @@ async function resetDatabase() {
     try {
       const [result] = await connection.query("DELETE FROM invoice_fraud_assessment");
       console.log(`[RESET] Deleted ${result.affectedRows} fraud assessments.`);
-    } catch { /* table may not exist */ }
-
-    // View logs
-    try {
-      const [result] = await connection.query("DELETE FROM invoice_view_log");
-      console.log(`[RESET] Deleted ${result.affectedRows} view logs.`);
     } catch { /* table may not exist */ }
 
     // Delete all invoices
