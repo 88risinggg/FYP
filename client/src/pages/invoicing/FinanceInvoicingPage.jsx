@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+s git diff:Fix payroll reports, database startup and Finance page crashesimport { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import * as XLSX from "xlsx";
 import {
@@ -355,7 +355,7 @@ function getItemAmount(item) {
 
 function InvoiceStatusBadge({ status }) {
   return (
-    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyles[status] || statusStyles.Draft}`}>
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusStyles[status] || statusStyles.Draft}`}>
       {status}
     </span>
   );
@@ -364,10 +364,10 @@ function InvoiceStatusBadge({ status }) {
 function MetricCard({ label, value, accent = "text-white" }) {
   return (
     <div className="neon-glass neon-border rounded-xl px-5 py-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#d8c6e8]/70">
+      <p className="text-xs font-bold uppercase tracking-wide text-[#d8c6e8]">
         {label}
       </p>
-      <p className={`mt-2 text-2xl font-semibold ${accent}`}>{value}</p>
+      <p className={`mt-2 text-3xl font-bold ${accent}`}>{value}</p>
     </div>
   );
 }
@@ -377,10 +377,10 @@ function SectionShell({ eyebrow, title, description, action, children }) {
     <section className="neon-glass neon-border rounded-2xl p-5">
       <div className="flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#C77DFF]">{eyebrow}</p>
-          <h2 className="mt-1 text-2xl font-semibold text-white">{title}</h2>
+          <p className="text-sm font-bold text-[#C77DFF]">{eyebrow}</p>
+          <h2 className="mt-1 text-2xl font-bold text-white">{title}</h2>
           {description ? (
-            <p className="mt-2 max-w-3xl text-sm text-[#d8c6e8]/75">{description}</p>
+            <p className="mt-2 max-w-3xl text-sm text-[#d8c6e8]/80">{description}</p>
           ) : null}
         </div>
         {action}
@@ -910,14 +910,14 @@ function InvoiceTable({
                 aria-label="Select all draft invoices"
               />
             </th>
-            <th className="px-4 py-3">Invoice Number</th>
-            <th className="px-4 py-3">Customer</th>
-            <th className="px-4 py-3">Issue Date</th>
-            <th className="px-4 py-3">Due Date</th>
-            <th className="px-4 py-3">Scheduled</th>
-            <th className="px-4 py-3 text-right">Total Amount</th>
-            <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3 text-right">Actions</th>
+            <th className="px-4 py-3 font-bold">Invoice Number</th>
+            <th className="px-4 py-3 font-bold">Customer</th>
+            <th className="px-4 py-3 font-bold">Issue Date</th>
+            <th className="px-4 py-3 font-bold">Due Date</th>
+            <th className="px-4 py-3 font-bold">Scheduled</th>
+            <th className="px-4 py-3 font-bold text-right">Total Amount</th>
+            <th className="px-4 py-3 font-bold">Status</th>
+            <th className="px-4 py-3 font-bold text-right">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-white/10">
@@ -933,15 +933,15 @@ function InvoiceTable({
                   aria-label={`Select invoice ${invoice.invoiceId}`}
                 />
               </td>
-              <td className="px-4 py-4 font-semibold text-white">{invoice.invoiceId}</td>
+              <td className="px-4 py-4 font-bold text-white">{invoice.invoiceId}</td>
               <td className="px-4 py-4">
-                <p className="font-medium text-white">{invoice.customer_name}</p>
-                <p className="text-xs text-[#d8c6e8]/65">{invoice.customer_email}</p>
+                <p className="font-bold text-white">{invoice.customer_name}</p>
+                <p className="text-xs text-[#d8c6e8]/70">{invoice.customer_email}</p>
               </td>
               <td className="px-4 py-4">{formatDate(invoice.issue_date)}</td>
               <td className="px-4 py-4">{formatDate(invoice.due_date)}</td>
               <td className="px-4 py-4 text-[#d8c6e8]">{invoice.scheduled_at ? formatDateTime(invoice.scheduled_at) : "-"}</td>
-              <td className="px-4 py-4 text-right font-semibold">{formatCurrency(invoice.total_amount)}</td>
+              <td className="px-4 py-4 text-right font-bold text-white">{formatCurrency(invoice.total_amount)}</td>
               <td className="px-4 py-4">
                 <InvoiceStatusBadge status={invoice.status} />
               </td>
