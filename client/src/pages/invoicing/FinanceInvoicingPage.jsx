@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import * as XLSX from "xlsx";
 import {
@@ -55,6 +55,26 @@ import {
   fetchFinancialExport
 } from "../../services/invoiceService.js";
 import { getStoredSession } from "../../services/sessionService.js";
+import {
+  startNotificationPolling,
+  markNotificationRead as apiMarkNotificationRead,
+  markAllNotificationsRead as apiMarkAllNotificationsRead
+} from "../../services/financeNotificationService.js";
+import {
+  createPdfDocument,
+  addCoverPage,
+  addPageFooter,
+  addSectionHeader,
+  addChartImage,
+  addMetricRow,
+  captureElement,
+  generateAndDownloadPdf,
+  PAGE_MARGIN,
+  CONTENT_WIDTH_A4,
+  BRAND_COLOR,
+  DARK_COLOR,
+  GRAY_COLOR
+} from "../../services/pdfExportService.js";
 
 const financeSidebarSections = [
   {
@@ -1580,46 +1600,141 @@ function InvoiceCompliancePanel({ invoices, fraudSummary }) {
   async function handleSendFraudReport() {
     setReportSending(true);
     try {
-      // Build report data from failed checks and fraud summary
-      const reportData = [
-        ["Fraud Compliance Report", "", "", ""],
-        ["Generated", new Date().toLocaleString(), "", ""],
-        ["", "", "", ""],
-        ["Check", "Status", "Severity", "Detail"],
-        ...checks.map((c) => [c.label, c.status ? "PASS" : "FAIL", c.severity, c.detail]),
-        ["", "", "", ""],
-        ["Fraud Summary", "", "", ""],
-        ["Total Assessed", fraudSummary?.assessedCount || 0, "", ""],
-        ["High Risk", fraudSummary?.highCount || 0, "", ""],
-        ["Medium Risk", fraudSummary?.mediumCount || 0, "", ""],
-        ["Low Risk", fraudSummary?.lowCount || 0, "", ""],
-        ["Flagged for Review", fraudSummary?.flaggedCount || 0, "", ""],
-        ["Average Risk Score", fraudSummary?.averageScore || 0, "", ""]
-      ];
+      await generateAndDownloadPdf(
+        async () => {
+          const doc = createPdfDocument("portrait");
+          const timestamp = new Date().toLocaleString("en-SG");
+          const pageCtx = { pageNum: 1, timestamp };
 
-      // Create Excel workbook
-      const ws = XLSX.utils.aoa_to_sheet(reportData);
-      ws["!cols"] = [{ wch: 40 }, { wch: 15 }, { wch: 12 }, { wch: 50 }];
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Fraud Report");
-      XLSX.writeFile(wb, `fraud_compliance_report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+          // Cover page
+          addCoverPage(doc, {
+            title: "Fraud Detection Report",
+            subtitle: "Compliance & Risk Assessment",
+            generatedBy: "Finance Team",
+            date: timestamp
+          });
+          addPageFooter(doc, pageCtx.pageNum, null, timestamp);
 
-      // Send notification to Finance via API
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-      const token = localStorage.getItem("authToken");
-      await fetch(`${API_BASE}/api/fraud/report-notification`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          failed_checks: failed.map((c) => ({ label: c.label, severity: c.severity, detail: c.detail })),
-          summary: fraudSummary
-        })
-      });
+          // Page 2 - Summary Statistics
+          doc.addPage();
+          pageCtx.pageNum++;
+          let y = PAGE_MARGIN + 5;
 
-      setReportSent(true);
-      setTimeout(() => setReportSent(false), 4000);
+          y = addSectionHeader(doc, "Fraud Summary Statistics", y);
+          y += 4;
+
+          y = addMetricRow(doc, "Total Invoices Analyzed", String(fraudSummary?.assessedCount || 0), y);
+          y = addMetricRow(doc, "Suspicious Invoices (Flagged)", String(fraudSummary?.flaggedCount || 0), y, { valueColor: [190, 18, 60] });
+          const pct = fraudSummary?.assessedCount > 0
+            ? ((fraudSummary?.flaggedCount || 0) / fraudSummary.assessedCount * 100).toFixed(1) + "%"
+            : "0%";
+          y = addMetricRow(doc, "Fraud Percentage", pct, y, { valueColor: [190, 18, 60] });
+          y = addMetricRow(doc, "Average Risk Score", String(fraudSummary?.averageScore || 0), y);
+          y += 4;
+
+          y = addSectionHeader(doc, "Risk Level Breakdown", y + 4);
+          y += 4;
+          y = addMetricRow(doc, "High Risk Invoices", String(fraudSummary?.highCount || 0), y, { valueColor: [190, 18, 60] });
+          y = addMetricRow(doc, "Medium Risk Invoices", String(fraudSummary?.mediumCount || 0), y, { valueColor: [180, 83, 9] });
+          y = addMetricRow(doc, "Low Risk Invoices", String(fraudSummary?.lowCount || 0), y, { valueColor: [4, 120, 87] });
+          y += 6;
+
+          // Compliance checklist
+          y = addSectionHeader(doc, "Compliance Checklist", y + 4);
+          y += 4;
+          checks.forEach((c) => {
+            const statusLabel = c.status ? "PASS" : "FAIL";
+            const color = c.status ? [4, 120, 87] : [190, 18, 60];
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(...GRAY_COLOR);
+            doc.text(`[${statusLabel}] ${c.label}`, PAGE_MARGIN + 4, y);
+            doc.setFontSize(8);
+            doc.setTextColor(...color);
+            doc.text(`Severity: ${c.severity}`, 170, y, { align: "right" });
+            y += 5;
+            if (y > 270) {
+              addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+              doc.addPage();
+              pageCtx.pageNum++;
+              y = PAGE_MARGIN + 5;
+            }
+          });
+
+          // Capture fraud charts if they exist
+          const fraudSection = document.querySelector('[data-pdf-fraud-charts]');
+          if (fraudSection) {
+            addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+            doc.addPage();
+            pageCtx.pageNum++;
+            let cy = PAGE_MARGIN + 5;
+            cy = addSectionHeader(doc, "Fraud Analysis Charts", cy);
+            cy += 4;
+            const canvas = await captureElement(fraudSection, { scale: 2 });
+            addChartImage(doc, canvas, cy, CONTENT_WIDTH_A4, 180, pageCtx);
+          }
+
+          // Suspicious invoices table
+          const suspiciousInvoices = (invoices || []).filter(
+            (inv) => inv.risk_level === "High" || inv.risk_level === "Medium"
+          );
+          if (suspiciousInvoices.length > 0) {
+            addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+            doc.addPage();
+            pageCtx.pageNum++;
+            let ty = PAGE_MARGIN + 5;
+            ty = addSectionHeader(doc, "Suspicious Invoices", ty);
+            ty += 6;
+
+            // Table headers
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(...DARK_COLOR);
+            doc.text("Invoice", PAGE_MARGIN + 2, ty);
+            doc.text("Customer", PAGE_MARGIN + 30, ty);
+            doc.text("Amount", PAGE_MARGIN + 80, ty);
+            doc.text("Score", PAGE_MARGIN + 110, ty);
+            doc.text("Risk", PAGE_MARGIN + 130, ty);
+            doc.text("Status", PAGE_MARGIN + 150, ty);
+            ty += 4;
+            doc.setDrawColor(240, 210, 202);
+            doc.line(PAGE_MARGIN, ty, 190, ty);
+            ty += 3;
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7.5);
+            suspiciousInvoices.forEach((inv) => {
+              if (ty > 270) {
+                addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+                doc.addPage();
+                pageCtx.pageNum++;
+                ty = PAGE_MARGIN + 10;
+              }
+              doc.setTextColor(...DARK_COLOR);
+              doc.text(inv.invoiceId || "-", PAGE_MARGIN + 2, ty);
+              doc.text((inv.customer_name || "-").substring(0, 20), PAGE_MARGIN + 30, ty);
+              doc.text(formatCurrency(inv.total_amount), PAGE_MARGIN + 80, ty);
+              doc.text(String(inv.risk_score || 0), PAGE_MARGIN + 110, ty);
+              const riskColor = inv.risk_level === "High" ? [190, 18, 60] : [180, 83, 9];
+              doc.setTextColor(...riskColor);
+              doc.text(inv.risk_level || "-", PAGE_MARGIN + 130, ty);
+              doc.setTextColor(...GRAY_COLOR);
+              doc.text(inv.review_status || "-", PAGE_MARGIN + 150, ty);
+              ty += 5;
+            });
+          }
+
+          addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+          return doc;
+        },
+        `fraud_report_${new Date().toISOString().slice(0, 10)}.pdf`,
+        {
+          onError: (msg) => console.error("Fraud PDF export failed:", msg),
+          onSuccess: () => { setReportSent(true); setTimeout(() => setReportSent(false), 4000); }
+        }
+      );
     } catch (err) {
-      console.error("Failed to send fraud report:", err);
+      console.error("Failed to export fraud report:", err);
     } finally {
       setReportSending(false);
     }
@@ -2829,7 +2944,7 @@ function FraudDetectionView() {
               </table>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4" data-pdf-fraud-charts>
               <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
                 <h3 className="text-sm font-bold text-[#251E1F]">Risk Categories</h3>
                 <div className="mt-4 space-y-3">
@@ -2868,6 +2983,7 @@ function ReportsView() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("charts");
   const [isExporting, setIsExporting] = useState(false);
+  const [exportToast, setExportToast] = useState(null);
 
   useEffect(() => {
     async function loadReports() {
@@ -2885,84 +3001,176 @@ function ReportsView() {
     loadReports();
   }, []);
 
-  async function handleExportExcel() {
-    setIsExporting(true);
-    try {
-      const data = await fetchFinancialExport();
-      // Build Excel using XLSX
-      const wb = XLSX.utils.book_new();
-
-      // Summary sheet
-      const summaryData = [
-        ["Financial Report - " + (data.companyName || "PayNivo")],
-        ["Generated", new Date(data.generatedAt).toLocaleString()],
-        [],
-        ["REVENUE SUMMARY"],
-        ["Total Inflow (Customer Payments)", data.summary.totalInflow],
-        ["Salon Payouts", data.summary.salonPayouts],
-        ["Gross Revenue (Platform Commission)", data.summary.grossRevenue],
-        ["Collected Revenue", data.summary.collectedRevenue],
-        ["Outstanding Revenue", data.summary.outstandingRevenue],
-        ["Avg Commission Rate", data.summary.avgCommissionRate + "%"],
-        [],
-        ["INVOICE COUNTS"],
-        ["Total Invoices", data.summary.invoiceCount],
-        ["Paid", data.summary.paidCount],
-        ["Overdue", data.summary.overdueCount]
-      ];
-      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-      XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
-
-      // Invoice details sheet
-      const invoiceHeaders = ["Invoice", "Customer", "Status", "Issue Date", "Due Date", "Total Amount", "Commission %", "Platform Share", "Salon Share", "Payment Method", "Transaction ID"];
-      const invoiceRows = data.invoices.map((inv) => [
-        inv.invoiceId, inv.customer, inv.status, inv.issueDate, inv.dueDate,
-        inv.totalAmount, inv.commissionRate, inv.vanidayShare, inv.salonShare,
-        inv.paymentMethod || "-", inv.transactionId || "-"
-      ]);
-      const invoiceSheet = XLSX.utils.aoa_to_sheet([invoiceHeaders, ...invoiceRows]);
-      XLSX.utils.book_append_sheet(wb, invoiceSheet, "Invoices");
-
-      // Download
-      XLSX.writeFile(wb, `financial-report-${new Date().toISOString().split("T")[0]}.xlsx`);
-    } catch (exportError) {
-      setError(exportError.message);
-    } finally {
-      setIsExporting(false);
-    }
-  }
-
   async function handleExportPdf() {
     setIsExporting(true);
     try {
       const data = await fetchFinancialExport();
-      // Generate a printable HTML page for PDF
-      const html = `<!DOCTYPE html><html><head><title>Financial Report</title>
-        <style>body{font-family:Inter,sans-serif;padding:40px;color:#251E1F}
-        h1{font-size:22px;margin-bottom:4px}h2{font-size:16px;margin-top:24px;border-bottom:1px solid #f0d2ca;padding-bottom:6px}
-        table{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
-        th,td{padding:8px 10px;border:1px solid #f0d2ca;text-align:left}
-        th{background:#FDD9CD;font-weight:600}
-        .right{text-align:right}.bold{font-weight:700}
-        .summary-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px}
-        .summary-card{border:1px solid #f0d2ca;border-radius:8px;padding:14px}
-        .summary-card p{margin:0}.label{font-size:12px;color:#7b6660}.value{font-size:20px;font-weight:700}
-        </style></head><body>
-        <h1>${data.companyName || "PayNivo"} - Financial Report</h1>
-        <p style="color:#7b6660">Generated: ${new Date(data.generatedAt).toLocaleString()}</p>
-        <div class="summary-grid">
-          <div class="summary-card"><p class="label">Total Inflow</p><p class="value">SGD ${data.summary.totalInflow.toLocaleString()}</p></div>
-          <div class="summary-card"><p class="label">Salon Payouts</p><p class="value">SGD ${data.summary.salonPayouts.toLocaleString()}</p></div>
-          <div class="summary-card"><p class="label">Gross Revenue (Commission)</p><p class="value">SGD ${data.summary.grossRevenue.toLocaleString()}</p></div>
-        </div>
-        <h2>Invoice Details (${data.invoices.length})</h2>
-        <table><thead><tr><th>Invoice</th><th>Customer</th><th>Status</th><th>Date</th><th class="right">Amount</th><th class="right">Commission</th><th class="right">Salon Share</th></tr></thead><tbody>
-        ${data.invoices.map((inv) => `<tr><td>${inv.invoiceId}</td><td>${inv.customer}</td><td>${inv.status}</td><td>${inv.issueDate}</td><td class="right">$${inv.totalAmount.toFixed(2)}</td><td class="right">$${inv.vanidayShare.toFixed(2)}</td><td class="right">$${inv.salonShare.toFixed(2)}</td></tr>`).join("")}
-        </tbody></table>
-        <script>window.onload=function(){window.print()}</script></body></html>`;
-      const w = window.open("", "_blank");
-      w.document.write(html);
-      w.document.close();
+      await generateAndDownloadPdf(
+        async () => {
+          const doc = createPdfDocument("portrait");
+          const timestamp = new Date().toLocaleString("en-SG");
+          const pageCtx = { pageNum: 1, timestamp };
+
+          // ─── Cover Page ───
+          addCoverPage(doc, {
+            title: "PayNivo Report",
+            subtitle: "Financial Performance & Invoice Analytics",
+            generatedBy: "Finance Team",
+            date: timestamp
+          });
+          addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+
+          // ─── Page 2: Dashboard Summary ───
+          doc.addPage();
+          pageCtx.pageNum++;
+          let y = PAGE_MARGIN + 5;
+
+          y = addSectionHeader(doc, "Dashboard Summary", y);
+          y += 4;
+
+          y = addMetricRow(doc, "Total Invoices", String(data.summary.invoiceCount || 0), y);
+          y = addMetricRow(doc, "Paid Invoices", String(data.summary.paidCount || 0), y, { valueColor: [4, 120, 87] });
+          y = addMetricRow(doc, "Overdue Invoices", String(data.summary.overdueCount || 0), y, { valueColor: [190, 18, 60] });
+          y = addMetricRow(doc, "Total Revenue (Inflow)", `SGD ${Number(data.summary.totalInflow || 0).toLocaleString()}`, y);
+          y = addMetricRow(doc, "Outstanding Balance", `SGD ${Number(data.summary.outstandingRevenue || 0).toLocaleString()}`, y, { valueColor: [180, 83, 9] });
+          y = addMetricRow(doc, "Gross Revenue (Commission)", `SGD ${Number(data.summary.grossRevenue || 0).toLocaleString()}`, y, { valueColor: [4, 120, 87] });
+          y = addMetricRow(doc, "Collected Revenue", `SGD ${Number(data.summary.collectedRevenue || 0).toLocaleString()}`, y);
+          y = addMetricRow(doc, "Avg Commission Rate", `${data.summary.avgCommissionRate || 0}%`, y);
+          y += 8;
+
+          // ─── Charts ───
+          // Capture all chart containers from the page
+          const chartContainers = document.querySelectorAll('[data-pdf-report-chart]');
+          if (chartContainers.length > 0) {
+            y = addSectionHeader(doc, "Charts & Analytics", y);
+            y += 4;
+
+            for (const container of chartContainers) {
+              const chartTitle = container.getAttribute('data-pdf-chart-title') || '';
+              const canvas = await captureElement(container, { scale: 2, backgroundColor: "#ffffff" });
+
+              // Check page break
+              const imgRatio = canvas.width / canvas.height;
+              const imgWidth = CONTENT_WIDTH_A4;
+              const imgHeight = imgWidth / imgRatio;
+
+              if (y + imgHeight + 12 > 270) {
+                addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+                doc.addPage();
+                pageCtx.pageNum++;
+                y = PAGE_MARGIN + 5;
+              }
+
+              if (chartTitle) {
+                doc.setFontSize(10);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(...DARK_COLOR);
+                doc.text(chartTitle, PAGE_MARGIN, y);
+                y += 5;
+              }
+
+              y = addChartImage(doc, canvas, y, CONTENT_WIDTH_A4, 90, pageCtx);
+              y += 4;
+            }
+          }
+
+          addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+
+          // ─── Invoice Details Pages ───
+          if (data.invoices && data.invoices.length > 0) {
+            doc.addPage();
+            pageCtx.pageNum++;
+            let iy = PAGE_MARGIN + 5;
+
+            iy = addSectionHeader(doc, "Invoice Details", iy);
+            iy += 6;
+
+            // Table headers
+            const colWidths = [22, 32, 16, 18, 18, 22, 18, 24];
+            const headers = ["Invoice", "Customer", "Status", "Issue", "Due", "Amount", "Rate", "Commission"];
+
+            doc.setFontSize(7);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(...DARK_COLOR);
+            let cx = PAGE_MARGIN;
+            headers.forEach((h, i) => {
+              doc.text(h, cx, iy);
+              cx += colWidths[i];
+            });
+            iy += 3;
+            doc.setDrawColor(240, 210, 202);
+            doc.line(PAGE_MARGIN, iy, 190, iy);
+            iy += 4;
+
+            // Table rows
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(6.5);
+            data.invoices.forEach((inv) => {
+              if (iy > 275) {
+                addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+                doc.addPage();
+                pageCtx.pageNum++;
+                iy = PAGE_MARGIN + 10;
+
+                // Re-draw headers on new page
+                doc.setFontSize(7);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(...DARK_COLOR);
+                cx = PAGE_MARGIN;
+                headers.forEach((h, i) => {
+                  doc.text(h, cx, iy);
+                  cx += colWidths[i];
+                });
+                iy += 3;
+                doc.setDrawColor(240, 210, 202);
+                doc.line(PAGE_MARGIN, iy, 190, iy);
+                iy += 4;
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(6.5);
+              }
+
+              doc.setTextColor(...DARK_COLOR);
+              cx = PAGE_MARGIN;
+              doc.text(String(inv.invoiceId || ""), cx, iy); cx += colWidths[0];
+              doc.text((inv.customer || "").substring(0, 16), cx, iy); cx += colWidths[1];
+
+              // Status color
+              const statusColor = inv.status === "Paid" ? [4, 120, 87] : inv.status === "Overdue" ? [190, 18, 60] : DARK_COLOR;
+              doc.setTextColor(...statusColor);
+              doc.text(inv.status || "", cx, iy); cx += colWidths[2];
+
+              doc.setTextColor(...GRAY_COLOR);
+              const issueStr = inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("en-SG", { day: "2-digit", month: "short" }) : "-";
+              const dueStr = inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-SG", { day: "2-digit", month: "short" }) : "-";
+              doc.text(issueStr, cx, iy); cx += colWidths[3];
+              doc.text(dueStr, cx, iy); cx += colWidths[4];
+
+              doc.setTextColor(...DARK_COLOR);
+              doc.text(`$${Number(inv.totalAmount || 0).toFixed(0)}`, cx, iy); cx += colWidths[5];
+              doc.text(`${inv.commissionRate || 0}%`, cx, iy); cx += colWidths[6];
+              doc.setTextColor(4, 120, 87);
+              doc.text(`$${Number(inv.vanidayShare || 0).toFixed(0)}`, cx, iy);
+              iy += 4.5;
+            });
+
+            addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+          }
+
+          return doc;
+        },
+        `PayNivo_Financial_Report_${new Date().toISOString().slice(0, 10)}.pdf`,
+        {
+          onError: (msg) => {
+            setError(msg);
+            setExportToast({ message: "PDF export failed", type: "error" });
+            setTimeout(() => setExportToast(null), 4000);
+          },
+          onSuccess: () => {
+            setExportToast({ message: "PDF exported successfully", type: "success" });
+            setTimeout(() => setExportToast(null), 4000);
+          }
+        }
+      );
     } catch (exportError) {
       setError(exportError.message);
     } finally {
@@ -2979,6 +3187,18 @@ function ReportsView() {
   return (
     <div className="space-y-6">
       <ErrorBanner message={error} />
+
+      {/* Export Toast */}
+      {exportToast && (
+        <div className={`fixed right-6 top-24 z-50 animate-[slideDown_0.3s_ease] rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
+          exportToast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-700" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-700"
+        }`}>
+          <div className="flex items-center gap-2">
+            {exportToast.type === "error" ? <X size={16} /> : <CheckCircle2 size={16} />}
+            <span className="text-sm font-medium">{exportToast.message}</span>
+          </div>
+        </div>
+      )}
 
       {/* Summary Metrics - Vaniday Commission Model */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -3002,13 +3222,9 @@ function ReportsView() {
           </button>
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={handleExportExcel} disabled={isExporting}
-            className="inline-flex items-center gap-2 rounded-lg border border-emerald-600/30 px-4 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
-            <Download size={14} />{isExporting ? "Exporting..." : "Export Excel"}
-          </button>
           <button type="button" onClick={handleExportPdf} disabled={isExporting}
             className="inline-flex items-center gap-2 rounded-lg border border-[#F38978]/30 px-4 py-2 text-xs font-bold text-[#F38978] hover:bg-[#FDD9CD]/20 disabled:opacity-50">
-            <Download size={14} />{isExporting ? "Exporting..." : "Export PDF"}
+            {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}{isExporting ? "Generating PDF..." : "Export Financial Report (PDF)"}
           </button>
         </div>
       </div>
@@ -3016,18 +3232,26 @@ function ReportsView() {
       {/* Charts Tab */}
       {activeTab === "charts" && (
         <div className="grid gap-6 xl:grid-cols-2">
-          <SectionShell eyebrow="Analytics" title="Revenue Over Time">
-            <SimpleLineChart data={reports?.monthlyRevenue || []} />
-          </SectionShell>
-          <SectionShell eyebrow="Collections" title="Aging Receivables">
-            <SimpleBarChart data={reports?.agingReceivables || []} labelKey="bucket" valueKey="total" />
-          </SectionShell>
-          <SectionShell eyebrow="Status" title="Invoice Status Distribution">
-            <SimpleBarChart data={reports?.statusDistribution || []} labelKey="status" valueKey="total" />
-          </SectionShell>
-          <SectionShell eyebrow="Customers" title="Top Customer Revenue">
-            <SimpleBarChart data={reports?.topCustomers || []} labelKey="name" valueKey="total" />
-          </SectionShell>
+          <div data-pdf-report-chart data-pdf-chart-title="Revenue Over Time">
+            <SectionShell eyebrow="Analytics" title="Revenue Over Time">
+              <SimpleLineChart data={reports?.monthlyRevenue || []} />
+            </SectionShell>
+          </div>
+          <div data-pdf-report-chart data-pdf-chart-title="Aging Receivables">
+            <SectionShell eyebrow="Collections" title="Aging Receivables">
+              <SimpleBarChart data={reports?.agingReceivables || []} labelKey="bucket" valueKey="total" />
+            </SectionShell>
+          </div>
+          <div data-pdf-report-chart data-pdf-chart-title="Invoice Status Distribution">
+            <SectionShell eyebrow="Status" title="Invoice Status Distribution">
+              <SimpleBarChart data={reports?.statusDistribution || []} labelKey="status" valueKey="total" />
+            </SectionShell>
+          </div>
+          <div data-pdf-report-chart data-pdf-chart-title="Top Customer Revenue">
+            <SectionShell eyebrow="Customers" title="Top Customer Revenue">
+              <SimpleBarChart data={reports?.topCustomers || []} labelKey="name" valueKey="total" />
+            </SectionShell>
+          </div>
         </div>
       )}
 
@@ -3165,6 +3389,8 @@ export default function FinanceInvoicingPage() {
   const [error, setError] = useState("");
   const [globalSearch, setGlobalSearch] = useState("");
   const [notifications, setNotifications] = useState([]);
+  const [notificationBadgeCount, setNotificationBadgeCount] = useState(0);
+  const stopPollingRef = useRef(null);
 
   // Use demo data as fallback when database is empty
   const displayInvoices = invoices.length === 0 && !isLoading ? DEMO_INVOICES : invoices;
@@ -3210,73 +3436,6 @@ export default function FinanceInvoicingPage() {
     setInvoices(invoiceResponse.invoices || []);
     setCustomers(customerDirectoryResponse.customers || customerResponse.customers || []);
     setNextInvoiceId(numberResponse.invoiceId || "INV-0001");
-
-    // Generate notifications from invoice data
-    const allInvoices = invoiceResponse.invoices || [];
-    let fraudResponse = null;
-    try {
-      fraudResponse = await fetchFraudDashboard({ riskLevel: "High" });
-    } catch {
-      fraudResponse = null;
-    }
-    const newNotifications = [];
-    const overdueInvoices = allInvoices.filter((inv) => inv.status === "Overdue");
-    const scheduledInvoices = allInvoices.filter((inv) => inv.status === "Scheduled");
-    const recentPaid = allInvoices.filter((inv) => inv.status === "Paid").slice(0, 3);
-    const highRiskCount = fraudResponse?.summary?.highCount || 0;
-
-    if (highRiskCount > 0) {
-      newNotifications.push({
-        id: "fraud-high-risk",
-        title: `${highRiskCount} high-risk invoice${highRiskCount > 1 ? "s" : ""} detected`,
-        description: "Fraud review is required before payment processing.",
-        time: "Immediate review",
-        read: false
-      });
-    }
-
-    if (overdueInvoices.length > 0) {
-      newNotifications.push({
-        id: "overdue-alert",
-        title: `${overdueInvoices.length} invoice${overdueInvoices.length > 1 ? "s" : ""} overdue`,
-        description: `Total overdue: ${formatCurrency(overdueInvoices.reduce((s, i) => s + Number(i.total_amount), 0))}`,
-        time: "Action required",
-        read: false
-      });
-    }
-
-    if (scheduledInvoices.length > 0) {
-      newNotifications.push({
-        id: "scheduled-info",
-        title: `${scheduledInvoices.length} invoice${scheduledInvoices.length > 1 ? "s" : ""} scheduled`,
-        description: "Invoices will be sent automatically at the scheduled time.",
-        time: "Pending",
-        read: false
-      });
-    }
-
-    recentPaid.forEach((inv) => {
-      newNotifications.push({
-        id: `paid-${inv.invoice_id}`,
-        title: `Payment received: ${inv.invoiceId}`,
-        description: `${inv.customer_name} - ${formatCurrency(inv.total_amount)}`,
-        time: formatDate(inv.issue_date),
-        read: true
-      });
-    });
-
-    const draftCount = allInvoices.filter((inv) => inv.status === "Draft").length;
-    if (draftCount > 0) {
-      newNotifications.push({
-        id: "draft-reminder",
-        title: `${draftCount} draft invoice${draftCount > 1 ? "s" : ""} pending`,
-        description: "Review and send when ready.",
-        time: "Reminder",
-        read: true
-      });
-    }
-
-    setNotifications(newNotifications);
   }
 
   function handleGlobalSearch(query) {
@@ -3290,9 +3449,19 @@ export default function FinanceInvoicingPage() {
   }
 
   function handleMarkNotificationRead(notifId) {
+    // Mark locally
     setNotifications((current) =>
-      current.map((n) => n.id === notifId ? { ...n, read: true } : n)
+      current.map((n) => (n.notification_id || n.id) === notifId ? { ...n, is_read: 1, read: true } : n)
     );
+    setNotificationBadgeCount((c) => Math.max(0, c - 1));
+    // Mark on server
+    apiMarkNotificationRead(notifId).catch(() => {});
+  }
+
+  function handleMarkAllRead() {
+    setNotifications((current) => current.map((n) => ({ ...n, is_read: 1, read: true })));
+    setNotificationBadgeCount(0);
+    apiMarkAllNotificationsRead().catch(() => {});
   }
 
   useEffect(() => {
@@ -3308,6 +3477,20 @@ export default function FinanceInvoicingPage() {
     }
 
     loadInitialData();
+
+    // Start notification polling (Finance-only, from database)
+    if (session?.user?.role === "Finance") {
+      stopPollingRef.current = startNotificationPolling(({ notifications: notifs, unreadCount }) => {
+        setNotifications(notifs);
+        setNotificationBadgeCount(unreadCount);
+      }, 15000);
+    }
+
+    return () => {
+      if (stopPollingRef.current) {
+        stopPollingRef.current();
+      }
+    };
   }, []);
 
   async function handleSendInvoice(invoiceId) {
@@ -3392,7 +3575,9 @@ export default function FinanceInvoicingPage() {
       searchPlaceholder="Search invoices, customers, payments..."
       onSearch={handleGlobalSearch}
       notifications={notifications}
+      notificationBadgeCount={notificationBadgeCount}
       onMarkNotificationRead={handleMarkNotificationRead}
+      onMarkAllRead={handleMarkAllRead}
     >
       <div className="space-y-6">
         {renderActiveView()}

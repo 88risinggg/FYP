@@ -33,6 +33,10 @@ async function getNotificationsByUserId(req, res) {
 
     return res.json(rows);
   } catch (error) {
+    // If notification table doesn't exist, return empty array
+    if (error.code === "ER_NO_SUCH_TABLE") {
+      return res.json([]);
+    }
     console.error(error);
     return res.status(500).json({ message: "Failed to fetch notifications" });
   }

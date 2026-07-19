@@ -150,6 +150,24 @@ async function reassessInvoice(req, res) {
       [score, level, JSON.stringify(indicators), invoiceId]
     );
 
+    // Notify Finance if fraud score exceeds threshold (High risk)
+    if (level === "High") {
+      try {
+        const { createNotification } = require("../services/invoiceNotificationService");
+        const [invInfo] = await pool.query(
+          "SELECT invoiceId FROM invoice WHERE invoice_id = ? LIMIT 1",
+          [invoiceId]
+        );
+        const invNum = invInfo[0]?.invoiceId || `#${invoiceId}`;
+        await createNotification({
+          type: "fraud_alert",
+          title: "Fraud Alert",
+          message: `Invoice ${invNum} flagged as High Risk (score: ${score}). Immediate review required.`,
+          invoiceId
+        });
+      } catch { /* non-blocking */ }
+    }
+
     res.json({ message: "Invoice fraud risk reassessed.", assessment: { risk_score: score, risk_level: level, indicators } });
   } catch (error) {
     res.status(500).json({ message: "Failed to reassess invoice.", detail: error.message });

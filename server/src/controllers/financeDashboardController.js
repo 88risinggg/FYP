@@ -3,9 +3,38 @@
  *
  * Provides invoice-related metrics and activity data for the Finance dashboard.
  * Only displays invoice-related information (no payroll, HR, or admin data).
+ *
+ * Uses the existing `notification` table for Finance notifications.
+ * Finance notifications are identified by type prefix 'finance_' or known invoice types.
  */
 
 const { pool } = require("../config/db");
+
+// Types used for finance/invoice notifications
+const FINANCE_NOTIFICATION_TYPES = [
+  "finance_invoice_created",
+  "finance_invoice_sent",
+  "finance_customer_viewed",
+  "finance_payment_success",
+  "finance_payment_failed",
+  "finance_invoice_overdue",
+  "finance_reminder_sent",
+  "finance_fraud_alert",
+  "finance_stripe_payment",
+  "finance_invoice_cancelled",
+  "draft_saved",
+  "invoice_sent",
+  "customer_viewed",
+  "customer_downloaded",
+  "pay_now_clicked",
+  "payment_success",
+  "payment_failed",
+  "invoice_overdue",
+  "payment_refunded",
+  "reminder_sent",
+  "invoice_cancelled",
+  "fraud_alert"
+];
 
 /**
  * GET /api/finance/dashboard
@@ -69,20 +98,26 @@ async function getFinanceDashboard(req, res) {
     `);
 
     // Recent activity (last 10 audit log entries for invoices)
-    const [recentActivity] = await pool.query(`
-      SELECT
-        al.log_id,
-        al.action,
-        al.entity_id,
-        al.entity_type,
-        al.created_at AS timestamp,
-        u.email AS user_email
-      FROM audit_log al
-      LEFT JOIN user u ON u.user_id = al.user_user_id
-      WHERE al.entity_type = 'invoice'
-      ORDER BY al.log_id DESC
-      LIMIT 10
-    `);
+    let recentActivity = [];
+    try {
+      const [activityRows] = await pool.query(`
+        SELECT
+          al.log_id,
+          al.action,
+          al.entity_id,
+          al.entity_type,
+          al.created_at AS timestamp,
+          u.email AS user_email
+        FROM audit_logs al
+        LEFT JOIN user u ON u.user_id = al.user_user_id
+        WHERE al.entity_type = 'invoice'
+        ORDER BY al.log_id DESC
+        LIMIT 10
+      `);
+      recentActivity = activityRows;
+    } catch {
+      // audit_logs table may have different name or not exist
+    }
 
     res.json({
       statusCounts,
@@ -101,34 +136,69 @@ async function getFinanceDashboard(req, res) {
  * GET /api/finance/notifications
  *
  * Returns invoice-related notifications for the current Finance user.
+ * Uses the existing `notification` table.
+ * Only Finance role users can access this endpoint.
  */
 async function getFinanceNotifications(req, res) {
   try {
     const userId = req.user?.userId;
+    const role = req.user?.role;
+
+    // Only Finance users should receive finance notifications
+    if (role !== "Finance") {
+      return res.json({ notifications: [] });
+    }
 
     const [rows] = await pool.query(`
       SELECT
-        n.notification_id,
-        n.type,
-        n.title,
-        n.message,
-        n.is_read,
-        n.invoice_id,
-        n.created_at
-      FROM invoice_notification n
-      WHERE n.user_id = ?
-      ORDER BY n.created_at DESC
+        notification_id,
+        type,
+        subject AS title,
+        message,
+        CASE WHEN status = 'Unread' THEN 0 ELSE 1 END AS is_read,
+        sent_at AS created_at
+      FROM notification
+      WHERE user_user_id = ?
+      ORDER BY sent_at DESC
       LIMIT 50
     `, [userId]);
 
     res.json({ notifications: rows });
   } catch (error) {
-    // Table may not exist yet — return empty array
     if (error.code === "ER_NO_SUCH_TABLE") {
       return res.json({ notifications: [] });
     }
     console.error("[FINANCE NOTIFICATIONS]", error.message);
     res.status(500).json({ message: "Failed to load notifications." });
+  }
+}
+
+/**
+ * GET /api/finance/notifications/unread-count
+ *
+ * Returns just the unread count for efficient polling.
+ * Only Finance role users get a count; others get 0.
+ */
+async function getUnreadCount(req, res) {
+  try {
+    const userId = req.user?.userId;
+    const role = req.user?.role;
+
+    if (role !== "Finance") {
+      return res.json({ count: 0 });
+    }
+
+    const [rows] = await pool.query(
+      "SELECT COUNT(*) AS count FROM notification WHERE user_user_id = ? AND status = 'Unread'",
+      [userId]
+    );
+
+    res.json({ count: Number(rows[0]?.count || 0) });
+  } catch (error) {
+    if (error.code === "ER_NO_SUCH_TABLE") {
+      return res.json({ count: 0 });
+    }
+    res.status(500).json({ message: "Failed to get unread count." });
   }
 }
 
@@ -143,7 +213,7 @@ async function markNotificationRead(req, res) {
     const userId = req.user?.userId;
 
     await pool.query(
-      "UPDATE invoice_notification SET is_read = 1 WHERE notification_id = ? AND user_id = ?",
+      "UPDATE notification SET status = 'Read' WHERE notification_id = ? AND user_user_id = ?",
       [notificationId, userId]
     );
 
@@ -166,7 +236,7 @@ async function markAllNotificationsRead(req, res) {
     const userId = req.user?.userId;
 
     await pool.query(
-      "UPDATE invoice_notification SET is_read = 1 WHERE user_id = ? AND is_read = 0",
+      "UPDATE notification SET status = 'Read' WHERE user_user_id = ? AND status = 'Unread'",
       [userId]
     );
 
@@ -182,6 +252,7 @@ async function markAllNotificationsRead(req, res) {
 module.exports = {
   getFinanceDashboard,
   getFinanceNotifications,
+  getUnreadCount,
   markNotificationRead,
   markAllNotificationsRead
 };

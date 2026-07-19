@@ -196,6 +196,18 @@ async function stripeWebhook(req, res) {
           [transactionId, invoiceId]
         );
         await connection.commit();
+
+        // Notify Finance about Stripe payment (non-blocking)
+        try {
+          const [invInfo] = await pool.query(
+            `SELECT i.invoiceId, c.name AS customer_name FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id WHERE i.invoice_id = ?`,
+            [invoiceId]
+          );
+          if (invInfo.length > 0) {
+            const { notifyPaymentSuccess } = require("../services/invoiceNotificationService");
+            notifyPaymentSuccess(invInfo[0].invoiceId, invInfo[0].customer_name, payAmount).catch(() => {});
+          }
+        } catch { /* non-blocking */ }
       } catch (dbErr) { await connection.rollback(); throw dbErr; }
       finally { connection.release(); }
     }

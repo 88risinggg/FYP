@@ -2,51 +2,56 @@
  * Invoice Notification Service
  *
  * Creates in-app notifications for Finance users about invoice events.
- * Notifications are stored in the invoice_notification table.
- * If the table doesn't exist, operations are no-ops.
+ * Uses the existing `notification` table with columns:
+ *   notification_id, user_user_id, type, subject, message, status (Unread/Read), sent_at
+ *
+ * Only Finance role users receive these notifications.
  */
 
 const { pool } = require("../config/db");
 
 /**
- * Create a notification for Finance users.
+ * Create a notification for Finance users using the existing notification table.
  *
  * @param {Object} data - Notification data.
- * @param {string} data.type - Notification type (draft_saved, invoice_sent, customer_viewed, etc.)
- * @param {string} data.title - Short title.
+ * @param {string} data.type - Notification type (e.g. invoice_sent, payment_success, fraud_alert).
+ * @param {string} data.title - Short title (stored in `subject` column).
  * @param {string} data.message - Notification message.
- * @param {number|null} data.invoiceId - Related invoice primary key.
+ * @param {number|null} data.invoiceId - Related invoice primary key (not stored, for reference only).
  * @param {number|null} data.userId - Target user ID (null = all Finance users).
  */
 async function createNotification(data) {
   try {
-    const { type, title, message, invoiceId, userId } = data;
+    const { type, title, message, userId } = data;
 
     if (userId) {
-      await pool.query(
-        `INSERT INTO invoice_notification (type, title, message, invoice_id, user_id, is_read, created_at)
-         VALUES (?, ?, ?, ?, ?, 0, NOW())`,
-        [type, title, message, invoiceId || null, userId]
+      // Verify the user is Finance role before creating notification
+      const [userRows] = await pool.query(
+        "SELECT user_id, role_name FROM user WHERE user_id = ? AND role_name = 'Finance' AND status = 1 LIMIT 1",
+        [userId]
       );
+      if (userRows.length > 0) {
+        await pool.query(
+          "INSERT INTO notification (user_user_id, type, subject, message, status, sent_at) VALUES (?, ?, ?, ?, 'Unread', NOW())",
+          [userId, type || "system", title, message || null]
+        );
+      }
     } else {
-      // Notify all Finance and Admin users
-      const [users] = await pool.query(`
-        SELECT u.user_id FROM user u
-        INNER JOIN role r ON r.role_id = u.role_id
-        WHERE r.role_name IN ('Finance', 'Admin') AND u.status = 1
-      `);
+      // Notify only Finance users
+      const [users] = await pool.query(
+        "SELECT user_id FROM user WHERE role_name = 'Finance' AND status = 1"
+      );
 
       if (users.length > 0) {
-        const values = users.map((u) => [type, title, message, invoiceId || null, u.user_id, 0]);
+        const values = users.map((u) => [u.user_id, type || "system", title, message || null, "Unread"]);
         await pool.query(
-          `INSERT INTO invoice_notification (type, title, message, invoice_id, user_id, is_read)
-           VALUES ?`,
-          [values]
+          "INSERT INTO notification (user_user_id, type, subject, message, status, sent_at) VALUES ?",
+          [values.map((v) => [...v, new Date()])]
         );
       }
     }
   } catch (error) {
-    // Non-blocking — notification table may not exist
+    // Non-blocking — log but don't crash
     if (error.code !== "ER_NO_SUCH_TABLE") {
       console.error("[NOTIFICATION]", error.message);
     }
@@ -177,6 +182,17 @@ async function notifyInvoiceCancelled(invoiceNumber, customerName, userId) {
   });
 }
 
+/**
+ * Notify Finance about a fraud detection alert (score exceeds threshold).
+ */
+async function notifyFraudAlert(invoiceNumber, score) {
+  await createNotification({
+    type: "fraud_alert",
+    title: "Fraud Detection Alert",
+    message: `Invoice ${invoiceNumber} flagged as High Risk (score: ${score}). Immediate review required.`
+  });
+}
+
 module.exports = {
   createNotification,
   notifyDraftSaved,
@@ -189,5 +205,6 @@ module.exports = {
   notifyInvoiceOverdue,
   notifyPaymentRefunded,
   notifyReminderSent,
-  notifyInvoiceCancelled
+  notifyInvoiceCancelled,
+  notifyFraudAlert
 };

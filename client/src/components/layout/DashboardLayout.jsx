@@ -79,7 +79,8 @@ export default function DashboardLayout({
   notificationBadgeCount,
   notificationsPath,
   profilePath,
-  onMarkNotificationRead
+  onMarkNotificationRead,
+  onMarkAllRead
 }) {
   const navigate = useNavigate();
   const roleProfile = roleProfiles[user?.role];
@@ -100,6 +101,11 @@ export default function DashboardLayout({
   async function handleBellClick() {
     const newShow = !showNotifications;
     setShowNotifications(newShow);
+
+    // If notifications are provided via props (e.g. Finance polling), skip API fetch
+    if (notifications.length > 0 || typeof notificationBadgeCount === 'number') {
+      return;
+    }
 
     if (newShow && fetchedNotifications === null) {
       const session = getStoredSession();
@@ -140,6 +146,13 @@ export default function DashboardLayout({
   }
 
   function handleMarkAllRead() {
+    // Use dedicated prop if provided (Finance notification system)
+    if (onMarkAllRead) {
+      onMarkAllRead();
+      setFetchedNotifications(prev => prev ? prev.map(n => ({ ...n, is_read: 1 })) : []);
+      return;
+    }
+
     const session = getStoredSession();
     const userId = session?.user?.userId;
     const token = session?.token;
@@ -251,7 +264,12 @@ export default function DashboardLayout({
                         return (
                           <div
                             key={notif.notification_id || notif.id || index}
-                            className={`border-b border-white/5 px-4 py-3 transition hover:bg-white/[0.04] ${!isRead ? "bg-[#C77DFF]/5" : ""}`}
+                            onClick={() => {
+                              if (!isRead && onMarkNotificationRead) {
+                                onMarkNotificationRead(notif.notification_id || notif.id);
+                              }
+                            }}
+                            className={`border-b border-white/5 px-4 py-3 transition hover:bg-white/[0.04] cursor-pointer ${!isRead ? "bg-[#C77DFF]/5" : ""}`}
                           >
                             <div className="min-w-0 flex-1">
                               <p className={`text-sm ${!isRead ? "font-semibold text-white" : "text-[#d8c6e8]/80"}`}>
