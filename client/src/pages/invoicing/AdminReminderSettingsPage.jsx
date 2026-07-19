@@ -75,7 +75,7 @@ function formatDate(value) {
 
 function renderPreview(text, form) {
   return String(text || "")
-    .replaceAll("{{client_name}}", "Acme Supplies")
+    .replaceAll("{{client_name}}", "Luxe Hair Studio")
     .replaceAll("{{invoice_number}}", "INV-2026-001")
     .replaceAll("{{amount_due}}", "$1,280.00")
     .replaceAll("{{due_date}}", "15 May 2026")

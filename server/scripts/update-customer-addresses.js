@@ -2,21 +2,21 @@ require("dotenv").config({ path: require("path").join(__dirname, "../.env") });
 const { pool } = require("../src/config/db");
 
 const addresses = {
-  "BluePeak Software": "9 North Buona Vista Drive, #08-01, Singapore 138588",
-  "Atlas Security": "12 Tampines Central 1, #09-04, Singapore 529543",
-  "Sunrise Digital": "71 Ayer Rajah Crescent, #06-14, Singapore 139951",
-  "Acme Corporation": "1 Raffles Place, #20-01, Singapore 048616",
-  "Orchid Healthcare": "2 Bukit Merah Central, #15-01, Singapore 159835",
-  "Stellar Marketing": "80 Robinson Road, #17-02, Singapore 068898",
-  "Coral Bay Restaurants": "26 Sentosa Gateway, #01-10, Singapore 098138",
-  "TechWave Solutions": "5 Shenton Way, #12-05, Singapore 068808",
-  "GreenLeaf Consulting": "3 Fusionopolis Way, #07-21, Singapore 138633",
-  "Golden Gate Logistics": "30 Pasir Panjang Road, #02-15, Singapore 117440",
-  "Pacific Ventures": "8 Marina View, #30-01, Singapore 018960",
-  "Diamond Electronics": "52 Jurong Gateway Road, #11-03, Singapore 608550",
-  "Zenith Engineering": "18 Boon Lay Way, #05-06, Singapore 609966",
-  "Marina Bay Trading": "10 Bayfront Avenue, #03-12, Singapore 018956",
-  "CloudNine Systems": "21 Bukit Batok Street 22, #04-08, Singapore 659589"
+  "Luxe Hair Studio": "391B Orchard Road, #03-12, Ngee Ann City, Singapore 238874",
+  "The Nail Artistry": "68 Orchard Road, #04-58, Plaza Singapura, Singapore 238839",
+  "Serenity Spa & Wellness": "2 Bayfront Avenue, #B1-05, Marina Bay Sands, Singapore 018972",
+  "Glow Aesthetics Clinic": "1 Raffles Place, #05-19, One Raffles Place, Singapore 048616",
+  "Brow & Lash Bar": "313 Orchard Road, #02-28, 313@Somerset, Singapore 238895",
+  "KBeauty Haven": "181 Orchard Road, #04-01, Orchard Central, Singapore 238896",
+  "Zen Reflexology Centre": "6 Raffles Boulevard, #03-128, Marina Square, Singapore 039594",
+  "Prestige Barbers": "252 North Bridge Road, #01-15, Raffles City, Singapore 179103",
+  "Skin Lab Express": "290 Orchard Road, #12-01, Paragon, Singapore 238859",
+  "Orchid Beauty Lounge": "3 Temasek Boulevard, #02-435, Suntec City, Singapore 038983",
+  "The Waxing Boutique": "1 HarbourFront Walk, #01-153, VivoCity, Singapore 098585",
+  "Radiance Medi-Spa": "2 Orchard Turn, #B2-15, ION Orchard, Singapore 238801",
+  "Aura Hair & Beauty": "50 Jurong Gateway Road, #03-11, JEM, Singapore 608549",
+  "Bliss Nail Studio": "23 Serangoon Central, #04-42, NEX, Singapore 556083",
+  "Rejuve Wellness Clinic": "80 Marine Parade Road, #09-05, Parkway Parade, Singapore 449269"
 };
 
 async function run() {

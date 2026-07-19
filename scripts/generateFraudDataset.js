@@ -37,11 +37,11 @@ function addDays(dateStr, days) {
 
 // Must match customer names in database
 const customers = [
-  "Acme Learning Centre",
-  "BrightPath Tuition",
-  "Nova Skills Academy",
-  "Summit Corporate Training",
-  "Urban Tech Institute"
+  "Luxe Hair Studio",
+  "The Nail Artistry",
+  "Serenity Spa & Wellness",
+  "Glow Aesthetics Clinic",
+  "Brow & Lash Bar"
 ];
 
 let counter = 1;
@@ -77,7 +77,7 @@ function generateFraudulent(scenario) {
       inv["Amount"] = randomFloat(4800, 4999);
       break;
     case "Invalid Customer":
-      inv["Customer Name"] = "Phantom Holdings Ltd";
+      inv["Customer Name"] = "Phantom Beauty Pte Ltd";
       break;
     case "Future Dated Invoice":
       inv["Invoice Date"] = "2027-12-01";

@@ -9,110 +9,110 @@ const outputPath = path.join(__dirname, "..", "dummy_invoice_upload.xlsx");
 
 const customers = [
   {
-    name: "Acme Learning Centre",
-    email: "accounts@acmelearning.sg",
-    address: "12 North Bridge Road, Singapore 179094"
+    name: "Luxe Hair Studio",
+    email: "bookings@luxehairstudio.sg",
+    address: "391B Orchard Road, #03-12, Ngee Ann City, Singapore 238874"
   },
   {
-    name: "BrightPath Tuition",
-    email: "finance@brightpath.sg",
-    address: "8 Tampines Central 1, Singapore 529543"
+    name: "The Nail Artistry",
+    email: "hello@thenailartistry.sg",
+    address: "68 Orchard Road, #04-58, Plaza Singapura, Singapore 238839"
   },
   {
-    name: "Nova Skills Academy",
-    email: "billing@novaskills.sg",
-    address: "3 Fusionopolis Way, Singapore 138633"
+    name: "Serenity Spa & Wellness",
+    email: "reservations@serenityspa.sg",
+    address: "2 Bayfront Avenue, #B1-05, Marina Bay Sands, Singapore 018972"
   },
   {
-    name: "Summit Corporate Training",
-    email: "payables@summittraining.sg",
-    address: "50 Raffles Place, Singapore 048623"
+    name: "Glow Aesthetics Clinic",
+    email: "appointments@glowaesthetics.sg",
+    address: "1 Raffles Place, #05-19, One Raffles Place, Singapore 048616"
   },
   {
-    name: "Urban Tech Institute",
-    email: "admin@urbantech.edu.sg",
-    address: "21 Bukit Batok Street 22, Singapore 659589"
+    name: "Brow & Lash Bar",
+    email: "info@browlashbar.sg",
+    address: "313 Orchard Road, #02-28, 313@Somerset, Singapore 238895"
   }
 ];
 
 const invoiceDefinitions = [
   {
-    customerEmail: "accounts@acmelearning.sg",
+    customerEmail: "bookings@luxehairstudio.sg",
     issue_date: "2026-05-01",
     due_date: "2026-05-15",
     status: "Sent",
     items: [
-      ["Math enrichment session", 8, 45.5],
-      ["Learning materials", 12, 8.9]
+      ["Balayage hair coloring", 3, 185.00],
+      ["Olaplex hair treatment", 3, 65.00]
     ]
   },
   {
-    customerEmail: "finance@brightpath.sg",
+    customerEmail: "hello@thenailartistry.sg",
     issue_date: "2026-05-03",
     due_date: "2026-05-17",
     status: "Viewed",
     items: [
-      ["Science workshop", 10, 38.75],
-      ["Assessment pack", 10, 6.5]
+      ["Gel manicure session", 12, 48.00],
+      ["Nail art add-on", 8, 25.00]
     ]
   },
   {
-    customerEmail: "billing@novaskills.sg",
+    customerEmail: "reservations@serenityspa.sg",
     issue_date: "2026-05-05",
     due_date: "2026-05-19",
     status: "Paid",
     items: [
-      ["Excel automation training", 12, 52],
-      ["Trainer travel allowance", 1, 35]
+      ["Full body massage (90 min)", 5, 158.00],
+      ["Aromatherapy upgrade", 5, 30.00]
     ]
   },
   {
-    customerEmail: "payables@summittraining.sg",
+    customerEmail: "appointments@glowaesthetics.sg",
     issue_date: "2026-04-20",
     due_date: "2026-05-04",
     status: "Overdue",
     items: [
-      ["Leadership bootcamp", 15, 64],
-      ["Course handbook", 15, 7.25]
+      ["Hydrafacial treatment", 4, 280.00],
+      ["LED light therapy add-on", 4, 85.00]
     ]
   },
   {
-    customerEmail: "admin@urbantech.edu.sg",
+    customerEmail: "info@browlashbar.sg",
     issue_date: "2026-05-08",
     due_date: "2026-05-22",
     status: "Draft",
     items: [
-      ["Coding lab support", 6, 72.5],
-      ["USB learning kit", 6, 12.4]
+      ["Eyebrow embroidery", 2, 388.00],
+      ["Lash lift & tint", 4, 78.00]
     ]
   },
   {
-    customerEmail: "accounts@acmelearning.sg",
+    customerEmail: "bookings@luxehairstudio.sg",
     issue_date: "2026-05-10",
     due_date: "2026-05-24",
     status: "Paid",
     items: [
-      ["Holiday programme", 20, 49.9]
+      ["Keratin smoothing treatment", 6, 220.00]
     ]
   },
   {
-    customerEmail: "finance@brightpath.sg",
+    customerEmail: "hello@thenailartistry.sg",
     issue_date: "2026-05-12",
     due_date: "2026-05-26",
     status: "Sent",
     items: [
-      ["English clinic", 9, 42],
-      ["Worksheet bundle", 9, 5.75]
+      ["Classic pedicure", 9, 58.00],
+      ["Paraffin wax treatment", 9, 22.00]
     ]
   },
   {
-    customerEmail: "billing@novaskills.sg",
+    customerEmail: "reservations@serenityspa.sg",
     issue_date: "2026-05-14",
     due_date: "2026-05-28",
     status: "Sent",
     items: [
-      ["Power BI fundamentals", 14, 58],
-      ["Certificate printing", 14, 3.5]
+      ["Hot stone massage", 7, 188.00],
+      ["Complimentary herbal tea set", 7, 12.00]
     ]
   }
 ];
@@ -122,7 +122,8 @@ function toMoney(value) {
 }
 
 function toDatabaseStatus(status) {
-  return status === "Paid" ? "Paid" : "Pending";
+  // Use the status directly — invoice table uses ENUM with these values
+  return status;
 }
 
 function nextInvoiceId(lastInvoiceId, offset) {
@@ -132,34 +133,9 @@ function nextInvoiceId(lastInvoiceId, offset) {
 }
 
 async function ensurePaymentMethods(connection) {
-  const paymentMethods = [
-    ["Cash", "Cash payment"],
-    ["Credit Card", "Card payment"],
-    ["Bank Transfer", "Bank transfer payment"],
-    ["PayNow", "PayNow transfer"]
-  ];
-
-  const ids = {};
-
-  for (const [name, description] of paymentMethods) {
-    const [existing] = await connection.query(
-      "SELECT payment_method_id FROM payment_method WHERE name = ? LIMIT 1",
-      [name]
-    );
-
-    if (existing.length > 0) {
-      ids[name] = existing[0].payment_method_id;
-      continue;
-    }
-
-    const [result] = await connection.query(
-      "INSERT INTO payment_method (name, description, is_active) VALUES (?, ?, 1)",
-      [name, description]
-    );
-    ids[name] = result.insertId;
-  }
-
-  return ids;
+  // payment_method table doesn't exist in this schema
+  // payments use payment_method_name column directly
+  return {};
 }
 
 async function ensureCustomers(connection) {
@@ -260,32 +236,36 @@ async function seedInvoices(connection, customerIdsByEmail, paymentMethodIds) {
       invoicePrimaryId
     ]);
 
+    // Store items as JSON on invoice table
+    const itemsJson = definition.items.map(([description, quantity, unitPrice]) => ({
+      description,
+      quantity,
+      unit_price: toMoney(unitPrice),
+      amount: toMoney(quantity * unitPrice)
+    }));
     await connection.query(
-      `
-        INSERT INTO invoice_item
-          (description, quantity, unit_price, amount, invoice_invoice_id)
-        VALUES ?
-      `,
-      [itemValues]
+      "UPDATE invoice SET items_json = ? WHERE invoice_id = ?",
+      [JSON.stringify(itemsJson), invoicePrimaryId]
     );
 
-    await connection.query(
-      "INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, 'invoice', ?, NULL)",
-      [`invoice_status:${definition.status}`, invoicePrimaryId]
-    );
+    try {
+      await connection.query(
+        "INSERT INTO audit_logs (action, entity_type, entity_id, user_user_id) VALUES (?, 'invoice', ?, NULL)",
+        [`invoice_status:${definition.status}`, invoicePrimaryId]
+      );
+    } catch { /* audit_logs table may have different schema */ }
 
     if (definition.status === "Paid") {
       await connection.query(
         `
           INSERT INTO payment
-            (payment_date, amount, status, transaction_id, invoice_invoice_id, payment_method_id)
-          VALUES (NOW(), ?, 'Completed', ?, ?, ?)
+            (payment_date, amount, status, transaction_id, invoice_invoice_id, payment_method_name)
+          VALUES (NOW(), ?, 'Completed', ?, ?, 'Bank Transfer')
         `,
         [
           String(total),
           `DUMMY-${invoiceId}`,
-          invoicePrimaryId,
-          paymentMethodIds["Bank Transfer"]
+          invoicePrimaryId
         ]
       );
     }

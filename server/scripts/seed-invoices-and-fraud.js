@@ -13,29 +13,29 @@ function daysAgo(days) { return new Date(Date.now() - days * 86400000).toISOStri
 function addDays(dateStr, days) { const d = new Date(dateStr); d.setDate(d.getDate() + days); return d.toISOString().split("T")[0]; }
 
 const customers = [
-  { name: "Acme Corporation", email: "billing@acmecorp.sg" },
-  { name: "TechWave Solutions", email: "accounts@techwave.sg" },
-  { name: "Marina Bay Trading", email: "finance@marinabay.sg" },
-  { name: "Sunrise Digital", email: "payment@sunrisedigital.sg" },
-  { name: "Pacific Ventures", email: "ap@pacificventures.sg" },
-  { name: "GreenLeaf Consulting", email: "invoices@greenleaf.sg" },
-  { name: "CloudNine Systems", email: "billing@cloudnine.sg" },
-  { name: "Diamond Electronics", email: "accounts@diamondel.sg" },
-  { name: "Golden Gate Logistics", email: "finance@gglogistics.sg" },
-  { name: "Stellar Marketing", email: "payments@stellarmarketing.sg" },
-  { name: "BluePeak Software", email: "ar@bluepeaksw.sg" },
-  { name: "Orchid Healthcare", email: "billing@orchidhc.sg" },
-  { name: "Zenith Engineering", email: "accounts@zenitheng.sg" },
-  { name: "Coral Bay Restaurants", email: "finance@coralbay.sg" },
-  { name: "Atlas Security", email: "invoices@atlassec.sg" }
+  { name: "Luxe Hair Studio", email: "bookings@luxehairstudio.sg" },
+  { name: "The Nail Artistry", email: "hello@thenailartistry.sg" },
+  { name: "Serenity Spa & Wellness", email: "reservations@serenityspa.sg" },
+  { name: "Glow Aesthetics Clinic", email: "appointments@glowaesthetics.sg" },
+  { name: "Brow & Lash Bar", email: "info@browlashbar.sg" },
+  { name: "KBeauty Haven", email: "hello@kbeautyhaven.sg" },
+  { name: "Zen Reflexology Centre", email: "bookings@zenreflexology.sg" },
+  { name: "Prestige Barbers", email: "appointments@prestigebarbers.sg" },
+  { name: "Skin Lab Express", email: "info@skinlabexpress.sg" },
+  { name: "Orchid Beauty Lounge", email: "bookings@orchidbeauty.sg" },
+  { name: "The Waxing Boutique", email: "hello@waxingboutique.sg" },
+  { name: "Radiance Medi-Spa", email: "info@radiancespa.sg" },
+  { name: "Aura Hair & Beauty", email: "bookings@aurahairbeauty.sg" },
+  { name: "Bliss Nail Studio", email: "hello@blissnails.sg" },
+  { name: "Rejuve Wellness Clinic", email: "appointments@rejuveclinic.sg" }
 ];
 
 const services = [
-  "Web Development Services", "Mobile App Development", "Cloud Infrastructure Setup",
-  "UI/UX Design Consultation", "Database Migration", "API Integration",
-  "Security Audit", "IT Support (Monthly)", "Software License Renewal",
-  "Data Analytics Setup", "Email Campaign", "SEO Package",
-  "CMS Setup", "Server Admin", "Network Config"
+  "Balayage Hair Coloring", "Keratin Smoothing Treatment", "Hair Extensions Installation",
+  "Gel Manicure Session", "Full Body Massage (90 min)", "Hydrafacial Treatment",
+  "Eyebrow Embroidery", "Lash Lift & Tint", "Brazilian Waxing",
+  "Hot Stone Therapy", "Nail Art Design Package", "Chemical Peel Session",
+  "Scalp Treatment", "Digital Perm", "Men's Grooming Package"
 ];
 
 const statusDist = [
