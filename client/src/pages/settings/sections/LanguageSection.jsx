@@ -38,7 +38,7 @@ export default function LanguageSection() {
   }
 
   if (loading) {
-    return <div className="app-panel rounded-2xl p-6"><div className="animate-pulse h-48 rounded-lg bg-white/[0.04]" /></div>;
+    return <div className="app-panel rounded-2xl p-6"><div className="animate-pulse h-48 rounded-lg bg-[#FDD9CD]/30" /></div>;
   }
 
   return (
@@ -48,7 +48,7 @@ export default function LanguageSection() {
       <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
           <Globe size={20} className="text-[#F38978]" />
-          <h2 className="text-xl font-semibold text-white">Language</h2>
+          <h2 className="text-xl font-semibold text-[#251E1F]">Language</h2>
         </div>
         <p className="mt-1 text-sm text-[#7b6660]">Choose your preferred display language.</p>
 
@@ -60,11 +60,11 @@ export default function LanguageSection() {
                 className={`flex items-center gap-4 rounded-xl border p-4 text-left transition ${
                   isActive
                     ? "border-[#F38978]/50 bg-[#F38978]/10 shadow-lg shadow-[#E77463]/15"
-                    : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
+                    : "border-[#ead3cc] bg-[#fff3ee]/70 hover:bg-[#FDD9CD]/45"
                 }`}>
                 <span className="text-2xl">{lang.flag}</span>
                 <div className="flex-1">
-                  <p className={`text-sm font-medium ${isActive ? "text-white" : "text-[#7b6660]"}`}>{lang.label}</p>
+                  <p className={`text-sm font-medium ${isActive ? "text-[#251E1F]" : "text-[#7b6660]"}`}>{lang.label}</p>
                   <p className="text-xs text-[#7b6660]/60">{lang.native}</p>
                 </div>
                 {isActive && <Check size={16} className="text-[#F38978]" />}
@@ -80,7 +80,7 @@ export default function LanguageSection() {
 function Toast({ toast }) {
   return (
     <div className={`fixed right-6 top-24 z-50 animate-[slideDown_0.3s_ease] rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
-      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-200" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-200"
+      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-700" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-700"
     }`}>
       <div className="flex items-center gap-2">
         {toast.type === "error" ? <X size={16} /> : <Check size={16} />}

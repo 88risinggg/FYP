@@ -54,9 +54,9 @@ const loanSidebarSections = [
 ];
 
 const loanStatusStyles = {
-  pending: "border-amber-300/30 bg-amber-300/10 text-amber-200",
-  approved: "border-emerald-300/30 bg-emerald-300/10 text-emerald-200",
-  rejected: "border-red-300/30 bg-red-300/10 text-red-200"
+  pending: "border-amber-300/30 bg-amber-300/10 text-amber-700",
+  approved: "border-emerald-300/30 bg-emerald-300/10 text-emerald-700",
+  rejected: "border-red-300/30 bg-red-300/10 text-red-700"
 };
 
 const statusLabels = {
@@ -81,7 +81,7 @@ function formatDate(dateStr) {
 /* ─── Shared Components ─── */
 function Panel({ title, children }) {
   return (
-    <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+    <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
       <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">{title}</h3>
       {children}
     </div>
@@ -89,7 +89,7 @@ function Panel({ title, children }) {
 }
 
 const SkeletonBar = ({ width = "100%", height = "h-4" }) => (
-  <div className={`${height} rounded-lg bg-white/80 animate-pulse`} style={{ width }} />
+  <div className={`${height} rounded-lg bg-white/800 animate-pulse`} style={{ width }} />
 );
 
 export default function StaffLoanPage({ embedded = false }) {
@@ -204,12 +204,12 @@ function LoanRequestForm() {
       {toast && (
         <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[70] w-full max-w-md rounded-xl border px-5 py-4 shadow-2xl backdrop-blur-sm animate-[slideDown_0.3s_ease-out] ${
           toast.type === "error"
-            ? "border-red-400/30 bg-red-950/90 text-red-100"
-            : "border-emerald-400/30 bg-emerald-950/90 text-emerald-100"
+            ? "border-red-400/30 bg-red-50 text-red-700"
+            : "border-emerald-400/30 bg-emerald-50 text-emerald-700"
         }`}>
           <div className="flex items-center gap-3">
             <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-              toast.type === "error" ? "bg-red-500/20 text-red-300" : "bg-emerald-500/20 text-emerald-300"
+              toast.type === "error" ? "bg-red-500/20 text-red-700" : "bg-emerald-500/20 text-emerald-700"
             }`}>
               {toast.type === "error" ? "✕" : "✓"}
             </span>
@@ -279,7 +279,7 @@ function LoanRequestForm() {
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="rounded-lg bg-[#2D7C83] px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-60"
+            className="rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-60"
           >
             {submitting ? "Submitting…" : "Submit Loan Request"}
           </button>
@@ -382,7 +382,7 @@ function LoanRequestList() {
                     <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#251E1F]/40">
                       <span>{loan.repayment_months} month{loan.repayment_months > 1 ? "s" : ""} repayment</span>
                       {isApproved && loan.outstanding_balance != null && (
-                        <span className="text-amber-200">Outstanding: {formatCurrency(loan.outstanding_balance)}</span>
+                        <span className="text-amber-700">Outstanding: {formatCurrency(loan.outstanding_balance)}</span>
                       )}
                     </div>
                   </div>
@@ -393,7 +393,7 @@ function LoanRequestList() {
                       <button
                         type="button"
                         onClick={() => toggleExpand(loanId)}
-                        className="flex items-center gap-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-1.5 text-xs text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                        className="flex items-center gap-1 rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-1.5 text-xs text-[#251E1F] hover:bg-[#FDD9CD]/45"
                         aria-label={isExpanded ? "Collapse installments" : "Expand installments"}
                       >
                         Installments
@@ -405,7 +405,7 @@ function LoanRequestList() {
 
                 {/* HR Comments */}
                 {loan.hr_comments && (
-                  <div className="mt-2 rounded-lg border border-[#f0d2ca] bg-white/[0.02] px-3 py-2">
+                  <div className="mt-2 rounded-lg border border-[#f0d2ca] bg-[#fff3ee]/50 px-3 py-2">
                     <p className="text-xs text-[#7b6660]/70"><span className="font-medium text-[#7b6660]">HR:</span> {loan.hr_comments}</p>
                   </div>
                 )}
@@ -439,8 +439,8 @@ function LoanRequestList() {
                                 <td className="py-2">
                                   <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${
                                     inst.status === "paid"
-                                      ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-200"
-                                      : "border-amber-300/30 bg-amber-300/10 text-amber-200"
+                                      ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-700"
+                                      : "border-amber-300/30 bg-amber-300/10 text-amber-700"
                                   }`}>
                                     {inst.status === "paid" ? "Paid" : "Unpaid"}
                                   </span>

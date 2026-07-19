@@ -78,14 +78,14 @@ export default function ConnectedAccountsSection() {
       <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
           <Link2 size={20} className="text-[#F38978]" />
-          <h2 className="text-xl font-semibold text-white">Connected Accounts</h2>
+          <h2 className="text-xl font-semibold text-[#251E1F]">Connected Accounts</h2>
         </div>
         <p className="mt-1 text-sm text-[#7b6660]">Manage your connected third-party services.</p>
 
         {loading ? (
           <div className="mt-6 space-y-3">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-20 animate-pulse rounded-xl bg-white/[0.04]" />
+              <div key={i} className="h-20 animate-pulse rounded-xl bg-[#FDD9CD]/30" />
             ))}
           </div>
         ) : (
@@ -95,7 +95,7 @@ export default function ConnectedAccountsSection() {
               const isLoading = actionLoading === provider.id;
 
               return (
-                <div key={provider.id} className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div key={provider.id} className="flex flex-col gap-3 rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
                     <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${provider.bg}`}>
                       <span className={`text-sm font-bold ${provider.color}`}>{provider.name.charAt(0)}</span>
@@ -116,11 +116,11 @@ export default function ConnectedAccountsSection() {
                     {connected ? (
                       <>
                         <button type="button" onClick={() => handleConnect(provider.id)} disabled={isLoading}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-[#7b6660] transition hover:bg-white/10 hover:text-[#251E1F] disabled:opacity-50">
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#ead3cc] bg-white px-3 py-1.5 text-xs font-semibold text-[#7b6660] transition hover:bg-[#FDD9CD]/50 hover:text-[#251E1F] disabled:opacity-50">
                           <RefreshCw size={12} /> Reconnect
                         </button>
                         <button type="button" onClick={() => handleDisconnect(provider.id)} disabled={isLoading}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400/20 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-50">
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400/20 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-500/20 disabled:opacity-50">
                           {isLoading ? <Loader2 size={12} className="animate-spin" /> : <Unlink size={12} />} Disconnect
                         </button>
                       </>
@@ -144,7 +144,7 @@ export default function ConnectedAccountsSection() {
 function Toast({ toast }) {
   return (
     <div className={`fixed right-6 top-24 z-50 animate-[slideDown_0.3s_ease] rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
-      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-200" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-200"
+      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-700" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-700"
     }`}>
       <div className="flex items-center gap-2">
         {toast.type === "error" ? <X size={16} /> : <Check size={16} />}

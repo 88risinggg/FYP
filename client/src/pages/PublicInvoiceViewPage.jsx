@@ -46,8 +46,8 @@ export default function PublicInvoiceViewPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#fff8f5]">
         <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 p-8 text-center">
-          <h1 className="text-xl font-semibold text-rose-200">Invoice Not Found</h1>
-          <p className="mt-2 text-sm text-rose-100/70">{error}</p>
+          <h1 className="text-xl font-semibold text-rose-700">Invoice Not Found</h1>
+          <p className="mt-2 text-sm text-rose-700/70">{error}</p>
         </div>
       </div>
     );
@@ -69,7 +69,7 @@ export default function PublicInvoiceViewPage() {
     <div className="min-h-screen bg-[#fff8f5] px-4 py-12">
       <div className="mx-auto max-w-3xl">
         {/* Header */}
-        <div className="rounded-t-2xl border border-[#f0d2ca] bg-white/80 p-8">
+        <div className="rounded-t-2xl border border-[#f0d2ca] bg-white/800 p-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h1 className="text-3xl font-bold text-[#F38978]">PayNivo</h1>
@@ -86,7 +86,7 @@ export default function PublicInvoiceViewPage() {
         </div>
 
         {/* Invoice Details */}
-        <div className="border-x border-[#f0d2ca] bg-white/[0.02] p-8">
+        <div className="border-x border-[#f0d2ca] bg-[#fff3ee]/50 p-8">
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
               <p className="text-xs font-semibold uppercase text-[#F38978]/70">Bill To</p>
@@ -112,7 +112,7 @@ export default function PublicInvoiceViewPage() {
           {invoice.items && invoice.items.length > 0 ? (
             <div className="mt-8 overflow-hidden rounded-xl border border-[#f0d2ca]">
               <table className="w-full text-left text-sm">
-                <thead className="bg-white/80 text-xs uppercase text-[#7b6660]/70">
+                <thead className="bg-white/800 text-xs uppercase text-[#7b6660]/70">
                   <tr>
                     <th className="px-4 py-3">Description</th>
                     <th className="px-4 py-3 text-right">Qty</th>
@@ -120,7 +120,7 @@ export default function PublicInvoiceViewPage() {
                     <th className="px-4 py-3 text-right">Amount</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/10">
+                <tbody className="divide-y divide-[#ead3cc]">
                   {invoice.items.map((item, idx) => (
                     <tr key={idx} className="text-[#251E1F]">
                       <td className="px-4 py-3">{item.description}</td>
@@ -136,7 +136,7 @@ export default function PublicInvoiceViewPage() {
         </div>
 
         {/* Total & Payment */}
-        <div className="rounded-b-2xl border border-[#f0d2ca] bg-white/80 p-8">
+        <div className="rounded-b-2xl border border-[#f0d2ca] bg-white/800 p-8">
           <div className="flex items-center justify-between">
             <span className="text-lg text-[#7b6660]">Total Amount</span>
             <span className="text-3xl font-bold text-[#251E1F]">{formatCurrency(invoice.total_amount)}</span>
@@ -151,7 +151,7 @@ export default function PublicInvoiceViewPage() {
             </div>
           ) : (
             <div className="mt-6 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-center">
-              <p className="text-sm font-semibold text-emerald-200">
+              <p className="text-sm font-semibold text-emerald-700">
                 ✅ This invoice has been paid{invoice.paid_date ? ` on ${formatDate(invoice.paid_date)}` : ""}. Thank you!
               </p>
             </div>

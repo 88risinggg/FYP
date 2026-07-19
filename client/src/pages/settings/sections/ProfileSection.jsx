@@ -100,7 +100,7 @@ export default function ProfileSection() {
       {/* Toast */}
       {toast && (
         <div className={`fixed right-6 top-24 z-50 animate-[slideDown_0.3s_ease] rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
-          toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-200" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-200"
+          toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-700" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-700"
         }`}>
           <div className="flex items-center gap-2">
             {toast.type === "error" ? <X size={16} /> : <Check size={16} />}
@@ -110,7 +110,7 @@ export default function ProfileSection() {
       )}
 
       <div className="app-panel rounded-2xl p-6">
-        <h2 className="text-xl font-semibold text-white">Profile</h2>
+        <h2 className="text-xl font-semibold text-[#251E1F]">Profile</h2>
         <p className="mt-1 text-sm text-[#7b6660]">Manage your personal information and preferences.</p>
 
         <form onSubmit={handleSave} className="mt-6 space-y-6">
@@ -124,13 +124,13 @@ export default function ProfileSection() {
                   <span className="text-2xl font-bold text-[#F38978]">{form.name?.charAt(0) || "U"}</span>
                 )}
               </div>
-              <label className="absolute -bottom-1 -right-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-[#F38978] text-white shadow-lg transition hover:bg-[#E77463]">
+              <label className="absolute -bottom-1 -right-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-[#F38978] text-[#251E1F] shadow-lg transition hover:bg-[#E77463]">
                 <Camera size={13} />
                 <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
               </label>
             </div>
             <div>
-              <p className="text-sm font-medium text-white">Profile Picture</p>
+              <p className="text-sm font-medium text-[#251E1F]">Profile Picture</p>
               <p className="text-xs text-[#7b6660]">JPG, PNG or GIF. Max 2MB.</p>
             </div>
           </div>
@@ -154,7 +154,7 @@ export default function ProfileSection() {
           </div>
 
           {/* Read-only Fields */}
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 p-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Read-only Information</p>
             <div className="grid gap-4 md:grid-cols-3">
               <ReadOnlyField label="Employee ID" value={readOnly.employee_id} />
@@ -171,7 +171,7 @@ export default function ProfileSection() {
               Save Changes
             </button>
             <button type="button" onClick={loadProfile}
-              className="rounded-xl border border-white/10 bg-white/[0.06] px-5 py-2.5 text-sm font-semibold text-[#7b6660] transition hover:bg-white/10 hover:text-white">
+              className="rounded-xl border border-[#ead3cc] bg-white px-5 py-2.5 text-sm font-semibold text-[#7b6660] transition hover:bg-[#FDD9CD]/50 hover:text-[#251E1F]">
               Cancel
             </button>
           </div>
@@ -186,7 +186,7 @@ function Field({ label, name, value, onChange, type = "text", required = false }
     <div>
       <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">{label}{required && <span className="text-rose-400"> *</span>}</label>
       <input type={type} name={name} value={value} onChange={onChange} required={required}
-        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-[#7b6660]/40 focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30" />
+        className="w-full rounded-lg border border-[#ead3cc] bg-white px-3 py-2.5 text-sm text-[#251E1F] outline-none transition placeholder:text-[#7b6660]/40 focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30" />
     </div>
   );
 }
@@ -196,7 +196,7 @@ function SelectField({ label, name, value, onChange, options }) {
     <div>
       <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">{label}</label>
       <select name={name} value={value} onChange={onChange}
-        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30">
+        className="w-full rounded-lg border border-[#ead3cc] bg-white px-3 py-2.5 text-sm text-[#251E1F] outline-none transition focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30">
         {options.map((opt) => (
           <option key={opt.value} value={opt.value} className="bg-[#fff3ee]">{opt.label}</option>
         ))}
@@ -209,7 +209,7 @@ function ReadOnlyField({ label, value }) {
   return (
     <div>
       <p className="text-xs text-[#7b6660]/70">{label}</p>
-      <p className="mt-1 text-sm font-medium text-white">{value}</p>
+      <p className="mt-1 text-sm font-medium text-[#251E1F]">{value}</p>
     </div>
   );
 }
@@ -218,13 +218,13 @@ function LoadingSkeleton() {
   return (
     <div className="app-panel rounded-2xl p-6">
       <div className="animate-pulse space-y-4">
-        <div className="h-6 w-32 rounded bg-white/10" />
-        <div className="h-4 w-64 rounded bg-white/[0.06]" />
+        <div className="h-6 w-32 rounded bg-[#FDD9CD]/50" />
+        <div className="h-4 w-64 rounded bg-white" />
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="space-y-2">
-              <div className="h-3 w-20 rounded bg-white/[0.06]" />
-              <div className="h-10 rounded-lg bg-white/[0.04]" />
+              <div className="h-3 w-20 rounded bg-white" />
+              <div className="h-10 rounded-lg bg-[#FDD9CD]/30" />
             </div>
           ))}
         </div>

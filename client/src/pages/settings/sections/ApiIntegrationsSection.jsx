@@ -51,7 +51,7 @@ export default function ApiIntegrationsSection() {
   }
 
   if (loading) {
-    return <div className="app-panel rounded-2xl p-6"><div className="animate-pulse h-48 rounded-lg bg-white/[0.04]" /></div>;
+    return <div className="app-panel rounded-2xl p-6"><div className="animate-pulse h-48 rounded-lg bg-[#FDD9CD]/30" /></div>;
   }
 
   return (
@@ -61,21 +61,21 @@ export default function ApiIntegrationsSection() {
       <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
           <Key size={20} className="text-[#F38978]" />
-          <h2 className="text-xl font-semibold text-white">API & Integrations</h2>
+          <h2 className="text-xl font-semibold text-[#251E1F]">API & Integrations</h2>
         </div>
         <p className="mt-1 text-sm text-[#7b6660]">Manage your API keys and webhook configuration.</p>
 
         <div className="mt-6 space-y-5">
           {/* API Key */}
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">API Key</p>
             {settings.api_key ? (
               <div className="mt-2 flex items-center gap-2">
-                <code className="flex-1 overflow-hidden text-ellipsis rounded-lg bg-white/[0.06] px-3 py-2 font-mono text-xs text-white">
+                <code className="flex-1 overflow-hidden text-ellipsis rounded-lg bg-white px-3 py-2 font-mono text-xs text-[#251E1F]">
                   {settings.api_key}
                 </code>
                 <button type="button" onClick={() => copyToClipboard(settings.api_key, "api")}
-                  className="rounded-lg border border-white/10 bg-white/[0.06] p-2 text-[#7b6660] transition hover:bg-white/10 hover:text-white">
+                  className="rounded-lg border border-[#ead3cc] bg-white p-2 text-[#7b6660] transition hover:bg-[#FDD9CD]/50 hover:text-[#251E1F]">
                   {copied === "api" ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
                 </button>
               </div>
@@ -93,14 +93,14 @@ export default function ApiIntegrationsSection() {
 
           {/* Webhook Secret */}
           {settings.webhook_secret && (
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Webhook Secret</p>
               <div className="mt-2 flex items-center gap-2">
-                <code className="flex-1 overflow-hidden text-ellipsis rounded-lg bg-white/[0.06] px-3 py-2 font-mono text-xs text-white">
+                <code className="flex-1 overflow-hidden text-ellipsis rounded-lg bg-white px-3 py-2 font-mono text-xs text-[#251E1F]">
                   {settings.webhook_secret}
                 </code>
                 <button type="button" onClick={() => copyToClipboard(settings.webhook_secret, "secret")}
-                  className="rounded-lg border border-white/10 bg-white/[0.06] p-2 text-[#7b6660] transition hover:bg-white/10 hover:text-white">
+                  className="rounded-lg border border-[#ead3cc] bg-white p-2 text-[#7b6660] transition hover:bg-[#FDD9CD]/50 hover:text-[#251E1F]">
                   {copied === "secret" ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
                 </button>
               </div>
@@ -108,19 +108,19 @@ export default function ApiIntegrationsSection() {
           )}
 
           {/* Webhook URL */}
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Webhook Configuration</p>
             <div className="mt-3 space-y-3">
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">Webhook URL</label>
                 <input type="url" value={settings.webhook_url || ""} onChange={(e) => setSettings((p) => ({ ...p, webhook_url: e.target.value }))}
                   placeholder="https://your-domain.com/webhook"
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-[#7b6660]/40 focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30" />
+                  className="w-full rounded-lg border border-[#ead3cc] bg-white px-3 py-2.5 text-sm text-[#251E1F] outline-none transition placeholder:text-[#7b6660]/40 focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30" />
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-white">Enable Webhooks</span>
+                <span className="text-sm text-[#251E1F]">Enable Webhooks</span>
                 <button type="button" onClick={() => setSettings((p) => ({ ...p, webhooks_enabled: !p.webhooks_enabled }))}
-                  className={`relative h-6 w-11 rounded-full transition ${settings.webhooks_enabled ? "bg-[#F38978]" : "bg-white/15"}`}>
+                  className={`relative h-6 w-11 rounded-full transition ${settings.webhooks_enabled ? "bg-[#F38978]" : "bg-[#f0d2ca]"}`}>
                   <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${settings.webhooks_enabled ? "translate-x-[22px]" : "translate-x-0.5"}`} />
                 </button>
               </div>
@@ -140,7 +140,7 @@ export default function ApiIntegrationsSection() {
 function Toast({ toast }) {
   return (
     <div className={`fixed right-6 top-24 z-50 animate-[slideDown_0.3s_ease] rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
-      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-200" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-200"
+      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-700" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-700"
     }`}>
       <div className="flex items-center gap-2">
         {toast.type === "error" ? <X size={16} /> : <Check size={16} />}

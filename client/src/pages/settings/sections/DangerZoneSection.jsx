@@ -76,9 +76,9 @@ export default function DangerZoneSection() {
       <div className="rounded-2xl border-2 border-rose-500/30 bg-rose-500/[0.04] p-6 shadow-lg shadow-rose-500/5">
         <div className="flex items-center gap-3">
           <AlertTriangle size={20} className="text-rose-400" />
-          <h2 className="text-xl font-semibold text-rose-200">Danger Zone</h2>
+          <h2 className="text-xl font-semibold text-rose-700">Danger Zone</h2>
         </div>
-        <p className="mt-1 text-sm text-rose-300/70">Irreversible and destructive actions. Please be certain.</p>
+        <p className="mt-1 text-sm text-rose-700/70">Irreversible and destructive actions. Please be certain.</p>
 
         <div className="mt-6 space-y-4">
           <DangerAction
@@ -118,7 +118,7 @@ export default function DangerZoneSection() {
           <div className="mx-4 w-full max-w-sm rounded-2xl border border-rose-500/20 bg-[#fff3ee] p-6 shadow-2xl">
             <div className="flex items-center gap-3">
               <AlertTriangle size={20} className="text-rose-400" />
-              <h3 className="text-lg font-semibold text-white">
+              <h3 className="text-lg font-semibold text-[#251E1F]">
                 {modal === "deactivate" && "Deactivate Account"}
                 {modal === "delete" && "Delete Account"}
                 {modal === "logout" && "Logout All Devices"}
@@ -135,7 +135,7 @@ export default function DangerZoneSection() {
             {modal === "delete" && (
               <input type="password" placeholder="Enter your password" value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-4 w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition focus:border-rose-400/50" />
+                className="mt-4 w-full rounded-lg border border-[#ead3cc] bg-white px-3 py-2.5 text-sm text-[#251E1F] outline-none transition focus:border-rose-400/50" />
             )}
 
             <div className="mt-5 flex gap-3">
@@ -146,11 +146,11 @@ export default function DangerZoneSection() {
                   else if (modal === "logout") handleLogoutAll();
                   else if (modal === "reset") handleReset();
                 }}
-                className="flex-1 rounded-xl bg-rose-500/20 px-4 py-2.5 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/30 disabled:opacity-50">
+                className="flex-1 rounded-xl bg-rose-500/20 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-500/30 disabled:opacity-50">
                 {actionLoading ? <Loader2 size={14} className="mx-auto animate-spin" /> : "Confirm"}
               </button>
               <button type="button" onClick={() => { setModal(null); setPassword(""); }}
-                className="flex-1 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-[#7b6660] transition hover:bg-white/10">
+                className="flex-1 rounded-xl border border-[#ead3cc] bg-white px-4 py-2.5 text-sm font-semibold text-[#7b6660] transition hover:bg-[#FDD9CD]/50">
                 Cancel
               </button>
             </div>
@@ -167,12 +167,12 @@ function DangerAction({ icon: Icon, title, description, buttonLabel, onClick }) 
       <div className="flex items-start gap-3">
         <Icon size={18} className="mt-0.5 shrink-0 text-rose-400" />
         <div>
-          <p className="text-sm font-medium text-white">{title}</p>
-          <p className="mt-0.5 text-xs text-rose-300/60">{description}</p>
+          <p className="text-sm font-medium text-[#251E1F]">{title}</p>
+          <p className="mt-0.5 text-xs text-rose-700/60">{description}</p>
         </div>
       </div>
       <button type="button" onClick={onClick}
-        className="shrink-0 rounded-lg border border-rose-400/30 bg-rose-500/15 px-4 py-2 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/25">
+        className="shrink-0 rounded-lg border border-rose-400/30 bg-rose-500/15 px-4 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-500/25">
         {buttonLabel}
       </button>
     </div>
@@ -182,7 +182,7 @@ function DangerAction({ icon: Icon, title, description, buttonLabel, onClick }) 
 function Toast({ toast }) {
   return (
     <div className={`fixed right-6 top-24 z-50 animate-[slideDown_0.3s_ease] rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
-      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-200" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-200"
+      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-700" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-700"
     }`}>
       <div className="flex items-center gap-2">
         {toast.type === "error" ? <X size={16} /> : <Check size={16} />}

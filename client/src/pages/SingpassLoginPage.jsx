@@ -82,7 +82,7 @@ export default function SingpassLoginPage() {
         <div className="flex items-center justify-between">
           <button
             onClick={() => navigate("/login")}
-            className="flex items-center gap-1 text-sm text-slate-400 transition hover:text-[#251E1F]"
+            className="flex items-center gap-1 text-sm text-[#7b6660] transition hover:text-[#251E1F]"
           >
             <ArrowLeft size={16} />
             Back
@@ -112,7 +112,7 @@ export default function SingpassLoginPage() {
                 exit={shouldReduceMotion ? undefined : { opacity: 0 }}
               >
                 <h2 className="text-xl font-semibold text-[#251E1F]">Scan with Singpass app</h2>
-                <p className="mt-2 text-sm text-slate-400">
+                <p className="mt-2 text-sm text-[#7b6660]">
                   Open your Singpass app and scan the QR code below
                 </p>
 
@@ -191,16 +191,16 @@ export default function SingpassLoginPage() {
                   </svg>
                 </motion.div>
 
-                <p className="mt-4 text-xs text-slate-500">
+                <p className="mt-4 text-xs text-[#6f5b55]">
                   QR expires in {minutes}:{seconds.toString().padStart(2, "0")}
                 </p>
 
-                <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-500">
+                <div className="mt-4 flex items-center justify-center gap-2 text-xs text-[#6f5b55]">
                   <Smartphone size={14} />
                   <span>Don&apos;t have the app? <a href="https://app.singpass.gov.sg" target="_blank" rel="noopener noreferrer" className="text-[#F4333D] hover:underline">Download Singpass</a></span>
                 </div>
 
-                <p className="mt-6 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                <p className="mt-6 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
                   Demo: Click the QR code to simulate scanning
                 </p>
               </motion.div>
@@ -216,7 +216,7 @@ export default function SingpassLoginPage() {
               >
                 <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-slate-600 border-t-[#F4333D]" />
                 <h2 className="mt-6 text-xl font-semibold text-[#251E1F]">Verifying identity...</h2>
-                <p className="mt-2 text-sm text-slate-400">
+                <p className="mt-2 text-sm text-[#7b6660]">
                   Authenticating with Singpass
                 </p>
               </motion.div>
@@ -235,7 +235,7 @@ export default function SingpassLoginPage() {
                   </svg>
                 </div>
                 <h2 className="mt-4 text-xl font-semibold text-[#251E1F]">Identity verified</h2>
-                <p className="mt-2 text-sm text-slate-400">Redirecting...</p>
+                <p className="mt-2 text-sm text-[#7b6660]">Redirecting...</p>
               </motion.div>
             )}
 
@@ -266,7 +266,7 @@ export default function SingpassLoginPage() {
         </div>
 
         {/* Footer */}
-        <div className="mt-8 border-t border-[#f0d2ca] pt-4 text-center text-xs text-slate-500">
+        <div className="mt-8 border-t border-[#f0d2ca] pt-4 text-center text-xs text-[#6f5b55]">
           Secured by Singpass · National Digital Identity
         </div>
       </motion.div>

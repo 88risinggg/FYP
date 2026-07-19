@@ -11,7 +11,7 @@ const themes = [
 const accentColors = [
   { value: "#F38978", label: "Coral" },
   { value: "#F26E5F", label: "Pink" },
-  { value: "#4CC9F0", label: "Blue" },
+  { value: "#3269A8", label: "Blue" },
   { value: "#34D399", label: "Green" },
   { value: "#F59E0B", label: "Amber" },
   { value: "#FB7185", label: "Rose" }
@@ -57,7 +57,7 @@ export default function AppearanceSection() {
   }
 
   if (loading) {
-    return <div className="app-panel rounded-2xl p-6"><div className="animate-pulse h-48 rounded-lg bg-white/[0.04]" /></div>;
+    return <div className="app-panel rounded-2xl p-6"><div className="animate-pulse h-48 rounded-lg bg-[#FDD9CD]/30" /></div>;
   }
 
   return (
@@ -82,7 +82,7 @@ export default function AppearanceSection() {
                 return (
                   <button key={t.id} type="button" onClick={() => save({ ...settings, theme: t.id })}
                     className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition ${
-                      isActive ? "border-[#F38978]/50 bg-[#F38978]/10 shadow-lg shadow-[#f2b5a9]/15" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
+                      isActive ? "border-[#F38978]/50 bg-[#F38978]/10 shadow-lg shadow-[#f2b5a9]/15" : "border-[#ead3cc] bg-[#fff3ee]/70 hover:bg-[#FDD9CD]/45"
                     }`}>
                     <Icon size={22} className={isActive ? "text-[#F38978]" : "text-[#7b6660]"} />
                     <span className={`text-xs font-medium ${isActive ? "text-[#251E1F]" : "text-[#7b6660]"}`}>{t.label}</span>
@@ -99,11 +99,11 @@ export default function AppearanceSection() {
               {accentColors.map((c) => (
                 <button key={c.value} type="button" onClick={() => save({ ...settings, accent_color: c.value })}
                   className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
-                    settings.accent_color === c.value ? "ring-2 ring-white ring-offset-2 ring-offset-[#fff8f5]" : "hover:scale-110"
+                    settings.accent_color === c.value ? "ring-2 ring-[#f0d2ca] ring-offset-2 ring-offset-[#fff8f5]" : "hover:scale-110"
                   }`}
                   style={{ backgroundColor: c.value }}
                   title={c.label}>
-                  {settings.accent_color === c.value && <Check size={14} className="text-white" />}
+                  {settings.accent_color === c.value && <Check size={14} className="text-[#251E1F]" />}
                 </button>
               ))}
             </div>
@@ -118,7 +118,7 @@ export default function AppearanceSection() {
                   className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition ${
                     settings.font_size === f.value
                     ? "border-[#F38978]/50 bg-[#F38978]/10 text-[#251E1F]"
-                      : "border-white/10 bg-white/[0.03] text-[#7b6660] hover:bg-white/[0.06]"
+                      : "border-[#ead3cc] bg-[#fff3ee]/70 text-[#7b6660] hover:bg-[#FDD9CD]/45"
                   }`}>
                   {f.label}
                 </button>
@@ -127,13 +127,13 @@ export default function AppearanceSection() {
           </div>
 
           {/* Compact Mode */}
-          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+          <div className="flex items-center justify-between rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 px-4 py-3">
             <div>
               <span className="text-sm font-medium text-[#251E1F]">Compact Mode</span>
               <p className="text-xs text-[#7b6660]">Reduce spacing and padding throughout the UI</p>
             </div>
             <button type="button" onClick={() => save({ ...settings, compact_mode: !settings.compact_mode })}
-              className={`relative h-6 w-11 rounded-full transition ${settings.compact_mode ? "bg-[#F38978]" : "bg-white/15"}`}>
+              className={`relative h-6 w-11 rounded-full transition ${settings.compact_mode ? "bg-[#F38978]" : "bg-[#f0d2ca]"}`}>
               <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${settings.compact_mode ? "translate-x-[22px]" : "translate-x-0.5"}`} />
             </button>
           </div>
@@ -146,7 +146,7 @@ export default function AppearanceSection() {
 function Toast({ toast }) {
   return (
     <div className={`fixed right-6 top-24 z-50 animate-[slideDown_0.3s_ease] rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
-      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-200" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-200"
+      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-700" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-700"
     }`}>
       <div className="flex items-center gap-2">
         {toast.type === "error" ? <X size={16} /> : <Check size={16} />}

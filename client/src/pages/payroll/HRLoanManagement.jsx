@@ -17,9 +17,9 @@ import {
 } from "../../services/loanService.js";
 
 const loanStatusStyles = {
-  pending: "border-amber-300/30 bg-amber-300/10 text-amber-200",
-  approved: "border-emerald-300/30 bg-emerald-300/10 text-emerald-200",
-  rejected: "border-red-300/30 bg-red-300/10 text-red-200"
+  pending: "border-amber-300/30 bg-amber-300/10 text-amber-700",
+  approved: "border-emerald-300/30 bg-emerald-300/10 text-emerald-700",
+  rejected: "border-red-300/30 bg-red-300/10 text-red-700"
 };
 
 const statusLabels = {
@@ -44,7 +44,7 @@ function formatDate(dateStr) {
 }
 
 const SkeletonBar = ({ width = "100%", height = "h-4" }) => (
-  <div className={`${height} rounded-lg bg-white/80 animate-pulse`} style={{ width }} />
+  <div className={`${height} rounded-lg bg-white/800 animate-pulse`} style={{ width }} />
 );
 
 export default function HRLoanManagement() {
@@ -179,16 +179,16 @@ export default function HRLoanManagement() {
           <div
             className={`fixed top-24 left-1/2 -translate-x-1/2 z-[70] w-full max-w-md rounded-xl border px-5 py-4 shadow-2xl backdrop-blur-sm animate-[slideDown_0.3s_ease-out] ${
               toast.type === "error"
-                ? "border-red-400/30 bg-red-950/90 text-red-100"
-                : "border-emerald-400/30 bg-emerald-950/90 text-emerald-100"
+                ? "border-red-400/30 bg-red-50 text-red-700"
+                : "border-emerald-400/30 bg-emerald-50 text-emerald-700"
             }`}
           >
             <div className="flex items-center gap-3">
               <span
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
                   toast.type === "error"
-                    ? "bg-red-500/20 text-red-300"
-                    : "bg-emerald-500/20 text-emerald-300"
+                    ? "bg-red-500/20 text-red-700"
+                    : "bg-emerald-500/20 text-emerald-700"
                 }`}
               >
                 {toast.type === "error" ? "✕" : "✓"}
@@ -209,8 +209,8 @@ export default function HRLoanManagement() {
                 onClick={() => setFilterStatus(status)}
                 className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
                   filterStatus === status
-                    ? "bg-[#2D7C83] text-[#251E1F]"
-                    : "border border-[#f0d2ca] bg-white/80 text-[#251E1F]/60 hover:bg-[#FDD9CD]/45 hover:text-[#251E1F]"
+                    ? "bg-[#F38978] text-[#251E1F]"
+                    : "border border-[#f0d2ca] bg-white/800 text-[#251E1F]/60 hover:bg-[#FDD9CD]/45 hover:text-[#251E1F]"
                 }`}
               >
                 {status === "all" ? "All" : statusLabels[status]}
@@ -221,7 +221,7 @@ export default function HRLoanManagement() {
 
         {/* Loan Table */}
         {loading ? (
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
             <div className="space-y-3">
               {[1, 2, 3, 4].map((i) => (
                 <SkeletonBar key={i} height="h-14" />
@@ -229,7 +229,7 @@ export default function HRLoanManagement() {
             </div>
           </div>
         ) : filteredLoans.length === 0 ? (
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Landmark size={48} className="text-[#F38978]/30" />
               <p className="mt-4 text-sm text-[#7b6660]">No loan requests found</p>
@@ -241,7 +241,7 @@ export default function HRLoanManagement() {
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
             {/* Table Header */}
             <div className="hidden sm:grid sm:grid-cols-[1.5fr_1fr_0.8fr_0.8fr_1fr_0.5fr] gap-4 pb-3 border-b border-[#f0d2ca]">
               <span className="text-[#7b6660]/70 font-medium text-xs">Staff Name</span>
@@ -287,7 +287,7 @@ export default function HRLoanManagement() {
                         <button
                           type="button"
                           onClick={() => toggleExpand(loanId)}
-                          className="flex items-center gap-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-1.5 text-xs text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                          className="flex items-center gap-1 rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-1.5 text-xs text-[#251E1F] hover:bg-[#FDD9CD]/45"
                           aria-label={isExpanded ? "Collapse details" : "Expand details"}
                         >
                           {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -389,8 +389,8 @@ export default function HRLoanManagement() {
                                           <span
                                             className={`rounded-full border px-2 py-0.5 text-xs font-medium ${
                                               inst.status === "paid"
-                                                ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-200"
-                                                : "border-amber-300/30 bg-amber-300/10 text-amber-200"
+                                                ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-700"
+                                                : "border-amber-300/30 bg-amber-300/10 text-amber-700"
                                             }`}
                                           >
                                             {inst.status === "paid" ? "Paid" : "Unpaid"}
@@ -404,7 +404,7 @@ export default function HRLoanManagement() {
                                                 handleMarkPaid(loanId, inst.installment_id)
                                               }
                                               disabled={payingInstallment === inst.installment_id}
-                                              className="flex items-center gap-1 rounded-lg bg-[#2D7C83] px-3 py-1.5 text-xs font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-60"
+                                              className="flex items-center gap-1 rounded-lg bg-[#F38978] px-3 py-1.5 text-xs font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-60"
                                             >
                                               <Check size={12} />
                                               {payingInstallment === inst.installment_id
@@ -429,7 +429,7 @@ export default function HRLoanManagement() {
                               Rejection Details
                             </h4>
                             {loan.hr_comments ? (
-                              <div className="rounded-lg border border-[#f0d2ca] bg-white/[0.02] px-3 py-2">
+                              <div className="rounded-lg border border-[#f0d2ca] bg-[#fff3ee]/50 px-3 py-2">
                                 <p className="text-xs text-[#7b6660]/70">
                                   <span className="font-medium text-[#7b6660]">HR Comments:</span>{" "}
                                   {loan.hr_comments}

@@ -32,16 +32,16 @@ function formatDate(value) {
 
 function statusClass(status) {
   const classes = {
-    Success: "border-[#b8d9c6] bg-[#e9f7ef] text-[#2f8758]",
+    Success: "border-[#f3c6bc] bg-[#fff0eb] text-[#b64d3b]",
     Failed: "border-[#f3c6bc] bg-[#fff0eb] text-[#c55245]",
     Warning: "border-[#f4d59a] bg-[#fff4d8] text-[#9a6412]",
-    Info: "border-[#b8d9dc] bg-[#eaf6f7] text-[#15565b]"
+    Info: "border-[#f3c6bc] bg-[#fff0eb] text-[#b64d3b]"
   };
   return classes[status] || classes.Info;
 }
 
 function chartColor(index) {
-  return ["#F38978", "#38BDF8", "#34D399", "#F59E0B", "#FB7185"][index % 5];
+  return ["#F38978", "#e87562", "#F26E5F", "#F0B23E", "#FB7185"][index % 5];
 }
 
 export default function AdminAuditLogsPage() {
@@ -159,7 +159,7 @@ export default function AdminAuditLogsPage() {
         <button
           type="button"
           onClick={() => loadAuditData(filters, true)}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-4 py-2.5 text-sm font-semibold text-[#251E1F] hover:bg-white/80"
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-4 py-2.5 text-sm font-semibold text-[#251E1F] hover:bg-white/800"
         >
           <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
           Refresh
@@ -212,7 +212,7 @@ export default function AdminAuditLogsPage() {
           <button
             type="button"
             onClick={clearFilters}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#f0d2ca] px-3 py-2 text-sm font-semibold text-[#7b6660] hover:bg-white/80 hover:text-[#251E1F]"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#f0d2ca] px-3 py-2 text-sm font-semibold text-[#7b6660] hover:bg-white/800 hover:text-[#251E1F]"
           >
             <FilterX size={16} />
             Clear
@@ -229,7 +229,7 @@ export default function AdminAuditLogsPage() {
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-rose-300/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+        <div className="rounded-lg border border-rose-300/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-700">
           {error}
         </div>
       ) : null}

@@ -80,7 +80,8 @@ export default function DashboardLayout({
   notificationsPath,
   profilePath,
   onMarkNotificationRead,
-  onMarkAllRead
+  onMarkAllRead,
+  theme
 }) {
   const navigate = useNavigate();
   const roleProfile = roleProfiles[user?.role];
@@ -91,6 +92,35 @@ export default function DashboardLayout({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [fetchedNotifications, setFetchedNotifications] = useState(null);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const classes = {
+    page: "relative min-h-screen overflow-hidden bg-[#fff8f5] text-[#251E1F]",
+    grid: "pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(243,137,120,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(243,137,120,0.08)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20",
+    header: "sticky top-0 z-10 flex h-20 items-center gap-4 border-b border-[#f2d5cc] bg-[#fff8f5]/85 px-4 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur-2xl sm:px-6",
+    iconButton: "flex h-10 w-10 items-center justify-center rounded-lg text-[#6f4f47] hover:bg-[#FDD9CD]/45 hover:text-[#F38978]",
+    title: "min-w-0 flex-1 truncate text-base font-semibold text-[#251E1F] sm:text-lg",
+    searchWrap: "hidden w-full max-w-sm items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 shadow-lg shadow-[#F38978]/10 backdrop-blur lg:flex",
+    searchIcon: "text-[#F38978]",
+    searchInput: "w-full bg-transparent text-sm text-[#251E1F] outline-none placeholder:text-[#9c7b72]",
+    mutedButton: "text-[#6f4f47] hover:text-[#F38978]",
+    badge: "absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#F38978] text-[9px] font-bold text-white ring-2 ring-[#fff8f5]",
+    dropdown: "absolute right-0 top-12 z-30 w-80 rounded-xl border border-[#f0d2ca] bg-white shadow-2xl shadow-[#f2b5a9]/30",
+    dropdownWide: "absolute right-0 top-14 z-30 w-56 rounded-xl border border-[#f0d2ca] bg-white shadow-2xl shadow-[#f2b5a9]/30",
+    dropdownBorder: "border-[#f0d2ca]",
+    dropdownTitle: "text-[#251E1F]",
+    dropdownMuted: "text-[#7b6660]",
+    dropdownAction: "text-[#F38978] hover:bg-[#FDD9CD]/45",
+    notificationHover: "cursor-pointer border-b border-[#f0d2ca] px-4 py-3 transition hover:bg-[#fff3ee]",
+    unreadBg: "bg-[#FDD9CD]/35",
+    notificationTitle: "font-semibold text-[#251E1F]",
+    notificationRead: "text-[#7b6660]",
+    notificationSubtle: "text-[#7b6660]/70",
+    notificationDate: "text-[#7b6660]/50",
+    profileButton: "flex items-center gap-3 rounded-lg transition hover:bg-[#FDD9CD]/45",
+    avatar: "flex h-10 w-10 items-center justify-center rounded-full bg-[#F38978]/15 text-[#F38978] ring-1 ring-[#F38978]/25",
+    profileText: "text-[#251E1F]",
+    profileSubtext: "text-[#7b6660]",
+    menuItem: "flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#6f4f47] transition hover:bg-[#FDD9CD]/45 hover:text-[#251E1F]"
+  };
 
   // Use notificationBadgeCount prop if provided, otherwise compute from notifications array
   const unreadCount = typeof notificationBadgeCount === 'number'
@@ -173,27 +203,27 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="neon-page relative overflow-hidden">
-      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20" />
-      <Sidebar sections={sidebarSections} title={sidebarTitle} />
+    <div className={classes.page}>
+      <div className={classes.grid} />
+      <Sidebar sections={sidebarSections} title={sidebarTitle} theme={theme} />
 
       <div className="relative z-10 lg:pl-64">
-        <header className="sticky top-0 z-10 flex h-20 items-center gap-4 border-b border-white/10 bg-[#090014]/70 px-4 shadow-xl shadow-purple-950/20 backdrop-blur-2xl sm:px-6">
+        <header className={classes.header}>
           <button
             type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-white/10 hover:text-white"
+            className={classes.iconButton}
             aria-label="Open menu"
           >
             <Menu size={21} />
           </button>
 
-          <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-white sm:text-lg">
+          <h1 className={classes.title}>
             {pageTitle}
           </h1>
 
           {/* Search */}
-          <div className="hidden w-full max-w-sm items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 shadow-lg shadow-[#9D4EDD]/10 backdrop-blur lg:flex">
-            <Search size={16} className="text-[#C77DFF]" />
+          <div className={classes.searchWrap}>
+            <Search size={16} className={classes.searchIcon} />
             <input
               type="search"
               value={searchQuery}
@@ -203,10 +233,10 @@ export default function DashboardLayout({
               }}
               onKeyDown={handleSearchKeyDown}
               placeholder={searchPlaceholder}
-              className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[#d8c6e8]/60"
+              className={classes.searchInput}
             />
             {searchQuery && (
-              <button type="button" onClick={() => { setSearchQuery(""); if (onSearch) onSearch(""); }} className="text-[#d8c6e8] hover:text-white">
+              <button type="button" onClick={() => { setSearchQuery(""); if (onSearch) onSearch(""); }} className={classes.mutedButton}>
                 <X size={14} />
               </button>
             )}
@@ -217,12 +247,12 @@ export default function DashboardLayout({
             <button
               type="button"
               onClick={handleBellClick}
-              className="relative flex h-10 w-10 items-center justify-center rounded-lg text-[#d8c6e8] hover:bg-white/10 hover:text-white"
+              className={`relative ${classes.iconButton}`}
               aria-label="Notifications"
             >
               <Bell size={20} />
               {unreadCount > 0 && (
-                <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#FF4DDB] text-[9px] font-bold text-white ring-2 ring-[#090014]">
+                <span className={classes.badge}>
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
@@ -232,16 +262,16 @@ export default function DashboardLayout({
             {showNotifications && (
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setShowNotifications(false)} />
-                <div className="absolute right-0 top-12 z-30 w-80 rounded-xl border border-white/10 bg-[#120022] shadow-2xl shadow-purple-950/40">
-                  <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-                    <h3 className="text-sm font-semibold text-white">Notifications</h3>
+                <div className={classes.dropdown}>
+                  <div className={`flex items-center justify-between border-b px-4 py-3 ${classes.dropdownBorder}`}>
+                    <h3 className={`text-sm font-semibold ${classes.dropdownTitle}`}>Notifications</h3>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-[#d8c6e8]/60">{unreadCount} unread</span>
+                      <span className={`text-xs ${classes.dropdownMuted}`}>{unreadCount} unread</span>
                       {unreadCount > 0 && (
                         <button
                           type="button"
                           onClick={handleMarkAllRead}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-[#C77DFF] hover:bg-white/10"
+                          className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold ${classes.dropdownAction}`}
                         >
                           <Check size={12} />
                           Mark all read
@@ -251,11 +281,11 @@ export default function DashboardLayout({
                   </div>
                   <div className="max-h-80 overflow-y-auto">
                     {loadingNotifications ? (
-                      <div className="px-4 py-8 text-center text-sm text-[#d8c6e8]/60">
+                      <div className={`px-4 py-8 text-center text-sm ${classes.dropdownMuted}`}>
                         Loading...
                       </div>
                     ) : displayNotifications.length === 0 ? (
-                      <div className="px-4 py-8 text-center text-sm text-[#d8c6e8]/60">
+                      <div className={`px-4 py-8 text-center text-sm ${classes.dropdownMuted}`}>
                         No notifications yet
                       </div>
                     ) : (
@@ -269,17 +299,17 @@ export default function DashboardLayout({
                                 onMarkNotificationRead(notif.notification_id || notif.id);
                               }
                             }}
-                            className={`border-b border-white/5 px-4 py-3 transition hover:bg-white/[0.04] cursor-pointer ${!isRead ? "bg-[#C77DFF]/5" : ""}`}
+                            className={`${classes.notificationHover} ${!isRead ? classes.unreadBg : ""}`}
                           >
                             <div className="min-w-0 flex-1">
-                              <p className={`text-sm ${!isRead ? "font-semibold text-white" : "text-[#d8c6e8]/80"}`}>
+                              <p className={`text-sm ${!isRead ? classes.notificationTitle : classes.notificationRead}`}>
                                 {notif.title || notif.message}
                               </p>
                               {notif.message && notif.title && (
-                                <p className="mt-0.5 text-xs text-[#d8c6e8]/60">{notif.message}</p>
+                                <p className={`mt-0.5 text-xs ${classes.notificationSubtle}`}>{notif.message}</p>
                               )}
                               {notif.created_at && (
-                                <p className="mt-1 text-xs text-[#d8c6e8]/40">
+                                <p className={`mt-1 text-xs ${classes.notificationDate}`}>
                                   {new Date(notif.created_at).toLocaleDateString("en-SG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                                 </p>
                               )}
@@ -298,14 +328,14 @@ export default function DashboardLayout({
             <button
               type="button"
               onClick={() => setShowProfileMenu(!showProfileMenu)}
-              className="flex items-center gap-3 rounded-lg transition hover:bg-white/[0.06]"
+              className={classes.profileButton}
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#C77DFF]/15 text-[#C77DFF] ring-1 ring-[#C77DFF]/25">
+              <div className={classes.avatar}>
                 <UserCog size={20} />
               </div>
               <div className="hidden leading-tight sm:block">
-                <p className="text-sm font-semibold text-white">{displayName}</p>
-                <p className="text-xs text-[#d8c6e8]/75">{displayRole}</p>
+                <p className={`text-sm font-semibold ${classes.profileText}`}>{displayName}</p>
+                <p className={`text-xs ${classes.profileSubtext}`}>{displayRole}</p>
               </div>
             </button>
 
@@ -313,16 +343,16 @@ export default function DashboardLayout({
             {showProfileMenu && (
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setShowProfileMenu(false)} />
-                <div className="absolute right-0 top-14 z-30 w-56 rounded-xl border border-white/10 bg-[#120022] shadow-2xl shadow-purple-950/40">
-                  <div className="border-b border-white/10 px-4 py-3">
-                    <p className="text-sm font-semibold text-white">{displayName}</p>
-                    <p className="text-xs text-[#d8c6e8]/60">{displayRole}</p>
+                <div className={classes.dropdownWide}>
+                  <div className={`border-b px-4 py-3 ${classes.dropdownBorder}`}>
+                    <p className={`text-sm font-semibold ${classes.profileText}`}>{displayName}</p>
+                    <p className={`text-xs ${classes.dropdownMuted}`}>{displayRole}</p>
                   </div>
                   <div className="py-1.5">
                     <button
                       type="button"
                       onClick={() => { setShowProfileMenu(false); navigate("/dashboard/settings"); }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#d8c6e8] transition hover:bg-white/[0.06] hover:text-white"
+                      className={classes.menuItem}
                     >
                       <User size={15} />
                       My Profile
@@ -330,7 +360,7 @@ export default function DashboardLayout({
                     <button
                       type="button"
                       onClick={() => { setShowProfileMenu(false); navigate("/dashboard/settings"); }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#d8c6e8] transition hover:bg-white/[0.06] hover:text-white"
+                      className={classes.menuItem}
                     >
                       <Settings size={15} />
                       Settings
@@ -338,17 +368,17 @@ export default function DashboardLayout({
                     <button
                       type="button"
                       onClick={() => { setShowProfileMenu(false); navigate("/dashboard/settings"); }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#d8c6e8] transition hover:bg-white/[0.06] hover:text-white"
+                      className={classes.menuItem}
                     >
                       <Shield size={15} />
                       Security
                     </button>
                   </div>
-                  <div className="border-t border-white/10 py-1.5">
+                  <div className={`border-t py-1.5 ${classes.dropdownBorder}`}>
                     <button
                       type="button"
                       onClick={() => { setShowProfileMenu(false); handleLogout(); }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-rose-400 transition hover:bg-rose-500/10 hover:text-rose-300"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-rose-400 transition hover:bg-rose-500/10 hover:text-rose-700"
                     >
                       <LogOut size={15} />
                       Logout

@@ -185,7 +185,7 @@ export default function AdminRoleActionPage({ roleId, action = "view" }) {
             <div>
               <h2 className="text-3xl font-bold text-[#251E1F]">{meta.title}</h2>
               <p className="mt-1 text-sm text-[#7b6660]">{meta.description}</p>
-              {role ? <p className="mt-3 text-base font-bold text-[#15565b]">{role.roleName}</p> : null}
+              {role ? <p className="mt-3 text-base font-bold text-[#b64d3b]">{role.roleName}</p> : null}
             </div>
           </div>
 

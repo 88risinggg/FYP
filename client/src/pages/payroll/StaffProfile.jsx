@@ -197,7 +197,7 @@ export default function StaffProfile({ onProfileSaved }) {
       )}
 
       {/* Personal Info */}
-      <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+      <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
         <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">Personal Info</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <DisplayField label="Name" value={profile?.name || "-"} />
@@ -208,7 +208,7 @@ export default function StaffProfile({ onProfileSaved }) {
       </div>
 
       {/* Bank Details */}
-      <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+      <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
         <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">Bank Details</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <DisplayField label="Bank" value={profile?.bank || "-"} />
@@ -217,7 +217,7 @@ export default function StaffProfile({ onProfileSaved }) {
       </div>
 
       {/* Employment Info (read-only) */}
-      <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+      <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
         <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">Employment Info</h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <DisplayField label="Department" value={profile?.department || "-"} />
@@ -230,7 +230,7 @@ export default function StaffProfile({ onProfileSaved }) {
       </div>
 
       {/* Emergency Contacts */}
-      <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+      <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
         <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">Emergency Contacts</h3>
 
         {contactsLoading ? (
@@ -282,7 +282,7 @@ export default function StaffProfile({ onProfileSaved }) {
           <button
             type="button"
             onClick={() => { resetContactForm(); setShowAddForm(true); }}
-            className="mt-3 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="mt-3 rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
           >
             + Add Contact
           </button>
@@ -345,14 +345,14 @@ export default function StaffProfile({ onProfileSaved }) {
               <button
                 type="button"
                 onClick={resetContactForm}
-                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSaveContact}
-                className="flex-1 rounded-lg bg-[#2D7C83] px-4 py-2 text-sm font-semibold text-[#251E1F] hover:brightness-110"
+                className="flex-1 rounded-lg bg-[#F38978] px-4 py-2 text-sm font-semibold text-[#251E1F] hover:brightness-110"
               >
                 {editingContact ? 'Update' : 'Save'}
               </button>
@@ -366,7 +366,7 @@ export default function StaffProfile({ onProfileSaved }) {
         <button
           type="button"
           onClick={() => setShowEditModal(true)}
-          className="rounded-lg bg-[#2D7C83] px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110"
+          className="rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110"
         >
           Edit Profile
         </button>
@@ -495,7 +495,7 @@ function EditProfileModal({ profile, token, userId, onClose, onSaved, onError })
               <ModalField label="Bank Name" name="bank" value={form.bank} onChange={handleChange} error={errors.bank} placeholder="e.g. DBS, OCBC, UOB" />
               <ModalField label="Account Number" name="account_no" value={form.account_no} onChange={handleChange} error={errors.account_no} placeholder="e.g. 012-345678-9" />
             </div>
-            <p className="mt-2 text-xs text-amber-300/70">Changing bank details will notify Finance/HR. Your next pay will be sent to the updated account.</p>
+            <p className="mt-2 text-xs text-amber-700/70">Changing bank details will notify Finance/HR. Your next pay will be sent to the updated account.</p>
           </div>
         </div>
 
@@ -503,7 +503,7 @@ function EditProfileModal({ profile, token, userId, onClose, onSaved, onError })
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2.5 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
           >
             Cancel
           </button>
@@ -511,7 +511,7 @@ function EditProfileModal({ profile, token, userId, onClose, onSaved, onError })
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 rounded-lg bg-[#2D7C83] px-4 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-60"
+            className="flex-1 rounded-lg bg-[#F38978] px-4 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-60"
           >
             {saving ? 'Saving…' : 'Save Changes'}
           </button>

@@ -409,7 +409,7 @@ export default function AdminDashboardHomePage() {
       note: "Fully paid",
       icon: CheckCircle2,
       to: `${invoiceListPath}?status=paid`,
-      accent: "#4FB783"
+      accent: "#F38978"
     },
     {
       title: "Overdue",

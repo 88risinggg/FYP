@@ -161,12 +161,12 @@ export default function AdminBackupPage() {
 
       {/* Alerts */}
       {error && (
-        <div className="rounded-lg border border-rose-300/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+        <div className="rounded-lg border border-rose-300/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-700">
           {error}
         </div>
       )}
       {success && (
-        <div className="rounded-lg border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100 flex items-center gap-2">
+        <div className="rounded-lg border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-700 flex items-center gap-2">
           <CheckCircle2 size={16} />
           {success}
         </div>
@@ -192,7 +192,7 @@ export default function AdminBackupPage() {
             className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
               backupType === "FULL"
                 ? "border-[#F38978]/50 bg-[#F38978]/15 text-white"
-                : "border-white/10 bg-white/[0.05] text-[#7b6660] hover:bg-white/10"
+                : "border-[#ead3cc] bg-white/[0.05] text-[#7b6660] hover:bg-[#FDD9CD]/50"
             }`}
           >
             <Database size={16} />
@@ -204,7 +204,7 @@ export default function AdminBackupPage() {
             className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
               backupType === "PARTIAL"
                 ? "border-[#F38978]/50 bg-[#F38978]/15 text-white"
-                : "border-white/10 bg-white/[0.05] text-[#7b6660] hover:bg-white/10"
+                : "border-[#ead3cc] bg-white/[0.05] text-[#7b6660] hover:bg-[#FDD9CD]/50"
             }`}
           >
             <Archive size={16} />
@@ -216,7 +216,7 @@ export default function AdminBackupPage() {
             className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
               backupType === "INCREMENTAL"
                 ? "border-[#F38978]/50 bg-[#F38978]/15 text-white"
-                : "border-white/10 bg-white/[0.05] text-[#7b6660] hover:bg-white/10"
+                : "border-[#ead3cc] bg-white/[0.05] text-[#7b6660] hover:bg-[#FDD9CD]/50"
             }`}
           >
             <RotateCcw size={16} />
@@ -228,7 +228,7 @@ export default function AdminBackupPage() {
             className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
               backupType === "DIFFERENTIAL"
                 ? "border-[#F38978]/50 bg-[#F38978]/15 text-white"
-                : "border-white/10 bg-white/[0.05] text-[#7b6660] hover:bg-white/10"
+                : "border-[#ead3cc] bg-white/[0.05] text-[#7b6660] hover:bg-[#FDD9CD]/50"
             }`}
           >
             <HardDrive size={16} />
@@ -237,7 +237,7 @@ export default function AdminBackupPage() {
         </div>
 
         {/* Type Description */}
-        <div className="mb-5 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-[#7b6660]">
+        <div className="mb-5 rounded-lg border border-[#ead3cc] bg-[#fff3ee]/70 px-4 py-3 text-sm text-[#7b6660]">
           {backupType === "FULL" && "Full Backup — Creates a complete snapshot of all tables and data in the database."}
           {backupType === "PARTIAL" && "Partial Backup — Backs up only the tables you select below."}
           {backupType === "INCREMENTAL" && "Incremental Backup — Backs up only data that has changed since the last backup (any type)."}
@@ -268,21 +268,21 @@ export default function AdminBackupPage() {
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 max-h-60 overflow-y-auto rounded-lg border border-[#ead3cc] bg-[#fff3ee]/70 p-3">
               {tables.map((table) => (
                 <label
                   key={table}
                   className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm cursor-pointer transition ${
                     selectedTables.includes(table)
                       ? "bg-[#F38978]/15 text-white"
-                      : "text-[#7b6660] hover:bg-white/[0.06]"
+                      : "text-[#7b6660] hover:bg-[#FDD9CD]/45"
                   }`}
                 >
                   <input
                     type="checkbox"
                     checked={selectedTables.includes(table)}
                     onChange={() => toggleTable(table)}
-                    className="rounded border-white/20 bg-white/10 text-[#F38978] focus:ring-[#F38978]/50"
+                    className="rounded border-white/20 bg-[#FDD9CD]/50 text-[#F38978] focus:ring-[#F38978]/50"
                   />
                   {table}
                 </label>
@@ -315,7 +315,7 @@ export default function AdminBackupPage() {
       {/* Backup History */}
       <div className="app-panel rounded-lg p-6">
         <div className="flex items-center gap-3 mb-5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.07] text-emerald-300">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#fff3ee] text-emerald-700">
             <Archive size={20} />
           </div>
           <div>
@@ -325,14 +325,14 @@ export default function AdminBackupPage() {
         </div>
 
         {backups.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-white/15 bg-white/[0.035] px-4 py-8 text-center text-sm text-[#7b6660]">
+          <div className="rounded-lg border border-dashed border-[#ead3cc] bg-[#fff3ee]/70 px-4 py-8 text-center text-sm text-[#7b6660]">
             No backups created yet. Create your first backup above.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-[#7b6660]/70">
+                <tr className="border-b border-[#ead3cc] text-left text-xs uppercase tracking-wide text-[#7b6660]/70">
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Size</th>
@@ -345,19 +345,19 @@ export default function AdminBackupPage() {
                 {backups.map((backup) => (
                   <tr
                     key={backup.backup_id}
-                    className="border-b border-white/5 hover:bg-white/[0.03]"
+                    className="border-b border-[#f0d2ca] hover:bg-[#FDD9CD]/35"
                   >
                     <td className="px-4 py-3 font-medium text-white">{backup.name}</td>
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                           backup.type === "FULL"
-                            ? "bg-emerald-400/10 text-emerald-200 border border-emerald-300/20"
+                            ? "bg-emerald-400/10 text-emerald-700 border border-emerald-300/20"
                             : backup.type === "INCREMENTAL"
-                            ? "bg-sky-400/10 text-sky-200 border border-sky-300/20"
+                            ? "bg-sky-400/10 text-sky-700 border border-sky-300/20"
                             : backup.type === "DIFFERENTIAL"
                             ? "bg-[#FDD9CD]/45 text-[#F38978] border border-[#f0d2ca]"
-                            : "bg-amber-400/10 text-amber-200 border border-amber-300/20"
+                            : "bg-amber-400/10 text-amber-700 border border-amber-300/20"
                         }`}
                       >
                         {backup.type}
@@ -387,7 +387,7 @@ export default function AdminBackupPage() {
                                 URL.revokeObjectURL(url);
                               });
                           }}
-                          className="rounded-lg p-2 text-[#7b6660] hover:bg-white/10 hover:text-white"
+                          className="rounded-lg p-2 text-[#7b6660] hover:bg-[#FDD9CD]/50 hover:text-white"
                           title="Download"
                         >
                           <Download size={16} />
@@ -395,7 +395,7 @@ export default function AdminBackupPage() {
                         <button
                           type="button"
                           onClick={() => setRestoreTarget(backup)}
-                          className="rounded-lg p-2 text-sky-300 hover:bg-sky-400/10"
+                          className="rounded-lg p-2 text-sky-700 hover:bg-sky-400/10"
                           title="Restore"
                         >
                           <RotateCcw size={16} />
@@ -403,7 +403,7 @@ export default function AdminBackupPage() {
                         <button
                           type="button"
                           onClick={() => handleDelete(backup.backup_id)}
-                          className="rounded-lg p-2 text-rose-300 hover:bg-rose-400/10"
+                          className="rounded-lg p-2 text-rose-700 hover:bg-rose-400/10"
                           title="Delete"
                         >
                           <Trash2 size={16} />
@@ -426,10 +426,10 @@ export default function AdminBackupPage() {
             <p className="text-sm text-[#7b6660] mb-1">
               Are you sure you want to restore from this backup?
             </p>
-            <p className="text-sm text-rose-300 mb-4">
+            <p className="text-sm text-rose-700 mb-4">
               ⚠️ This will overwrite the current database with the backup data. This action cannot be undone.
             </p>
-            <div className="rounded-lg border border-white/10 bg-white/[0.05] p-3 mb-5 text-sm">
+            <div className="rounded-lg border border-[#ead3cc] bg-white/[0.05] p-3 mb-5 text-sm">
               <p className="text-white font-medium">{restoreTarget.name}</p>
               <p className="text-[#7b6660]">
                 {restoreTarget.type} • {formatSize(restoreTarget.file_size)} • {formatDate(restoreTarget.date)}
@@ -439,7 +439,7 @@ export default function AdminBackupPage() {
               <button
                 type="button"
                 onClick={() => setRestoreTarget(null)}
-                className="rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2 text-sm font-medium text-[#7b6660] hover:bg-white/10"
+                className="rounded-lg border border-[#ead3cc] bg-white/[0.05] px-4 py-2 text-sm font-medium text-[#7b6660] hover:bg-[#FDD9CD]/50"
               >
                 Cancel
               </button>

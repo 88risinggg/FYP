@@ -10,14 +10,14 @@ import {
 } from "../../services/leaveService.js";
 
 const SkeletonBar = ({ width = "100%", height = "h-4" }) => (
-  <div className={`${height} rounded-lg bg-white/80 animate-pulse`} style={{ width }} />
+  <div className={`${height} rounded-lg bg-white/800 animate-pulse`} style={{ width }} />
 );
 
 function LeaveStatusBadge({ status }) {
   const styles = {
-    pending: "border-amber-300/30 bg-amber-300/10 text-amber-200",
-    approved: "border-emerald-300/30 bg-emerald-300/10 text-emerald-200",
-    rejected: "border-red-300/30 bg-red-300/10 text-red-200",
+    pending: "border-amber-300/30 bg-amber-300/10 text-amber-700",
+    approved: "border-emerald-300/30 bg-emerald-300/10 text-emerald-700",
+    rejected: "border-red-300/30 bg-red-300/10 text-red-700",
     cancelled: "border-gray-300/30 bg-gray-300/10 text-gray-200"
   };
   const label = status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unknown";
@@ -208,12 +208,12 @@ export default function HRLeaveManagement() {
       <div className="space-y-6">
         <div className="flex gap-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-lg bg-white/80 px-6 py-3">
+            <div key={i} className="rounded-lg bg-white/800 px-6 py-3">
               <SkeletonBar width="100px" height="h-4" />
             </div>
           ))}
         </div>
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 space-y-3">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5 space-y-3">
           <SkeletonBar width="30%" height="h-4" />
           {[1, 2, 3, 4].map((i) => (
             <SkeletonBar key={i} height="h-14" />
@@ -229,12 +229,12 @@ export default function HRLeaveManagement() {
       {toast && (
         <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[70] w-full max-w-md rounded-xl border px-5 py-4 shadow-2xl backdrop-blur-sm animate-[slideDown_0.3s_ease-out] ${
           toast.type === "error"
-            ? "border-red-400/30 bg-red-950/90 text-red-100"
-            : "border-emerald-400/30 bg-emerald-950/90 text-emerald-100"
+            ? "border-red-400/30 bg-red-50 text-red-700"
+            : "border-emerald-400/30 bg-emerald-50 text-emerald-700"
         }`}>
           <div className="flex items-center gap-3">
             <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-              toast.type === "error" ? "bg-red-500/20 text-red-300" : "bg-emerald-500/20 text-emerald-300"
+              toast.type === "error" ? "bg-red-500/20 text-red-700" : "bg-emerald-500/20 text-emerald-700"
             }`}>
               {toast.type === "error" ? "✕" : "✓"}
             </span>
@@ -244,7 +244,7 @@ export default function HRLeaveManagement() {
       )}
 
       {/* Tab Navigation */}
-      <div className="flex gap-1 rounded-xl border border-[#f0d2ca] bg-white/80 p-1">
+      <div className="flex gap-1 rounded-xl border border-[#f0d2ca] bg-white/800 p-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -254,14 +254,14 @@ export default function HRLeaveManagement() {
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
                 isActive
-                  ? "bg-[#2D7C83] text-[#251E1F] shadow-lg"
-                  : "text-[#7b6660] hover:bg-white/80 hover:text-[#251E1F]"
+                  ? "bg-[#F38978] text-[#251E1F] shadow-lg"
+                  : "text-[#7b6660] hover:bg-white/800 hover:text-[#251E1F]"
               }`}
             >
               <Icon size={16} />
               {tab.label}
               {tab.id === "pending" && pendingApps.length > 0 && (
-                <span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400/20 text-xs font-bold text-amber-200">
+                <span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400/20 text-xs font-bold text-amber-700">
                   {pendingApps.length}
                 </span>
               )}
@@ -272,7 +272,7 @@ export default function HRLeaveManagement() {
 
       {/* ─── Pending Approvals Tab ──────────────────────────────────── */}
       {activeTab === "pending" && (
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
           <h3 className="mb-4 text-lg font-semibold text-[#251E1F]">Pending Leave Approvals</h3>
           {pendingApps.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -284,7 +284,7 @@ export default function HRLeaveManagement() {
               {pendingApps.map((app) => (
                 <div
                   key={app.id}
-                  className="rounded-lg border border-[#f0d2ca] bg-white/[0.02] p-4 transition hover:bg-[#FDD9CD]/45"
+                  className="rounded-lg border border-[#f0d2ca] bg-[#fff3ee]/50 p-4 transition hover:bg-[#FDD9CD]/45"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-1">
@@ -321,7 +321,7 @@ export default function HRLeaveManagement() {
                         <button
                           type="button"
                           onClick={() => openAction(app.id, "approved")}
-                          className="flex items-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30 transition"
+                          className="flex items-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/30 transition"
                         >
                           <Check size={14} />
                           Approve
@@ -329,7 +329,7 @@ export default function HRLeaveManagement() {
                         <button
                           type="button"
                           onClick={() => openAction(app.id, "rejected")}
-                          className="flex items-center gap-1.5 rounded-lg bg-red-500/20 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/30 transition"
+                          className="flex items-center gap-1.5 rounded-lg bg-red-500/20 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-500/30 transition"
                         >
                           <X size={14} />
                           Reject
@@ -342,7 +342,7 @@ export default function HRLeaveManagement() {
                           value={actionComment}
                           onChange={(e) => setActionComment(e.target.value)}
                           placeholder="Optional comment..."
-                          className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-xs text-[#251E1F] placeholder:text-[#251E1F]/30 focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
+                          className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-xs text-[#251E1F] placeholder:text-[#251E1F]/30 focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978]"
                         />
                         <div className="flex gap-2">
                           <button
@@ -351,8 +351,8 @@ export default function HRLeaveManagement() {
                             onClick={() => handleAction(app.id, actionType)}
                             className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition disabled:opacity-50 ${
                               actionType === "approved"
-                                ? "bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30"
-                                : "bg-red-500/20 text-red-200 hover:bg-red-500/30"
+                                ? "bg-emerald-500/20 text-emerald-700 hover:bg-emerald-500/30"
+                                : "bg-red-500/20 text-red-700 hover:bg-red-500/30"
                             }`}
                           >
                             {processing ? "Processing..." : `Confirm ${actionType === "approved" ? "Approve" : "Reject"}`}
@@ -360,7 +360,7 @@ export default function HRLeaveManagement() {
                           <button
                             type="button"
                             onClick={cancelAction}
-                            className="rounded-lg border border-[#f0d2ca] px-3 py-2 text-xs text-[#7b6660] hover:bg-white/80 transition"
+                            className="rounded-lg border border-[#f0d2ca] px-3 py-2 text-xs text-[#7b6660] hover:bg-white/800 transition"
                           >
                             Cancel
                           </button>
@@ -377,7 +377,7 @@ export default function HRLeaveManagement() {
 
       {/* ─── All Applications Tab ──────────────────────────────────── */}
       {activeTab === "all" && (
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
           <h3 className="mb-4 text-lg font-semibold text-[#251E1F]">All Staff Leave Applications</h3>
 
           {/* Filters */}
@@ -391,7 +391,7 @@ export default function HRLeaveManagement() {
                   value={filterName}
                   onChange={(e) => setFilterName(e.target.value)}
                   placeholder="Search name..."
-                  className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 pl-9 pr-4 py-2 text-sm text-[#251E1F] placeholder:text-[#251E1F]/30 focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
+                  className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 pl-9 pr-4 py-2 text-sm text-[#251E1F] placeholder:text-[#251E1F]/30 focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978]"
                 />
               </div>
             </div>
@@ -400,7 +400,7 @@ export default function HRLeaveManagement() {
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm text-[#251E1F] focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978]"
               >
                 <option value="" className="bg-[#fff3ee]">All Types</option>
                 {leaveTypes.map((type) => (
@@ -415,7 +415,7 @@ export default function HRLeaveManagement() {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm text-[#251E1F] focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978]"
               >
                 <option value="" className="bg-[#fff3ee]">All Statuses</option>
                 <option value="pending" className="bg-[#fff3ee]">Pending</option>
@@ -431,7 +431,7 @@ export default function HRLeaveManagement() {
                 type="date"
                 value={filterStartDate}
                 onChange={(e) => setFilterStartDate(e.target.value)}
-                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm text-[#251E1F] focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978]"
               />
             </div>
             <div>
@@ -440,7 +440,7 @@ export default function HRLeaveManagement() {
                 type="date"
                 value={filterEndDate}
                 onChange={(e) => setFilterEndDate(e.target.value)}
-                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm text-[#251E1F] focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978]"
               />
             </div>
           </div>
@@ -473,7 +473,7 @@ export default function HRLeaveManagement() {
                 </thead>
                 <tbody>
                   {filteredApps.map((app) => (
-                    <tr key={app.id} className="border-b border-[#f0d2ca] hover:bg-white/[0.02] transition">
+                    <tr key={app.id} className="border-b border-[#f0d2ca] hover:bg-[#FDD9CD]/30 transition">
                       <td className="px-3 py-3 text-[#251E1F] font-medium">
                         {app.staff_name || app.name || "—"}
                       </td>
@@ -503,7 +503,7 @@ export default function HRLeaveManagement() {
 
       {/* ─── Leave Configuration Tab ──────────────────────────────── */}
       {activeTab === "config" && (
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
           <h3 className="mb-4 text-lg font-semibold text-[#251E1F]">Leave Type Configuration</h3>
           <p className="mb-4 text-xs text-[#7b6660]">
             Edit entitlement settings for each leave type. Changes apply to future balance records only.
@@ -513,7 +513,7 @@ export default function HRLeaveManagement() {
             {leaveTypes.map((type) => (
               <div
                 key={type.id}
-                className="rounded-lg border border-[#f0d2ca] bg-white/[0.02] p-4 transition hover:bg-[#FDD9CD]/45"
+                className="rounded-lg border border-[#f0d2ca] bg-[#fff3ee]/50 p-4 transition hover:bg-[#FDD9CD]/45"
               >
                 {editingType !== type.id ? (
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -537,7 +537,7 @@ export default function HRLeaveManagement() {
                     <button
                       type="button"
                       onClick={() => startEditType(type)}
-                      className="rounded-lg border border-[#f0d2ca] px-4 py-2 text-xs font-medium text-[#7b6660] hover:bg-white/80 hover:text-[#251E1F] transition"
+                      className="rounded-lg border border-[#f0d2ca] px-4 py-2 text-xs font-medium text-[#7b6660] hover:bg-white/800 hover:text-[#251E1F] transition"
                     >
                       Edit
                     </button>
@@ -555,7 +555,7 @@ export default function HRLeaveManagement() {
                           min="0"
                           value={editEntitlement}
                           onChange={(e) => setEditEntitlement(e.target.value)}
-                          className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
+                          className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978]"
                         />
                       </div>
 
@@ -568,7 +568,7 @@ export default function HRLeaveManagement() {
                           min="0"
                           value={editCarryCap}
                           onChange={(e) => setEditCarryCap(e.target.value)}
-                          className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
+                          className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978]"
                         />
                       </div>
                       <div className="flex items-center gap-3 pt-5">
@@ -579,7 +579,7 @@ export default function HRLeaveManagement() {
                             onChange={(e) => setEditRequiresAttachment(e.target.checked)}
                             className="peer sr-only"
                           />
-                          <div className="h-5 w-9 rounded-full bg-white/80 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white/60 after:transition-all peer-checked:bg-[#2D7C83] peer-checked:after:translate-x-full peer-checked:after:bg-white"></div>
+                          <div className="h-5 w-9 rounded-full bg-white/800 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white/60 after:transition-all peer-checked:bg-[#F38978] peer-checked:after:translate-x-full peer-checked:after:bg-white"></div>
                         </label>
                         <span className="text-xs text-[#7b6660]">Requires Attachment</span>
                       </div>
@@ -589,14 +589,14 @@ export default function HRLeaveManagement() {
                         type="button"
                         disabled={savingType}
                         onClick={() => handleSaveLeaveType(type.id)}
-                        className="rounded-lg bg-[#2D7C83] px-6 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-50 transition"
+                        className="rounded-lg bg-[#F38978] px-6 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-50 transition"
                       >
                         {savingType ? "Saving..." : "Save Changes"}
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditingType(null)}
-                        className="rounded-lg border border-[#f0d2ca] px-4 py-2.5 text-sm text-[#7b6660] hover:bg-white/80 transition"
+                        className="rounded-lg border border-[#f0d2ca] px-4 py-2.5 text-sm text-[#7b6660] hover:bg-white/800 transition"
                       >
                         Cancel
                       </button>
@@ -611,9 +611,9 @@ export default function HRLeaveManagement() {
           </div>
 
           {/* ─── Carry-Forward Execution ──────────────────────────────── */}
-          <div className="mt-6 rounded-lg border border-[#f0d2ca] bg-white/[0.02] p-5">
+          <div className="mt-6 rounded-lg border border-[#f0d2ca] bg-[#fff3ee]/50 p-5">
             <div className="flex items-center gap-2 mb-3">
-              <RefreshCw size={18} className="text-[#2D7C83]" />
+              <RefreshCw size={18} className="text-[#F38978]" />
               <h4 className="text-sm font-semibold text-[#251E1F]">Annual Leave Carry-Forward</h4>
             </div>
             <p className="mb-4 text-xs text-[#7b6660]">
@@ -629,14 +629,14 @@ export default function HRLeaveManagement() {
                   max="2099"
                   value={carryForwardYear}
                   onChange={(e) => setCarryForwardYear(e.target.value)}
-                  className="w-32 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#2D7C83] focus:outline-none focus:ring-1 focus:ring-[#2D7C83]"
+                  className="w-32 rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978]"
                 />
               </div>
               <button
                 type="button"
                 onClick={() => setShowCarryForwardConfirm(true)}
                 disabled={carryForwardProcessing || !carryForwardYear}
-                className="flex items-center gap-2 rounded-lg bg-[#2D7C83] px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-50 transition"
+                className="flex items-center gap-2 rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-50 transition"
               >
                 <RefreshCw size={14} />
                 Run Carry-Forward
@@ -664,7 +664,7 @@ export default function HRLeaveManagement() {
                     type="button"
                     onClick={() => setShowCarryForwardConfirm(false)}
                     disabled={carryForwardProcessing}
-                    className="rounded-lg border border-[#f0d2ca] px-4 py-2.5 text-sm text-[#7b6660] hover:bg-white/80 transition disabled:opacity-50"
+                    className="rounded-lg border border-[#f0d2ca] px-4 py-2.5 text-sm text-[#7b6660] hover:bg-white/800 transition disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -672,7 +672,7 @@ export default function HRLeaveManagement() {
                     type="button"
                     onClick={handleRunCarryForward}
                     disabled={carryForwardProcessing}
-                    className="flex items-center gap-2 rounded-lg bg-[#2D7C83] px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-50 transition"
+                    className="flex items-center gap-2 rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-50 transition"
                   >
                     {carryForwardProcessing ? (
                       <>

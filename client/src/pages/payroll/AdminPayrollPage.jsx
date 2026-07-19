@@ -313,7 +313,7 @@ const statutorySchemeSettings = [
 function ActionButton({ icon: Icon, children, variant = "primary", onClick, disabled = false }) {
   const className =
     variant === "secondary"
-      ? "inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
+      ? "inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
       : "primary-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold";
 
   return (
@@ -367,7 +367,7 @@ function formatMoney(value) {
 
 function EmptyState({ message }) {
   return (
-    <div className="rounded-xl border border-dashed border-[#f0d2ca] bg-white/80 p-6 text-sm text-[#7b6660]">
+    <div className="rounded-xl border border-dashed border-[#f0d2ca] bg-white/800 p-6 text-sm text-[#7b6660]">
       {message}
     </div>
   );
@@ -527,18 +527,18 @@ function getStatusBadgeClass(status) {
   const normalizedStatus = status.toLowerCase();
 
   if (["active", "configured", "default set", "tracking"].includes(normalizedStatus)) {
-    return "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]";
+    return "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]";
   }
 
   if (["not configured", "needs data"].includes(normalizedStatus)) {
-    return "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]";
+    return "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]";
   }
 
   if (normalizedStatus === "view only") {
     return "border-[#7DD3FC]/25 bg-[#7DD3FC]/10 text-[#BAE6FD]";
   }
 
-  return "border-[#f0d2ca] bg-white/80 text-[#7b6660]";
+  return "border-[#f0d2ca] bg-white/800 text-[#7b6660]";
 }
 
 function WorkflowCard({ data, onNavigate, step }) {
@@ -557,7 +557,7 @@ function WorkflowCard({ data, onNavigate, step }) {
         </span>
       </div>
       <h3 className="mt-5 text-base font-semibold text-[#251E1F]">{step.title}</h3>
-      <div className="mt-3 grid gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 p-3 text-xs text-[#7b6660]">
+      <div className="mt-3 grid gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 p-3 text-xs text-[#7b6660]">
         <div className="flex items-center justify-between gap-3">
           <span>Owner</span>
           <span className="font-semibold text-[#251E1F]">{step.owner}</span>
@@ -596,8 +596,8 @@ function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout })
   const dashboardStats = [
     { label: "Active Users", value: stats.activeUsers ?? 0, tone: "text-[#F38978]", updatedAt: getLatestTimestamp(data?.users) },
     { label: "Payroll Rules", value: stats.payrollRules ?? 0, tone: "text-[#251E1F]", updatedAt: getLatestTimestamp(data?.settings) },
-    { label: "Payslip Layouts", value: stats.payslipLayouts ?? 0, tone: "text-[#7CFFB2]", updatedAt: getLatestTimestamp(data?.layouts) },
-    { label: "Admin Logs", value: stats.adminLogs ?? 0, tone: "text-[#FFB86B]", updatedAt: getLatestTimestamp(data?.auditLogs) }
+    { label: "Payslip Layouts", value: stats.payslipLayouts ?? 0, tone: "text-[#2f8758]", updatedAt: getLatestTimestamp(data?.layouts) },
+    { label: "Admin Logs", value: stats.adminLogs ?? 0, tone: "text-[#D97706]", updatedAt: getLatestTimestamp(data?.auditLogs) }
   ];
   const defaultLayout = data?.layouts?.find((layout) => Number(layout.is_default) === 1);
 
@@ -637,7 +637,7 @@ function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout })
         </div>
         <div className="mt-5 grid gap-3 md:grid-cols-5">
           {dashboardUpdates.map((item) => (
-            <div key={item.label} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+            <div key={item.label} className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
               <p className="text-sm font-semibold text-[#251E1F]">{item.label}</p>
               <p className="mt-1 text-xs text-[#7b6660]">{item.records}</p>
               <p className="mt-3 text-xs font-semibold text-[#F38978]">
@@ -659,7 +659,7 @@ function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout })
 
         <aside className="app-panel rounded-2xl p-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#2D7C83]/20 text-[#F38978]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F38978]/20 text-[#F38978]">
               <Palette size={21} />
             </div>
             <div>
@@ -776,7 +776,7 @@ function UsersRolesView({
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3 xl:w-[46rem]">
-              <label className="flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2.5">
+              <label className="flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 px-3 py-2.5">
                 <Search size={16} className="text-[#F38978]" />
                 <input
                   type="search"
@@ -859,14 +859,14 @@ function UsersRolesView({
                       <td className="border-b border-[#f0d2ca] px-4 py-4">{user.department_name || "Not linked"}</td>
                       <td className="border-b border-[#f0d2ca] px-4 py-4">{formatMoney(user.base_salary)}</td>
                       <td className="border-b border-[#f0d2ca] px-4 py-4">
-                        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isActive ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
+                        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isActive ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]"}`}>
                           {isActive ? "Active" : "Inactive"}
                         </span>
                       </td>
                       <td className="border-b border-[#f0d2ca] px-4 py-4">
                         <button
                           type="button"
-                          className="rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                          className="rounded-xl border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
                           onClick={(event) => {
                             event.stopPropagation();
                             setManagedUser(user);
@@ -993,7 +993,7 @@ function BulkAccessModal({
           </div>
           <button
             type="button"
-            className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
             onClick={onClose}
           >
             Close
@@ -1001,18 +1001,18 @@ function BulkAccessModal({
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
             <p className="text-sm text-[#7b6660]">Selected Users</p>
             <p className="mt-2 text-3xl font-semibold text-[#251E1F]">{selectedCount}</p>
             <p className="mt-2 text-xs text-[#7b6660]/75">{activeCount} active / {inactiveCount} inactive</p>
           </div>
 
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4 md:col-span-2">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4 md:col-span-2">
             <p className="text-sm font-semibold text-[#251E1F]">Selection</p>
             <div className="mt-4 flex flex-wrap gap-3">
               <button
                 type="button"
-                className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
                 onClick={() => onSelectionChange(filteredIds)}
                 disabled={!filteredIds.length}
               >
@@ -1020,7 +1020,7 @@ function BulkAccessModal({
               </button>
               <button
                 type="button"
-                className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
                 onClick={() => onSelectionChange([])}
                 disabled={!selectedCount}
               >
@@ -1031,7 +1031,7 @@ function BulkAccessModal({
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
             <p className="text-sm font-semibold text-[#251E1F]">Apply Role</p>
             <p className="mt-2 text-sm text-[#7b6660]">Assign one role to every selected user.</p>
             <div className="mt-4 flex gap-2">
@@ -1056,13 +1056,13 @@ function BulkAccessModal({
             </div>
           </div>
 
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
             <p className="text-sm font-semibold text-[#251E1F]">Account Status</p>
             <p className="mt-2 text-sm text-[#7b6660]">Activate or deactivate all selected user accounts.</p>
             <div className="mt-4 flex flex-wrap gap-3">
               <button
                 type="button"
-                className="rounded-xl border border-[#7CFFB2]/25 bg-[#7CFFB2]/10 px-4 py-2 text-sm font-semibold text-[#D8FFE6] hover:bg-[#7CFFB2]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl border border-[#2f8758]/25 bg-[#2f8758]/10 px-4 py-2 text-sm font-semibold text-[#065F46] hover:bg-[#2f8758]/18 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => applyBulkStatus(1)}
                 disabled={isSubmitting || !selectedCount}
               >
@@ -1070,7 +1070,7 @@ function BulkAccessModal({
               </button>
               <button
                 type="button"
-                className="rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 px-4 py-2 text-sm font-semibold text-[#FFE2B8] hover:bg-[#FFB86B]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl border border-[#D97706]/25 bg-[#D97706]/10 px-4 py-2 text-sm font-semibold text-[#9A6412] hover:bg-[#D97706]/18 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => applyBulkStatus(0)}
                 disabled={isSubmitting || !selectedCount}
               >
@@ -1080,11 +1080,11 @@ function BulkAccessModal({
           </div>
         </div>
 
-        <div className="mt-5 rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+        <div className="mt-5 rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
           <p className="text-sm font-semibold text-[#251E1F]">Selected Users Preview</p>
           <div className="mt-3 max-h-56 overflow-y-auto">
             {selectedUsers.length ? (
-              <div className="divide-y divide-white/10">
+              <div className="divide-y divide-[#ead3cc]">
                 {selectedUsers.map((user) => (
                   <div key={user.user_id} className="flex flex-col gap-1 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -1107,7 +1107,7 @@ function BulkAccessModal({
 
 function ProfileField({ label, value }) {
   return (
-    <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+    <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/75">{label}</p>
       <p className="mt-2 text-sm font-semibold text-[#251E1F]">{value || "Not linked"}</p>
     </div>
@@ -1178,7 +1178,7 @@ function AddUserModal({ availableStaff = [], onClose, onCreateUser, roles = [] }
           </div>
           <button
             type="button"
-            className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
             onClick={onClose}
           >
             Close
@@ -1250,14 +1250,14 @@ function AddUserModal({ availableStaff = [], onClose, onCreateUser, roles = [] }
           </div>
 
           {errorMessage ? (
-            <div className="rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-4 text-sm text-[#FFE2B8]">
+            <div className="rounded-xl border border-[#D97706]/25 bg-[#D97706]/10 p-4 text-sm text-[#9A6412]">
               {errorMessage}
             </div>
           ) : null}
 
           {temporaryPassword ? (
-            <div className="rounded-xl border border-[#7CFFB2]/25 bg-[#7CFFB2]/10 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#7CFFB2]">Temporary Password</p>
+            <div className="rounded-xl border border-[#2f8758]/25 bg-[#2f8758]/10 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#2f8758]">Temporary Password</p>
               <p className="mt-2 break-all font-mono text-sm text-[#251E1F]">{temporaryPassword}</p>
             </div>
           ) : null}
@@ -1265,7 +1265,7 @@ function AddUserModal({ availableStaff = [], onClose, onCreateUser, roles = [] }
           <div className="flex flex-wrap justify-end gap-3 border-t border-[#f0d2ca] pt-5">
             <button
               type="button"
-              className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+              className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
               onClick={onClose}
             >
               Done
@@ -1346,13 +1346,13 @@ function UserManagementModal({
               <h3 className="text-xl font-semibold text-[#251E1F]">Manage {user.name}</h3>
               <p className="mt-1 text-sm text-[#7b6660]">{user.email}</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <span className="rounded-full border border-[#f0d2ca] bg-white/80 px-3 py-1 text-xs font-semibold text-[#7b6660]">
+                <span className="rounded-full border border-[#f0d2ca] bg-white/800 px-3 py-1 text-xs font-semibold text-[#7b6660]">
                   {user.role_name}
                 </span>
-                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isActive ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
+                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isActive ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]"}`}>
                   {isActive ? "Active account" : "Inactive account"}
                 </span>
-                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${hasStaffProfile ? "border-[#F38978]/25 bg-[#F38978]/10 text-[#6F4F47]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
+                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${hasStaffProfile ? "border-[#F38978]/25 bg-[#F38978]/10 text-[#6F4F47]" : "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]"}`}>
                   {hasStaffProfile ? "Staff profile linked" : "No staff profile"}
                 </span>
               </div>
@@ -1360,7 +1360,7 @@ function UserManagementModal({
           </div>
           <button
             type="button"
-            className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
             onClick={onClose}
           >
             Close
@@ -1371,7 +1371,7 @@ function UserManagementModal({
           <div>
             <h4 className="font-semibold text-[#251E1F]">Admin Actions</h4>
             <div className="mt-4 grid gap-4 lg:grid-cols-3">
-              <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+              <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
                 <p className="text-sm font-semibold text-[#251E1F]">Reset Password</p>
                 <p className="mt-2 text-sm text-[#7b6660]">
                   Generates a temporary password for the user. Share it through a secure channel.
@@ -1385,21 +1385,21 @@ function UserManagementModal({
                   Reset Password
                 </button>
                 {temporaryPassword ? (
-                  <div className="mt-4 rounded-xl border border-[#7CFFB2]/25 bg-[#7CFFB2]/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#7CFFB2]">Temporary Password</p>
+                  <div className="mt-4 rounded-xl border border-[#2f8758]/25 bg-[#2f8758]/10 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#2f8758]">Temporary Password</p>
                     <p className="mt-2 break-all font-mono text-sm text-[#251E1F]">{temporaryPassword}</p>
                   </div>
                 ) : null}
               </div>
 
-              <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+              <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
                 <p className="text-sm font-semibold text-[#251E1F]">Account Status</p>
                 <p className="mt-2 text-sm text-[#7b6660]">
                   Disable access for inactive users. Self-deactivation is blocked.
                 </p>
                 <button
                   type="button"
-                  className="mt-4 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mt-4 rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45 disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={handleStatusUpdate}
                   disabled={isSubmitting || isCurrentUser}
                 >
@@ -1407,7 +1407,7 @@ function UserManagementModal({
                 </button>
               </div>
 
-              <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+              <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
                 <p className="text-sm font-semibold text-[#251E1F]">Role Access</p>
                 <p className="mt-2 text-sm text-[#7b6660]">
                   Change module access by assigning a different role. Self-role changes are blocked.
@@ -1495,20 +1495,20 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
           {layouts.length ? (
             <div className="grid gap-4 md:grid-cols-3">
               {layouts.map((layout) => (
-              <article key={layout.layout_id} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+              <article key={layout.layout_id} className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978] ring-1 ring-[#F38978]/25">
                   <FileText size={22} />
                 </div>
                 <h3 className="mt-4 font-semibold text-[#251E1F]">{layout.layout_name}</h3>
                 <p className="mt-2 text-sm text-[#7b6660]">{layout.file_type} template</p>
                 <div className="mt-4 flex items-center justify-between gap-3 text-xs">
-                  <span className="rounded-full border border-[#f0d2ca] bg-white/80 px-3 py-1 font-semibold text-[#7b6660]">
+                  <span className="rounded-full border border-[#f0d2ca] bg-white/800 px-3 py-1 font-semibold text-[#7b6660]">
                     {Number(layout.is_default) === 1 ? "Default" : layout.status}
                   </span>
                   <span className="text-[#7b6660]/80">{formatDate(layout.updated_at)}</span>
                 </div>
                 <div className="mt-5 flex gap-2">
-                  <button type="button" className="rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45" onClick={() => window.open(layout.file_path, "_blank")}>
+                  <button type="button" className="rounded-xl border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45" onClick={() => window.open(layout.file_path, "_blank")}>
                     Preview
                   </button>
                   <button type="button" className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18" onClick={() => onSetDefaultLayout(layout.layout_id)}>
@@ -1584,7 +1584,7 @@ function SettingEditor({ definition, setting, onSave }) {
         value={value}
         onChange={(event) => setValue(event.target.value)}
         placeholder={definition.placeholder}
-        className="mt-5 w-full rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2.5 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]/50"
+        className="mt-5 w-full rounded-xl border border-[#f0d2ca] bg-white/800 px-3 py-2.5 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]/50"
       />
 
       <div className="mt-4 flex items-center justify-between gap-3">
@@ -1632,7 +1632,7 @@ function SettingInput({ value, onChange, placeholder }) {
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]/50"
+      className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]/50"
     />
   );
 }
@@ -2247,7 +2247,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
                 </select>
                 <SettingInput value={form.employeeRate} onChange={(value) => updateForm("employeeRate", value)} placeholder="Employee rate %" />
                 <SettingInput value={form.employerRate} onChange={(value) => updateForm("employerRate", value)} placeholder="Employer rate %" />
-                <div className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#7b6660]">
+                <div className="rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#7b6660]">
                   Total Rate: <span className="font-semibold text-[#251E1F]">{(employeeRate + employerRate).toFixed(2)}%</span>
                 </div>
               </div>
@@ -2265,7 +2265,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
                 </select>
                 <SettingInput value={form.monthlyWageCeiling} onChange={(value) => updateForm("monthlyWageCeiling", value)} placeholder="Monthly wage ceiling" />
               </div>
-              <p className="mt-4 rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-3 text-sm text-[#FFE2B8]">
+              <p className="mt-4 rounded-xl border border-[#D97706]/25 bg-[#D97706]/10 p-3 text-sm text-[#9A6412]">
                 If gross salary is above the ceiling, MBMF uses the ceiling amount only.
               </p>
             </section>
@@ -2284,7 +2284,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
 
             <section className="app-panel rounded-2xl p-5">
               <h4 className="font-semibold text-[#251E1F]">5. Save & Apply</h4>
-              <div className="mt-4 rounded-xl border border-[#7CFFB2]/25 bg-[#7CFFB2]/10 p-4 text-sm text-[#D8FFE6]">
+              <div className="mt-4 rounded-xl border border-[#2f8758]/25 bg-[#2f8758]/10 p-4 text-sm text-[#065F46]">
                 Saved MBMF settings are applied to eligible Muslim employees only.
               </div>
               <button
@@ -2339,26 +2339,26 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
               <p className="mt-1 text-sm text-[#7b6660]">All employees where staff.religion = {form.applicableReligion}</p>
             </div>
             <div className="mt-4 grid gap-3 text-sm">
-              <div className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3">
+              <div className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-3">
                 <span className="text-[#7b6660]">Total Staff</span>
                 <span className="font-semibold text-[#251E1F]">{eligibility?.totalStaff ?? 0}</span>
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3">
+              <div className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-3">
                 <span className="text-[#7b6660]">Eligible {form.applicableReligion} Staff</span>
-                <span className="font-semibold text-[#7CFFB2]">{eligibility?.eligibleMuslimEmployees ?? 0}</span>
+                <span className="font-semibold text-[#2f8758]">{eligibility?.eligibleMuslimEmployees ?? 0}</span>
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3">
+              <div className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-3">
                 <span className="text-[#7b6660]">Not Applied</span>
                 <span className="font-semibold text-[#251E1F]">{eligibility?.nonEligibleEmployees ?? 0}</span>
               </div>
             </div>
             {!eligibility?.hasReligionColumn ? (
-              <p className="mt-4 rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-3 text-sm text-[#FFE2B8]">
+              <p className="mt-4 rounded-xl border border-[#D97706]/25 bg-[#D97706]/10 p-3 text-sm text-[#9A6412]">
                 Add a religion column to the staff table so the system can identify Muslim employees.
               </p>
             ) : null}
             {eligibility?.sampleEmployees?.length ? (
-              <div className="mt-4 rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+              <div className="mt-4 rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
                 <p className="text-sm font-semibold text-[#251E1F]">Eligible Staff Preview</p>
                 <div className="mt-3 space-y-2 text-sm text-[#7b6660]">
                   {eligibility.sampleEmployees.map((employee) => (
@@ -2402,13 +2402,13 @@ function CpfCeilingPanel({ onSave, settingsByKey }) {
         <h3 className="text-lg font-semibold text-[#251E1F]">Wage Ceiling History</h3>
         <div className="mt-4 space-y-3">
           {cpfCeilingHistory.map(([effectiveFrom, ceiling]) => (
-            <div key={effectiveFrom} className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3 text-sm">
+            <div key={effectiveFrom} className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-3 text-sm">
               <span className="text-[#7b6660]">{effectiveFrom}</span>
               <span className="font-semibold text-[#251E1F]">SGD {ceiling}</span>
             </div>
           ))}
         </div>
-        <p className="mt-4 rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-3 text-sm text-[#FFE2B8]">
+        <p className="mt-4 rounded-xl border border-[#D97706]/25 bg-[#D97706]/10 p-3 text-sm text-[#9A6412]">
           System should apply the ceiling based on the payroll period date.
         </p>
       </section>
@@ -2525,7 +2525,7 @@ function SelfHelpGroupRulesPanel({ onSave, settingsByKey, users = [] }) {
                       type="date"
                       value={row.effectiveFrom}
                       onChange={(event) => updateRow(row.key, "effectiveFrom", event.target.value)}
-                      className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none"
+                      className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#251E1F] outline-none"
                     />
                   </td>
                   <td className="border-b border-[#f0d2ca] px-4 py-4">
@@ -2668,7 +2668,7 @@ function ComplianceRulesView({ mbmfEligibility, onUpdateSetting, settings = [], 
           </div>
           <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
             {complianceUpdates.map((item) => (
-              <div key={item.label} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+              <div key={item.label} className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
                 <p className="text-sm font-semibold text-[#251E1F]">{item.label}</p>
                 <p className="mt-2 text-xs leading-5 text-[#7b6660]">{item.value}</p>
                 <p className="mt-3 text-xs font-semibold text-[#F38978]">
@@ -2784,7 +2784,7 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
       </div>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-2xl border border-[#f0d2ca] bg-white/80 p-5">
+        <div className="rounded-2xl border border-[#f0d2ca] bg-white/800 p-5">
           <h4 className="font-semibold text-[#251E1F]">{editingKey ? "Edit Rule" : "Add Rule"}</h4>
           <div className="mt-4 grid gap-3">
             <SettingInput value={form.title} onChange={(value) => updateForm("title", value)} placeholder="Rule title" />
@@ -2794,7 +2794,7 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
                 type="date"
                 value={form.effectiveFrom}
                 onChange={(event) => updateForm("effectiveFrom", event.target.value)}
-                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#F38978]/50"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#F38978]/50"
               />
             </div>
             <textarea
@@ -2802,7 +2802,7 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
               onChange={(event) => updateForm("ruleText", event.target.value)}
               placeholder="Rule details"
               rows={5}
-              className="w-full resize-y rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]/50"
+              className="w-full resize-y rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]/50"
             />
             <div className="grid gap-3 sm:grid-cols-2">
               <SettingInput value={form.source} onChange={(value) => updateForm("source", value)} placeholder="Source or reference" />
@@ -2828,7 +2828,7 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
               {editingKey ? (
                 <button
                   type="button"
-                  className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                  className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
                   onClick={resetForm}
                 >
                   Cancel
@@ -2841,12 +2841,12 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
         <div className="space-y-3">
           {customRules.length ? (
             customRules.map((rule) => (
-              <article key={rule.settingKey} className="rounded-2xl border border-[#f0d2ca] bg-white/80 p-5">
+              <article key={rule.settingKey} className="rounded-2xl border border-[#f0d2ca] bg-white/800 p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h4 className="font-semibold text-[#251E1F]">{rule.title}</h4>
-                      <span className="rounded-full border border-[#f0d2ca] bg-white/80 px-3 py-1 text-xs font-semibold text-[#7b6660]">
+                      <span className="rounded-full border border-[#f0d2ca] bg-white/800 px-3 py-1 text-xs font-semibold text-[#7b6660]">
                         {rule.status}
                       </span>
                     </div>
@@ -2854,7 +2854,7 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
                   </div>
                   <button
                     type="button"
-                    className="shrink-0 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                    className="shrink-0 rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
                     onClick={() => startEdit(rule)}
                   >
                     Edit
@@ -2909,7 +2909,7 @@ function PayrollMonitorView({ payrollRuns = [] }) {
         </>
       }
     >
-      <div className="mb-5 grid gap-3 rounded-2xl border border-[#f0d2ca] bg-white/80 p-4 md:grid-cols-[1fr_1fr_1fr_auto]">
+      <div className="mb-5 grid gap-3 rounded-2xl border border-[#f0d2ca] bg-white/800 p-4 md:grid-cols-[1fr_1fr_1fr_auto]">
         <label className="space-y-2">
           <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
             <Filter size={14} />
@@ -2970,7 +2970,7 @@ function PayrollMonitorView({ payrollRuns = [] }) {
               <p className="text-[#7b6660]">{formatDateTime(run.updated_at || run.created_at)}</p>
               <p className="text-[#7b6660]">{run.employee_count}</p>
               <p className="text-[#251E1F]">{run.status}</p>
-              <button type="button" className="justify-self-start rounded-xl bg-white/80 px-4 py-2 font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45" onClick={() => setSelectedRun(run)}>
+              <button type="button" className="justify-self-start rounded-xl bg-white/800 px-4 py-2 font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45" onClick={() => setSelectedRun(run)}>
                 Review
               </button>
             </div>
@@ -2982,7 +2982,7 @@ function PayrollMonitorView({ payrollRuns = [] }) {
         )}
       </div>
       {selectedRun ? (
-        <div className="mt-5 rounded-2xl border border-[#f0d2ca] bg-white/80 p-5 text-sm text-[#7b6660]">
+        <div className="mt-5 rounded-2xl border border-[#f0d2ca] bg-white/800 p-5 text-sm text-[#7b6660]">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="font-semibold text-[#251E1F]">{formatPayrollPeriod(selectedRun)}</p>
@@ -2990,7 +2990,7 @@ function PayrollMonitorView({ payrollRuns = [] }) {
             </div>
             <button
               type="button"
-              className="w-fit rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+              className="w-fit rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
               onClick={() => setSelectedRun(null)}
             >
               Close
@@ -3076,7 +3076,7 @@ function AuditLogsView({ auditLogs = [] }) {
         </div>
         <div className="app-panel rounded-2xl p-5">
           <p className="text-sm text-[#7b6660]">Entity Types</p>
-          <p className="mt-3 text-3xl font-semibold text-[#7CFFB2]">{Math.max(entityTypes.length - 1, 0)}</p>
+          <p className="mt-3 text-3xl font-semibold text-[#2f8758]">{Math.max(entityTypes.length - 1, 0)}</p>
         </div>
       </div>
 
@@ -3088,7 +3088,7 @@ function AuditLogsView({ auditLogs = [] }) {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-[1fr_14rem] lg:w-[38rem]">
-            <label className="flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2.5">
+            <label className="flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 px-3 py-2.5">
               <Search size={16} className="text-[#F38978]" />
               <input
                 type="search"
@@ -3130,7 +3130,7 @@ function AuditLogsView({ auditLogs = [] }) {
                   </td>
                   <td className="border-b border-[#f0d2ca] px-4 py-4">{log.action || "System activity"}</td>
                   <td className="border-b border-[#f0d2ca] px-4 py-4">
-                    <span className="rounded-full border border-[#f0d2ca] bg-white/80 px-3 py-1 text-xs font-semibold text-[#7b6660]">
+                    <span className="rounded-full border border-[#f0d2ca] bg-white/800 px-3 py-1 text-xs font-semibold text-[#7b6660]">
                       {formatAuditArea(log.entity_type)}
                     </span>
                   </td>
@@ -3270,7 +3270,7 @@ function PayslipsApprovalView() {
           <button
             type="button"
             onClick={fetchPayslips}
-            className="rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
           >
             Refresh
           </button>
@@ -3278,13 +3278,13 @@ function PayslipsApprovalView() {
       </div>
 
       {error ? (
-        <div className="app-panel rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
+        <div className="app-panel rounded-2xl border-red-500/40 p-4 text-sm text-red-700">
           {error}
         </div>
       ) : null}
 
       {successMessage ? (
-        <div className="app-panel rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-200">
+        <div className="app-panel rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-700">
           {successMessage}
         </div>
       ) : null}
@@ -3298,14 +3298,14 @@ function PayslipsApprovalView() {
         ) : payslips.length === 0 ? (
           <div className="p-6 text-center">
             <div className="mb-3 inline-block rounded-full bg-emerald-500/10 p-3">
-              <CheckCircle2 className="text-emerald-300" size={24} />
+              <CheckCircle2 className="text-emerald-700" size={24} />
             </div>
             <p className="text-sm text-[#7b6660]">No payslips pending final approval</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[#f0d2ca] bg-white/80 text-[#7b6660]">
+              <thead className="border-b border-[#f0d2ca] bg-white/800 text-[#7b6660]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Payslip ID</th>
                   <th className="px-4 py-3 font-medium">Staff Name</th>
@@ -3327,7 +3327,7 @@ function PayslipsApprovalView() {
                     <td className="px-4 py-3 text-[#7b6660]">
                       ${Number(payslip.gross_salary || 0).toFixed(2)}
                     </td>
-                    <td className="px-4 py-3 text-emerald-300">
+                    <td className="px-4 py-3 text-emerald-700">
                       ${Number(payslip.net_pay || 0).toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-xs text-[#7b6660]">
@@ -3339,7 +3339,7 @@ function PayslipsApprovalView() {
                           type="button"
                           onClick={() => handleApprove(payslip.payslip_id)}
                           disabled={actionInProgress === payslip.payslip_id}
-                          className="rounded-lg bg-cyan-500/20 px-3 py-1 text-xs text-cyan-300 hover:bg-cyan-500/30 disabled:opacity-50"
+                          className="rounded-lg bg-cyan-500/20 px-3 py-1 text-xs text-cyan-700 hover:bg-cyan-500/30 disabled:opacity-50"
                         >
                           {actionInProgress === payslip.payslip_id ? <Loader2 className="inline animate-spin" size={12} /> : "Send"}
                         </button>
@@ -3347,7 +3347,7 @@ function PayslipsApprovalView() {
                           type="button"
                           onClick={() => setRejectingPayslipId(payslip.payslip_id)}
                           disabled={actionInProgress === payslip.payslip_id}
-                          className="rounded-lg bg-red-500/20 px-3 py-1 text-xs text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+                          className="rounded-lg bg-red-500/20 px-3 py-1 text-xs text-red-700 hover:bg-red-500/30 disabled:opacity-50"
                         >
                           Reject
                         </button>
@@ -3365,7 +3365,7 @@ function PayslipsApprovalView() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="app-panel m-4 w-full max-w-md rounded-2xl p-6">
             <div className="mb-4 flex items-center gap-3">
-              <AlertCircle className="text-red-300" size={20} />
+              <AlertCircle className="text-red-700" size={20} />
               <h3 className="text-lg font-semibold text-[#251E1F]">Reject Payslip</h3>
             </div>
             <p className="mb-4 text-sm text-[#7b6660]">
@@ -3375,7 +3375,7 @@ function PayslipsApprovalView() {
               value={rejectReason}
               onChange={(event) => setRejectReason(event.target.value)}
               placeholder="Enter rejection reason..."
-              className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] placeholder-white/30"
+              className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#251E1F] placeholder-white/30"
               rows={4}
             />
             <div className="mt-6 flex gap-3">
@@ -3383,7 +3383,7 @@ function PayslipsApprovalView() {
                 type="button"
                 onClick={() => handleReject(rejectingPayslipId)}
                 disabled={actionInProgress === rejectingPayslipId}
-                className="flex-1 rounded-lg bg-red-500/20 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+                className="flex-1 rounded-lg bg-red-500/20 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-500/30 disabled:opacity-50"
               >
                 Reject
               </button>
@@ -3393,7 +3393,7 @@ function PayslipsApprovalView() {
                   setRejectingPayslipId(null);
                   setRejectReason("");
                 }}
-                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
               >
                 Cancel
               </button>
@@ -3668,14 +3668,14 @@ function ReportPreviewModal({ data, report, onClose }) {
             </a>
             <button
               type="button"
-              className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+              className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
               onClick={onClose}
             >
               Close
             </button>
           </div>
         </div>
-        <div className="mt-5 grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 md:grid-cols-3">
+        <div className="mt-5 grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 md:grid-cols-3">
           <label className="space-y-2">
             <span className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">Period Type</span>
             <select
@@ -3786,7 +3786,7 @@ function ReportsView({ data }) {
       }
     >
       {reportLoading ? (
-        <div className="mb-4 flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm text-[#7b6660]">
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 text-sm text-[#7b6660]">
           <Loader2 size={17} className="animate-spin" /> Loading consolidated payroll report data...
         </div>
       ) : null}
@@ -3801,7 +3801,7 @@ function ReportsView({ data }) {
             <p className="mt-2 text-sm text-[#7b6660]">{report.description}</p>
             <button
               type="button"
-              className="mt-5 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+              className="mt-5 rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
               onClick={() => setSelectedReport(report.title)}
             >
               Open
@@ -4063,7 +4063,7 @@ export default function AdminPayrollPage() {
         </div>
       ) : null}
       {errorMessage ? (
-        <div className="mb-4 rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-4 text-sm text-[#FFE2B8]">
+        <div className="mb-4 rounded-xl border border-[#D97706]/25 bg-[#D97706]/10 p-4 text-sm text-[#9A6412]">
           {errorMessage}
         </div>
       ) : null}

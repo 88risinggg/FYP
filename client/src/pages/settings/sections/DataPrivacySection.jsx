@@ -60,7 +60,7 @@ export default function DataPrivacySection() {
       <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
           <Lock size={20} className="text-[#F38978]" />
-          <h2 className="text-xl font-semibold text-white">Data & Privacy</h2>
+          <h2 className="text-xl font-semibold text-[#251E1F]">Data & Privacy</h2>
         </div>
         <p className="mt-1 text-sm text-[#7b6660]">Manage your data and privacy preferences.</p>
 
@@ -101,8 +101,8 @@ export default function DataPrivacySection() {
         </div>
 
         {/* Privacy Preferences */}
-        <div className="mt-6 border-t border-white/10 pt-6">
-          <h3 className="text-sm font-semibold text-white">Privacy Preferences</h3>
+        <div className="mt-6 border-t border-[#ead3cc] pt-6">
+          <h3 className="text-sm font-semibold text-[#251E1F]">Privacy Preferences</h3>
           <div className="mt-3 space-y-3">
             <ToggleRow label="Allow analytics tracking" defaultChecked={true} />
             <ToggleRow label="Show profile to other users" defaultChecked={true} />
@@ -111,8 +111,8 @@ export default function DataPrivacySection() {
         </div>
 
         {/* Cookie Preferences */}
-        <div className="mt-6 border-t border-white/10 pt-6">
-          <h3 className="text-sm font-semibold text-white">Cookie Preferences</h3>
+        <div className="mt-6 border-t border-[#ead3cc] pt-6">
+          <h3 className="text-sm font-semibold text-[#251E1F]">Cookie Preferences</h3>
           <div className="mt-3 space-y-3">
             <ToggleRow label="Essential cookies (required)" defaultChecked={true} disabled />
             <ToggleRow label="Analytics cookies" defaultChecked={true} />
@@ -126,16 +126,16 @@ export default function DataPrivacySection() {
 
 function ActionCard({ title, description, buttonLabel, icon: Icon, loading, onClick, danger }) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="text-sm font-medium text-white">{title}</p>
+        <p className="text-sm font-medium text-[#251E1F]">{title}</p>
         <p className="mt-0.5 text-xs text-[#7b6660]">{description}</p>
       </div>
       <button type="button" onClick={onClick} disabled={loading}
         className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold transition disabled:opacity-50 ${
           danger
-            ? "border border-rose-400/20 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20"
-            : "border border-white/10 bg-white/[0.06] text-white hover:bg-white/10"
+            ? "border border-rose-400/20 bg-rose-500/10 text-rose-700 hover:bg-rose-500/20"
+            : "border border-[#ead3cc] bg-white text-[#251E1F] hover:bg-[#FDD9CD]/50"
         }`}>
         {loading ? <Loader2 size={12} className="animate-spin" /> : <Icon size={12} />}
         {buttonLabel}
@@ -147,10 +147,10 @@ function ActionCard({ title, description, buttonLabel, icon: Icon, loading, onCl
 function ToggleRow({ label, defaultChecked = false, disabled = false }) {
   const [checked, setChecked] = useState(defaultChecked);
   return (
-    <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
-      <span className={`text-sm ${disabled ? "text-[#7b6660]/50" : "text-white"}`}>{label}</span>
+    <div className="flex items-center justify-between rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 px-4 py-3">
+      <span className={`text-sm ${disabled ? "text-[#7b6660]/50" : "text-[#251E1F]"}`}>{label}</span>
       <button type="button" onClick={() => !disabled && setChecked(!checked)} disabled={disabled}
-        className={`relative h-6 w-11 rounded-full transition ${checked ? "bg-[#F38978]" : "bg-white/15"} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}>
+        className={`relative h-6 w-11 rounded-full transition ${checked ? "bg-[#F38978]" : "bg-[#f0d2ca]"} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}>
         <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-[22px]" : "translate-x-0.5"}`} />
       </button>
     </div>
@@ -160,7 +160,7 @@ function ToggleRow({ label, defaultChecked = false, disabled = false }) {
 function Toast({ toast }) {
   return (
     <div className={`fixed right-6 top-24 z-50 animate-[slideDown_0.3s_ease] rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
-      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-200" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-200"
+      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-700" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-700"
     }`}>
       <div className="flex items-center gap-2">
         {toast.type === "error" ? <X size={16} /> : <Check size={16} />}

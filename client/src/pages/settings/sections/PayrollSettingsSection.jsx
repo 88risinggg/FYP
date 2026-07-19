@@ -51,7 +51,7 @@ export default function PayrollSettingsSection() {
   }
 
   if (loading) {
-    return <div className="app-panel rounded-2xl p-6"><div className="animate-pulse h-64 rounded-lg bg-white/[0.04]" /></div>;
+    return <div className="app-panel rounded-2xl p-6"><div className="animate-pulse h-64 rounded-lg bg-[#FDD9CD]/30" /></div>;
   }
 
   return (
@@ -60,7 +60,7 @@ export default function PayrollSettingsSection() {
       <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
           <Wallet size={20} className="text-[#F38978]" />
-          <h2 className="text-xl font-semibold text-white">Payroll Settings</h2>
+          <h2 className="text-xl font-semibold text-[#251E1F]">Payroll Settings</h2>
         </div>
         <p className="mt-1 text-sm text-[#7b6660]">Configure payroll processing parameters.</p>
 
@@ -75,7 +75,7 @@ export default function PayrollSettingsSection() {
             <div className="md:col-span-2 lg:col-span-3">
               <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">Tax Settings</label>
               <textarea name="tax_settings" value={form.tax_settings || ""} onChange={handleChange} rows={2}
-                className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition resize-none focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30"
+                className="w-full rounded-lg border border-[#ead3cc] bg-white px-3 py-2.5 text-sm text-[#251E1F] outline-none transition resize-none focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30"
                 placeholder="Tax configuration details..." />
             </div>
           </div>
@@ -104,7 +104,7 @@ function Field({ label, name, value, onChange, type = "text" }) {
     <div>
       <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">{label}</label>
       <input type={type} name={name} value={value} onChange={onChange}
-        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30" />
+        className="w-full rounded-lg border border-[#ead3cc] bg-white px-3 py-2.5 text-sm text-[#251E1F] outline-none transition focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30" />
     </div>
   );
 }
@@ -114,7 +114,7 @@ function SelectField({ label, name, value, onChange, options }) {
     <div>
       <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">{label}</label>
       <select name={name} value={value} onChange={onChange}
-        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30">
+        className="w-full rounded-lg border border-[#ead3cc] bg-white px-3 py-2.5 text-sm text-[#251E1F] outline-none transition focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30">
         {options.map((o) => <option key={o.value} value={o.value} className="bg-[#fff3ee]">{o.label}</option>)}
       </select>
     </div>
@@ -123,11 +123,11 @@ function SelectField({ label, name, value, onChange, options }) {
 
 function ToggleRow({ label, name, checked, onChange }) {
   return (
-    <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
-      <span className="text-sm text-white">{label}</span>
+    <div className="flex items-center justify-between rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 px-4 py-3">
+      <span className="text-sm text-[#251E1F]">{label}</span>
       <label className="relative cursor-pointer">
         <input type="checkbox" name={name} checked={checked} onChange={onChange} className="peer sr-only" />
-        <div className="h-6 w-11 rounded-full bg-white/15 transition peer-checked:bg-[#F38978]" />
+        <div className="h-6 w-11 rounded-full bg-[#f0d2ca] transition peer-checked:bg-[#F38978]" />
         <div className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-[22px]" />
       </label>
     </div>
@@ -137,7 +137,7 @@ function ToggleRow({ label, name, checked, onChange }) {
 function Toast({ toast }) {
   return (
     <div className={`fixed right-6 top-24 z-50 animate-[slideDown_0.3s_ease] rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
-      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-200" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-200"
+      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-700" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-700"
     }`}>
       <div className="flex items-center gap-2">
         {toast.type === "error" ? <X size={16} /> : <Check size={16} />}

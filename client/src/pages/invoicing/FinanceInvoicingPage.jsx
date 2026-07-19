@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import * as XLSX from "xlsx";
 import {
@@ -134,7 +134,7 @@ const invoiceStatuses = ["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdu
 
 const statusStyles = {
   Draft: "border-slate-400/25 bg-slate-400/10 text-slate-700",
-  Scheduled: "border-violet-400/30 bg-violet-500/15 text-violet-700",
+  Scheduled: "border-amber-400/30 bg-amber-500/15 text-amber-700",
   Sent: "border-blue-400/30 bg-blue-500/15 text-blue-700",
   Viewed: "border-cyan-400/30 bg-cyan-500/15 text-cyan-700",
   Paid: "border-emerald-400/30 bg-emerald-500/15 text-emerald-700",
@@ -280,14 +280,14 @@ function openPrintableInvoice(invoice) {
     const qrLibUrl = "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js";
 
     const paymentSection = (isPayable && paymentUrl) ? `
-      <div style="margin-top: 32px; padding: 24px; background: #f8f4ff; border-radius: 12px; text-align: center; border: 1px solid #e5e0f0;">
+      <div style="margin-top: 32px; padding: 24px; background: #fff3ee; border-radius: 12px; text-align: center; border: 1px solid #ead3cc;">
         <h3 style="margin: 0 0 4px; font-size: 16px; color: #1a1a2e;">Pay This Invoice Online</h3>
         <p style="margin: 0 0 16px; font-size: 12px; color: #666;">Secure payment powered by Stripe</p>
-        <a href="${escapeHtml(paymentUrl)}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #7B2FF7; color: white; padding: 14px 36px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px; cursor: pointer;">
+        <a href="${escapeHtml(paymentUrl)}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #F38978; color: white; padding: 14px 36px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px; cursor: pointer;">
           Pay Now â€” ${escapeHtml(formatCurrency(invoice.total_amount))}
         </a>
         <p style="margin: 12px 0 0; font-size: 10px; color: #888;">Click the button above or copy this link into your browser:</p>
-        <p style="margin: 4px 0 0; font-size: 11px; word-break: break-all;"><a href="${escapeHtml(paymentUrl)}" target="_blank" style="color: #7B2FF7; text-decoration: underline;">${escapeHtml(paymentUrl)}</a></p>
+        <p style="margin: 4px 0 0; font-size: 11px; word-break: break-all;"><a href="${escapeHtml(paymentUrl)}" target="_blank" style="color: #F38978; text-decoration: underline;">${escapeHtml(paymentUrl)}</a></p>
         <div style="margin-top: 20px; padding-top: 16px; border-top: 1px dashed #ddd;">
           <p style="font-size: 12px; color: #666; margin: 0 0 12px;">Scan QR code to pay:</p>
           <div id="stripe-qr" style="display: inline-block; background: white; padding: 8px; border-radius: 8px; border: 1px solid #e5e7eb;"></div>
@@ -316,9 +316,9 @@ function openPrintableInvoice(invoice) {
           <script src="${qrLibUrl}"><\/script>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; color: #111827; margin: 40px; }
-            header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #7B2FF7; padding-bottom: 20px; }
-            h1 { margin: 0 0 4px; font-size: 28px; color: #7B2FF7; }
-            .brand { font-size: 32px; font-weight: 900; color: #7B2FF7; margin: 0; }
+            header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #F38978; padding-bottom: 20px; }
+            h1 { margin: 0 0 4px; font-size: 28px; color: #F38978; }
+            .brand { font-size: 32px; font-weight: 900; color: #F38978; margin: 0; }
             .muted { color: #6b7280; }
             table { width: 100%; border-collapse: collapse; margin-top: 28px; }
             th, td { border-bottom: 1px solid #e5e7eb; padding: 10px; text-align: left; }
@@ -420,7 +420,7 @@ function InvoiceStatusBadge({ status }) {
 
 function MetricCard({ label, value, accent = "text-[#251E1F]" }) {
   return (
-    <div className="neon-glass neon-border rounded-xl px-5 py-4">
+    <div className="app-panel rounded-xl px-5 py-4">
       <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">
         {label}
       </p>
@@ -431,7 +431,7 @@ function MetricCard({ label, value, accent = "text-[#251E1F]" }) {
 
 function SectionShell({ eyebrow, title, description, action, children }) {
   return (
-    <section className="neon-glass neon-border rounded-2xl p-5">
+    <section className="app-panel rounded-2xl p-5">
       <div className="flex flex-col gap-4 border-b border-[#f0d2ca] pb-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-sm font-bold text-[#F38978]">{eyebrow}</p>
@@ -474,8 +474,8 @@ function InvoiceDetailsModal({ invoice, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#090014]/80 p-4 backdrop-blur">
-      <div className="neon-glass neon-border my-6 w-full max-w-3xl rounded-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#251E1F]/80 p-4 backdrop-blur">
+      <div className="app-panel my-6 w-full max-w-3xl rounded-2xl">
         <div className="flex items-start justify-between border-b border-[#f0d2ca] p-5">
           <div>
             <p className="text-sm text-[#F38978]">{invoice.invoiceId}</p>
@@ -525,7 +525,7 @@ function InvoiceDetailsModal({ invoice, onClose }) {
                   <th className="px-4 py-3 text-right">Amount</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/10">
+              <tbody className="divide-y divide-[#ead3cc]">
                 {invoice.items && invoice.items.length > 0 ? (
                   invoice.items.map((item, idx) => (
                     <tr key={item.item_id || idx} className="text-[#251E1F]">
@@ -663,8 +663,8 @@ function InvoiceCreationModal({ customers, nextInvoiceId, onCancel, onCreated })
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#090014]/80 p-4 backdrop-blur">
-      <div className="neon-glass neon-border my-6 w-full max-w-5xl rounded-2xl p-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#251E1F]/80 p-4 backdrop-blur">
+      <div className="app-panel my-6 w-full max-w-5xl rounded-2xl p-5">
         <div className="flex flex-col gap-3 border-b border-[#f0d2ca] pb-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-[#F38978]">Create Single Invoice</p>
@@ -730,7 +730,7 @@ function InvoiceCreationModal({ customers, nextInvoiceId, onCancel, onCreated })
                 <th className="w-16 px-4 py-3" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-[#ead3cc]">
               {form.items.map((item, index) => (
                 <tr key={index}>
                   <td className="px-4 py-3">
@@ -813,7 +813,7 @@ function InvoiceCreationModal({ customers, nextInvoiceId, onCancel, onCreated })
             type="button"
             onClick={submitInvoice}
             disabled={isSaving}
-            className="neon-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold disabled:opacity-60"
+            className="primary-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold disabled:opacity-60"
           >
             {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
             {isSaving ? "Creating..." : "Create Draft Invoice"}
@@ -851,8 +851,8 @@ function ScheduleInvoiceModal({ selectedCount, onCancel, onConfirm }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#090014]/80 p-4 backdrop-blur">
-      <div className="neon-glass neon-border w-full max-w-lg rounded-2xl p-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#251E1F]/80 p-4 backdrop-blur">
+      <div className="app-panel w-full max-w-lg rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4 border-b border-[#f0d2ca] pb-5">
           <div>
             <p className="text-sm font-semibold text-[#F38978]">Schedule Invoice</p>
@@ -907,7 +907,7 @@ function ScheduleInvoiceModal({ selectedCount, onCancel, onConfirm }) {
             type="button"
             onClick={confirmSchedule}
             disabled={isSaving}
-            className="neon-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+            className="primary-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
           >
             <CalendarClock size={16} />
             {isSaving ? "Scheduling..." : "Confirm Schedule"}
@@ -950,7 +950,7 @@ function InvoiceTable({
                 checked={allVisibleSelected}
                 disabled={schedulableInvoices.length === 0}
                 onChange={(event) => onToggleAll(event.target.checked)}
-                className="h-4 w-4 rounded border-[#f0d2ca] bg-white accent-[#C77DFF] disabled:opacity-30"
+                className="h-4 w-4 rounded border-[#f0d2ca] bg-white accent-[#F38978] disabled:opacity-30"
                 aria-label="Select all draft invoices"
               />
             </th>
@@ -964,7 +964,7 @@ function InvoiceTable({
             <th className="px-4 py-3 font-bold text-right">Actions</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/10">
+        <tbody className="divide-y divide-[#ead3cc]">
           {invoices.map((invoice) => (
             <tr key={invoice.invoice_id} className="text-[#251E1F] transition hover:bg-[#FDD9CD]/10">
               <td className="px-4 py-4">
@@ -973,7 +973,7 @@ function InvoiceTable({
                   checked={selectedInvoiceIds.has(invoice.invoice_id)}
                   disabled={invoice.status !== "Draft"}
                   onChange={(event) => onToggleInvoice(invoice.invoice_id, event.target.checked)}
-                  className="h-4 w-4 rounded border-[#f0d2ca] bg-white accent-[#C77DFF] disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="h-4 w-4 rounded border-[#f0d2ca] bg-white accent-[#F38978] disabled:opacity-30 disabled:cursor-not-allowed"
                   aria-label={`Select invoice ${invoice.invoiceId}`}
                 />
               </td>
@@ -1021,7 +1021,7 @@ function InvoiceTable({
                     <button
                       type="button"
                       onClick={() => onScheduleInvoice(invoice.invoice_id)}
-                      className="inline-flex items-center gap-2 rounded-lg border border-violet-400/30 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-500/10"
+                      className="inline-flex items-center gap-2 rounded-lg border border-amber-400/30 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-500/10"
                     >
                       <CalendarClock size={14} />
                       Schedule Invoice
@@ -1112,7 +1112,7 @@ function CustomersView({ customers, invoices, isLoading, error, onViewInvoices }
                 <th className="px-4 py-3 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-[#ead3cc]">
               {filteredCustomers.map((customer) => {
                 const invoiceCount = Number(customer.invoice_count ?? invoices.filter((invoice) => invoice.customer_id === customer.customer_id).length);
 
@@ -1260,22 +1260,22 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
       {error ? <div className="mt-4"><ErrorBanner message={error} /></div> : null}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="neon-glass rounded-2xl p-5">
+        <div className="app-panel rounded-2xl p-5">
           <p className="text-sm text-[#7b6660]">Total Revenue</p>
           <p className="mt-3 text-3xl font-semibold text-[#251E1F]">{formatCurrency(totals.totalRevenue)}</p>
           <p className="mt-2 text-xs font-semibold text-[#7b6660]">{invoices.length} invoices</p>
         </div>
-        <div className="neon-glass rounded-2xl p-5">
+        <div className="app-panel rounded-2xl p-5">
           <p className="text-sm text-[#7b6660]">Collected</p>
-          <p className="mt-3 text-3xl font-semibold text-[#7CFFB2]">{formatCurrency(totals.paidRevenue)}</p>
+          <p className="mt-3 text-3xl font-semibold text-[#2f8758]">{formatCurrency(totals.paidRevenue)}</p>
           <p className="mt-2 text-xs font-semibold text-[#7b6660]">{statusCounts.Paid} paid</p>
         </div>
-        <div className="neon-glass rounded-2xl p-5">
+        <div className="app-panel rounded-2xl p-5">
           <p className="text-sm text-[#7b6660]">Pending</p>
-          <p className="mt-3 text-3xl font-semibold text-[#FFB86B]">{formatCurrency(totals.pendingAmount)}</p>
+          <p className="mt-3 text-3xl font-semibold text-[#D97706]">{formatCurrency(totals.pendingAmount)}</p>
           <p className="mt-2 text-xs font-semibold text-[#7b6660]">{statusCounts.Sent + statusCounts.Scheduled} invoices</p>
         </div>
-        <div className="neon-glass rounded-2xl p-5">
+        <div className="app-panel rounded-2xl p-5">
           <p className="text-sm text-[#7b6660]">Overdue</p>
           <p className="mt-3 text-3xl font-semibold text-rose-700">{formatCurrency(totals.overdueAmount)}</p>
           <p className="mt-2 text-xs font-semibold text-[#7b6660]">{statusCounts.Overdue} overdue</p>
@@ -1292,12 +1292,12 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
             {invoiceWorkflowSteps.map((step) => {
               const Icon = step.icon;
               return (
-                <article key={step.key} className="neon-glass neon-border rounded-2xl p-5">
+                <article key={step.key} className="app-panel rounded-2xl p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F38978]/10 text-[#F38978] ring-1 ring-[#F38978]/25">
                       <Icon size={24} />
                     </div>
-                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${step.completed ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#f0d2ca] bg-[#FDD9CD]/20 text-[#7b6660]"}`}>
+                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${step.completed ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#f0d2ca] bg-[#FDD9CD]/20 text-[#7b6660]"}`}>
                       {step.completed ? "Active" : "Pending"}
                     </span>
                   </div>
@@ -1316,9 +1316,9 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
           </div>
         </div>
 
-        <aside className="neon-glass neon-border rounded-2xl p-6">
+        <aside className="app-panel rounded-2xl p-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#7B2FF7]/20 text-[#F38978]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F38978]/20 text-[#F38978]">
               <ShieldCheck size={21} />
             </div>
             <div>
@@ -1329,7 +1329,7 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
           <div className="mt-6 space-y-3 text-sm text-[#7b6660]">
             {invoiceStatuses.map((status) => (
               <div key={status} className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-3">
-                <CheckCircle2 size={17} className={statusCounts[status] > 0 ? "text-[#7CFFB2]" : "text-[#7b6660]/50"} />
+                <CheckCircle2 size={17} className={statusCounts[status] > 0 ? "text-[#2f8758]" : "text-[#7b6660]/50"} />
                 <span className="flex-1">{status}</span>
                 <span className="font-semibold text-[#251E1F]">{statusCounts[status]}</span>
               </div>
@@ -1340,7 +1340,7 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
             <button
               type="button"
               onClick={() => navigate("/dashboard/invoicing/finance/invoices")}
-              className="neon-button flex w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold"
+              className="primary-button flex w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold"
             >
               <ReceiptText size={17} />
               View All Invoices
@@ -1357,7 +1357,7 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
         </aside>
       </div>
 
-      <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
+      <div className="mt-6 app-panel rounded-2xl p-6">
         <h3 className="text-lg font-bold text-[#251E1F]">Quick Overview</h3>
         <p className="mt-1 text-sm font-medium text-[#7b6660]">Key performance metrics at a glance.</p>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1374,7 +1374,7 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
           </div>
           <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#7CFFB2]/15 text-[#7CFFB2]">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#2f8758]/15 text-[#2f8758]">
                 <TrendingUp size={18} />
               </div>
               <div>
@@ -1387,7 +1387,7 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
           </div>
           <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#FFB86B]/15 text-[#FFB86B]">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#D97706]/15 text-[#D97706]">
                 <Clock size={18} />
               </div>
               <div>
@@ -1439,10 +1439,10 @@ function AdminInvoiceConfigPanel({ settings, reminderRules }) {
   const activeReminders = Array.isArray(reminderRules) ? reminderRules.filter((r) => r.enabled) : [];
 
   return (
-    <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
+    <div className="mt-6 app-panel rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#7B2FF7]/20 text-[#F38978]">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F38978]/20 text-[#F38978]">
             <Settings2 size={21} />
           </div>
           <div>
@@ -1509,7 +1509,7 @@ function AdminInvoiceConfigPanel({ settings, reminderRules }) {
                 <th className="px-4 py-3">Channel</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-[#ead3cc]">
               {activeReminders.map((rule, idx) => (
                 <tr key={rule.id || idx} className="text-[#251E1F]">
                   <td className="px-4 py-3 font-medium text-[#251E1F]">{rule.name || rule.ruleName || `Rule ${idx + 1}`}</td>
@@ -1728,7 +1728,7 @@ function InvoiceCompliancePanel({ invoices, fraudSummary }) {
   }
 
   return (
-    <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
+    <div className="mt-6 app-panel rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[#251E1F]">Fraud Compliance Checklist</h3>
@@ -1738,12 +1738,12 @@ function InvoiceCompliancePanel({ invoices, fraudSummary }) {
           <button
             onClick={handleSendFraudReport}
             disabled={reportSending}
-            className="flex items-center gap-2 rounded-lg border border-[#a78bfa]/30 bg-[#a78bfa]/10 px-3 py-1.5 text-xs font-medium text-[#a78bfa] transition hover:bg-[#a78bfa]/20 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg border border-[#F38978]/30 bg-[#F38978]/10 px-3 py-1.5 text-xs font-medium text-[#F38978] transition hover:bg-[#F38978]/20 disabled:opacity-50"
           >
             {reportSending ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
             {reportSent ? "Report Sent âœ“" : "Export Fraud Report"}
           </button>
-          <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${passed === checks.length ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-rose-400/25 bg-rose-400/10 text-rose-700"}`}>
+          <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${passed === checks.length ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-rose-400/25 bg-rose-400/10 text-rose-700"}`}>
             {passed}/{checks.length} passed
           </span>
         </div>
@@ -1752,13 +1752,13 @@ function InvoiceCompliancePanel({ invoices, fraudSummary }) {
         {checks.map((check) => (
           <div key={check.label} className={`flex items-start gap-3 rounded-xl border p-3 ${check.status ? "border-[#f0d2ca] bg-[#FDD9CD]/10" : "border-rose-400/20 bg-rose-400/[0.04]"}`}>
             {check.status
-              ? <ShieldCheck size={17} className="mt-0.5 shrink-0 text-[#7CFFB2]" />
+              ? <ShieldCheck size={17} className="mt-0.5 shrink-0 text-[#2f8758]" />
               : <ShieldAlert size={17} className="mt-0.5 shrink-0 text-rose-400" />
             }
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-medium text-[#251E1F]">{check.label}</p>
-                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${check.severity === "Critical" ? "bg-rose-500/20 text-rose-700" : check.severity === "High" ? "bg-amber-500/20 text-amber-300" : "bg-blue-500/20 text-blue-300"}`}>
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${check.severity === "Critical" ? "bg-rose-500/20 text-rose-700" : check.severity === "High" ? "bg-amber-500/20 text-amber-700" : "bg-blue-500/20 text-blue-700"}`}>
                   {check.severity}
                 </span>
               </div>
@@ -1795,27 +1795,27 @@ function InvoiceExceptionPanel({ invoices, fraudSummary }) {
   }
 
   return (
-    <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
+    <div className="mt-6 app-panel rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[#251E1F]">Automated Exception Review</h3>
           <p className="mt-1 text-sm text-[#7b6660]">System validation on active invoices before payment processing.</p>
         </div>
-        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${exceptions.length ? "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]" : "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]"}`}>
+        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${exceptions.length ? "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]" : "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]"}`}>
           {exceptions.length ? `${exceptions.length} exception(s)` : "No exceptions"}
         </span>
       </div>
       <div className="mt-5 grid gap-3">
         {exceptions.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-[#f0d2ca] bg-white/[0.03] p-5 text-center text-sm text-[#7b6660]">
+          <div className="rounded-xl border border-dashed border-[#f0d2ca] bg-[#fff3ee]/70 p-5 text-center text-sm text-[#7b6660]">
             All invoices pass automated validation. No exceptions detected.
           </div>
         ) : (
           exceptions.map((exc) => (
-            <div key={exc.message} className={`rounded-xl border p-4 text-sm ${exc.severity === "critical" ? "border-rose-400/25 bg-rose-500/10" : "border-[#FFB86B]/20 bg-[#FFB86B]/10"}`}>
+            <div key={exc.message} className={`rounded-xl border p-4 text-sm ${exc.severity === "critical" ? "border-rose-400/25 bg-rose-500/10" : "border-[#D97706]/20 bg-[#D97706]/10"}`}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <AlertCircle size={16} className={exc.severity === "critical" ? "text-rose-700" : "text-[#FFB86B]"} />
+                  <AlertCircle size={16} className={exc.severity === "critical" ? "text-rose-700" : "text-[#D97706]"} />
                   <span className="font-medium text-[#251E1F]">{exc.message}</span>
                 </div>
                 <span className="rounded-full border border-[#f0d2ca] bg-[#FDD9CD]/20 px-3 py-1 text-xs font-semibold text-[#251E1F]">
@@ -1843,7 +1843,7 @@ function InvoiceAccountingPanel({ invoices, totals, statusCounts }) {
   ];
 
   return (
-    <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
+    <div className="mt-6 app-panel rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[#251E1F]">Accounting Impact in Internal Ledger</h3>
@@ -1863,7 +1863,7 @@ function InvoiceAccountingPanel({ invoices, totals, statusCounts }) {
               <th className="px-4 py-3 text-right">Credit</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/10">
+          <tbody className="divide-y divide-[#ead3cc]">
             {journalEntries.map((entry, idx) => (
               <tr key={idx} className="text-[#251E1F]">
                 <td className="px-4 py-3 font-medium text-[#251E1F]">{entry.accountDr}</td>
@@ -1886,11 +1886,11 @@ function InvoiceAccountingPanel({ invoices, totals, statusCounts }) {
       <div className="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
         <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-3">
           <p className="text-[#7b6660]">Outstanding Receivable</p>
-          <p className="mt-1 font-semibold text-[#FFB86B]">{formatCurrency(outstanding)}</p>
+          <p className="mt-1 font-semibold text-[#D97706]">{formatCurrency(outstanding)}</p>
         </div>
         <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-3">
           <p className="text-[#7b6660]">Revenue Collected</p>
-          <p className="mt-1 font-semibold text-[#7CFFB2]">{formatCurrency(collected)}</p>
+          <p className="mt-1 font-semibold text-[#2f8758]">{formatCurrency(collected)}</p>
         </div>
         <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-3">
           <p className="text-[#7b6660]">Pending Settlement</p>
@@ -1907,7 +1907,7 @@ function InvoiceAuditTrailPanel({ entries }) {
     .slice(0, 10);
 
   return (
-    <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
+    <div className="mt-6 app-panel rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[#251E1F]">Audit Trail</h3>
@@ -1919,7 +1919,7 @@ function InvoiceAuditTrailPanel({ entries }) {
       </div>
       <div className="mt-5 grid gap-3">
         {sortedEntries.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-[#f0d2ca] bg-white/[0.03] p-5 text-center text-sm text-[#7b6660]">
+          <div className="rounded-xl border border-dashed border-[#f0d2ca] bg-[#fff3ee]/70 p-5 text-center text-sm text-[#7b6660]">
             No audit events recorded yet.
           </div>
         ) : (
@@ -2069,7 +2069,7 @@ function InvoicesView({
             <button
               type="button"
               onClick={onCreateClick}
-              className="neon-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold"
+              className="primary-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold"
             >
               <Plus size={17} />
               Create Single Invoice
@@ -2343,7 +2343,7 @@ function BulkUploadView({ onProcessed }) {
             type="button"
             onClick={processRows}
             disabled={selectedCount === 0 || isProcessing}
-            className="neon-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            className="primary-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
           >
             {sendMode === "schedule" ? <CalendarClock size={16} /> : <Send size={16} />}
             {isProcessing ? "Processing..." : sendMode === "schedule" ? `Schedule ${selectedCount} Invoices` : `Send ${selectedCount} Invoices`}
@@ -2360,7 +2360,7 @@ function BulkUploadView({ onProcessed }) {
         ) : null}
 
         <label
-          className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-[#F38978]/40 bg-[#FDD9CD]/10 px-6 py-12 text-center hover:bg-white/[0.07]"
+          className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-[#F38978]/40 bg-[#FDD9CD]/10 px-6 py-12 text-center hover:bg-[#fff3ee]"
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
@@ -2384,11 +2384,11 @@ function BulkUploadView({ onProcessed }) {
             <p className="text-sm font-semibold text-[#251E1F]">Send Options</p>
             <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="sendMode" value="now" checked={sendMode === "now"} onChange={() => setSendMode("now")} className="accent-[#C77DFF]" />
+                <input type="radio" name="sendMode" value="now" checked={sendMode === "now"} onChange={() => setSendMode("now")} className="accent-[#F38978]" />
                 <span className="text-sm text-[#251E1F]">Send immediately</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="sendMode" value="schedule" checked={sendMode === "schedule"} onChange={() => setSendMode("schedule")} className="accent-[#C77DFF]" />
+                <input type="radio" name="sendMode" value="schedule" checked={sendMode === "schedule"} onChange={() => setSendMode("schedule")} className="accent-[#F38978]" />
                 <span className="text-sm text-[#251E1F]">Schedule for later</span>
               </label>
               {sendMode === "schedule" && (
@@ -2421,7 +2421,7 @@ function BulkUploadView({ onProcessed }) {
                     type="checkbox"
                     checked={allValidSelected && validRows.length > 0}
                     onChange={(e) => toggleAllRows(e.target.checked)}
-                    className="h-4 w-4 rounded border-[#f0d2ca] bg-white accent-[#C77DFF]"
+                    className="h-4 w-4 rounded border-[#f0d2ca] bg-white accent-[#F38978]"
                     aria-label="Select all valid rows"
                   />
                 </th>
@@ -2434,16 +2434,16 @@ function BulkUploadView({ onProcessed }) {
                 <th className="px-4 py-3">Validation</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-[#ead3cc]">
               {displayRows.map((row, index) => (
-                <tr key={`${row.row_number || index}-${row.invoice_number || index}`} className={`text-[#251E1F] transition ${selectedRowIndices.has(index) ? "bg-[#C77DFF]/5" : "hover:bg-white/[0.03]"}`}>
+                <tr key={`${row.row_number || index}-${row.invoice_number || index}`} className={`text-[#251E1F] transition ${selectedRowIndices.has(index) ? "bg-[#F38978]/5" : "hover:bg-[#FDD9CD]/35"}`}>
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
                       checked={selectedRowIndices.has(index)}
                       onChange={(e) => toggleRow(index, e.target.checked)}
                       disabled={validatedRows.length > 0 && !row.is_valid}
-                      className="h-4 w-4 rounded border-[#f0d2ca] bg-white accent-[#C77DFF] disabled:opacity-30"
+                      className="h-4 w-4 rounded border-[#f0d2ca] bg-white accent-[#F38978] disabled:opacity-30"
                       aria-label={`Select row ${index + 1}`}
                     />
                   </td>
@@ -2589,7 +2589,7 @@ function PaymentsView() {
                     <th className="px-4 py-3 font-bold text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/10">
+                <tbody className="divide-y divide-[#ead3cc]">
                   {displayWorkspace.outstandingInvoices.map((invoice) => (
                     <tr key={invoice.invoice_id} className="text-[#251E1F]">
                       <td className="px-4 py-4 font-bold text-[#251E1F]">{invoice.invoiceId}</td>
@@ -2655,9 +2655,9 @@ function SimpleBarChart({ data, labelKey, valueKey }) {
         return (
           <div key={item[labelKey]} className="grid grid-cols-[90px_1fr_96px] items-center gap-3 text-sm">
             <span className="truncate text-[#7b6660]">{item[labelKey]}</span>
-            <div className="h-3 overflow-hidden rounded-full bg-white/10">
+            <div className="h-3 overflow-hidden rounded-full bg-[#FDD9CD]/50">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-[#7B2FF7] to-[#FF4DDB]"
+                className="h-full rounded-full bg-gradient-to-r from-[#F38978] to-[#e77463]"
                 style={{ width: `${Math.max((value / maxValue) * 100, 4)}%` }}
               />
             </div>
@@ -2684,7 +2684,7 @@ function SimpleLineChart({ data }) {
       <svg viewBox={`0 0 ${width} ${height}`} className="h-64 min-w-[620px] w-full">
         <polyline
           fill="none"
-          stroke="#C77DFF"
+          stroke="#F38978"
           strokeWidth="4"
           points={points.join(" ")}
         />
@@ -2692,8 +2692,8 @@ function SimpleLineChart({ data }) {
           const [x, y] = points[index].split(",").map(Number);
           return (
             <g key={item.month}>
-              <circle cx={x} cy={y} r="5" fill="#FF4DDB" />
-              <text x={x} y={height - 4} textAnchor="middle" fill="#d8c6e8" fontSize="12">
+              <circle cx={x} cy={y} r="5" fill="#e77463" />
+              <text x={x} y={height - 4} textAnchor="middle" fill="#7b6660" fontSize="12">
                 {item.month}
               </text>
             </g>
@@ -2859,7 +2859,7 @@ function FraudDetectionView() {
             <option value="Low">Low</option>
           </select>
           <input type="number" min="0" max="100" value={filters.minScore} onChange={(e) => updateFilter("minScore", e.target.value)} placeholder="Min score" className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/60 focus:border-[#F38978]" />
-          <button type="submit" className="neon-button px-4 py-2 text-sm font-bold">Filter</button>
+          <button type="submit" className="primary-button px-4 py-2 text-sm font-bold">Filter</button>
         </form>
 
         {isLoading ? (
@@ -2880,7 +2880,7 @@ function FraudDetectionView() {
                     <th className="px-4 py-3 font-bold text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/10">
+                <tbody className="divide-y divide-[#ead3cc]">
                   {displayInvoices.map((invoice) => (
                     <tr key={invoice.invoice_id} className="text-[#251E1F]">
                       <td className="px-4 py-4">

@@ -165,7 +165,7 @@ const buttonClasses = {
 
 const bannerClasses = {
   error: "rounded-xl border border-[#F38978]/35 bg-white px-4 py-3 text-sm font-semibold text-[#b64d3b]",
-  success: "rounded-xl border border-[#4FB783]/30 bg-white px-4 py-3 text-sm font-semibold text-[#347a57]"
+  success: "rounded-xl border border-[#F38978]/30 bg-white px-4 py-3 text-sm font-semibold text-[#b64d3b]"
 };
 
 function cloneSettings(settings) {
@@ -310,7 +310,7 @@ function Toggle({ checked, onChange, label, note }) {
         onChange={(event) => onChange(event.target.checked)}
         className="peer sr-only"
       />
-      <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${checked ? "bg-[#4FB783]" : "bg-[#dcc8c1]"}`}>
+      <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${checked ? "bg-[#F38978]" : "bg-[#dcc8c1]"}`}>
         <span className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition ${checked ? "translate-x-5" : ""}`} />
       </span>
     </label>
@@ -343,7 +343,7 @@ function SettingsCard({ title, icon: Icon, children }) {
 }
 
 function StatusIcon({ status }) {
-  if (status === "completed") return <CheckCircle2 size={15} className="text-[#4FB783]" />;
+  if (status === "completed") return <CheckCircle2 size={15} className="text-[#F38978]" />;
   if (status === "warning") return <AlertTriangle size={15} className="text-[#FFB65C]" />;
   return <XCircle size={15} className="text-[#F38978]" />;
 }
@@ -365,7 +365,7 @@ function ConfigurationStatusPanel({ status }) {
               cy="54"
               r="42"
               fill="none"
-              stroke="#4FB783"
+              stroke="#F38978"
               strokeLinecap="round"
               strokeWidth="12"
               strokeDasharray={circumference}
@@ -1092,7 +1092,7 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
               </SettingsCard>
 
               <div className="flex items-start gap-3 rounded-xl border border-[#cfe8d9] bg-white/95 p-4 text-sm text-[#527260] shadow-[0_10px_28px_rgba(37,30,31,0.04)]">
-                <Info size={18} className="mt-0.5 shrink-0 text-[#4FB783]" />
+                <Info size={18} className="mt-0.5 shrink-0 text-[#F38978]" />
                 <p>
                   These settings apply to new invoices. Individual invoice flows can override them when a future invoice creation page provides that control.
                 </p>

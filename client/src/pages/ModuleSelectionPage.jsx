@@ -19,10 +19,10 @@ const moduleDetails = {
     badge: "Billing and reports",
     description: "Manage billing, invoice records, PDF generation, reminders, and reports.",
     icon: FileText,
-    shellClass: "border-[#2D7C83]/30 bg-white/95 shadow-[#2D7C83]/10",
-    iconClass: "bg-gradient-to-br from-[#2D7C83] to-[#2D7C83] text-[#251E1F] shadow-[#2D7C83]/25",
-    accentClass: "from-[#2D7C83] via-[#F38978] to-[#F38978]",
-    buttonClass: "bg-gradient-to-r from-[#2D7C83] to-[#2D7C83] text-[#251E1F] hover:brightness-110"
+    shellClass: "border-[#F38978]/30 bg-white/95 shadow-[#F38978]/10",
+    iconClass: "bg-gradient-to-br from-[#F38978] to-[#F38978] text-[#251E1F] shadow-[#F38978]/25",
+    accentClass: "from-[#F38978] via-[#F38978] to-[#F38978]",
+    buttonClass: "bg-gradient-to-r from-[#F38978] to-[#F38978] text-[#251E1F] hover:brightness-110"
   },
   payroll: {
     title: "Payroll System",
@@ -31,9 +31,9 @@ const moduleDetails = {
     description: "Manage payroll processing, staff records, payslips, exports, and summaries.",
     icon: WalletCards,
     shellClass: "border-[#F38978]/30 bg-white/95 shadow-[#F38978]/10",
-    iconClass: "bg-gradient-to-br from-[#F38978] to-[#2D7C83] text-[#251E1F] shadow-[#F38978]/25",
-    accentClass: "from-[#F38978] via-[#F38978] to-[#2D7C83]",
-    buttonClass: "bg-gradient-to-r from-[#F38978] to-[#2D7C83] text-[#251E1F] hover:brightness-110"
+    iconClass: "bg-gradient-to-br from-[#F38978] to-[#F38978] text-[#251E1F] shadow-[#F38978]/25",
+    accentClass: "from-[#F38978] via-[#F38978] to-[#F38978]",
+    buttonClass: "bg-gradient-to-r from-[#F38978] to-[#F38978] text-[#251E1F] hover:brightness-110"
   }
 };
 
@@ -83,7 +83,7 @@ export default function ModuleSelectionPage() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#fff8f5] via-[#fff3ee] to-[#FDD9CD] px-5 py-6 text-[#251E1F] sm:px-6 lg:px-8">
       <motion.div
-        className="pointer-events-none absolute left-[-8rem] top-[-6rem] h-80 w-80 rounded-full bg-[#2D7C83]/30 blur-3xl"
+        className="pointer-events-none absolute left-[-8rem] top-[-6rem] h-80 w-80 rounded-full bg-[#F38978]/30 blur-3xl"
         animate={shouldReduceMotion ? undefined : { y: [0, 24, 0], x: [0, 18, 0] }}
         transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
       />
@@ -97,7 +97,7 @@ export default function ModuleSelectionPage() {
       <div className="relative z-10 mx-auto flex min-h-[calc(100vh-3rem)] max-w-6xl flex-col">
         <header className="flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#ead3cc] bg-white/80 text-sm font-bold shadow-lg shadow-blue-950/20 backdrop-blur">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#ead3cc] bg-white/800 text-sm font-bold shadow-lg shadow-[#251E1F]/10 backdrop-blur">
               AIP
             </div>
             <div className="min-w-0">
@@ -111,7 +111,7 @@ export default function ModuleSelectionPage() {
           <button
             type="button"
             onClick={handleLogout}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#F38978]/25 bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] shadow-lg shadow-[#F38978]/10 backdrop-blur transition hover:bg-white/15"
+            className="inline-flex items-center gap-2 rounded-lg border border-[#F38978]/25 bg-white/800 px-4 py-2 text-sm font-medium text-[#251E1F] shadow-lg shadow-[#F38978]/10 backdrop-blur transition hover:bg-[#FDD9CD]/60"
           >
             <LogOut size={16} />
             Logout
@@ -125,7 +125,7 @@ export default function ModuleSelectionPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: shouldReduceMotion ? 0 : 0.55, ease: "easeOut" }}
           >
-            <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[#F38978]/25 bg-white/80 px-4 py-2 text-sm font-medium text-[#6f5b55] shadow-lg shadow-[#f2b5a9]/20 backdrop-blur">
+            <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[#F38978]/25 bg-white/800 px-4 py-2 text-sm font-medium text-[#6f5b55] shadow-lg shadow-[#f2b5a9]/20 backdrop-blur">
               <BadgeCheck size={16} />
               Signed in as {user?.name || "User"}
             </div>
@@ -135,7 +135,7 @@ export default function ModuleSelectionPage() {
             <p className="mt-4 text-base leading-7 text-[#7b6660]">
               Launch the modules assigned to your account and continue your role-based workflow.
             </p>
-            <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-[#ead3cc] bg-white/80 px-4 py-2 text-sm text-[#514440] backdrop-blur">
+            <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-[#ead3cc] bg-white/800 px-4 py-2 text-sm text-[#514440] backdrop-blur">
               <Sparkles size={16} className="text-[#F38978]" />
               <span className="font-medium text-[#251E1F]">{user?.role}</span>
               <span className="text-[#7b6660]/70">role access enabled</span>
@@ -167,7 +167,7 @@ export default function ModuleSelectionPage() {
                   whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
                 >
                   <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${module.accentClass}`} />
-                  <div className="absolute right-5 top-5 rounded-full border border-[#ead3cc] bg-white/80 px-3 py-1 text-xs font-semibold text-[#6f5b55] shadow-sm backdrop-blur">
+                  <div className="absolute right-5 top-5 rounded-full border border-[#ead3cc] bg-white/800 px-3 py-1 text-xs font-semibold text-[#6f5b55] shadow-sm backdrop-blur">
                     {module.badge}
                   </div>
 
@@ -201,7 +201,7 @@ export default function ModuleSelectionPage() {
           </section>
 
           <motion.div
-            className="mx-auto mt-10 flex items-center gap-3 rounded-2xl border border-[#f0d2ca] bg-white/8 px-5 py-4 text-sm text-[#7b6660] shadow-xl shadow-[#f2b5a9]/20 backdrop-blur"
+            className="mx-auto mt-10 flex items-center gap-3 rounded-2xl border border-[#f0d2ca] bg-white/80 px-5 py-4 text-sm text-[#7b6660] shadow-xl shadow-[#f2b5a9]/20 backdrop-blur"
             initial={shouldReduceMotion ? false : { opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: shouldReduceMotion ? 0 : 0.5, delay: 0.25 }}

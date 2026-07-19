@@ -366,12 +366,12 @@ export default function AdminUserProfilePage({ userId }) {
       <div className="rounded-xl border border-[#f0d2ca] bg-white/95 p-6 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
         <div className="grid gap-6 xl:grid-cols-[1fr_auto] xl:items-start">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-            <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl bg-[#2D7C83]/12 text-3xl font-bold text-[#2D7C83] ring-1 ring-[#2D7C83]/15">
+            <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl bg-[#F38978]/12 text-3xl font-bold text-[#F38978] ring-1 ring-[#F38978]/15">
               {getInitials(user.name)}
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-3xl font-bold text-[#15565b]">{user.name}</h2>
+                <h2 className="text-3xl font-bold text-[#251E1F]">{user.name}</h2>
                 <span className={`rounded-md border px-2 py-1 text-xs font-bold ${statusBadgeClass(user.statusLabel)}`}>
                   {user.statusLabel}
                 </span>
@@ -445,7 +445,7 @@ export default function AdminUserProfilePage({ userId }) {
           {user.assignedModules?.length ? (
             <div className="flex flex-wrap gap-2">
               {user.assignedModules.map((module) => (
-                <span key={module} className="rounded-md border border-[#b8d9dc] bg-[#eaf6f7] px-2.5 py-1 text-sm font-bold text-[#15565b]">
+                <span key={module} className="rounded-md border border-[#f3c6bc] bg-[#fff0eb] px-2.5 py-1 text-sm font-bold text-[#b64d3b]">
                   {module}
                 </span>
               ))}

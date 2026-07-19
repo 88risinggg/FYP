@@ -70,9 +70,9 @@ export default function NotificationsSection() {
     return (
       <div className="app-panel rounded-2xl p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-6 w-48 rounded bg-white/10" />
+          <div className="h-6 w-48 rounded bg-[#FDD9CD]/50" />
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-12 rounded-lg bg-white/[0.04]" />
+            <div key={i} className="h-12 rounded-lg bg-[#FDD9CD]/30" />
           ))}
         </div>
       </div>
@@ -86,7 +86,7 @@ export default function NotificationsSection() {
       <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
           <Bell size={20} className="text-[#F38978]" />
-          <h2 className="text-xl font-semibold text-white">Notification Settings</h2>
+          <h2 className="text-xl font-semibold text-[#251E1F]">Notification Settings</h2>
         </div>
         <p className="mt-1 text-sm text-[#7b6660]">Choose what notifications you want to receive.</p>
 
@@ -96,7 +96,7 @@ export default function NotificationsSection() {
           <NotificationGroup title="General" items={generalNotifications} prefs={prefs} onToggle={toggle} />
         </div>
 
-        <div className="mt-6 pt-4 border-t border-white/10">
+        <div className="mt-6 pt-4 border-t border-[#ead3cc]">
           <button type="button" onClick={handleSave} disabled={saving}
             className="primary-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
@@ -114,8 +114,8 @@ function NotificationGroup({ title, items, prefs, onToggle }) {
       <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">{title}</p>
       <div className="space-y-2">
         {items.map((item) => (
-          <div key={item.key} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
-            <span className="text-sm text-white">{item.label}</span>
+          <div key={item.key} className="flex items-center justify-between rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 px-4 py-3">
+            <span className="text-sm text-[#251E1F]">{item.label}</span>
             <Toggle checked={!!prefs[item.key]} onChange={() => onToggle(item.key)} />
           </div>
         ))}
@@ -127,7 +127,7 @@ function NotificationGroup({ title, items, prefs, onToggle }) {
 function Toggle({ checked, onChange }) {
   return (
     <button type="button" onClick={onChange}
-      className={`relative h-6 w-11 rounded-full transition-colors duration-200 ${checked ? "bg-[#F38978]" : "bg-white/15"}`}>
+      className={`relative h-6 w-11 rounded-full transition-colors duration-200 ${checked ? "bg-[#F38978]" : "bg-[#f0d2ca]"}`}>
       <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${checked ? "translate-x-[22px]" : "translate-x-0.5"}`} />
     </button>
   );
@@ -136,7 +136,7 @@ function Toggle({ checked, onChange }) {
 function Toast({ toast }) {
   return (
     <div className={`fixed right-6 top-24 z-50 animate-[slideDown_0.3s_ease] rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
-      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-200" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-200"
+      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-700" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-700"
     }`}>
       <div className="flex items-center gap-2">
         {toast.type === "error" ? <X size={16} /> : <Check size={16} />}

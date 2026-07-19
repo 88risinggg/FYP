@@ -53,9 +53,9 @@ export default function StaffClaimsPage() {
       )}
 
       {/* Submit Form */}
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-start gap-3">
-          <ReceiptText className="mt-0.5 text-[#C77DFF]" />
+          <ReceiptText className="mt-0.5 text-[#F38978]" />
           <div>
             <h3 className="font-semibold text-[#251E1F]">Submit an expense claim</h3>
             <p className="mt-1 text-sm text-[#7b6660]">A receipt or supporting document is required for compliance review.</p>
@@ -63,37 +63,37 @@ export default function StaffClaimsPage() {
         </div>
         <form onSubmit={handleSubmit} className="mt-6 grid gap-4 md:grid-cols-2">
           <label className="text-sm text-[#7b6660]">Claim type
-            <select value={form.claim_type} onChange={(e) => setForm({ ...form, claim_type: e.target.value })} className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-[#251E1F] outline-none focus:border-[#C77DFF]">
+            <select value={form.claim_type} onChange={(e) => setForm({ ...form, claim_type: e.target.value })} className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-[#251E1F] outline-none focus:border-[#F38978]">
               {CLAIM_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
             </select>
           </label>
           <label className="text-sm text-[#7b6660]">Amount (SGD)
-            <input required type="number" min="0.01" max="100000" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0.00" className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-[#251E1F] placeholder-[#7b6660]/40 outline-none focus:border-[#C77DFF]" />
+            <input required type="number" min="0.01" max="100000" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0.00" className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-[#251E1F] placeholder-[#7b6660]/40 outline-none focus:border-[#F38978]" />
           </label>
           <label className="text-sm text-[#7b6660]">Expense date
-            <input required type="date" max={new Date().toISOString().slice(0, 10)} value={form.expense_date} onChange={(e) => setForm({ ...form, expense_date: e.target.value })} className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-[#251E1F] outline-none focus:border-[#C77DFF]" />
+            <input required type="date" max={new Date().toISOString().slice(0, 10)} value={form.expense_date} onChange={(e) => setForm({ ...form, expense_date: e.target.value })} className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-[#251E1F] outline-none focus:border-[#F38978]" />
           </label>
           <label className="text-sm text-[#7b6660]">Proof (PDF, JPG or PNG; max 5MB)
-            <span className="mt-1 flex items-center gap-2 rounded-lg border border-dashed border-[#C77DFF]/40 bg-[#C77DFF]/5 px-3 py-2.5 text-[#251E1F]">
-              <Upload size={16} className="text-[#C77DFF]" />
+            <span className="mt-1 flex items-center gap-2 rounded-lg border border-dashed border-[#F38978]/40 bg-[#F38978]/5 px-3 py-2.5 text-[#251E1F]">
+              <Upload size={16} className="text-[#F38978]" />
               <input required type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(e) => setForm({ ...form, proof: e.target.files?.[0] || null })} className="min-w-0 text-xs text-[#7b6660]" />
             </span>
           </label>
           <label className="text-sm text-[#7b6660] md:col-span-2">Business purpose / description
-            <textarea required minLength={5} maxLength={1000} rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe the business purpose of this expense..." className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-[#251E1F] placeholder-[#7b6660]/40 outline-none focus:border-[#C77DFF]" />
+            <textarea required minLength={5} maxLength={1000} rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe the business purpose of this expense..." className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-[#251E1F] placeholder-[#7b6660]/40 outline-none focus:border-[#F38978]" />
           </label>
-          <button disabled={submitting} className="inline-flex w-fit items-center gap-2 rounded-lg bg-[#7B2FF7] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:brightness-110 disabled:opacity-50">
+          <button disabled={submitting} className="inline-flex w-fit items-center gap-2 rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:brightness-110 disabled:opacity-50">
             {submitting ? <Loader2 size={16} className="animate-spin" /> : <FileCheck2 size={16} />} Submit claim
           </button>
         </form>
       </div>
 
       {/* Claim History */}
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <h3 className="font-semibold text-[#251E1F]">Claim history</h3>
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="animate-spin text-[#C77DFF]" size={24} />
+            <Loader2 className="animate-spin text-[#F38978]" size={24} />
           </div>
         ) : claims.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
@@ -115,7 +115,7 @@ export default function StaffClaimsPage() {
                 </div>
                 <ClaimWorkflowProgress status={claim.status} />
                 <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
-                  <button onClick={() => openClaimProof(claim.claim_id).catch((error) => setMessage({ type: "error", text: error.message }))} className="inline-flex items-center gap-1 text-[#C77DFF] hover:text-[#7B2FF7] transition">
+                  <button onClick={() => openClaimProof(claim.claim_id).catch((error) => setMessage({ type: "error", text: error.message }))} className="inline-flex items-center gap-1 text-[#F38978] hover:text-[#F38978] transition">
                     <Paperclip size={14} />{claim.proof_original_name}
                   </button>
                   {claim.hr_comments && <span className="text-[#7b6660]">HR: {claim.hr_comments}</span>}

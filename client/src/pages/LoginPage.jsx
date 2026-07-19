@@ -227,7 +227,7 @@ export default function LoginPage() {
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(circle at 18% 22%, rgba(123,47,247,0.38), transparent 28%), radial-gradient(circle at 86% 18%, rgba(255,77,219,0.26), transparent 30%), radial-gradient(circle at 72% 72%, rgba(76,201,240,0.16), transparent 34%), linear-gradient(135deg, #fff8f5 0%, #fff3ee 46%, #FDD9CD 100%)",
+              "radial-gradient(circle at 18% 22%, rgba(243,137,120,0.18), transparent 28%), radial-gradient(circle at 86% 18%, rgba(253,217,205,0.55), transparent 30%), radial-gradient(circle at 72% 72%, rgba(50,105,168,0.10), transparent 34%), linear-gradient(135deg, #fff8f5 0%, #fff3ee 46%, #FDD9CD 100%)",
             backgroundSize: "130% 130%"
           }}
           animate={shouldReduceMotion ? undefined : { backgroundPosition: ["0% 45%", "100% 55%", "0% 45%"] }}
@@ -236,7 +236,7 @@ export default function LoginPage() {
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.045)_1px,transparent_1px)] bg-[size:64px_64px] opacity-30" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[#fff8f5] to-transparent" />
 
-        <header className="relative z-20 border-b border-[#f0d2ca] bg-white/80 backdrop-blur-xl">
+        <header className="relative z-20 border-b border-[#f0d2ca] bg-white/800 backdrop-blur-xl">
           <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
             <a href="#top" className="flex min-w-0 items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#F38978]/30 bg-[#F38978]/10 text-sm font-bold text-[#6f5b55] shadow-lg shadow-[#F38978]/25">
@@ -257,7 +257,7 @@ export default function LoginPage() {
             <div className="flex items-center gap-3">
               <motion.button
                 type="button"
-                className="flex h-10 items-center rounded-lg border border-[#F38978]/30 bg-white/80 px-4 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/20 transition hover:bg-white/15"
+                className="flex h-10 items-center rounded-lg border border-[#F38978]/30 bg-white/800 px-4 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/20 transition hover:bg-[#FDD9CD]/60"
                 onClick={openLogin}
                 whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
                 whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
@@ -266,7 +266,7 @@ export default function LoginPage() {
               </motion.button>
               <button
                 type="button"
-                className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/80 text-[#251E1F] ring-1 ring-white/15 lg:hidden"
+                className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/800 text-[#251E1F] ring-1 ring-[#ead3cc] lg:hidden"
                 aria-label="Open navigation"
               >
                 <Menu size={20} />
@@ -282,7 +282,7 @@ export default function LoginPage() {
             variants={heroVariant}
           >
             <motion.p
-              className="inline-flex items-center gap-2 rounded-full border border-[#F38978]/25 bg-white/80 px-4 py-2 text-sm font-medium text-[#6f5b55] shadow-lg shadow-[#f2b5a9]/20 backdrop-blur"
+              className="inline-flex items-center gap-2 rounded-full border border-[#F38978]/25 bg-white/800 px-4 py-2 text-sm font-medium text-[#6f5b55] shadow-lg shadow-[#f2b5a9]/20 backdrop-blur"
               variants={heroItem}
             >
               <Sparkles size={16} />
@@ -305,7 +305,7 @@ export default function LoginPage() {
               <motion.button
                 type="button"
                 onClick={openLogin}
-                className="rounded-lg bg-gradient-to-r from-[#2D7C83] via-[#F38978] to-[#F38978] px-6 py-3 text-sm font-semibold text-[#251E1F] shadow-xl shadow-[#F38978]/35 transition hover:brightness-110"
+                className="rounded-lg bg-gradient-to-r from-[#F38978] via-[#F38978] to-[#F38978] px-6 py-3 text-sm font-semibold text-[#251E1F] shadow-xl shadow-[#F38978]/35 transition hover:brightness-110"
                 whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
                 whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
               >
@@ -313,7 +313,7 @@ export default function LoginPage() {
               </motion.button>
               <motion.a
                 href="#modules"
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#ead3cc] bg-white/8 px-6 py-3 text-sm font-semibold text-[#251E1F] transition hover:bg-white/12"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#ead3cc] bg-white/80 px-6 py-3 text-sm font-semibold text-[#251E1F] transition hover:bg-white/12"
                 whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
                 whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
               >
@@ -340,19 +340,19 @@ export default function LoginPage() {
               transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
             />
             <motion.div
-              className="absolute right-24 top-8 h-14 w-32 skew-x-6 rounded-xl border border-[#ead3cc] bg-white/8 shadow-xl shadow-blue-500/10"
+              className="absolute right-24 top-8 h-14 w-32 skew-x-6 rounded-xl border border-[#ead3cc] bg-white/80 shadow-xl shadow-[#f2b5a9]/10"
               animate={shouldReduceMotion ? undefined : { x: [0, 14, 0], opacity: [0.8, 1, 0.8] }}
               transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
             />
 
-            <div className="absolute inset-x-0 top-20 rounded-3xl border border-[#ead3cc] bg-white/80 p-5 shadow-2xl shadow-cyan-950/40 backdrop-blur-2xl lg:left-8">
-              <div className="rounded-2xl border border-[#f0d2ca] bg-white/80 p-5">
+            <div className="absolute inset-x-0 top-20 rounded-3xl border border-[#ead3cc] bg-white/800 p-5 shadow-2xl shadow-[#251E1F]/10 backdrop-blur-2xl lg:left-8">
+              <div className="rounded-2xl border border-[#f0d2ca] bg-white/800 p-5">
                 <div className="flex items-center justify-between gap-4 border-b border-[#f0d2ca] pb-4">
                   <div>
                     <p className="text-sm font-semibold text-[#251E1F]">Operations Overview</p>
-                    <p className="mt-1 text-xs text-slate-400">Invoice and payroll monitoring</p>
+                    <p className="mt-1 text-xs text-[#7b6660]">Invoice and payroll monitoring</p>
                   </div>
-                  <div className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-xs font-semibold text-emerald-200">
+                  <div className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-xs font-semibold text-emerald-700">
                     Secured
                   </div>
                 </div>
@@ -363,20 +363,20 @@ export default function LoginPage() {
                     ["Payroll", "Ready", Wallet],
                     ["Reports", "Synced", BarChart3]
                   ].map(([label, value, Icon]) => (
-                    <div key={label} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+                    <div key={label} className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
                       <Icon className="text-[#F38978]" size={20} />
-                      <p className="mt-4 text-xs text-slate-400">{label}</p>
+                      <p className="mt-4 text-xs text-[#7b6660]">{label}</p>
                       <p className="mt-1 text-sm font-semibold text-[#251E1F]">{value}</p>
                     </div>
                   ))}
                 </div>
 
-                <div className="mt-5 rounded-2xl border border-[#f0d2ca] bg-white/80 p-4">
+                <div className="mt-5 rounded-2xl border border-[#f0d2ca] bg-white/800 p-4">
                   <div className="flex items-end gap-2">
                     {[48, 70, 54, 82, 62, 92, 76, 88].map((height, index) => (
                       <motion.div
                         key={height + index}
-                        className="flex-1 rounded-t-md bg-gradient-to-t from-[#2D7C83] via-[#F38978] to-[#F38978]"
+                        className="flex-1 rounded-t-md bg-gradient-to-t from-[#F38978] via-[#F38978] to-[#F38978]"
                         style={{ height }}
                         animate={shouldReduceMotion ? undefined : { opacity: [0.65, 1, 0.65] }}
                         transition={{ duration: 2.8, delay: index * 0.12, repeat: Infinity }}
@@ -398,7 +398,7 @@ export default function LoginPage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-[#251E1F]">Invoice Card</p>
-                  <p className="text-xs text-slate-400">Settings and reports</p>
+                  <p className="text-xs text-[#7b6660]">Settings and reports</p>
                 </div>
               </div>
             </motion.div>
@@ -414,7 +414,7 @@ export default function LoginPage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-[#251E1F]">Payroll Card</p>
-                  <p className="text-xs text-slate-400">Runs, payslips, summaries</p>
+                  <p className="text-xs text-[#7b6660]">Runs, payslips, summaries</p>
                 </div>
               </div>
             </motion.div>
@@ -444,7 +444,7 @@ export default function LoginPage() {
               return (
                 <motion.article
                   key={feature.title}
-                  className="rounded-2xl border border-[#f0d2ca] bg-white/80 p-6 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur transition-colors hover:border-[#F38978]/40"
+                  className="rounded-2xl border border-[#f0d2ca] bg-white/800 p-6 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur transition-colors hover:border-[#F38978]/40"
                   initial={sectionInitial}
                   whileInView={sectionVisible}
                   viewport={{ once: true, amount: 0.2 }}
@@ -455,7 +455,7 @@ export default function LoginPage() {
                     <Icon size={22} />
                   </div>
                   <h3 className="mt-5 text-lg font-semibold text-[#251E1F]">{feature.title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-slate-400">{feature.description}</p>
+                  <p className="mt-3 text-sm leading-6 text-[#7b6660]">{feature.description}</p>
                 </motion.article>
               );
             })}
@@ -473,23 +473,23 @@ export default function LoginPage() {
       >
         <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-2">
           <motion.article
-            className="rounded-2xl border border-[#F38978]/20 bg-white/80 p-7 shadow-xl shadow-[#f2b5a9]/20 backdrop-blur"
+            className="rounded-2xl border border-[#F38978]/20 bg-white/800 p-7 shadow-xl shadow-[#f2b5a9]/20 backdrop-blur"
             whileHover={shouldReduceMotion ? undefined : { y: -5 }}
           >
             <FileText className="text-[#F38978]" size={30} />
             <h2 className="mt-5 text-2xl font-semibold text-[#251E1F]">Invoicing Module</h2>
-            <p className="mt-4 text-sm leading-7 text-slate-400">
+            <p className="mt-4 text-sm leading-7 text-[#7b6660]">
               A dedicated workspace for invoice settings, reminders, finance dashboards,
               reports, and audit visibility.
             </p>
           </motion.article>
           <motion.article
-            className="rounded-2xl border border-[#F38978]/20 bg-white/80 p-7 shadow-xl shadow-[#F38978]/10 backdrop-blur"
+            className="rounded-2xl border border-[#F38978]/20 bg-white/800 p-7 shadow-xl shadow-[#F38978]/10 backdrop-blur"
             whileHover={shouldReduceMotion ? undefined : { y: -5 }}
           >
             <Wallet className="text-[#F38978]" size={30} />
             <h2 className="mt-5 text-2xl font-semibold text-[#251E1F]">Payroll Module</h2>
-            <p className="mt-4 text-sm leading-7 text-slate-400">
+            <p className="mt-4 text-sm leading-7 text-[#7b6660]">
               A structured payroll area for HR uploads, finance review, staff payslips,
               notifications, and payroll summaries.
             </p>
@@ -513,7 +513,7 @@ export default function LoginPage() {
             <h2 className="mt-3 text-3xl font-semibold tracking-normal text-[#251E1F]">
               Users continue through the same authenticated module flow
             </h2>
-            <p className="mt-4 text-sm leading-7 text-slate-400">
+            <p className="mt-4 text-sm leading-7 text-[#7b6660]">
               The login modal still uses the existing API. After successful authentication,
               saved user data controls Admin, Finance, HR, and Staff access.
             </p>
@@ -522,7 +522,7 @@ export default function LoginPage() {
             {roleItems.map((role) => (
               <motion.div
                 key={role}
-                className="rounded-2xl border border-[#f0d2ca] bg-white/80 p-5 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur transition-colors hover:border-[#F38978]/40"
+                className="rounded-2xl border border-[#f0d2ca] bg-white/800 p-5 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur transition-colors hover:border-[#F38978]/40"
                 initial={sectionInitial}
                 whileInView={sectionVisible}
                 viewport={{ once: true, amount: 0.2 }}
@@ -531,7 +531,7 @@ export default function LoginPage() {
               >
                 <Users className="text-[#F38978]" size={22} />
                 <p className="mt-4 text-base font-semibold text-[#251E1F]">{role}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">
+                <p className="mt-2 text-sm leading-6 text-[#7b6660]">
                   Access is assigned after successful database-backed authentication.
                 </p>
               </motion.div>
@@ -544,11 +544,11 @@ export default function LoginPage() {
         <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-[#251E1F]">Automated Invoicing & Payroll System</p>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-[#6f5b55]">
               Secure module access for academic FYP business operations.
             </p>
           </div>
-          <p className="text-sm text-slate-500">Built for role-based invoicing and payroll workflows.</p>
+          <p className="text-sm text-[#6f5b55]">Built for role-based invoicing and payroll workflows.</p>
         </div>
       </footer>
 
@@ -572,20 +572,20 @@ export default function LoginPage() {
                 type="button"
                 onClick={closeLogin}
                 disabled={isLoading}
-                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-[#FDD9CD]/45 hover:text-[#251E1F] disabled:cursor-not-allowed"
+                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-lg text-[#7b6660] transition hover:bg-[#FDD9CD]/45 hover:text-[#251E1F] disabled:cursor-not-allowed"
                 aria-label="Close login"
               >
                 <X size={20} />
               </button>
 
               <div className="pr-8">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#2D7C83] to-[#F38978] text-sm font-bold text-[#251E1F] shadow-lg shadow-[#F38978]/30">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#F38978] to-[#F38978] text-sm font-bold text-[#251E1F] shadow-lg shadow-[#F38978]/30">
                   AIP
                 </div>
                 <h2 className="mt-6 text-2xl font-semibold tracking-normal text-[#251E1F]">
                   Login to System
                 </h2>
-                <p className="mt-2 text-sm text-slate-400">
+                <p className="mt-2 text-sm text-[#7b6660]">
                   Use your assigned account to continue to module selection.
                 </p>
               </div>
@@ -595,8 +595,8 @@ export default function LoginPage() {
                   <label className="block text-sm font-medium text-[#6f5b55]" htmlFor="email">
                     Email
                   </label>
-                  <div className="mt-2 flex transform-gpu rounded-xl border border-[#f0d2ca] bg-white/80 transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-[#F38978]/70 focus-within:ring-4 focus-within:ring-[#F38978]/15">
-                    <span className="flex items-center px-3 text-slate-400">
+                  <div className="mt-2 flex transform-gpu rounded-xl border border-[#f0d2ca] bg-white/800 transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-[#F38978]/70 focus-within:ring-4 focus-within:ring-[#F38978]/15">
+                    <span className="flex items-center px-3 text-[#7b6660]">
                       <Mail size={18} />
                     </span>
                     <input
@@ -607,7 +607,7 @@ export default function LoginPage() {
                       required
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
-                      className="min-w-0 flex-1 rounded-r-xl bg-transparent px-1 py-3 pr-4 text-sm text-[#251E1F] outline-none placeholder:text-slate-500"
+                      className="min-w-0 flex-1 rounded-r-xl bg-transparent px-1 py-3 pr-4 text-sm text-[#251E1F] outline-none placeholder:text-[#6f5b55]"
                       placeholder="name@example.com"
                     />
                   </div>
@@ -617,8 +617,8 @@ export default function LoginPage() {
                   <label className="block text-sm font-medium text-[#6f5b55]" htmlFor="password">
                     Password
                   </label>
-                  <div className="mt-2 flex transform-gpu rounded-xl border border-[#f0d2ca] bg-white/80 transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-[#F38978]/70 focus-within:ring-4 focus-within:ring-[#F38978]/15">
-                    <span className="flex items-center px-3 text-slate-400">
+                  <div className="mt-2 flex transform-gpu rounded-xl border border-[#f0d2ca] bg-white/800 transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-[#F38978]/70 focus-within:ring-4 focus-within:ring-[#F38978]/15">
+                    <span className="flex items-center px-3 text-[#7b6660]">
                       <Lock size={18} />
                     </span>
                     <input
@@ -629,13 +629,13 @@ export default function LoginPage() {
                       required
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
-                      className="min-w-0 flex-1 bg-transparent px-1 py-3 text-sm text-[#251E1F] outline-none placeholder:text-slate-500"
+                      className="min-w-0 flex-1 bg-transparent px-1 py-3 text-sm text-[#251E1F] outline-none placeholder:text-[#6f5b55]"
                       placeholder="Enter your password"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword((current) => !current)}
-                      className="flex w-11 items-center justify-center rounded-r-xl text-slate-400 transition hover:bg-white/8 hover:text-[#251E1F]"
+                      className="flex w-11 items-center justify-center rounded-r-xl text-[#7b6660] transition hover:bg-white/80 hover:text-[#251E1F]"
                       aria-label={showPassword ? "Hide password" : "Show password"}
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -644,7 +644,7 @@ export default function LoginPage() {
                 </div>
 
                 <div className="flex items-center justify-between gap-4 text-sm">
-                  <label className="flex cursor-pointer items-center gap-2 text-slate-400">
+                  <label className="flex cursor-pointer items-center gap-2 text-[#7b6660]">
                     <input
                       type="checkbox"
                       checked={rememberMe}
@@ -661,7 +661,7 @@ export default function LoginPage() {
                 <AnimatePresence>
                   {error && (
                     <motion.div
-                      className="rounded-xl border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm text-red-100"
+                      className="rounded-xl border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm text-red-700"
                       initial={shouldReduceMotion ? false : { opacity: 0, y: -8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }}
@@ -675,7 +675,7 @@ export default function LoginPage() {
                 <motion.button
                   type="submit"
                   disabled={isLoading}
-                  className="flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#2D7C83] via-[#F38978] to-[#F38978] px-4 py-3 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-slate-500 disabled:text-[#514440] disabled:shadow-none"
+                  className="flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#F38978] via-[#F38978] to-[#F38978] px-4 py-3 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-slate-500 disabled:text-[#514440] disabled:shadow-none"
                   whileHover={!isLoading && !shouldReduceMotion ? { scale: 1.02 } : undefined}
                   whileTap={!isLoading && !shouldReduceMotion ? { scale: 0.98 } : undefined}
                   animate={isLoading && !shouldReduceMotion ? { scale: 0.99 } : { scale: 1 }}
@@ -691,9 +691,9 @@ export default function LoginPage() {
                 </motion.button>
 
                 <div className="relative my-4 flex items-center gap-3">
-                  <div className="h-px flex-1 bg-white/80" />
-                  <span className="text-xs text-slate-500">or</span>
-                  <div className="h-px flex-1 bg-white/80" />
+                  <div className="h-px flex-1 bg-white/800" />
+                  <span className="text-xs text-[#6f5b55]">or</span>
+                  <div className="h-px flex-1 bg-white/800" />
                 </div>
 
                 <motion.button
@@ -720,7 +720,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={handleGoogleLogin}
                   disabled={isLoading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#ead3cc] bg-white/80 px-4 py-3 text-sm font-semibold text-[#251E1F] transition hover:bg-white/[0.14] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#ead3cc] bg-white/800 px-4 py-3 text-sm font-semibold text-[#251E1F] transition hover:bg-white/[0.14] disabled:cursor-not-allowed disabled:opacity-50"
                   whileHover={!isLoading && !shouldReduceMotion ? { scale: 1.02 } : undefined}
                   whileTap={!isLoading && !shouldReduceMotion ? { scale: 0.98 } : undefined}
                 >
@@ -746,7 +746,7 @@ export default function LoginPage() {
                 </motion.button>
               </form>
 
-              <div className="mt-5 flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3 text-sm text-slate-400">
+              <div className="mt-5 flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-3 text-sm text-[#7b6660]">
                 <Bell size={16} className="shrink-0 text-[#F38978]" />
                 Role-based access is applied after successful login.
               </div>
@@ -775,7 +775,7 @@ export default function LoginPage() {
               <h3 className="text-lg font-semibold text-[#251E1F]">
                 {otpSent ? "Enter verification code" : "Sign in with Email"}
               </h3>
-              <p className="mt-1 text-sm text-slate-400">
+              <p className="mt-1 text-sm text-[#7b6660]">
                 {otpSent
                   ? `We sent a 6-digit code to ${otpEmail}`
                   : "We'll send a one-time code to your email"}
@@ -785,24 +785,24 @@ export default function LoginPage() {
                 <form className="mt-5 space-y-4" onSubmit={handleOtpRequest}>
                   <div>
                     <label className="block text-sm font-medium text-[#6f5b55]" htmlFor="otp-email">Email</label>
-                    <div className="mt-2 flex rounded-xl border border-[#f0d2ca] bg-white/80 focus-within:border-[#F38978]/70 focus-within:ring-4 focus-within:ring-[#F38978]/15">
-                      <span className="flex items-center px-3 text-slate-400"><Mail size={18} /></span>
+                    <div className="mt-2 flex rounded-xl border border-[#f0d2ca] bg-white/800 focus-within:border-[#F38978]/70 focus-within:ring-4 focus-within:ring-[#F38978]/15">
+                      <span className="flex items-center px-3 text-[#7b6660]"><Mail size={18} /></span>
                       <input
                         id="otp-email"
                         type="email"
                         required
                         value={otpEmail}
                         onChange={(e) => setOtpEmail(e.target.value)}
-                        className="min-w-0 flex-1 rounded-r-xl bg-transparent px-1 py-3 pr-4 text-sm text-[#251E1F] outline-none placeholder:text-slate-500"
+                        className="min-w-0 flex-1 rounded-r-xl bg-transparent px-1 py-3 pr-4 text-sm text-[#251E1F] outline-none placeholder:text-[#6f5b55]"
                         placeholder="name@example.com"
                       />
                     </div>
                   </div>
-                  {error && <p className="rounded-xl border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm text-red-100">{error}</p>}
+                  {error && <p className="rounded-xl border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm text-red-700">{error}</p>}
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full rounded-xl bg-gradient-to-r from-[#2D7C83] via-[#F38978] to-[#F38978] px-4 py-3 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-full rounded-xl bg-gradient-to-r from-[#F38978] via-[#F38978] to-[#F38978] px-4 py-3 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isLoading ? "Sending..." : "Send Code"}
                   </button>
@@ -819,23 +819,23 @@ export default function LoginPage() {
                       required
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                      className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-[#251E1F] outline-none focus:border-[#F38978]/70 focus:ring-4 focus:ring-[#F38978]/15"
+                      className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-[#251E1F] outline-none focus:border-[#F38978]/70 focus:ring-4 focus:ring-[#F38978]/15"
                       placeholder="000000"
                       autoFocus
                     />
                   </div>
-                  {error && <p className="rounded-xl border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm text-red-100">{error}</p>}
+                  {error && <p className="rounded-xl border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm text-red-700">{error}</p>}
                   <button
                     type="submit"
                     disabled={isLoading || otpCode.length < 6}
-                    className="w-full rounded-xl bg-gradient-to-r from-[#2D7C83] via-[#F38978] to-[#F38978] px-4 py-3 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-full rounded-xl bg-gradient-to-r from-[#F38978] via-[#F38978] to-[#F38978] px-4 py-3 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isLoading ? "Verifying..." : "Verify & Login"}
                   </button>
                   <button
                     type="button"
                     onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); }}
-                    className="w-full text-center text-sm text-slate-400 hover:text-[#251E1F]"
+                    className="w-full text-center text-sm text-[#7b6660] hover:text-[#251E1F]"
                   >
                     Use a different email
                   </button>
@@ -845,7 +845,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => { setShowOtpForm(false); setOtpSent(false); setOtpCode(""); setError(""); }}
-                className="mt-4 w-full text-center text-sm text-slate-500 hover:text-[#251E1F]"
+                className="mt-4 w-full text-center text-sm text-[#6f5b55] hover:text-[#251E1F]"
               >
                 Cancel
               </button>

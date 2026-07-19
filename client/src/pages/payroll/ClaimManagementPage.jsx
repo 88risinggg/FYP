@@ -43,7 +43,7 @@ export default function ClaimManagementPage({ role }) {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="neon-glass neon-border rounded-2xl p-5">
+      <div className="app-panel rounded-2xl p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <ReceiptText className="text-[#F38978]" size={22} />
@@ -52,7 +52,7 @@ export default function ClaimManagementPage({ role }) {
               <p className="text-sm text-[#7b6660]">{isFinance ? "Verify HR-approved claims and record the fund release." : "Check the supporting proof before approving a claim for Finance."}</p>
             </div>
           </div>
-          <span className="rounded-full border border-[#C77DFF]/30 bg-[#C77DFF]/10 px-3 py-1 text-sm font-medium text-[#7B2FF7]">
+          <span className="rounded-full border border-[#F38978]/30 bg-[#F38978]/10 px-3 py-1 text-sm font-medium text-[#F38978]">
             {pendingCount} awaiting action
           </span>
         </div>
@@ -69,10 +69,10 @@ export default function ClaimManagementPage({ role }) {
       {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="animate-spin text-[#C77DFF]" size={24} />
+          <Loader2 className="animate-spin text-[#F38978]" size={24} />
         </div>
       ) : claims.length === 0 ? (
-        <div className="neon-glass neon-border rounded-2xl py-16 text-center">
+        <div className="app-panel rounded-2xl py-16 text-center">
           <ReceiptText size={32} className="mx-auto text-[#7b6660]/30" />
           <p className="mt-3 text-sm text-[#7b6660]">No claims in this queue.</p>
         </div>
@@ -81,7 +81,7 @@ export default function ClaimManagementPage({ role }) {
           {claims.map((claim) => {
             const actionable = canRoleActOnClaim(role, claim.status);
             return (
-              <div key={claim.claim_id} className="neon-glass neon-border rounded-2xl p-5">
+              <div key={claim.claim_id} className="app-panel rounded-2xl p-5">
                 {/* Claim Header */}
                 <div className="flex flex-wrap justify-between gap-4">
                   <div>
@@ -103,7 +103,7 @@ export default function ClaimManagementPage({ role }) {
                 <p className="mt-4 rounded-lg border border-[#f0d2ca] bg-white/50 p-3 text-sm text-[#7b6660]">{claim.description}</p>
 
                 {/* Proof Link */}
-                <button onClick={() => openClaimProof(claim.claim_id).catch((err) => setError(err.message))} className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-[#C77DFF] hover:text-[#7B2FF7] transition">
+                <button onClick={() => openClaimProof(claim.claim_id).catch((err) => setError(err.message))} className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-[#F38978] hover:text-[#F38978] transition">
                   <ExternalLink size={15} />Review proof: {claim.proof_original_name}
                 </button>
 
@@ -119,14 +119,14 @@ export default function ClaimManagementPage({ role }) {
                         value={references[claim.claim_id] || ""}
                         onChange={(e) => setReferences({ ...references, [claim.claim_id]: e.target.value })}
                         placeholder="Payment / bank reference (required to release)"
-                        className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm text-[#251E1F] placeholder-[#7b6660]/50 outline-none focus:border-[#C77DFF]"
+                        className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm text-[#251E1F] placeholder-[#7b6660]/50 outline-none focus:border-[#F38978]"
                       />
                     )}
                     <input
                       value={comments[claim.claim_id] || ""}
                       onChange={(e) => setComments({ ...comments, [claim.claim_id]: e.target.value })}
                       placeholder={isFinance ? "Finance note or rejection reason" : "HR comment or rejection reason"}
-                      className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm text-[#251E1F] placeholder-[#7b6660]/50 outline-none focus:border-[#C77DFF]"
+                      className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm text-[#251E1F] placeholder-[#7b6660]/50 outline-none focus:border-[#F38978]"
                     />
                     <div className="flex gap-2 md:col-span-2">
                       <button

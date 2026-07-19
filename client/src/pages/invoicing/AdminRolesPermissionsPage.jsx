@@ -28,7 +28,7 @@ const emptyFilters = {
 
 const roleVisuals = {
   Admin: { icon: Shield, color: "#7D8F58" },
-  Finance: { icon: BarChart3, color: "#2D7C83" },
+  Finance: { icon: BarChart3, color: "#F38978" },
   HR: { icon: UserPlus, color: "#F0B23E" },
   Staff: { icon: Users, color: "#F26E5F" }
 };
@@ -48,7 +48,7 @@ function formatDate(value) {
 
 function accessBadgeClass(accessLevel = "") {
   if (accessLevel === "Full Access") return "border-[#cdd4b6] bg-[#eef1df] text-[#4d663a]";
-  if (accessLevel === "High Access") return "border-[#b8d9dc] bg-[#eaf6f7] text-[#15565b]";
+  if (accessLevel === "High Access") return "border-[#f3c6bc] bg-[#fff0eb] text-[#b64d3b]";
   if (accessLevel === "Moderate Access") return "border-[#f4d59a] bg-[#fff4d8] text-[#9a6412]";
   return "border-[#f3c6bc] bg-[#fff0ec] text-[#c55245]";
 }
@@ -63,7 +63,7 @@ function EmptyState({ children }) {
 
 function RoleDistribution({ roles }) {
   const total = roles.reduce((sum, role) => sum + Number(role.assignedUsers || 0), 0);
-  const colors = ["#7D8F58", "#2D7C83", "#F0B23E", "#F26E5F"];
+  const colors = ["#7D8F58", "#F38978", "#F0B23E", "#F26E5F"];
   let cursor = 0;
   const segments = roles.map((role, index) => {
     const percentage = total ? (Number(role.assignedUsers || 0) / total) * 100 : 0;
@@ -163,18 +163,18 @@ export default function AdminRolesPermissionsPage() {
 
   const kpiCards = [
     { label: "Total Roles", value: summary.totalRoles, icon: Users, accent: "#7D8F58" },
-    { label: "Assigned Users", value: summary.assignedUsers, icon: UserPlus, accent: "#2D7C83" },
+    { label: "Assigned Users", value: summary.assignedUsers, icon: UserPlus, accent: "#F38978" },
     { label: "Active Roles", value: summary.activeRoles, icon: ShieldCheck, accent: "#F0B23E" },
     { label: "Permissions", value: summary.permissions, icon: KeyRound, accent: "#F26E5F" }
   ];
 
   const actionItems = useMemo(
     () => [
-      { label: "View Role", path: (role) => `/dashboard/invoicing/admin/roles/${role.roleId}`, icon: Shield },
-      { label: "Edit Role", path: (role) => `/dashboard/invoicing/admin/roles/${role.roleId}/edit`, icon: Edit3 },
-      { label: "Assign Users", path: (role) => `/dashboard/invoicing/admin/roles/${role.roleId}/assign-users`, icon: UserPlus },
-      { label: "Duplicate Role", path: (role) => `/dashboard/invoicing/admin/roles/${role.roleId}/duplicate`, icon: Copy },
-      { label: "Deactivate Role", path: (role) => `/dashboard/invoicing/admin/roles/${role.roleId}/deactivate`, icon: XCircle, danger: true }
+      { label: "View Role", path: (role) => `/admin/roles/${role.roleId}`, icon: Shield },
+      { label: "Edit Role", path: (role) => `/admin/roles/${role.roleId}/edit`, icon: Edit3 },
+      { label: "Assign Users", path: (role) => `/admin/roles/${role.roleId}/assign-users`, icon: UserPlus },
+      { label: "Duplicate Role", path: (role) => `/admin/roles/${role.roleId}/duplicate`, icon: Copy },
+      { label: "Deactivate Role", path: (role) => `/admin/roles/${role.roleId}/deactivate`, icon: XCircle, danger: true }
     ],
     []
   );
@@ -190,7 +190,7 @@ export default function AdminRolesPermissionsPage() {
         </div>
         <button
           type="button"
-          onClick={() => navigate("/dashboard/invoicing/admin/roles/create")}
+          onClick={() => navigate("/admin/roles/create")}
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#F38978] px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#F38978]/20 transition hover:bg-[#e77463]"
         >
           <Plus size={17} />

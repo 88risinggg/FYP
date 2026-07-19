@@ -6,7 +6,7 @@ import {
   Shield,
   Users
 } from "lucide-react";
-import { useLocation, Link } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
@@ -98,16 +98,6 @@ const invoicingSidebarSections = [
         path: "/dashboard/invoicing/admin/reports"
       }
     ]
-  },
-  {
-    label: "SYSTEM",
-    items: [
-      {
-        label: "Settings",
-        icon: Settings,
-        path: "/dashboard/settings"
-      }
-    ]
   }
 ];
 
@@ -193,6 +183,7 @@ export default function AdminInvoicingDashboard() {
       sidebarSections={invoicingSidebarSections}
       sidebarTitle="Automated Invoicing & Payroll System"
       searchPlaceholder="Search invoices, customers..."
+      theme="adminInvoicing"
     >
       {normalizedPath === "/dashboard/invoicing/admin" ? (
         <AdminDashboardHomePage />

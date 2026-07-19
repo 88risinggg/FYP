@@ -1096,7 +1096,7 @@ function getStatusClass(status) {
   const normalizedStatus = String(status || "").toLowerCase();
 
   if (normalizedStatus.includes("reconciled") || normalizedStatus.includes("recorded")) {
-    return "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]";
+    return "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]";
   }
 
   if (normalizedStatus.includes("approved") || normalizedStatus.includes("paid") || normalizedStatus.includes("sent")) {
@@ -1104,10 +1104,10 @@ function getStatusClass(status) {
   }
 
   if (normalizedStatus.includes("exception")) {
-    return "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]";
+    return "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]";
   }
 
-  return "border-[#f0d2ca] bg-white/80 text-[#7b6660]";
+  return "border-[#f0d2ca] bg-white/800 text-[#7b6660]";
 }
 
 function createTimelineEntry(action, owner = "Finance") {
@@ -1368,7 +1368,7 @@ function ActionButton({ children, disabled = false, disabledReason = "", icon: I
   const isBlockedWithReason = Boolean(disabled && disabledReason);
   const className =
     variant === "secondary"
-      ? "inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
+      ? "inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
       : "primary-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold";
   const handleClick = () => {
     if (isBlockedWithReason) {
@@ -1396,7 +1396,7 @@ function ActionButton({ children, disabled = false, disabledReason = "", icon: I
 
 function EmptyState({ message }) {
   return (
-    <div className="rounded-xl border border-dashed border-[#f0d2ca] bg-white/80 p-6 text-sm text-[#7b6660]">
+    <div className="rounded-xl border border-dashed border-[#f0d2ca] bg-white/800 p-6 text-sm text-[#7b6660]">
       {message}
     </div>
   );
@@ -1412,7 +1412,7 @@ function WorkflowCard({ run, step }) {
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978] ring-1 ring-[#F38978]/25">
           <Icon size={24} />
         </div>
-        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${completed ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"}`}>
+        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${completed ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#f0d2ca] bg-white/800 text-[#7b6660]"}`}>
           {completed ? "Completed" : "Pending"}
         </span>
       </div>
@@ -1455,24 +1455,24 @@ function ExceptionPanel({ run }) {
           <h3 className="text-lg font-semibold text-[#251E1F]">Automated Exception Review</h3>
           <p className="mt-1 text-sm text-[#7b6660]">System validation before Finance approves payment.</p>
         </div>
-        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${exceptions.length ? "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]" : "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]"}`}>
+        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${exceptions.length ? "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]" : "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]"}`}>
           {exceptions.length ? `${exceptions.length} exception(s)` : "No exceptions"}
         </span>
       </div>
       <div className="mt-5 grid gap-3">
         {groupedExceptions.length ? (
           groupedExceptions.map((group) => (
-            <div key={group.message} className="rounded-xl border border-[#FFB86B]/20 bg-[#FFB86B]/10 p-4 text-sm">
+            <div key={group.message} className="rounded-xl border border-[#D97706]/20 bg-[#D97706]/10 p-4 text-sm">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-semibold text-[#251E1F]">{group.message}</p>
-                  <p className="mt-1 text-xs text-[#FFE2B8]/80">
+                  <p className="mt-1 text-xs text-[#9A6412]/80">
                     Click the affected user count to view staff with this issue.
                   </p>
                 </div>
                 <button
                   type="button"
-                  className="w-fit rounded-full border border-[#FFB86B]/30 bg-[#FFB86B]/10 px-3 py-1 text-xs font-semibold text-[#FFE2B8] transition hover:bg-[#FFB86B]/20"
+                  className="w-fit rounded-full border border-[#D97706]/30 bg-[#D97706]/10 px-3 py-1 text-xs font-semibold text-[#9A6412] transition hover:bg-[#D97706]/20"
                   onClick={() => setExpandedException((current) => (current === group.message ? "" : group.message))}
                 >
                   {group.employees.length} user(s)
@@ -1481,7 +1481,7 @@ function ExceptionPanel({ run }) {
               {expandedException === group.message ? (
                 <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   {group.employees.map((employee) => (
-                    <div key={employee.id} className="rounded-lg border border-[#f0d2ca] bg-white/80 p-3">
+                    <div key={employee.id} className="rounded-lg border border-[#f0d2ca] bg-white/800 p-3">
                       <p className="font-semibold text-[#251E1F]">{employee.name}</p>
                       <p className="mt-1 text-xs text-[#7b6660]">{employee.department || "Missing department"}</p>
                       <p className="mt-1 text-xs text-[#7b6660]">Net pay: {formatMoney(getEmployeeNetPay(employee))}</p>
@@ -1529,14 +1529,14 @@ function AdminCpfConfigPanel() {
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         {rows.map(([label, value]) => (
-          <div key={label} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-3">
+          <div key={label} className="rounded-xl border border-[#f0d2ca] bg-white/800 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">{label}</p>
             <p className="mt-2 text-sm font-semibold text-[#251E1F]">{value}</p>
           </div>
         ))}
       </div>
       <div className="mt-5 overflow-hidden rounded-xl border border-[#f0d2ca]">
-        <div className="grid grid-cols-3 gap-3 border-b border-[#f0d2ca] bg-white/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
+        <div className="grid grid-cols-3 gap-3 border-b border-[#f0d2ca] bg-white/800 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
           <span>Age Group</span>
           <span>Employee CPF</span>
           <span>Employer CPF</span>
@@ -1550,7 +1550,7 @@ function AdminCpfConfigPanel() {
         ))}
       </div>
       <div className="mt-5 overflow-hidden rounded-xl border border-[#f0d2ca]">
-        <div className="grid grid-cols-3 gap-3 border-b border-[#f0d2ca] bg-white/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
+        <div className="grid grid-cols-3 gap-3 border-b border-[#f0d2ca] bg-white/800 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
           <span>Component</span>
           <span>CPF</span>
           <span>Wage Type</span>
@@ -1558,7 +1558,7 @@ function AdminCpfConfigPanel() {
         {componentRows.map(([component, rule]) => (
           <div key={component} className="grid grid-cols-3 gap-3 border-b border-[#f0d2ca] px-4 py-3 text-sm last:border-b-0">
             <span className="font-semibold capitalize text-[#251E1F]">{component}</span>
-            <span className={rule.cpfApplicable ? "font-semibold text-[#7CFFB2]" : "text-[#7b6660]"}>
+            <span className={rule.cpfApplicable ? "font-semibold text-[#2f8758]" : "text-[#7b6660]"}>
               {rule.cpfApplicable ? "Applicable" : "Excluded"}
             </span>
             <span className="text-[#7b6660]">{rule.wageType}</span>
@@ -1567,7 +1567,7 @@ function AdminCpfConfigPanel() {
       </div>
       <div className="mt-5 grid gap-4 xl:grid-cols-2">
         <div className="overflow-hidden rounded-xl border border-[#f0d2ca]">
-          <div className="grid grid-cols-3 gap-3 border-b border-[#f0d2ca] bg-white/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
+          <div className="grid grid-cols-3 gap-3 border-b border-[#f0d2ca] bg-white/800 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
             <span>Deduction</span>
             <span>Type</span>
             <span>CPF Wage Base</span>
@@ -1633,15 +1633,15 @@ function CompliancePanel({ run }) {
             Last updated: <span className="normal-case tracking-normal text-[#251E1F]">{lastUpdatedLabel}</span>
           </p>
         </div>
-        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${failed ? "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]" : "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]"}`}>
+        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${failed ? "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]" : "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]"}`}>
           {passed}/{total} passed
         </span>
       </div>
       <div className="mt-5 grid gap-3 md:grid-cols-2">
         {checks.map((check) => (
-          <div key={check.label} className={`rounded-xl border p-4 ${check.status ? "border-[#7CFFB2]/20 bg-[#7CFFB2]/10" : "border-[#FFB86B]/20 bg-[#FFB86B]/10"}`}>
+          <div key={check.label} className={`rounded-xl border p-4 ${check.status ? "border-[#2f8758]/20 bg-[#2f8758]/10" : "border-[#D97706]/20 bg-[#D97706]/10"}`}>
             <div className="flex items-start gap-3">
-              <CheckCircle2 size={18} className={`mt-0.5 shrink-0 ${check.status ? "text-[#7CFFB2]" : "text-[#FFE2B8]"}`} />
+              <CheckCircle2 size={18} className={`mt-0.5 shrink-0 ${check.status ? "text-[#2f8758]" : "text-[#9A6412]"}`} />
               <div>
                 <p className="font-semibold text-[#251E1F]">{check.label}</p>
                 <p className="mt-1 text-sm text-[#7b6660]">{check.detail}</p>
@@ -1671,7 +1671,7 @@ function AuditTrailPanel({ run }) {
       <div className="mt-5 grid gap-3">
         {auditEntries.length ? (
           auditEntries.slice(0, 8).map((entry, index) => (
-            <div key={`${entry.action}-${entry.at}-${index}`} className="grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm md:grid-cols-[10rem_1fr_8rem]">
+            <div key={`${entry.action}-${entry.at}-${index}`} className="grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 text-sm md:grid-cols-[10rem_1fr_8rem]">
               <span className="font-semibold text-[#251E1F]">{formatDateTime(entry.at)}</span>
               <span className="text-[#7b6660]">{entry.action}</span>
               <span className="text-right font-semibold text-[#F38978] md:text-left">{entry.owner}</span>
@@ -1697,9 +1697,9 @@ function StatCard({ detail, label, tone = "text-[#251E1F]", value }) {
 
 function PayrollStatsFilter({ filter, onFilterChange, onModeChange, resultCount }) {
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#f0d2ca] bg-white/80 p-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#f0d2ca] bg-white/800 p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#2D7C83]/20 text-[#F38978]">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F38978]/20 text-[#F38978]">
           <CalendarDays size={18} />
         </div>
         <div>
@@ -1708,12 +1708,12 @@ function PayrollStatsFilter({ filter, onFilterChange, onModeChange, resultCount 
         </div>
       </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="inline-flex rounded-xl border border-[#f0d2ca] bg-white/80 p-1">
+        <div className="inline-flex rounded-xl border border-[#f0d2ca] bg-white/800 p-1">
           {["month", "week"].map((mode) => (
             <button
               key={mode}
               type="button"
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition ${filter.mode === mode ? "bg-[#F38978] text-[#251E1F]" : "text-[#7b6660] hover:bg-white/80"}`}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition ${filter.mode === mode ? "bg-[#F38978] text-[#251E1F]" : "text-[#7b6660] hover:bg-white/800"}`}
               onClick={() => onModeChange(mode)}
             >
               {mode}
@@ -1733,7 +1733,7 @@ function PayrollStatsFilter({ filter, onFilterChange, onModeChange, resultCount 
 
 function RunSelector({ payrollRuns, selectedRunId, onSelectRun }) {
   return (
-    <label className="flex min-w-[17rem] items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2.5">
+    <label className="flex min-w-[17rem] items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 px-3 py-2.5">
       <Search size={16} className="text-[#F38978]" />
       <select
         value={selectedRunId}
@@ -1779,7 +1779,7 @@ function AccountingImpact({ payrollRuns = [], run }) {
           <h3 className="text-lg font-semibold text-[#251E1F]">Accounting Impact in Internal Ledger</h3>
           <p className="mt-1 text-sm text-[#7b6660]">Journal totals for the selected accounting period.</p>
         </div>
-        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${postedRuns === filteredRuns.length && filteredRuns.length ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"}`}>
+        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${postedRuns === filteredRuns.length && filteredRuns.length ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#f0d2ca] bg-white/800 text-[#7b6660]"}`}>
           {postedRuns}/{filteredRuns.length} posted
         </span>
       </div>
@@ -1836,22 +1836,22 @@ function CpfDeductionProcessPanel({ onAdvanceRun, run }) {
             Finance records statutory CPF/MBMF payables and employee deduction recoveries before ledger posting.
           </p>
         </div>
-        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${steps.statutoryDeductionsLogged ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
+        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${steps.statutoryDeductionsLogged ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]"}`}>
           {steps.statutoryDeductionsLogged ? "Ready for ledger" : "Action required"}
         </span>
       </div>
       <div className="mt-5 grid gap-3 lg:grid-cols-3">
         {rows.map((row) => (
-          <div key={row.key} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+          <div key={row.key} className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-[#251E1F]">{row.label}</p>
-              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${row.completedAt ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"}`}>
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${row.completedAt ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#f0d2ca] bg-white/800 text-[#7b6660]"}`}>
                 {row.status}
               </span>
             </div>
             <p className="mt-3 text-2xl font-semibold text-[#251E1F]">{formatMoney(row.amount)}</p>
             <p className="mt-2 text-xs leading-5 text-[#7b6660]">{row.detail}</p>
-            {row.completedAt ? <p className="mt-2 text-xs text-[#7CFFB2]">Logged {formatDateTime(row.completedAt)}</p> : null}
+            {row.completedAt ? <p className="mt-2 text-xs text-[#2f8758]">Logged {formatDateTime(row.completedAt)}</p> : null}
           </div>
         ))}
       </div>
@@ -1927,14 +1927,14 @@ function DashboardView({ onAdvanceRun, onSelectRun, payrollRuns, selectedRun }) 
         onModeChange={updateStatsMode}
       />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Pending Approval" value={selectedRun.employees.length - selectedApprovedStaff} detail={`${selectedApprovedStaff}/${selectedRun.employees.length} staff approved`} tone="text-[#FFB86B]" />
-        <StatCard label="Net Pay To Process" value={formatMoney(selectedTotals.netPay)} tone="text-[#7CFFB2]" />
-        <StatCard label="Payment File" value={selectedRun.paymentFileGeneratedAt ? "Generated" : "Pending"} detail={selectedRun.bankReference || "No bank reference yet"} tone={selectedRun.paymentFileGeneratedAt ? "text-[#F38978]" : "text-[#FFB86B]"} />
+        <StatCard label="Pending Approval" value={selectedRun.employees.length - selectedApprovedStaff} detail={`${selectedApprovedStaff}/${selectedRun.employees.length} staff approved`} tone="text-[#D97706]" />
+        <StatCard label="Net Pay To Process" value={formatMoney(selectedTotals.netPay)} tone="text-[#2f8758]" />
+        <StatCard label="Payment File" value={selectedRun.paymentFileGeneratedAt ? "Generated" : "Pending"} detail={selectedRun.bankReference || "No bank reference yet"} tone={selectedRun.paymentFileGeneratedAt ? "text-[#F38978]" : "text-[#D97706]"} />
         <StatCard
           label="Exceptions"
           value={selectedExceptionCount}
           detail={`${stats.pendingRuns} pending run(s) in filter`}
-          tone={selectedExceptionCount ? "text-[#FFB86B]" : "text-[#7CFFB2]"}
+          tone={selectedExceptionCount ? "text-[#D97706]" : "text-[#2f8758]"}
         />
       </div>
 
@@ -1956,7 +1956,7 @@ function DashboardView({ onAdvanceRun, onSelectRun, payrollRuns, selectedRun }) 
 
         <aside className="app-panel rounded-2xl p-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#2D7C83]/20 text-[#F38978]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F38978]/20 text-[#F38978]">
               <ShieldCheck size={21} />
             </div>
             <div>
@@ -1966,8 +1966,8 @@ function DashboardView({ onAdvanceRun, onSelectRun, payrollRuns, selectedRun }) 
           </div>
           <div className="mt-6 space-y-3 text-sm text-[#7b6660]">
             {workflowChecklist.map((item) => (
-              <div key={item.label} className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-3">
-                <CheckCircle2 size={17} className={item.completed ? "text-[#7CFFB2]" : "text-[#7b6660]/50"} />
+              <div key={item.label} className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/800 p-3">
+                <CheckCircle2 size={17} className={item.completed ? "text-[#2f8758]" : "text-[#7b6660]/50"} />
                 <span>{item.label}</span>
               </div>
             ))}
@@ -2131,10 +2131,10 @@ function PayrollRunsView({
         <aside className="app-panel rounded-2xl p-6">
           <h3 className="text-lg font-semibold text-[#251E1F]">{formatPayrollPeriod(selectedRun)}</h3>
           <p className="mt-1 text-sm text-[#7b6660]">Process the selected pay run in order.</p>
-          <div className="mt-4 grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm">
+          <div className="mt-4 grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 text-sm">
             <div className="flex items-center justify-between gap-3">
               <span className="text-[#7b6660]">Exceptions</span>
-              <span className={exceptionCount ? "font-semibold text-[#FFE2B8]" : "font-semibold text-[#7CFFB2]"}>
+              <span className={exceptionCount ? "font-semibold text-[#9A6412]" : "font-semibold text-[#2f8758]"}>
                 {exceptionCount}
               </span>
             </div>
@@ -2208,11 +2208,11 @@ function PayrollRunsView({
               Reconcile
             </ActionButton>
           </div>
-          <div className="mt-6 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm text-[#7b6660]">
+          <div className="mt-6 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 text-sm text-[#7b6660]">
             Bank reference: <span className="font-semibold text-[#251E1F]">{selectedRun.bankReference || "Pending payment"}</span>
           </div>
           {selectedRun.paymentProvider ? (
-            <div className="mt-3 rounded-xl border border-[#7CFFB2]/20 bg-[#7CFFB2]/10 p-4 text-sm text-[#CFFFE0]">
+            <div className="mt-3 rounded-xl border border-[#2f8758]/20 bg-[#2f8758]/10 p-4 text-sm text-[#065F46]">
               {selectedRun.paymentProvider} submitted {selectedRun.paymentTransferCount || 0} transfer(s).
             </div>
           ) : null}
@@ -2224,11 +2224,11 @@ function PayrollRunsView({
               </p>
             </div>
           ) : null}
-          <div className="mt-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm text-[#7b6660]">
+          <div className="mt-3 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 text-sm text-[#7b6660]">
             Modern Treasury recipients: <span className="font-semibold text-[#251E1F]">{approvedStaffCount - missingRecipientCount}/{approvedStaffCount}</span>
           </div>
           {paymentError ? (
-            <div className="mt-3 rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-4 text-sm text-[#FFE2B8]">
+            <div className="mt-3 rounded-xl border border-[#D97706]/25 bg-[#D97706]/10 p-4 text-sm text-[#9A6412]">
               {paymentError}
             </div>
           ) : null}
@@ -2256,7 +2256,7 @@ function PayrollRunsView({
 
 function PayrollItemList({ items, title }) {
   return (
-    <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+    <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
       <h4 className="text-sm font-semibold text-[#251E1F]">{title}</h4>
       <div className="mt-3 space-y-2">
         {items.length ? (
@@ -2327,7 +2327,7 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
           </div>
           <button
             type="button"
-            className="rounded-xl border border-[#f0d2ca] bg-white/80 p-2 text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="rounded-xl border border-[#f0d2ca] bg-white/800 p-2 text-[#251E1F] hover:bg-[#FDD9CD]/45"
             onClick={onClose}
           >
             <X size={18} />
@@ -2336,13 +2336,13 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Total Earnings" value={formatMoney(getEmployeeTotalEarnings(draft))} />
-          <StatCard label="Total Deductions" value={formatMoney(getEmployeeTotalDeductions(draft))} tone="text-[#FFB86B]" />
-          <StatCard label="Net Pay" value={formatMoney(getEmployeeNetPay(draft))} tone="text-[#7CFFB2]" />
+          <StatCard label="Total Deductions" value={formatMoney(getEmployeeTotalDeductions(draft))} tone="text-[#D97706]" />
+          <StatCard label="Net Pay" value={formatMoney(getEmployeeNetPay(draft))} tone="text-[#2f8758]" />
           <StatCard label="Other Deductions" value={formatMoney(getEmployeeOtherDeductions(draft))} tone="text-[#F38978]" />
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
             <h4 className="text-sm font-semibold text-[#251E1F]">Employee & Payment Details</h4>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {[
@@ -2377,7 +2377,7 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
                       />
                     )
                   ) : (
-                    <p className="rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2.5 text-sm font-semibold text-[#251E1F]">
+                    <p className="rounded-xl border border-[#f0d2ca] bg-white/800 px-3 py-2.5 text-sm font-semibold text-[#251E1F]">
                       {draft[field] || "Not recorded"}
                     </p>
                   )}
@@ -2386,17 +2386,17 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
             </div>
           </div>
 
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
             <h4 className="text-sm font-semibold text-[#251E1F]">Finance Checks</h4>
             <div className="mt-4 grid gap-2">
               {exceptions.length ? (
                 exceptions.map((exception) => (
-                  <div key={exception} className="rounded-lg border border-[#FFB86B]/20 bg-[#FFB86B]/10 p-3 text-sm text-[#FFE2B8]">
+                  <div key={exception} className="rounded-lg border border-[#D97706]/20 bg-[#D97706]/10 p-3 text-sm text-[#9A6412]">
                     {exception}
                   </div>
                 ))
               ) : (
-                <div className="rounded-lg border border-[#7CFFB2]/20 bg-[#7CFFB2]/10 p-3 text-sm text-[#7CFFB2]">
+                <div className="rounded-lg border border-[#2f8758]/20 bg-[#2f8758]/10 p-3 text-sm text-[#2f8758]">
                   No payment exceptions detected.
                 </div>
               )}
@@ -2578,20 +2578,20 @@ function PayslipsApprovalView() {
       }
     >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Pending Review" value={payslips.length} tone="text-[#FFB86B]" />
+        <StatCard label="Pending Review" value={payslips.length} tone="text-[#D97706]" />
         <StatCard label="Total Gross" value={formatPayslipMoney(payslips.reduce((sum, payslip) => sum + Number(payslip.gross_salary || 0), 0))} />
-        <StatCard label="Net Pay" value={formatPayslipMoney(payslips.reduce((sum, payslip) => sum + Number(payslip.net_pay || 0), 0))} tone="text-[#7CFFB2]" />
+        <StatCard label="Net Pay" value={formatPayslipMoney(payslips.reduce((sum, payslip) => sum + Number(payslip.net_pay || 0), 0))} tone="text-[#2f8758]" />
         <StatCard label="Next Approval" value="Admin" detail="After finance approval" tone="text-[#F38978]" />
       </div>
 
       {error ? (
-        <div className="app-panel mt-5 rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
+        <div className="app-panel mt-5 rounded-2xl border-red-500/40 p-4 text-sm text-red-700">
           {error}
         </div>
       ) : null}
 
       {successMessage ? (
-        <div className="app-panel mt-5 rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-200">
+        <div className="app-panel mt-5 rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-700">
           {successMessage}
         </div>
       ) : null}
@@ -2607,7 +2607,7 @@ function PayslipsApprovalView() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[#f0d2ca] bg-white/80 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
+              <thead className="border-b border-[#f0d2ca] bg-white/800 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
                 <tr>
                   <th className="px-4 py-3">Staff</th>
                   <th className="px-4 py-3">Period</th>
@@ -2626,9 +2626,9 @@ function PayslipsApprovalView() {
                     </td>
                     <td className="px-4 py-3 text-[#7b6660]">{getPayslipPeriod(payslip)}</td>
                     <td className="px-4 py-3 text-[#7b6660]">{formatPayslipMoney(payslip.gross_salary)}</td>
-                    <td className="px-4 py-3 font-semibold text-[#7CFFB2]">{formatPayslipMoney(payslip.net_pay)}</td>
+                    <td className="px-4 py-3 font-semibold text-[#2f8758]">{formatPayslipMoney(payslip.net_pay)}</td>
                     <td className="px-4 py-3">
-                      <span className="rounded-full border border-[#FFB86B]/25 bg-[#FFB86B]/10 px-3 py-1 text-xs font-semibold text-[#FFE2B8]">
+                      <span className="rounded-full border border-[#D97706]/25 bg-[#D97706]/10 px-3 py-1 text-xs font-semibold text-[#9A6412]">
                         Pending Finance
                       </span>
                     </td>
@@ -2638,7 +2638,7 @@ function PayslipsApprovalView() {
                           type="button"
                           onClick={() => handleApprove(payslip.payslip_id)}
                           disabled={actionInProgress === payslip.payslip_id}
-                          className="rounded-lg bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50"
+                          className="rounded-lg bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/30 disabled:opacity-50"
                         >
                           {actionInProgress === payslip.payslip_id ? <Loader2 className="inline animate-spin" size={12} /> : "Approve"}
                         </button>
@@ -2646,7 +2646,7 @@ function PayslipsApprovalView() {
                           type="button"
                           onClick={() => setRejectingPayslipId(payslip.payslip_id)}
                           disabled={actionInProgress === payslip.payslip_id}
-                          className="rounded-lg bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+                          className="rounded-lg bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-500/30 disabled:opacity-50"
                         >
                           Reject
                         </button>
@@ -2664,14 +2664,14 @@ function PayslipsApprovalView() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="app-panel w-full max-w-md rounded-2xl p-6">
             <div className="mb-4 flex items-center gap-3">
-              <AlertCircle className="text-red-300" size={20} />
+              <AlertCircle className="text-red-700" size={20} />
               <h3 className="text-lg font-semibold text-[#251E1F]">Reject Payslip</h3>
             </div>
             <textarea
               value={rejectReason}
               onChange={(event) => setRejectReason(event.target.value)}
               placeholder="Enter rejection reason..."
-              className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] placeholder-white/30"
+              className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#251E1F] placeholder-white/30"
               rows={4}
             />
             <div className="mt-6 flex gap-3">
@@ -2679,7 +2679,7 @@ function PayslipsApprovalView() {
                 type="button"
                 onClick={() => handleReject(rejectingPayslipId)}
                 disabled={actionInProgress === rejectingPayslipId}
-                className="flex-1 rounded-lg bg-red-500/20 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+                className="flex-1 rounded-lg bg-red-500/20 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-500/30 disabled:opacity-50"
               >
                 Reject
               </button>
@@ -2689,7 +2689,7 @@ function PayslipsApprovalView() {
                   setRejectingPayslipId(null);
                   setRejectReason("");
                 }}
-                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
               >
                 Cancel
               </button>
@@ -2730,8 +2730,8 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, payrol
       />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Gross Pay" value={formatMoney(stats.totals.grossPay)} />
-        <StatCard label="Net Pay" value={formatMoney(stats.totals.netPay)} tone="text-[#7CFFB2]" />
-        <StatCard label="Employee CPF" value={formatMoney(stats.totals.employeeCpf)} tone="text-[#FFB86B]" />
+        <StatCard label="Net Pay" value={formatMoney(stats.totals.netPay)} tone="text-[#2f8758]" />
+        <StatCard label="Employee CPF" value={formatMoney(stats.totals.employeeCpf)} tone="text-[#D97706]" />
         <StatCard label="Total Deductions" value={formatMoney(stats.totals.deductions)} tone="text-[#F38978]" />
       </div>
       <div className="mt-6">
@@ -2763,7 +2763,7 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, payrol
                 >
                   {employee.name}
                 </button>
-                {exceptions.length ? <span className="mt-1 block text-xs text-[#FFE2B8]">{exceptions.join(", ")}</span> : null}
+                {exceptions.length ? <span className="mt-1 block text-xs text-[#9A6412]">{exceptions.join(", ")}</span> : null}
               </span>
               <span className="text-[#7b6660]">
                 <span className="block">{employee.department || "Missing"}</span>
@@ -2775,13 +2775,13 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, payrol
               <span className="text-[#7b6660]">
                 <span className="block font-semibold text-[#251E1F]">{formatMoney(getEmployeeTotalDeductions(employee))}</span>
               </span>
-              <span className="font-semibold text-[#7CFFB2]">{formatMoney(netPay)}</span>
-              <span className={employee.bankAccount ? "text-[#7b6660]" : "text-[#FFE2B8]"}>
+              <span className="font-semibold text-[#2f8758]">{formatMoney(netPay)}</span>
+              <span className={employee.bankAccount ? "text-[#7b6660]" : "text-[#9A6412]"}>
                 <span className="block">{employee.bankType || "Missing bank"}</span>
                 <span className="block text-xs">{employee.bankAccount || "Missing account"}</span>
               </span>
               <span>
-                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${status === "Approved" ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : status === "Hold" ? "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]" : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"}`}>
+                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${status === "Approved" ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : status === "Hold" ? "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]" : "border-[#f0d2ca] bg-white/800 text-[#7b6660]"}`}>
                   {status}
                 </span>
               </span>
@@ -2795,7 +2795,7 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, payrol
                   <>
                     <button
                       type="button"
-                      className="rounded-lg border border-[#7CFFB2]/25 bg-[#7CFFB2]/10 px-3 py-1 text-xs font-semibold text-[#7CFFB2] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-lg border border-[#2f8758]/25 bg-[#2f8758]/10 px-3 py-1 text-xs font-semibold text-[#2f8758] disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={() => onUpdateStaffStatus(employee.id, "Approved")}
                       disabled={status === "Approved"}
                     >
@@ -2803,7 +2803,7 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, payrol
                     </button>
                     <button
                       type="button"
-                      className="rounded-lg border border-[#FFB86B]/25 bg-[#FFB86B]/10 px-3 py-1 text-xs font-semibold text-[#FFE2B8] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-lg border border-[#D97706]/25 bg-[#D97706]/10 px-3 py-1 text-xs font-semibold text-[#9A6412] disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={() => onUpdateStaffStatus(employee.id, "Hold")}
                       disabled={status === "Hold"}
                     >
@@ -2847,7 +2847,7 @@ function NotificationRecordsView({ selectedRun }) {
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978]">
                 <Send size={21} />
               </div>
-              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${notification.status === "Sent" ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"}`}>
+              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${notification.status === "Sent" ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#f0d2ca] bg-white/800 text-[#7b6660]"}`}>
                 {notification.status}
               </span>
             </div>
@@ -3209,7 +3209,7 @@ function PayrollReportsView({ onSelectRun, payrollRuns, selectedRun }) {
             <p className="mt-5 text-sm font-semibold text-[#251E1F]">{value}</p>
             <button
               type="button"
-              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
+              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
               onClick={() => downloadReport(selectedRun, title)}
             >
               <Download size={16} />
@@ -3265,7 +3265,7 @@ function PayrollSummariesView({ payrollRuns, selectedRun }) {
           </div>
           <div className="mt-6 space-y-3">
             {summaryRows.map(([label, value]) => (
-              <div key={label} className="flex items-center justify-between gap-4 rounded-xl border border-[#f0d2ca] bg-white/80 p-3 text-sm">
+              <div key={label} className="flex items-center justify-between gap-4 rounded-xl border border-[#f0d2ca] bg-white/800 p-3 text-sm">
                 <span className="text-[#7b6660]">{label}</span>
                 <span className="font-semibold text-[#251E1F]">{formatMoney(value)}</span>
               </div>
@@ -3728,12 +3728,12 @@ export default function FinancePayrollPage() {
       searchPlaceholder="Search payroll runs, staff, reports..."
     >
       {configError ? (
-        <div className="mb-4 rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-4 text-sm text-[#FFE2B8]">
+        <div className="mb-4 rounded-xl border border-[#D97706]/25 bg-[#D97706]/10 p-4 text-sm text-[#9A6412]">
           Admin payroll settings could not be loaded. Finance is using fallback payroll rules. {configError}
         </div>
       ) : null}
       {financeDbError ? (
-        <div className="mb-4 rounded-xl border border-[#FFB86B]/25 bg-[#FFB86B]/10 p-4 text-sm text-[#FFE2B8]">
+        <div className="mb-4 rounded-xl border border-[#D97706]/25 bg-[#D97706]/10 p-4 text-sm text-[#9A6412]">
           {financeDbError}
         </div>
       ) : null}
