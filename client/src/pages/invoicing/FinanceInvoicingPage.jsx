@@ -473,8 +473,6 @@ function InvoiceDetailsModal({ invoice, onClose }) {
     return null;
   }
 
-  const isPayable = !["Paid", "Cancelled", "Refunded"].includes(invoice.status);
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#090014]/80 p-4 backdrop-blur">
       <div className="neon-glass neon-border my-6 w-full max-w-3xl rounded-2xl">
@@ -515,17 +513,55 @@ function InvoiceDetailsModal({ invoice, onClose }) {
           </div>
         </div>
 
-        {/* Stripe Payment Section */}
-        {(invoice.payment_status || invoice.payment_url || invoice.transaction_id) ? (
-          <div className="mx-5 mb-4 rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
-            <h3 className="text-sm font-semibold text-[#F38978] mb-3 flex items-center gap-2">
-              <CreditCard size={14} />
-              Stripe Payment Details
+        {/* Line Items - Primary Content */}
+        <div className="px-5 pb-4">
+          <div className="overflow-hidden rounded-xl border border-[#f0d2ca]">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-[#FDD9CD]/20 text-xs uppercase tracking-wide text-[#7b6660]">
+                <tr>
+                  <th className="px-4 py-3">Description</th>
+                  <th className="px-4 py-3 text-right">Qty</th>
+                  <th className="px-4 py-3 text-right">Unit Price</th>
+                  <th className="px-4 py-3 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {invoice.items && invoice.items.length > 0 ? (
+                  invoice.items.map((item, idx) => (
+                    <tr key={item.item_id || idx} className="text-[#251E1F]">
+                      <td className="px-4 py-3">{item.description}</td>
+                      <td className="px-4 py-3 text-right">{item.quantity}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrency(item.unit_price)}</td>
+                      <td className="px-4 py-3 text-right font-medium">{formatCurrency(item.amount)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="4" className="px-4 py-6 text-center text-sm text-[#7b6660]">No line items available</td>
+                  </tr>
+                )}
+              </tbody>
+              <tfoot className="border-t border-[#f0d2ca] bg-[#FDD9CD]/10">
+                <tr>
+                  <td colSpan="3" className="px-4 py-3 text-right text-sm font-bold text-[#251E1F]">Total</td>
+                  <td className="px-4 py-3 text-right text-sm font-bold text-[#251E1F]">{formatCurrency(invoice.total_amount)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        {/* Payment Info - Compact Summary (only shown if there's payment activity) */}
+        {(invoice.payment_status || invoice.transaction_id || invoice.payment_date) ? (
+          <div className="mx-5 mb-5 rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-[#F38978] mb-2 flex items-center gap-2">
+              <CreditCard size={13} />
+              Payment Information
             </h3>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               {invoice.payment_status ? (
                 <div>
-                  <p className="text-xs text-[#7b6660]/70">Payment Status</p>
+                  <p className="text-xs text-[#7b6660]/70">Status</p>
                   <span className={`inline-flex mt-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
                     invoice.payment_status === "paid"
                       ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-700"
@@ -539,74 +575,25 @@ function InvoiceDetailsModal({ invoice, onClose }) {
               ) : null}
               {invoice.payment_method ? (
                 <div>
-                  <p className="text-xs text-[#7b6660]/70">Payment Method</p>
+                  <p className="text-xs text-[#7b6660]/70">Method</p>
                   <p className="mt-1 text-sm font-medium text-[#251E1F] capitalize">{invoice.payment_method}</p>
                 </div>
               ) : null}
               {invoice.payment_date ? (
                 <div>
-                  <p className="text-xs text-[#7b6660]/70">Payment Date</p>
+                  <p className="text-xs text-[#7b6660]/70">Paid On</p>
                   <p className="mt-1 text-sm font-medium text-[#251E1F]">{formatDateTime(invoice.payment_date)}</p>
                 </div>
               ) : null}
               {invoice.transaction_id ? (
-                <div>
+                <div className="sm:col-span-3">
                   <p className="text-xs text-[#7b6660]/70">Transaction ID</p>
                   <p className="mt-1 text-xs font-mono text-[#7b6660] break-all">{invoice.transaction_id}</p>
                 </div>
               ) : null}
             </div>
-            {invoice.payment_url && isPayable ? (
-              <div className="mt-3 flex items-center gap-3">
-                <a
-                  href={invoice.payment_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#7B2FF7] px-4 py-2 text-xs font-bold text-[#251E1F] hover:bg-[#6a1fe0]"
-                >
-                  <CreditCard size={14} />
-                  Pay Now
-                </a>
-                <span className="text-xs text-[#7b6660]/50 break-all flex-1">{invoice.payment_url}</span>
-              </div>
-            ) : null}
-            {invoice.qr_code_url && isPayable ? (
-              <div className="mt-3 text-center">
-                <p className="text-xs text-[#7b6660] mb-2">Scan QR Code to Pay</p>
-                <img
-                  src={invoice.qr_code_url}
-                  alt="Payment QR Code"
-                  className="mx-auto h-32 w-32 rounded-lg border border-[#f0d2ca] bg-white p-1"
-                />
-              </div>
-            ) : null}
           </div>
         ) : null}
-
-        <div className="px-5 pb-5">
-          <div className="overflow-hidden rounded-xl border border-[#f0d2ca]">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-[#FDD9CD]/20 text-xs uppercase tracking-wide text-[#7b6660]">
-                <tr>
-                  <th className="px-4 py-3">Description</th>
-                  <th className="px-4 py-3 text-right">Qty</th>
-                  <th className="px-4 py-3 text-right">Unit Price</th>
-                  <th className="px-4 py-3 text-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10">
-                {invoice.items?.map((item) => (
-                  <tr key={item.item_id} className="text-[#251E1F]">
-                    <td className="px-4 py-3">{item.description}</td>
-                    <td className="px-4 py-3 text-right">{item.quantity}</td>
-                    <td className="px-4 py-3 text-right">{formatCurrency(item.unit_price)}</td>
-                    <td className="px-4 py-3 text-right font-medium">{formatCurrency(item.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
     </div>
   );
