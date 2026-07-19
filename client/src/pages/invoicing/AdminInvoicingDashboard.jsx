@@ -20,6 +20,8 @@ import AdminRolesPermissionsPage from "./AdminRolesPermissionsPage.jsx";
 import AdminReminderSettingsPage from "./AdminReminderSettingsPage.jsx";
 import AdminUserManagementPage from "./AdminUserManagementPage.jsx";
 import AdminUserProfilePage from "./AdminUserProfilePage.jsx";
+import AdminValidationSummaryPage from "./AdminValidationSummaryPage.jsx";
+import AdminValidationErrorsPage from "./AdminValidationErrorsPage.jsx";
 
 const pageTitle = "Automated Invoicing System - Admin Dashboard";
 
@@ -106,6 +108,7 @@ const routeHeadings = {
   "/dashboard/invoicing/admin/dashboard/invoice-performance": "Invoice Performance",
   "/dashboard/invoicing/admin/dashboard/payment-reminder-summary": "Payment & Reminder Summary",
   "/dashboard/invoicing/admin/dashboard/validation-summary": "Validation Summary",
+  "/dashboard/invoicing/admin/dashboard/validation-errors": "All Validation Errors",
   "/dashboard/invoicing/admin/invoices": "Invoices",
   "/dashboard/invoicing/admin/invoices/create": "Create Invoice",
   "/dashboard/invoicing/admin/customers": "Customers",
@@ -160,6 +163,8 @@ export default function AdminInvoicingDashboard() {
   const isAuditLogs = normalizedPath === "/dashboard/invoicing/admin/audit-logs";
   const isInvoicePerformance = normalizedPath === "/dashboard/invoicing/admin/dashboard/invoice-performance";
   const isPaymentReminderSummary = normalizedPath === "/dashboard/invoicing/admin/dashboard/payment-reminder-summary";
+  const isValidationSummary = normalizedPath === "/dashboard/invoicing/admin/dashboard/validation-summary";
+  const isValidationErrors = normalizedPath === "/dashboard/invoicing/admin/dashboard/validation-errors";
   const currentPageTitle = isUserManagement || userProfileMatch
     ? "Automated Invoicing System - User Management"
     : isRolesManagement || roleCreateMatch || roleActionMatch
@@ -168,6 +173,10 @@ export default function AdminInvoicingDashboard() {
       ? "Automated Invoicing System - Invoice Performance"
     : isPaymentReminderSummary
       ? "Automated Invoicing System - Payment & Reminder Summary"
+    : isValidationSummary
+      ? "Automated Invoicing System - Validation Summary"
+    : isValidationErrors
+      ? "Automated Invoicing System - All Validation Errors"
     : isInvoiceSettings
       ? "Automated Invoicing System - Invoice Settings"
     : isReminderSettings
@@ -191,6 +200,10 @@ export default function AdminInvoicingDashboard() {
         <AdminInvoicePerformancePage />
       ) : isPaymentReminderSummary ? (
         <AdminPaymentReminderSummaryPage />
+      ) : isValidationSummary ? (
+        <AdminValidationSummaryPage />
+      ) : isValidationErrors ? (
+        <AdminValidationErrorsPage />
       ) : isUserManagement ? (
         <AdminUserManagementPage />
       ) : userProfileMatch ? (

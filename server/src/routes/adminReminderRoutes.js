@@ -13,7 +13,9 @@ const {
   exportInvoicePerformance,
   getAdminInvoicingDashboard,
   getInvoicePerformance,
-  getPaymentReminderSummary
+  getPaymentReminderSummary,
+  getValidationErrors,
+  getValidationSummary
 } = require("../controllers/adminDashboardController");
 const { getSettings, postInvoiceLogo, putSettings } = require("../controllers/invoiceSettingsController");
 const { authenticateToken, requireRole } = require("../middleware/authMiddleware");
@@ -26,6 +28,8 @@ router.get("/dashboard", getAdminInvoicingDashboard);
 router.get("/dashboard/invoice-performance", getInvoicePerformance);
 router.get("/dashboard/invoice-performance/export", exportInvoicePerformance);
 router.get("/dashboard/payment-reminder-summary", getPaymentReminderSummary);
+router.get("/dashboard/validation-summary", getValidationSummary);
+router.get("/dashboard/validation-errors", getValidationErrors);
 router.get("/invoice-settings", getSettings);
 router.put("/invoice-settings", putSettings);
 router.post("/invoice-settings/logo", postInvoiceLogo);

@@ -46,10 +46,10 @@ export function validateBulkInvoiceRows(rows, file) {
   });
 }
 
-export function processBulkInvoiceRows(rows, file) {
+export function processBulkInvoiceRows(rows, file, uploadId) {
   return apiRequest("/api/bulk-invoices/process", {
     method: "POST",
-    body: JSON.stringify({ rows, file })
+    body: JSON.stringify({ rows, file, uploadId })
   });
 }
 

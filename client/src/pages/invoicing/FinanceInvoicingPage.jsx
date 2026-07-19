@@ -2181,6 +2181,7 @@ function BulkUploadView({ onProcessed }) {
   const [validatedRows, setValidatedRows] = useState([]);
   const [selectedRowIndices, setSelectedRowIndices] = useState(new Set());
   const [fileMetadata, setFileMetadata] = useState(null);
+  const [uploadId, setUploadId] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -2220,6 +2221,7 @@ function BulkUploadView({ onProcessed }) {
 
     try {
       const response = await validateBulkInvoiceRows(importRows, uploadedFileMetadata);
+      setUploadId(response.uploadId || null);
       setValidatedRows(response.rows || []);
       setMessage(`${response.validCount || 0} rows ready, ${response.invalidCount || 0} rows need attention.`);
       const allValid = new Set();
@@ -2239,6 +2241,7 @@ function BulkUploadView({ onProcessed }) {
     setValidatedRows([]);
     setSelectedRowIndices(new Set());
     setFileMetadata(null);
+    setUploadId(null);
 
     if (!file) {
       return;
@@ -2278,7 +2281,7 @@ function BulkUploadView({ onProcessed }) {
         return;
       }
 
-      const response = await processBulkInvoiceRows(rowsToProcess, fileMetadata);
+      const response = await processBulkInvoiceRows(rowsToProcess, fileMetadata, uploadId);
       const createdIds = (response.invoices || []).map((inv) => inv.invoice_id);
 
       if (sendMode === "schedule" && createdIds.length > 0) {
@@ -2322,6 +2325,7 @@ function BulkUploadView({ onProcessed }) {
       setValidatedRows([]);
       setSelectedRowIndices(new Set());
       setFileMetadata(null);
+      setUploadId(null);
       await onProcessed();
     } catch (requestError) {
       setError(requestError.message);

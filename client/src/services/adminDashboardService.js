@@ -40,6 +40,18 @@ export function fetchPaymentReminderSummary(range = "today") {
   });
 }
 
+export function fetchInvoiceValidationSummary() {
+  return apiRequest("/api/admin/invoicing/dashboard/validation-summary", {
+    headers: authHeaders()
+  });
+}
+
+export function fetchInvoiceValidationErrors() {
+  return apiRequest("/api/admin/invoicing/dashboard/validation-errors", {
+    headers: authHeaders()
+  });
+}
+
 export async function exportInvoicePerformance(range = "last-30-days", filters = {}) {
   const response = await fetch(
     `${API_BASE_URL}/api/admin/invoicing/dashboard/invoice-performance/export${toQueryString({ range, ...filters })}`,

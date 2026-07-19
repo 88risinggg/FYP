@@ -3,6 +3,10 @@ const {
   getInvoicePerformanceData,
   getPaymentReminderSummaryData
 } = require("../models/adminDashboardModel");
+const {
+  getAllInvoiceValidationErrors,
+  getInvoiceValidationSummary
+} = require("../models/invoiceValidationSummaryModel");
 
 async function getAdminInvoicingDashboard(req, res) {
   try {
@@ -129,9 +133,33 @@ async function getPaymentReminderSummary(req, res) {
   }
 }
 
+async function getValidationSummary(req, res) {
+  try {
+    const summary = await getInvoiceValidationSummary();
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({
+      message: "Unable to load invoice validation summary."
+    });
+  }
+}
+
+async function getValidationErrors(req, res) {
+  try {
+    const errors = await getAllInvoiceValidationErrors();
+    res.json(errors);
+  } catch (error) {
+    res.status(500).json({
+      message: "Unable to load invoice validation errors."
+    });
+  }
+}
+
 module.exports = {
   exportInvoicePerformance,
   getAdminInvoicingDashboard,
   getInvoicePerformance,
-  getPaymentReminderSummary
+  getPaymentReminderSummary,
+  getValidationErrors,
+  getValidationSummary
 };

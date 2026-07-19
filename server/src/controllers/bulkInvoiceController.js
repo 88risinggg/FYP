@@ -17,6 +17,10 @@ const {
   writeAuditLog
 } = require("./invoiceController");
 const { assessInvoiceRisk } = require("../services/fraudDetectionService");
+const {
+  recordValidationAttempt,
+  updateUploadOutcome
+} = require("../services/invoiceUploadHistoryService");
 
 /** Error message when file is not an Excel format. */
 const EXCEL_FILE_ERROR = "Only Excel invoice files (.xlsx, .xls) are allowed.";
@@ -244,12 +248,17 @@ async function validateInvoiceImport(rows, file, connection = pool) {
 async function validateBulkRows(req, res) {
   try {
     const validation = await validateInvoiceImport(req.body.rows, req.body.file);
+    const uploadId = await recordValidationAttempt({
+      file: req.body.file,
+      validation,
+      user: req.user
+    });
 
     if (validation.message) {
-      return res.status(400).json(validation);
+      return res.status(400).json({ ...validation, uploadId });
     }
 
-    res.json(validation);
+    res.json({ ...validation, uploadId });
   } catch (error) {
     res.status(500).json({
       message: "Failed to validate imported rows.",
@@ -260,6 +269,7 @@ async function validateBulkRows(req, res) {
 
 async function processBulkInvoices(req, res) {
   const connection = await pool.getConnection();
+  const uploadId = Number(req.body.uploadId) || null;
 
   try {
     await connection.beginTransaction();
@@ -268,6 +278,12 @@ async function processBulkInvoices(req, res) {
 
     if (validation.message) {
       await connection.rollback();
+      await updateUploadOutcome(pool, {
+        uploadId,
+        userId: req.user?.userId,
+        status: "Failed",
+        errorMessage: validation.message
+      });
       return res.status(400).json({
         message: validation.message,
         rows: validation.rows,
@@ -281,6 +297,12 @@ async function processBulkInvoices(req, res) {
 
     if (invoices.length === 0) {
       await connection.rollback();
+      await updateUploadOutcome(pool, {
+        uploadId,
+        userId: req.user?.userId,
+        status: "Failed",
+        errorMessage: "No valid rows to process."
+      });
       return res.status(400).json({
         message: "No valid rows to process.",
         rows: validation.rows,
@@ -361,6 +383,13 @@ async function processBulkInvoices(req, res) {
       req.user?.userId
     );
 
+    await updateUploadOutcome(connection, {
+      uploadId,
+      userId: req.user?.userId,
+      status: "Successful",
+      createdInvoices: createdInvoices.length
+    });
+
     await connection.commit();
 
     res.status(201).json({
@@ -370,6 +399,16 @@ async function processBulkInvoices(req, res) {
     });
   } catch (error) {
     await connection.rollback();
+    try {
+      await updateUploadOutcome(pool, {
+        uploadId,
+        userId: req.user?.userId,
+        status: "Failed",
+        errorMessage: error.message
+      });
+    } catch (historyError) {
+      console.error("[BulkInvoice] Unable to update upload history:", historyError.message);
+    }
     console.error("[BulkInvoice] Processing error:", error);
     res.status(500).json({
       message: "Failed to process bulk invoices.",
