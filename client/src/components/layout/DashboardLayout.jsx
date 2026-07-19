@@ -122,10 +122,43 @@ export default function DashboardLayout({
     menuItem: "flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#6f4f47] transition hover:bg-[#FDD9CD]/45 hover:text-[#251E1F]"
   };
 
-  // Use notificationBadgeCount prop if provided, otherwise compute from notifications array
-  const unreadCount = typeof notificationBadgeCount === 'number'
+  const usesManagedNotifications = notifications.length > 0 || typeof notificationBadgeCount === "number";
+  const displayNotifications = fetchedNotifications || notifications;
+  const unreadCount = typeof notificationBadgeCount === "number"
     ? notificationBadgeCount
-    : notifications.filter((n) => !n.read).length;
+    : displayNotifications.filter((notification) => !(
+        notification.is_read === 1 || notification.is_read === true || notification.read
+      )).length;
+
+  // Admin, HR and payroll Finance pages use the shared notification API.
+  // Pages with their own polling service can continue supplying notification props.
+  useEffect(() => {
+    if (usesManagedNotifications) return undefined;
+
+    const session = getStoredSession();
+    const userId = session?.user?.userId;
+    const token = session?.token;
+    if (!userId || !token) return undefined;
+
+    let active = true;
+    const loadNotifications = async () => {
+      try {
+        const data = await apiRequest(`/api/notifications/user/${userId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (active) setFetchedNotifications(Array.isArray(data) ? data : []);
+      } catch {
+        if (active) setFetchedNotifications([]);
+      }
+    };
+
+    loadNotifications();
+    const pollingId = window.setInterval(loadNotifications, 30000);
+    return () => {
+      active = false;
+      window.clearInterval(pollingId);
+    };
+  }, [usesManagedNotifications, user?.userId]);
 
   // Fetch notifications from API when dropdown is opened
   async function handleBellClick() {
@@ -133,7 +166,7 @@ export default function DashboardLayout({
     setShowNotifications(newShow);
 
     // If notifications are provided via props (e.g. Finance polling), skip API fetch
-    if (notifications.length > 0 || typeof notificationBadgeCount === 'number') {
+    if (usesManagedNotifications) {
       return;
     }
 
@@ -161,8 +194,6 @@ export default function DashboardLayout({
   useEffect(() => {
     setFetchedNotifications(null);
   }, [notificationBadgeCount]);
-
-  const displayNotifications = fetchedNotifications || notifications;
 
   function handleSearchKeyDown(event) {
     if (event.key === "Enter" && onSearch) {
@@ -200,6 +231,27 @@ export default function DashboardLayout({
         if (!n.read) onMarkNotificationRead(n.id);
       });
     }
+  }
+
+  function handleNotificationClick(notification) {
+    const notificationId = notification.notification_id || notification.id;
+    const isRead = notification.is_read === 1 || notification.is_read === true || notification.read;
+    if (isRead || !notificationId) return;
+
+    if (onMarkNotificationRead) {
+      onMarkNotificationRead(notificationId);
+      return;
+    }
+
+    apiRequest(`/api/notifications/${notificationId}/read`, { method: "PUT" })
+      .then(() => {
+        setFetchedNotifications((current) => (current || []).map((item) =>
+          (item.notification_id || item.id) === notificationId
+            ? { ...item, is_read: 1, read: true }
+            : item
+        ));
+      })
+      .catch(() => {});
   }
 
   return (
@@ -294,11 +346,7 @@ export default function DashboardLayout({
                         return (
                           <div
                             key={notif.notification_id || notif.id || index}
-                            onClick={() => {
-                              if (!isRead && onMarkNotificationRead) {
-                                onMarkNotificationRead(notif.notification_id || notif.id);
-                              }
-                            }}
+                            onClick={() => handleNotificationClick(notif)}
                             className={`${classes.notificationHover} ${!isRead ? classes.unreadBg : ""}`}
                           >
                             <div className="min-w-0 flex-1">

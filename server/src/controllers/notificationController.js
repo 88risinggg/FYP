@@ -14,8 +14,8 @@ async function ensureNotificationTable() {
 async function getNotificationsByUserId(req, res) {
   const { userId } = req.params;
 
-  // Staff can only view their own notifications
-  if (req.user.role === "Staff" && String(req.user.userId) !== String(userId)) {
+  // Every role reads its own inbox; Admin may inspect another user's inbox.
+  if (req.user.role !== "Admin" && String(req.user.userId) !== String(userId)) {
     return res.status(403).json({ message: "Access denied" });
   }
 
@@ -70,7 +70,7 @@ async function markAsRead(req, res) {
 async function markAllAsRead(req, res) {
   const { userId } = req.params;
 
-  if (req.user.role === "Staff" && String(req.user.userId) !== String(userId)) {
+  if (req.user.role !== "Admin" && String(req.user.userId) !== String(userId)) {
     return res.status(403).json({ message: "Access denied" });
   }
 
