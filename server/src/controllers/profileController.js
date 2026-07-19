@@ -342,15 +342,6 @@ async function deleteProfileByUserId(req, res) {
 // [STAFF BRANCH - Steven] Emergency contact CRUD
 
 /**
- * Ensure the emergency_contact table exists.
- */
-async function ensureEmergencyContactTable() {
-  // Disabled - 11 table schema
-}
-
-// Disabled
-
-/**
  * Helper: resolve employee_id from a userId (staff.user_user_id)
  */
 async function resolveEmployeeId(userId) {
@@ -513,7 +504,7 @@ async function updateEmergencyContact(req, res) {
 
     // Verify ownership
     const [contactRows] = await pool.query(
-      "SELECT employee_id FROM emergency_contact WHERE contact_id = ?",
+      "SELECT employee_id, name, relationship, phone, is_primary FROM emergency_contact WHERE contact_id = ?",
       [contactId]
     );
     if (contactRows.length === 0) {

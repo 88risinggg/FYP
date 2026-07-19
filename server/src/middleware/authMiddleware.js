@@ -12,6 +12,7 @@ async function authenticateToken(req, res, next) {
 
   if (!token) {
     return res.status(401).json({
+      code: "AUTH_REQUIRED",
       message: "Authentication required"
     });
   }
@@ -20,12 +21,12 @@ async function authenticateToken(req, res, next) {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const [rows] = await pool.execute(
       `SELECT
-        user_id AS userId,
-        email,
-        status,
-        role_name AS role
-      FROM \`user\`
-      WHERE user_id = ?`,
+        user.user_id AS userId,
+        user.email,
+        user.status,
+        user.role_name AS role
+      FROM user
+      WHERE user.user_id = ?`,
       [payload.userId]
     );
 
@@ -33,6 +34,7 @@ async function authenticateToken(req, res, next) {
 
     if (!user || !(user.status === 1 || user.status === "1" || (typeof user.status === "string" && user.status.toLowerCase() === "active"))) {
       return res.status(403).json({
+        code: "ACCOUNT_DISABLED",
         message: "Account is disabled or no longer available"
       });
     }
@@ -59,7 +61,8 @@ async function authenticateToken(req, res, next) {
 
     next();
   } catch (error) {
-    res.status(403).json({
+    res.status(401).json({
+      code: "AUTH_INVALID",
       message: "Invalid or expired token"
     });
   }
@@ -73,6 +76,7 @@ function requireRole(...allowedRoles) {
   return (req, res, next) => {
     if (!allowedRoles.includes(req.user?.role)) {
       return res.status(403).json({
+        code: "ACCESS_DENIED",
         message: "Access denied: insufficient permissions"
       });
     }

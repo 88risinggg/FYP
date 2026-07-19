@@ -1,5 +1,22 @@
 const { pool } = require("../config/db");
 
+const LEGACY_DEPARTMENT_FILTERS = Object.freeze({
+  1: ["hr", "human resources"],
+  2: ["finance", "finance & accounting", "finance and accounting"],
+  3: ["sales"],
+  4: ["customer service"],
+  5: ["operations"],
+  6: ["management"],
+  7: ["it", "system administrator", "it / system administrator"]
+});
+
+function appendDepartmentNameFilter(sql, params, departmentId) {
+  if (!departmentId) return sql;
+  const aliases = LEGACY_DEPARTMENT_FILTERS[String(departmentId)] || [String(departmentId).trim().toLowerCase()];
+  params.push(...aliases);
+  return `${sql} AND LOWER(TRIM(COALESCE(s.department_name, ''))) IN (${aliases.map(() => "?").join(", ")})`;
+}
+
 /**
  * Fetch organization-wide payroll report with optional filters.
  * @param {Object} filters
@@ -11,13 +28,14 @@ const { pool } = require("../config/db");
 async function fetchPayrollReport({ month, year, departmentId } = {}) {
   let sql = `
     SELECT
-      ps.payslip_id, p.staff_employee_id AS employee_id, s.name AS employee_name,
-      s.department_id, s.base_salary, p.total_allowances AS allowances,
+      p.payroll_id AS payslip_id, p.staff_employee_id AS employee_id, s.name AS employee_name,
+      s.department_name AS department_id,
+      GREATEST(COALESCE(p.net_salary, 0) + COALESCE(p.total_deductions, 0) - COALESCE(p.total_allowances, 0), 0) AS base_salary,
+      p.total_allowances AS allowances,
       p.total_deductions AS deductions, p.net_salary AS net_pay, 
       p.payroll_month AS period_month, p.payroll_year AS period_year,
-      ps.status
-    FROM payslip ps
-    JOIN payroll p ON p.payroll_id = ps.payroll_payroll_id
+      p.payslip_status AS status
+    FROM payroll p
     JOIN staff s ON s.employee_id = p.staff_employee_id
     WHERE 1=1
   `;
@@ -32,8 +50,7 @@ async function fetchPayrollReport({ month, year, departmentId } = {}) {
     params.push(year);
   }
   if (departmentId) {
-    sql += " AND s.department_id = ?";
-    params.push(departmentId);
+    sql = appendDepartmentNameFilter(sql, params, departmentId);
   }
 
   sql += " ORDER BY p.payroll_year DESC, p.payroll_month DESC, s.name ASC";
@@ -52,13 +69,14 @@ async function fetchPayrollReport({ month, year, departmentId } = {}) {
 async function fetchPayrollReportForStaff(staffId, { month, year } = {}) {
   let sql = `
     SELECT
-      ps.payslip_id, p.staff_employee_id AS employee_id, s.name AS employee_name,
-      s.department_id, s.base_salary, p.total_allowances AS allowances,
+      p.payroll_id AS payslip_id, p.staff_employee_id AS employee_id, s.name AS employee_name,
+      s.department_name AS department_id,
+      GREATEST(COALESCE(p.net_salary, 0) + COALESCE(p.total_deductions, 0) - COALESCE(p.total_allowances, 0), 0) AS base_salary,
+      p.total_allowances AS allowances,
       p.total_deductions AS deductions, p.net_salary AS net_pay, 
       p.payroll_month AS period_month, p.payroll_year AS period_year,
-      ps.status
-    FROM payslip ps
-    JOIN payroll p ON p.payroll_id = ps.payroll_payroll_id
+      p.payslip_status AS status
+    FROM payroll p
     JOIN staff s ON s.employee_id = p.staff_employee_id
     WHERE p.staff_employee_id = ?
   `;
