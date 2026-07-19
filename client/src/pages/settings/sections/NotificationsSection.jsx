@@ -68,7 +68,7 @@ export default function NotificationsSection() {
 
   if (loading) {
     return (
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="animate-pulse space-y-4">
           <div className="h-6 w-48 rounded bg-white/10" />
           {Array.from({ length: 6 }).map((_, i) => (
@@ -83,12 +83,12 @@ export default function NotificationsSection() {
     <div className="space-y-6">
       {toast && <Toast toast={toast} />}
 
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
-          <Bell size={20} className="text-[#C77DFF]" />
+          <Bell size={20} className="text-[#F38978]" />
           <h2 className="text-xl font-semibold text-white">Notification Settings</h2>
         </div>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Choose what notifications you want to receive.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">Choose what notifications you want to receive.</p>
 
         <div className="mt-6 space-y-6">
           <NotificationGroup title="Invoice Notifications" items={invoiceNotifications} prefs={prefs} onToggle={toggle} />
@@ -98,7 +98,7 @@ export default function NotificationsSection() {
 
         <div className="mt-6 pt-4 border-t border-white/10">
           <button type="button" onClick={handleSave} disabled={saving}
-            className="neon-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
+            className="primary-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
             Save Preferences
           </button>
@@ -111,7 +111,7 @@ export default function NotificationsSection() {
 function NotificationGroup({ title, items, prefs, onToggle }) {
   return (
     <div>
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/70">{title}</p>
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">{title}</p>
       <div className="space-y-2">
         {items.map((item) => (
           <div key={item.key} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
@@ -127,7 +127,7 @@ function NotificationGroup({ title, items, prefs, onToggle }) {
 function Toggle({ checked, onChange }) {
   return (
     <button type="button" onClick={onChange}
-      className={`relative h-6 w-11 rounded-full transition-colors duration-200 ${checked ? "bg-[#7B2FF7]" : "bg-white/15"}`}>
+      className={`relative h-6 w-11 rounded-full transition-colors duration-200 ${checked ? "bg-[#F38978]" : "bg-white/15"}`}>
       <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${checked ? "translate-x-[22px]" : "translate-x-0.5"}`} />
     </button>
   );

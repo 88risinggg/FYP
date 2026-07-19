@@ -57,12 +57,12 @@ export default function DataPrivacySection() {
     <div className="space-y-6">
       {toast && <Toast toast={toast} />}
 
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
-          <Lock size={20} className="text-[#C77DFF]" />
+          <Lock size={20} className="text-[#F38978]" />
           <h2 className="text-xl font-semibold text-white">Data & Privacy</h2>
         </div>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Manage your data and privacy preferences.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">Manage your data and privacy preferences.</p>
 
         <div className="mt-6 space-y-4">
           <ActionCard
@@ -129,7 +129,7 @@ function ActionCard({ title, description, buttonLabel, icon: Icon, loading, onCl
     <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <p className="text-sm font-medium text-white">{title}</p>
-        <p className="mt-0.5 text-xs text-[#d8c6e8]">{description}</p>
+        <p className="mt-0.5 text-xs text-[#7b6660]">{description}</p>
       </div>
       <button type="button" onClick={onClick} disabled={loading}
         className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold transition disabled:opacity-50 ${
@@ -148,9 +148,9 @@ function ToggleRow({ label, defaultChecked = false, disabled = false }) {
   const [checked, setChecked] = useState(defaultChecked);
   return (
     <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
-      <span className={`text-sm ${disabled ? "text-[#d8c6e8]/50" : "text-white"}`}>{label}</span>
+      <span className={`text-sm ${disabled ? "text-[#7b6660]/50" : "text-white"}`}>{label}</span>
       <button type="button" onClick={() => !disabled && setChecked(!checked)} disabled={disabled}
-        className={`relative h-6 w-11 rounded-full transition ${checked ? "bg-[#7B2FF7]" : "bg-white/15"} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}>
+        className={`relative h-6 w-11 rounded-full transition ${checked ? "bg-[#F38978]" : "bg-white/15"} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}>
         <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-[22px]" : "translate-x-0.5"}`} />
       </button>
     </div>

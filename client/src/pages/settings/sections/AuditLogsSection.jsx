@@ -38,37 +38,37 @@ export default function AuditLogsSection() {
 
   return (
     <div className="space-y-6">
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
-          <Activity size={20} className="text-[#C77DFF]" />
+          <Activity size={20} className="text-[#F38978]" />
           <h2 className="text-xl font-semibold text-white">Audit Logs</h2>
         </div>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Track all settings changes and security events.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">Track all settings changes and security events.</p>
 
         {/* Filters */}
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           <form onSubmit={handleSearch} className="flex flex-1 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2">
-            <Search size={15} className="text-[#C77DFF]" />
+            <Search size={15} className="text-[#F38978]" />
             <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="Search actions..."
-              className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[#d8c6e8]/50" />
+              className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[#7b6660]/50" />
             {search && (
-              <button type="button" onClick={() => { setSearch(""); setPage(1); setTimeout(loadLogs, 0); }} className="text-[#d8c6e8] hover:text-white">
+              <button type="button" onClick={() => { setSearch(""); setPage(1); setTimeout(loadLogs, 0); }} className="text-[#7b6660] hover:text-white">
                 <X size={14} />
               </button>
             )}
           </form>
           <select value={moduleFilter} onChange={(e) => { setModuleFilter(e.target.value); setPage(1); }}
             className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none">
-            <option value="" className="bg-[#120022]">All Modules</option>
-            <option value="profile" className="bg-[#120022]">Profile</option>
-            <option value="security" className="bg-[#120022]">Security</option>
-            <option value="connected_accounts" className="bg-[#120022]">Connected Accounts</option>
-            <option value="invoice_settings" className="bg-[#120022]">Invoice Settings</option>
-            <option value="payroll_settings" className="bg-[#120022]">Payroll Settings</option>
-            <option value="company_settings" className="bg-[#120022]">Company Settings</option>
-            <option value="sessions" className="bg-[#120022]">Sessions</option>
-            <option value="danger_zone" className="bg-[#120022]">Danger Zone</option>
+            <option value="" className="bg-[#fff3ee]">All Modules</option>
+            <option value="profile" className="bg-[#fff3ee]">Profile</option>
+            <option value="security" className="bg-[#fff3ee]">Security</option>
+            <option value="connected_accounts" className="bg-[#fff3ee]">Connected Accounts</option>
+            <option value="invoice_settings" className="bg-[#fff3ee]">Invoice Settings</option>
+            <option value="payroll_settings" className="bg-[#fff3ee]">Payroll Settings</option>
+            <option value="company_settings" className="bg-[#fff3ee]">Company Settings</option>
+            <option value="sessions" className="bg-[#fff3ee]">Sessions</option>
+            <option value="danger_zone" className="bg-[#fff3ee]">Danger Zone</option>
           </select>
         </div>
 
@@ -80,7 +80,7 @@ export default function AuditLogsSection() {
             ))}
           </div>
         ) : logs.length === 0 ? (
-          <div className="mt-6 rounded-lg border border-dashed border-white/15 bg-white/[0.035] px-4 py-8 text-center text-sm text-[#d8c6e8]">
+          <div className="mt-6 rounded-lg border border-dashed border-white/15 bg-white/[0.035] px-4 py-8 text-center text-sm text-[#7b6660]">
             No audit logs found.
           </div>
         ) : (
@@ -88,25 +88,25 @@ export default function AuditLogsSection() {
             <table className="w-full min-w-[600px] text-left text-sm">
               <thead>
                 <tr className="border-b border-white/10">
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#d8c6e8]/80">Date</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#d8c6e8]/80">User</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#d8c6e8]/80">Action</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#d8c6e8]/80">Module</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#d8c6e8]/80">IP Address</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#d8c6e8]/80">Device</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#7b6660]/80">Date</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#7b6660]/80">User</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#7b6660]/80">Action</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#7b6660]/80">Module</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#7b6660]/80">IP Address</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#7b6660]/80">Device</th>
                 </tr>
               </thead>
               <tbody>
                 {logs.map((log) => (
                   <tr key={log.id} className="border-b border-white/5 hover:bg-white/[0.02]">
-                    <td className="px-3 py-2.5 text-[#d8c6e8]">{formatDate(log.created_at)}</td>
+                    <td className="px-3 py-2.5 text-[#7b6660]">{formatDate(log.created_at)}</td>
                     <td className="px-3 py-2.5 text-white">{log.user_name || "-"}</td>
                     <td className="px-3 py-2.5 text-white">{log.action}</td>
                     <td className="px-3 py-2.5">
-                      <span className="rounded bg-[#C77DFF]/10 px-2 py-0.5 text-xs font-medium text-[#C77DFF]">{log.module || "-"}</span>
+                      <span className="rounded bg-[#F38978]/10 px-2 py-0.5 text-xs font-medium text-[#F38978]">{log.module || "-"}</span>
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-[#d8c6e8]">{log.ip_address || "-"}</td>
-                    <td className="px-3 py-2.5 text-[#d8c6e8]">{log.device || "-"}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-[#7b6660]">{log.ip_address || "-"}</td>
+                    <td className="px-3 py-2.5 text-[#7b6660]">{log.device || "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -117,14 +117,14 @@ export default function AuditLogsSection() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="mt-4 flex items-center justify-between">
-            <p className="text-xs text-[#d8c6e8]">Showing {(page - 1) * limit + 1}-{Math.min(page * limit, total)} of {total}</p>
+            <p className="text-xs text-[#7b6660]">Showing {(page - 1) * limit + 1}-{Math.min(page * limit, total)} of {total}</p>
             <div className="flex gap-2">
               <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-                className="rounded-lg border border-white/10 bg-white/[0.06] p-2 text-[#d8c6e8] transition hover:bg-white/10 disabled:opacity-30">
+                className="rounded-lg border border-white/10 bg-white/[0.06] p-2 text-[#7b6660] transition hover:bg-white/10 disabled:opacity-30">
                 <ChevronLeft size={14} />
               </button>
               <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                className="rounded-lg border border-white/10 bg-white/[0.06] p-2 text-[#d8c6e8] transition hover:bg-white/10 disabled:opacity-30">
+                className="rounded-lg border border-white/10 bg-white/[0.06] p-2 text-[#7b6660] transition hover:bg-white/10 disabled:opacity-30">
                 <ChevronRight size={14} />
               </button>
             </div>

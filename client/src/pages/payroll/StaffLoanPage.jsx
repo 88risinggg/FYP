@@ -119,7 +119,7 @@ export default function StaffLoanPage({ embedded = false }) {
       <section>
         <h2 className="text-2xl font-semibold text-[#251E1F]">Loans</h2>
 
-        <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl p-6">
+        <div className="app-panel mt-6 min-h-[calc(100vh-12rem)] rounded-2xl p-6">
           {content}
         </div>
       </section>

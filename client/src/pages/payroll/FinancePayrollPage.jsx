@@ -1351,7 +1351,7 @@ function ActionButton({ children, disabled = false, disabledReason = "", icon: I
   const className =
     variant === "secondary"
       ? "inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
-      : "neon-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold";
+      : "primary-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold";
   const handleClick = () => {
     if (isBlockedWithReason) {
       window.alert(disabledReason);
@@ -1389,7 +1389,7 @@ function WorkflowCard({ run, step }) {
   const completed = getCompletedSteps(run)[step.key];
 
   return (
-    <article className="neon-glass neon-border rounded-2xl p-5">
+    <article className="app-panel rounded-2xl p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978] ring-1 ring-[#F38978]/25">
           <Icon size={24} />
@@ -1431,7 +1431,7 @@ function ExceptionPanel({ run }) {
   );
 
   return (
-    <div className="neon-glass neon-border rounded-2xl p-6">
+    <div className="app-panel rounded-2xl p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[#251E1F]">Automated Exception Review</h3>
@@ -1496,7 +1496,7 @@ function AdminCpfConfigPanel() {
   const deductionRows = Object.entries(adminCpfConfiguration.deductionRules || {});
 
   return (
-    <div className="neon-glass neon-border rounded-2xl p-6">
+    <div className="app-panel rounded-2xl p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[#251E1F]">Admin Payroll Rules</h3>
@@ -1606,7 +1606,7 @@ function CompliancePanel({ run }) {
   const lastUpdatedLabel = updatedAt ? formatDateTime(updatedAt) : "Fallback defaults";
 
   return (
-    <div className="neon-glass neon-border rounded-2xl p-6">
+    <div className="app-panel rounded-2xl p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[#251E1F]">Compliance Checklist</h3>
@@ -1640,7 +1640,7 @@ function AuditTrailPanel({ run }) {
   const auditEntries = getAuditEntries(run);
 
   return (
-    <div className="neon-glass neon-border rounded-2xl p-6">
+    <div className="app-panel rounded-2xl p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[#251E1F]">Audit Trail</h3>
@@ -1669,7 +1669,7 @@ function AuditTrailPanel({ run }) {
 
 function StatCard({ detail, label, tone = "text-[#251E1F]", value }) {
   return (
-    <div className="neon-glass rounded-2xl p-5">
+    <div className="app-panel rounded-2xl p-5">
       <p className="text-sm text-[#7b6660]">{label}</p>
       <p className={`mt-3 text-3xl font-semibold ${tone}`}>{value}</p>
       {detail ? <p className="mt-2 text-xs font-semibold text-[#7b6660]">{detail}</p> : null}
@@ -1756,7 +1756,7 @@ function AccountingImpact({ payrollRuns = [], run }) {
   ];
 
   return (
-    <div className="neon-glass neon-border rounded-2xl p-6">
+    <div className="app-panel rounded-2xl p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[#251E1F]">Accounting Impact in Internal Ledger</h3>
@@ -1811,7 +1811,7 @@ function CpfDeductionProcessPanel({ onAdvanceRun, run }) {
   const steps = getCompletedSteps(run);
 
   return (
-    <div className="neon-glass neon-border rounded-2xl p-6">
+    <div className="app-panel rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[#251E1F]">CPF & Deduction Remittance</h3>
@@ -1930,7 +1930,7 @@ function DashboardView({ onAdvanceRun, onSelectRun, payrollRuns, selectedRun }) 
           </div>
         </div>
 
-        <aside className="neon-glass neon-border rounded-2xl p-6">
+        <aside className="app-panel rounded-2xl p-6">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#2D7C83]/20 text-[#F38978]">
               <ShieldCheck size={21} />
@@ -2077,7 +2077,7 @@ function PayrollRunsView({
     >
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <div className="neon-glass neon-border overflow-hidden rounded-2xl">
+          <div className="app-panel overflow-hidden rounded-2xl">
             <div className="grid grid-cols-5 gap-4 border-b border-[#f0d2ca] px-6 py-4 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
               <span>Period</span>
               <span>Status</span>
@@ -2110,7 +2110,7 @@ function PayrollRunsView({
           </div>
         </div>
 
-        <aside className="neon-glass neon-border rounded-2xl p-6">
+        <aside className="app-panel rounded-2xl p-6">
           <h3 className="text-lg font-semibold text-[#251E1F]">{formatPayrollPeriod(selectedRun)}</h3>
           <p className="mt-1 text-sm text-[#7b6660]">Process the selected pay run in order.</p>
           <div className="mt-4 grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm">
@@ -2298,7 +2298,7 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#fff8f5]/80 px-4 backdrop-blur-sm">
-      <section className="neon-glass neon-border max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-2xl p-6">
+      <section className="app-panel max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-2xl p-6">
         <div className="flex flex-col gap-4 border-b border-[#f0d2ca] pb-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#F38978]/80">Staff Payroll Details</p>
@@ -2567,18 +2567,18 @@ function PayslipsApprovalView() {
       </div>
 
       {error ? (
-        <div className="neon-glass neon-border mt-5 rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
+        <div className="app-panel mt-5 rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
           {error}
         </div>
       ) : null}
 
       {successMessage ? (
-        <div className="neon-glass neon-border mt-5 rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-200">
+        <div className="app-panel mt-5 rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-200">
           {successMessage}
         </div>
       ) : null}
 
-      <div className="neon-glass neon-border mt-5 overflow-hidden rounded-2xl">
+      <div className="app-panel mt-5 overflow-hidden rounded-2xl">
         {loading ? (
           <div className="flex items-center gap-3 p-6 text-[#7b6660]">
             <Loader2 className="animate-spin" size={18} />
@@ -2644,7 +2644,7 @@ function PayslipsApprovalView() {
 
       {rejectingPayslipId ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="neon-glass neon-border w-full max-w-md rounded-2xl p-6">
+          <div className="app-panel w-full max-w-md rounded-2xl p-6">
             <div className="mb-4 flex items-center gap-3">
               <AlertCircle className="text-red-300" size={20} />
               <h3 className="text-lg font-semibold text-[#251E1F]">Reject Payslip</h3>
@@ -2719,7 +2719,7 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, payrol
       <div className="mt-6">
         <ExceptionPanel run={selectedRun} />
       </div>
-      <div className="neon-glass neon-border mt-6 overflow-hidden rounded-2xl">
+      <div className="app-panel mt-6 overflow-hidden rounded-2xl">
         <div className="grid grid-cols-8 gap-4 border-b border-[#f0d2ca] px-6 py-4 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
           <span>Employee</span>
           <span>Department</span>
@@ -2824,7 +2824,7 @@ function NotificationRecordsView({ selectedRun }) {
     <PageShell heading="Payslip Notifications">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {notifications.map((notification) => (
-          <article key={notification.id} className="neon-glass neon-border rounded-2xl p-6">
+          <article key={notification.id} className="app-panel rounded-2xl p-6">
             <div className="flex items-start justify-between gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978]">
                 <Send size={21} />
@@ -3176,7 +3176,7 @@ function PayrollReportsView({ selectedRun }) {
     <PageShell heading="Finance Reports">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {reportCards.map(([title, detail, value]) => (
-          <article key={title} className="neon-glass neon-border rounded-2xl p-6">
+          <article key={title} className="app-panel rounded-2xl p-6">
             <FileBarChart size={24} className="text-[#F38978]" />
             <h3 className="mt-4 font-semibold text-[#251E1F]">{title}</h3>
             <p className="mt-2 text-sm text-[#7b6660]">{detail}</p>
@@ -3227,7 +3227,7 @@ function PayrollSummariesView({ payrollRuns, selectedRun }) {
         onModeChange={updateStatsMode}
       />
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="neon-glass neon-border rounded-2xl p-6">
+        <div className="app-panel rounded-2xl p-6">
           <div className="flex items-center gap-3">
             <ReceiptText size={24} className="text-[#F38978]" />
             <div>

@@ -313,7 +313,7 @@ function ActionButton({ icon: Icon, children, variant = "primary", onClick, disa
   const className =
     variant === "secondary"
       ? "inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
-      : "neon-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold";
+      : "primary-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold";
 
   return (
     <button type="button" className={`${className} disabled:cursor-not-allowed disabled:opacity-60`} onClick={onClick} disabled={disabled}>
@@ -546,7 +546,7 @@ function WorkflowCard({ data, onNavigate, step }) {
   const status = meta.status || step.status;
 
   return (
-    <article className="neon-glass neon-border rounded-2xl p-5">
+    <article className="app-panel rounded-2xl p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978] ring-1 ring-[#F38978]/25">
           <Icon size={24} />
@@ -613,7 +613,7 @@ function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout })
     >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {dashboardStats.map((stat) => (
-          <div key={stat.label} className="neon-glass rounded-2xl p-5">
+          <div key={stat.label} className="app-panel rounded-2xl p-5">
             <p className="text-sm text-[#7b6660]">{stat.label}</p>
             <p className={`mt-3 text-3xl font-semibold ${stat.tone}`}>{stat.value}</p>
             <p className="mt-3 flex items-center gap-2 text-xs text-[#7b6660]/80">
@@ -624,7 +624,7 @@ function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout })
         ))}
       </div>
 
-      <section className="mt-6 neon-glass neon-border rounded-2xl p-6">
+      <section className="mt-6 app-panel rounded-2xl p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-[#251E1F]">Overall Update Timeline</h3>
@@ -656,7 +656,7 @@ function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout })
           </div>
         </div>
 
-        <aside className="neon-glass neon-border rounded-2xl p-6">
+        <aside className="app-panel rounded-2xl p-6">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#2D7C83]/20 text-[#F38978]">
               <Palette size={21} />
@@ -675,7 +675,7 @@ function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout })
               Set Latest as Default
             </ActionButton>
           </div>
-          <div className="mt-6 rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 p-4 text-sm text-[#eadcff]">
+          <div className="mt-6 rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 p-4 text-sm text-[#6F4F47]">
             Finance keeps payroll data submission. Admin only controls setup, access and reusable payslip designs.
           </div>
         </aside>
@@ -757,7 +757,7 @@ function UsersRolesView({
       <div className="space-y-5">
         <div className="grid gap-4 md:grid-cols-4">
           {roleSummary.map((role) => (
-            <div key={role.role_id} className="neon-glass rounded-2xl p-5">
+            <div key={role.role_id} className="app-panel rounded-2xl p-5">
               <p className="text-sm text-[#7b6660]">{role.role_name}</p>
               <p className="mt-3 text-3xl font-semibold text-[#251E1F]">{role.user_count}</p>
               <p className="mt-2 text-sm text-[#7b6660]/80">{role.description || "Role access"}</p>
@@ -765,7 +765,7 @@ function UsersRolesView({
           ))}
         </div>
 
-        <div className="neon-glass neon-border rounded-2xl p-6">
+        <div className="app-panel rounded-2xl p-6">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <h3 className="text-lg font-semibold text-[#251E1F]">User & Staff Directory</h3>
@@ -979,7 +979,7 @@ function BulkAccessModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#fff8f5]/80 px-4 backdrop-blur-sm">
-      <section className="neon-glass neon-border max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl p-6">
+      <section className="app-panel max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl p-6">
         <div className="flex flex-col gap-4 border-b border-[#f0d2ca] pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F38978]/15 text-[#F38978] ring-1 ring-[#F38978]/25">
@@ -1168,7 +1168,7 @@ function AddUserModal({ availableStaff = [], onClose, onCreateUser, roles = [] }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#fff8f5]/80 px-4 backdrop-blur-sm">
-      <section className="neon-glass neon-border max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl p-6">
+      <section className="app-panel max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl p-6">
         <div className="flex flex-col gap-4 border-b border-[#f0d2ca] pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#F38978]/80">Admin User Access</p>
@@ -1271,7 +1271,7 @@ function AddUserModal({ availableStaff = [], onClose, onCreateUser, roles = [] }
             </button>
             <button
               type="submit"
-              className="neon-button px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+              className="primary-button px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
               disabled={isSubmitting || !roles.length}
             >
               {isSubmitting ? "Creating..." : "Create User"}
@@ -1335,7 +1335,7 @@ function UserManagementModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#fff8f5]/80 px-4 backdrop-blur-sm">
-      <section className="neon-glass neon-border max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl p-6">
+      <section className="app-panel max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl p-6">
         <div className="flex flex-col gap-4 border-b border-[#f0d2ca] pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F38978]/15 text-[#F38978] ring-1 ring-[#F38978]/25">
@@ -1351,7 +1351,7 @@ function UserManagementModal({
                 <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isActive ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
                   {isActive ? "Active account" : "Inactive account"}
                 </span>
-                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${hasStaffProfile ? "border-[#F38978]/25 bg-[#F38978]/10 text-[#eadcff]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
+                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${hasStaffProfile ? "border-[#F38978]/25 bg-[#F38978]/10 text-[#6F4F47]" : "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]"}`}>
                   {hasStaffProfile ? "Staff profile linked" : "No staff profile"}
                 </span>
               </div>
@@ -1490,7 +1490,7 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
       }
     >
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="neon-glass neon-border rounded-2xl p-6 lg:col-span-2">
+        <div className="app-panel rounded-2xl p-6 lg:col-span-2">
           {layouts.length ? (
             <div className="grid gap-4 md:grid-cols-3">
               {layouts.map((layout) => (
@@ -1522,7 +1522,7 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
           )}
         </div>
 
-        <aside className="neon-glass neon-border rounded-2xl p-6">
+        <aside className="app-panel rounded-2xl p-6">
           <Palette size={26} className="text-[#F38978]" />
           <h3 className="mt-4 font-semibold text-[#251E1F]">Layout Import Requirements</h3>
           <ul className="mt-4 space-y-3 text-sm text-[#7b6660]">
@@ -1567,7 +1567,7 @@ function SettingEditor({ definition, setting, onSave }) {
   };
 
   return (
-    <div className="neon-glass neon-border rounded-2xl p-5">
+    <div className="app-panel rounded-2xl p-5">
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978] ring-1 ring-[#F38978]/25">
           <Settings size={20} />
@@ -1682,7 +1682,7 @@ function CpfRateTable({ onSave, settingsByKey }) {
   };
 
   return (
-    <section className="neon-glass neon-border overflow-hidden rounded-2xl">
+    <section className="app-panel overflow-hidden rounded-2xl">
       <div className="border-b border-[#f0d2ca] px-5 py-4">
         <h3 className="text-lg font-semibold text-[#251E1F]">CPF Age-Tier Rates</h3>
         <p className="mt-1 text-sm text-[#7b6660]">Set employee and employer CPF percentage rates by age tier.</p>
@@ -1778,7 +1778,7 @@ function WageComponentTable({ onSave, settingsByKey }) {
   };
 
   return (
-    <section className="neon-glass neon-border overflow-hidden rounded-2xl">
+    <section className="app-panel overflow-hidden rounded-2xl">
       <div className="border-b border-[#f0d2ca] px-5 py-4">
         <h3 className="text-lg font-semibold text-[#251E1F]">Earning Component Classification</h3>
         <p className="mt-1 text-sm text-[#7b6660]">Define which earning components feed CPF and how each wage type is classified.</p>
@@ -1899,7 +1899,7 @@ function DeductionComponentTable({ onSave, settingsByKey }) {
   };
 
   return (
-    <section className="neon-glass neon-border overflow-hidden rounded-2xl">
+    <section className="app-panel overflow-hidden rounded-2xl">
       <div className="border-b border-[#f0d2ca] px-5 py-4">
         <h3 className="text-lg font-semibold text-[#251E1F]">Deduction Component Classification</h3>
         <p className="mt-1 text-sm text-[#7b6660]">Define deduction treatment for net pay and CPF wage base validation.</p>
@@ -2026,7 +2026,7 @@ function EmployerContributionTable({ onSave, settingsByKey }) {
   };
 
   return (
-    <section className="neon-glass neon-border overflow-hidden rounded-2xl">
+    <section className="app-panel overflow-hidden rounded-2xl">
       <div className="border-b border-[#f0d2ca] px-5 py-4">
         <h3 className="text-lg font-semibold text-[#251E1F]">Employer Contribution Items</h3>
         <p className="mt-1 text-sm text-[#7b6660]">Define employer-side statutory and payroll cost items for Finance review.</p>
@@ -2214,7 +2214,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
       <div className="grid gap-4 xl:grid-cols-[1.4fr_0.8fr]">
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
-            <section className="neon-glass neon-border rounded-2xl p-5">
+            <section className="app-panel rounded-2xl p-5">
               <h4 className="font-semibold text-[#251E1F]">1. Enable MBMF</h4>
               <div className="mt-5 flex items-center justify-between gap-3">
                 <span className="text-sm text-[#7b6660]">Enable MBMF Contribution</span>
@@ -2232,7 +2232,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
               </p>
             </section>
 
-            <section className="neon-glass neon-border rounded-2xl p-5">
+            <section className="app-panel rounded-2xl p-5">
               <h4 className="font-semibold text-[#251E1F]">2. Contribution Rates</h4>
               <div className="mt-4 space-y-3">
                 <SettingInput value={form.effectiveFrom} onChange={(value) => updateForm("effectiveFrom", value)} placeholder="Effective date" />
@@ -2252,7 +2252,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
               </div>
             </section>
 
-            <section className="neon-glass neon-border rounded-2xl p-5">
+            <section className="app-panel rounded-2xl p-5">
               <h4 className="font-semibold text-[#251E1F]">3. Wage Ceiling</h4>
               <div className="mt-4 space-y-3">
                 <select
@@ -2271,7 +2271,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
-            <section className="neon-glass neon-border rounded-2xl p-5">
+            <section className="app-panel rounded-2xl p-5">
               <h4 className="font-semibold text-[#251E1F]">4. Map GL Accounts</h4>
               <div className="mt-4 grid gap-3">
                 <SettingInput value={form.employerExpenseAccount} onChange={(value) => updateForm("employerExpenseAccount", value)} />
@@ -2281,7 +2281,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
               </div>
             </section>
 
-            <section className="neon-glass neon-border rounded-2xl p-5">
+            <section className="app-panel rounded-2xl p-5">
               <h4 className="font-semibold text-[#251E1F]">5. Save & Apply</h4>
               <div className="mt-4 rounded-xl border border-[#7CFFB2]/25 bg-[#7CFFB2]/10 p-4 text-sm text-[#D8FFE6]">
                 Saved MBMF settings are applied to eligible Muslim employees only.
@@ -2297,7 +2297,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
             </section>
           </div>
 
-          <section className="neon-glass neon-border overflow-hidden rounded-2xl">
+          <section className="app-panel overflow-hidden rounded-2xl">
             <div className="border-b border-[#f0d2ca] px-5 py-4">
               <h4 className="font-semibold text-[#251E1F]">Contribution Calculation Example</h4>
             </div>
@@ -2331,7 +2331,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
         </div>
 
         <aside className="space-y-4">
-          <section className="neon-glass neon-border rounded-2xl p-5">
+          <section className="app-panel rounded-2xl p-5">
             <h4 className="font-semibold text-[#251E1F]">Applicability</h4>
             <div className="mt-4 rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 p-4">
               <p className="text-sm font-semibold text-[#251E1F]">Applicable To</p>
@@ -2371,7 +2371,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
             ) : null}
           </section>
 
-          <section className="neon-glass neon-border rounded-2xl p-5">
+          <section className="app-panel rounded-2xl p-5">
             <h4 className="font-semibold text-[#251E1F]">Process Flow</h4>
             <ol className="mt-4 space-y-3 text-sm text-[#7b6660]">
               <li>1. Payroll reads staff religion from the employee database.</li>
@@ -2397,7 +2397,7 @@ function CpfCeilingPanel({ onSave, settingsByKey }) {
         subtitle="Set the effective date and monthly wage ceiling used for payroll calculations."
         onSave={onSave}
       />
-      <section className="neon-glass neon-border rounded-2xl p-5">
+      <section className="app-panel rounded-2xl p-5">
         <h3 className="text-lg font-semibold text-[#251E1F]">Wage Ceiling History</h3>
         <div className="mt-4 space-y-3">
           {cpfCeilingHistory.map(([effectiveFrom, ceiling]) => (
@@ -2480,7 +2480,7 @@ function SelfHelpGroupRulesPanel({ onSave, settingsByKey, users = [] }) {
   };
 
   return (
-    <section className="neon-glass neon-border overflow-hidden rounded-2xl">
+    <section className="app-panel overflow-hidden rounded-2xl">
       <div className="border-b border-[#f0d2ca] px-5 py-4">
         <h3 className="text-lg font-semibold text-[#251E1F]">Community Fund Contribution Rules</h3>
         <p className="mt-1 text-sm text-[#7b6660]">Configure CDAC, SINDA and ECF using staff race fields. MBMF remains in its dedicated religion-based panel.</p>
@@ -2582,7 +2582,7 @@ function SettingsView({ mbmfEligibility, onUpdateSetting, settings = [], users =
       }
     >
       <div id="payroll-settings-start" className="space-y-8">
-        <section className="neon-glass neon-border rounded-2xl p-5">
+        <section className="app-panel rounded-2xl p-5">
           <h3 className="text-lg font-semibold text-[#251E1F]">Operational Payroll Settings</h3>
           <p className="mt-1 text-sm text-[#7b6660]">
             CPF rates, wage ceilings, SDL and self-help fund rules are managed in Compliance Rules.
@@ -2657,7 +2657,7 @@ function ComplianceRulesView({ mbmfEligibility, onUpdateSetting, settings = [], 
       }
     >
       <div className="space-y-8">
-        <section className="neon-glass neon-border rounded-2xl p-6">
+        <section className="app-panel rounded-2xl p-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h3 className="text-lg font-semibold text-[#251E1F]">Singapore Payroll Compliance Baseline</h3>
@@ -2773,7 +2773,7 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
   };
 
   return (
-    <section className="neon-glass neon-border rounded-2xl p-6">
+    <section className="app-panel rounded-2xl p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[#251E1F]">Custom Compliance Rules</h3>
@@ -2951,7 +2951,7 @@ function PayrollMonitorView({ payrollRuns = [] }) {
         </div>
       </div>
 
-      <div className="neon-glass neon-border overflow-hidden rounded-2xl">
+      <div className="app-panel overflow-hidden rounded-2xl">
         <div className="grid grid-cols-5 gap-4 border-b border-[#f0d2ca] px-6 py-4 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
           <span>Pay Period</span>
           <span>Updated</span>
@@ -3065,21 +3065,21 @@ function AuditLogsView({ auditLogs = [] }) {
       actions={<ActionButton icon={FileText} variant="secondary" onClick={exportLogs}>Export Logs</ActionButton>}
     >
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="neon-glass rounded-2xl p-5">
+        <div className="app-panel rounded-2xl p-5">
           <p className="text-sm text-[#7b6660]">Total Events</p>
           <p className="mt-3 text-3xl font-semibold text-[#251E1F]">{auditLogs.length}</p>
         </div>
-        <div className="neon-glass rounded-2xl p-5">
+        <div className="app-panel rounded-2xl p-5">
           <p className="text-sm text-[#7b6660]">Visible Events</p>
           <p className="mt-3 text-3xl font-semibold text-[#F38978]">{filteredLogs.length}</p>
         </div>
-        <div className="neon-glass rounded-2xl p-5">
+        <div className="app-panel rounded-2xl p-5">
           <p className="text-sm text-[#7b6660]">Entity Types</p>
           <p className="mt-3 text-3xl font-semibold text-[#7CFFB2]">{Math.max(entityTypes.length - 1, 0)}</p>
         </div>
       </div>
 
-      <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
+      <div className="mt-6 app-panel rounded-2xl p-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-[#251E1F]">Activity Trail</h3>
@@ -3258,7 +3258,7 @@ function PayslipsApprovalView() {
 
   return (
     <div className="space-y-5">
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 className="text-lg font-semibold text-[#251E1F]">Payslips Pending Final Approval</h3>
@@ -3277,18 +3277,18 @@ function PayslipsApprovalView() {
       </div>
 
       {error ? (
-        <div className="neon-glass neon-border rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
+        <div className="app-panel rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
           {error}
         </div>
       ) : null}
 
       {successMessage ? (
-        <div className="neon-glass neon-border rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-200">
+        <div className="app-panel rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-200">
           {successMessage}
         </div>
       ) : null}
 
-      <div className="neon-glass neon-border overflow-hidden rounded-2xl">
+      <div className="app-panel overflow-hidden rounded-2xl">
         {loading ? (
           <div className="flex items-center gap-3 p-6 text-[#7b6660]">
             <Loader2 className="animate-spin" size={18} />
@@ -3362,7 +3362,7 @@ function PayslipsApprovalView() {
 
       {rejectingPayslipId ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="neon-glass neon-border m-4 w-full max-w-md rounded-2xl p-6">
+          <div className="app-panel m-4 w-full max-w-md rounded-2xl p-6">
             <div className="mb-4 flex items-center gap-3">
               <AlertCircle className="text-red-300" size={20} />
               <h3 className="text-lg font-semibold text-[#251E1F]">Reject Payslip</h3>
@@ -3633,7 +3633,7 @@ function ReportPreviewModal({ data, report, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#fff8f5]/80 px-4 backdrop-blur-sm">
-      <section className="neon-glass neon-border flex max-h-[92vh] w-full max-w-5xl flex-col rounded-2xl p-6">
+      <section className="app-panel flex max-h-[92vh] w-full max-w-5xl flex-col rounded-2xl p-6">
         <div className="flex flex-col gap-4 border-b border-[#f0d2ca] pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#F38978]/80">PDF Preview</p>
@@ -3644,7 +3644,7 @@ function ReportPreviewModal({ data, report, onClose }) {
             <a
               href={pdfUrl}
               download={`${report.toLowerCase().replaceAll(" ", "-")}.pdf`}
-              className="neon-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold"
+              className="primary-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold"
             >
               <FileText size={17} />
               Download PDF
@@ -3741,7 +3741,7 @@ function ReportsView({ data }) {
     >
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {reportCards.map((report) => (
-          <div key={report.title} className="neon-glass neon-border rounded-2xl p-6">
+          <div key={report.title} className="app-panel rounded-2xl p-6">
             <FileBarChart size={24} className="text-[#F38978]" />
             <h3 className="mt-4 font-semibold text-[#251E1F]">{report.title}</h3>
             <p className="mt-2 text-sm text-[#7b6660]">{report.description}</p>
@@ -4001,7 +4001,7 @@ export default function AdminPayrollPage() {
       searchPlaceholder="Search payroll, staff, approvals..."
     >
       {isLoading ? (
-        <div className="neon-glass neon-border rounded-2xl p-6 text-sm text-[#7b6660]">
+        <div className="app-panel rounded-2xl p-6 text-sm text-[#7b6660]">
           Loading admin payroll data...
         </div>
       ) : null}

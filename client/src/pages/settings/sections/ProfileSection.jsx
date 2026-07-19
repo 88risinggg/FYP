@@ -109,29 +109,29 @@ export default function ProfileSection() {
         </div>
       )}
 
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <h2 className="text-xl font-semibold text-white">Profile</h2>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Manage your personal information and preferences.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">Manage your personal information and preferences.</p>
 
         <form onSubmit={handleSave} className="mt-6 space-y-6">
           {/* Profile Picture */}
           <div className="flex items-center gap-5">
             <div className="relative">
-              <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-[#C77DFF]/15 ring-2 ring-[#C77DFF]/30">
+              <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-[#F38978]/15 ring-2 ring-[#F38978]/30">
                 {form.profile_picture ? (
                   <img src={form.profile_picture} alt="Profile" className="h-full w-full object-cover" />
                 ) : (
-                  <span className="text-2xl font-bold text-[#C77DFF]">{form.name?.charAt(0) || "U"}</span>
+                  <span className="text-2xl font-bold text-[#F38978]">{form.name?.charAt(0) || "U"}</span>
                 )}
               </div>
-              <label className="absolute -bottom-1 -right-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-[#7B2FF7] text-white shadow-lg transition hover:bg-[#9D4EDD]">
+              <label className="absolute -bottom-1 -right-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-[#F38978] text-white shadow-lg transition hover:bg-[#E77463]">
                 <Camera size={13} />
                 <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
               </label>
             </div>
             <div>
               <p className="text-sm font-medium text-white">Profile Picture</p>
-              <p className="text-xs text-[#d8c6e8]">JPG, PNG or GIF. Max 2MB.</p>
+              <p className="text-xs text-[#7b6660]">JPG, PNG or GIF. Max 2MB.</p>
             </div>
           </div>
 
@@ -155,7 +155,7 @@ export default function ProfileSection() {
 
           {/* Read-only Fields */}
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/70">Read-only Information</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Read-only Information</p>
             <div className="grid gap-4 md:grid-cols-3">
               <ReadOnlyField label="Employee ID" value={readOnly.employee_id} />
               <ReadOnlyField label="User Role" value={readOnly.role_name} />
@@ -166,12 +166,12 @@ export default function ProfileSection() {
           {/* Actions */}
           <div className="flex gap-3 pt-2">
             <button type="submit" disabled={saving}
-              className="neon-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
+              className="primary-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
               {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
               Save Changes
             </button>
             <button type="button" onClick={loadProfile}
-              className="rounded-xl border border-white/10 bg-white/[0.06] px-5 py-2.5 text-sm font-semibold text-[#d8c6e8] transition hover:bg-white/10 hover:text-white">
+              className="rounded-xl border border-white/10 bg-white/[0.06] px-5 py-2.5 text-sm font-semibold text-[#7b6660] transition hover:bg-white/10 hover:text-white">
               Cancel
             </button>
           </div>
@@ -184,9 +184,9 @@ export default function ProfileSection() {
 function Field({ label, name, value, onChange, type = "text", required = false }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-[#d8c6e8]">{label}{required && <span className="text-rose-400"> *</span>}</label>
+      <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">{label}{required && <span className="text-rose-400"> *</span>}</label>
       <input type={type} name={name} value={value} onChange={onChange} required={required}
-        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-[#d8c6e8]/40 focus:border-[#C77DFF]/50 focus:ring-1 focus:ring-[#C77DFF]/30" />
+        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-[#7b6660]/40 focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30" />
     </div>
   );
 }
@@ -194,11 +194,11 @@ function Field({ label, name, value, onChange, type = "text", required = false }
 function SelectField({ label, name, value, onChange, options }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-[#d8c6e8]">{label}</label>
+      <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">{label}</label>
       <select name={name} value={value} onChange={onChange}
-        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#C77DFF]/50 focus:ring-1 focus:ring-[#C77DFF]/30">
+        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30">
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value} className="bg-[#120022]">{opt.label}</option>
+          <option key={opt.value} value={opt.value} className="bg-[#fff3ee]">{opt.label}</option>
         ))}
       </select>
     </div>
@@ -208,7 +208,7 @@ function SelectField({ label, name, value, onChange, options }) {
 function ReadOnlyField({ label, value }) {
   return (
     <div>
-      <p className="text-xs text-[#d8c6e8]/70">{label}</p>
+      <p className="text-xs text-[#7b6660]/70">{label}</p>
       <p className="mt-1 text-sm font-medium text-white">{value}</p>
     </div>
   );
@@ -216,7 +216,7 @@ function ReadOnlyField({ label, value }) {
 
 function LoadingSkeleton() {
   return (
-    <div className="neon-glass neon-border rounded-2xl p-6">
+    <div className="app-panel rounded-2xl p-6">
       <div className="animate-pulse space-y-4">
         <div className="h-6 w-32 rounded bg-white/10" />
         <div className="h-4 w-64 rounded bg-white/[0.06]" />

@@ -166,7 +166,7 @@ export default function AdminAuditLogsPage() {
         </button>
       </div>
 
-      <div className="neon-glass neon-border rounded-lg p-5">
+      <div className="app-panel rounded-lg p-5">
         <div className="grid gap-3 lg:grid-cols-[160px_160px_180px_200px_minmax(0,1fr)_auto_auto]">
           <input
             type="date"
@@ -220,7 +220,7 @@ export default function AdminAuditLogsPage() {
           <button
             type="button"
             onClick={handleExport}
-            className="neon-button inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold"
+            className="primary-button inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold"
           >
             <Download size={16} />
             Export
@@ -242,7 +242,7 @@ export default function AdminAuditLogsPage() {
               key={card.label}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="neon-glass neon-border rounded-lg p-5"
+              className="app-panel rounded-lg p-5"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -259,7 +259,7 @@ export default function AdminAuditLogsPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="neon-glass neon-border overflow-hidden rounded-lg">
+        <div className="app-panel overflow-hidden rounded-lg">
           <div className="border-b border-[#f0d2ca] px-5 py-4">
             <h3 className="text-lg font-semibold text-[#251E1F]">Audit Logs Table</h3>
           </div>
@@ -300,7 +300,7 @@ export default function AdminAuditLogsPage() {
         </div>
 
         <aside className="space-y-6">
-          <section className="neon-glass neon-border rounded-lg p-5">
+          <section className="app-panel rounded-lg p-5">
             <div className="mb-4 flex items-center gap-3">
               <ShieldCheck size={21} className="text-[#F38978]" />
               <h3 className="text-lg font-semibold text-[#251E1F]">Audit Retention Policy</h3>
@@ -314,7 +314,7 @@ export default function AdminAuditLogsPage() {
             </div>
           </section>
 
-          <section className="neon-glass neon-border rounded-lg p-5">
+          <section className="app-panel rounded-lg p-5">
             <div className="mb-4 flex items-center gap-3">
               <Activity size={21} className="text-[#F38978]" />
               <h3 className="text-lg font-semibold text-[#251E1F]">Activity Breakdown</h3>

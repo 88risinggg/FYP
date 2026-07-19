@@ -101,7 +101,7 @@ function printPayslip(payslip) {
         th { background: #f5f5f5; padding: 8px 12px; text-align: left; font-size: 12px; text-transform: uppercase; }
         td { padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
         .total-row td { font-weight: bold; background: #f9f9f9; }
-        .net-pay { background: #f0e8ff; padding: 16px; border-radius: 8px; display: flex; justify-content: space-between; margin-top: 20px; }
+        .net-pay { background: #FFF3EE; padding: 16px; border-radius: 8px; display: flex; justify-content: space-between; margin-top: 20px; }
         .net-pay span:last-child { font-size: 24px; font-weight: bold; color: #2D7C83; }
         .footer { margin-top: 40px; text-align: center; color: #999; font-size: 11px; }
         @media print { body { padding: 20px; } }
@@ -715,7 +715,7 @@ function HRDashboardView() {
                       className="h-full rounded-full transition-all duration-700"
                       style={{
                         width: `${month.total > 0 ? (month.total / maxPayroll) * 100 : 0}%`,
-                        background: "linear-gradient(to right, #2D7C83, #a855f7)",
+                        background: "linear-gradient(to right, #2D7C83, #F38978)",
                         opacity: isCurrent ? 1 : 0.4
                       }}
                     />
@@ -1177,7 +1177,7 @@ function StaffRecordsView() {
 
   return (
     <div className="space-y-5">
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 className="text-lg font-semibold text-[#251E1F]">Staff Records</h3>
@@ -1215,18 +1215,18 @@ function StaffRecordsView() {
       </div>
 
       {error ? (
-        <div className="neon-glass neon-border rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
+        <div className="app-panel rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
           {error}
         </div>
       ) : null}
 
       {successMessage ? (
-        <div className="neon-glass neon-border rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-200">
+        <div className="app-panel rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-200">
           {successMessage}
         </div>
       ) : null}
 
-      <div className="neon-glass neon-border rounded-2xl overflow-hidden">
+      <div className="app-panel rounded-2xl overflow-hidden">
         {loading ? (
           <div className="flex items-center gap-3 p-6 text-[#7b6660]">
             <Loader2 className="animate-spin" size={18} />
@@ -1337,7 +1337,7 @@ function StaffRecordsView() {
 
       {isEditModalOpen && editingStaff && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="neon-glass neon-border rounded-2xl w-full max-w-md p-6 m-4 max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="staff-edit-title">
+          <div className="app-panel rounded-2xl w-full max-w-md p-6 m-4 max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="staff-edit-title">
             <h3 id="staff-edit-title" className="text-lg font-semibold text-[#251E1F]">Edit Staff Record</h3>
             <div className="mt-4 space-y-4">
               <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
@@ -1459,7 +1459,7 @@ function StaffRecordsView() {
       )}
       {historyStaff && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="neon-glass neon-border rounded-2xl w-full max-w-2xl p-6 m-4" role="dialog">
+          <div className="app-panel rounded-2xl w-full max-w-2xl p-6 m-4" role="dialog">
             <h3 className="text-lg font-semibold text-[#251E1F]">
               Payroll History — {historyStaff.name || historyStaff.staff_name}
             </h3>
@@ -1630,7 +1630,7 @@ function PayrollUploadView() {
 
   return (
     <div className="space-y-5">
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div
           className="flex items-start gap-4 outline-none focus-within:ring-2 focus-within:ring-[#F38978] rounded-xl"
           tabIndex={0}
@@ -1647,7 +1647,7 @@ function PayrollUploadView() {
         </div>
       </div>
 
-      <form onSubmit={handleValidate} className="neon-glass neon-border rounded-2xl p-6">
+      <form onSubmit={handleValidate} className="app-panel rounded-2xl p-6">
         <label htmlFor="hr-sample-upload" className="block text-sm font-medium text-[#251E1F]">Choose file to preview</label>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
           <input
@@ -1689,13 +1689,13 @@ function PayrollUploadView() {
       </form>
 
       {error ? (
-        <div className="neon-glass neon-border rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
+        <div className="app-panel rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
           {error}
         </div>
       ) : null}
 
       {warning ? (
-        <div className="neon-glass neon-border rounded-2xl border-yellow-500/40 p-4 text-sm text-yellow-200">
+        <div className="app-panel rounded-2xl border-yellow-500/40 p-4 text-sm text-yellow-200">
           <span className="font-semibold">Note:</span> {warning}
         </div>
       ) : null}
@@ -1908,12 +1908,12 @@ function PayrollRunsView() {
   return (
     <div className="space-y-5">
       {error ? (
-        <div className="neon-glass neon-border rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
+        <div className="app-panel rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
           {error}
         </div>
       ) : null}
 
-      <div className="neon-glass neon-border rounded-2xl p-4">
+      <div className="app-panel rounded-2xl p-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <label className="text-sm text-[#7b6660]">
             Search
@@ -1968,7 +1968,7 @@ function PayrollRunsView() {
         </div>
       </div>
 
-      <div className="neon-glass neon-border rounded-2xl overflow-hidden">
+      <div className="app-panel rounded-2xl overflow-hidden">
         {loading ? (
           <div className="flex items-center gap-3 p-6 text-[#7b6660]">
             <Loader2 className="animate-spin" size={18} />
@@ -2498,23 +2498,23 @@ function PayslipsView() {
           </div>
         ))}
       </div>
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <h3 className="text-lg font-semibold text-[#251E1F]">Generate Payslips</h3>
       </div>
 
       {error && (
-        <div className="neon-glass neon-border rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
+        <div className="app-panel rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
           {error}
         </div>
       )}
 
       {successMessage && (
-        <div className="neon-glass neon-border rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-200">
+        <div className="app-panel rounded-2xl border-emerald-500/40 p-4 text-sm text-emerald-200">
           {successMessage}
         </div>
       )}
 
-      <form onSubmit={generatePayslips} className="neon-glass neon-border rounded-2xl p-6 space-y-4">
+      <form onSubmit={generatePayslips} className="app-panel rounded-2xl p-6 space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium text-[#7b6660]">Payroll Month</label>
@@ -2600,7 +2600,7 @@ function PayslipsView() {
         </div>
       </form>
 
-      <div className="neon-glass neon-border rounded-2xl p-4">
+      <div className="app-panel rounded-2xl p-4">
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
           <label className="block text-sm text-[#7b6660]">
             Search payslips...
@@ -2618,7 +2618,7 @@ function PayslipsView() {
         </div>
       </div>
 
-      <div className="neon-glass neon-border rounded-2xl overflow-hidden">
+      <div className="app-panel rounded-2xl overflow-hidden">
         <div className="flex items-start justify-between gap-4 border-b border-[#f0d2ca] bg-white/80 p-6">
           <div>
             <h3 className="text-lg font-semibold text-[#251E1F]">Payslips</h3>
@@ -2750,7 +2750,7 @@ function PayslipsView() {
       {/* Payslip Preview Modal */}
       {previewPayslip && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="neon-glass neon-border rounded-2xl w-full max-w-2xl p-6 m-4 max-h-[90vh] overflow-y-auto"
+          <div className="app-panel rounded-2xl w-full max-w-2xl p-6 m-4 max-h-[90vh] overflow-y-auto"
             role="dialog" aria-modal="true">
 
             <div className="flex items-center justify-between mb-6">
@@ -2911,12 +2911,12 @@ function NotificationsView() {
   return (
     <div className="space-y-5">
       {error ? (
-        <div className="neon-glass neon-border rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
+        <div className="app-panel rounded-2xl border-red-500/40 p-4 text-sm text-red-200">
           {error}
         </div>
       ) : null}
 
-      <div className="neon-glass neon-border rounded-2xl overflow-hidden">
+      <div className="app-panel rounded-2xl overflow-hidden">
         {loading ? (
           <div className="flex items-center gap-3 p-6 text-[#7b6660]">
             <Loader2 className="animate-spin" size={18} />
@@ -3041,4 +3041,4 @@ export default function HRPayrollPage() {
       </section>
     </DashboardLayout>
   );
-}   
+}

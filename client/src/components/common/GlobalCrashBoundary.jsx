@@ -60,8 +60,8 @@ export default class GlobalCrashBoundary extends React.Component {
     }
 
     return (
-      <div className="neon-page flex min-h-screen items-center justify-center px-6 py-10">
-        <div className="neon-glass neon-border w-full max-w-3xl rounded-2xl p-8 text-[#251E1F]">
+      <div className="app-page flex min-h-screen items-center justify-center px-6 py-10">
+        <div className="app-panel w-full max-w-3xl rounded-2xl p-8 text-[#251E1F]">
           <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Client Recovery Helper</p>
           <h1 className="mt-2 text-2xl font-semibold">The page crashed, but diagnostics are available.</h1>
           <p className="mt-3 text-sm text-[#7b6660]">
@@ -71,7 +71,7 @@ export default class GlobalCrashBoundary extends React.Component {
             Route: <span className="font-semibold break-all text-[#251E1F]">{window.location.pathname}</span>
           </p>
 
-          <div className="mt-6 rounded-xl border border-[#f0d2ca] bg-black/30 p-4 text-sm text-[#f1e6ff]">
+          <div className="mt-6 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm text-[#251E1F]">
             {errorMessage}
           </div>
 

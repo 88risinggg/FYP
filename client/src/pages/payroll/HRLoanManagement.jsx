@@ -173,7 +173,7 @@ export default function HRLoanManagement() {
     <section>
       <h2 className="text-2xl font-semibold text-[#251E1F]">Loan Management</h2>
 
-      <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl p-6">
+      <div className="app-panel mt-6 min-h-[calc(100vh-12rem)] rounded-2xl p-6">
         {/* Toast Notification */}
         {toast && (
           <div

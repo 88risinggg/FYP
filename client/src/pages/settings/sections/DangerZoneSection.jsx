@@ -115,7 +115,7 @@ export default function DangerZoneSection() {
       {/* Confirmation Modal */}
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-sm rounded-2xl border border-rose-500/20 bg-[#120022] p-6 shadow-2xl">
+          <div className="mx-4 w-full max-w-sm rounded-2xl border border-rose-500/20 bg-[#fff3ee] p-6 shadow-2xl">
             <div className="flex items-center gap-3">
               <AlertTriangle size={20} className="text-rose-400" />
               <h3 className="text-lg font-semibold text-white">
@@ -125,7 +125,7 @@ export default function DangerZoneSection() {
                 {modal === "reset" && "Reset Settings"}
               </h3>
             </div>
-            <p className="mt-3 text-sm text-[#d8c6e8]">
+            <p className="mt-3 text-sm text-[#7b6660]">
               {modal === "deactivate" && "Your account will be deactivated immediately. Are you sure?"}
               {modal === "delete" && "This will permanently delete your account and all data. Enter your password to confirm."}
               {modal === "logout" && "All sessions will be terminated. You will be logged out everywhere."}
@@ -150,7 +150,7 @@ export default function DangerZoneSection() {
                 {actionLoading ? <Loader2 size={14} className="mx-auto animate-spin" /> : "Confirm"}
               </button>
               <button type="button" onClick={() => { setModal(null); setPassword(""); }}
-                className="flex-1 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-[#d8c6e8] transition hover:bg-white/10">
+                className="flex-1 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-[#7b6660] transition hover:bg-white/10">
                 Cancel
               </button>
             </div>

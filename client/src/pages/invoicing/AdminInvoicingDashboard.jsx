@@ -219,7 +219,7 @@ export default function AdminInvoicingDashboard() {
       ) : (
         <section>
           <h2 className="text-2xl font-semibold text-[#251E1F]">{heading}</h2>
-          <div className="neon-glass neon-border mt-6 min-h-[calc(100vh-12rem)] rounded-2xl border-dashed p-8">
+          <div className="app-panel mt-6 min-h-[calc(100vh-12rem)] rounded-2xl border-dashed p-8">
             <p className="text-sm text-[#7b6660]">
               This page is reserved for module development.
             </p>

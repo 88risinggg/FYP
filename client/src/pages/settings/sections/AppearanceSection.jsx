@@ -9,8 +9,8 @@ const themes = [
 ];
 
 const accentColors = [
-  { value: "#7B2FF7", label: "Purple" },
-  { value: "#FF4DDB", label: "Pink" },
+  { value: "#F38978", label: "Coral" },
+  { value: "#F26E5F", label: "Pink" },
   { value: "#4CC9F0", label: "Blue" },
   { value: "#34D399", label: "Green" },
   { value: "#F59E0B", label: "Amber" },
@@ -26,7 +26,7 @@ const fontSizes = [
 export default function AppearanceSection() {
   const [settings, setSettings] = useState({
     theme: "system",
-    accent_color: "#7B2FF7",
+    accent_color: "#F38978",
     compact_mode: false,
     font_size: "medium"
   });
@@ -57,24 +57,24 @@ export default function AppearanceSection() {
   }
 
   if (loading) {
-    return <div className="neon-glass neon-border rounded-2xl p-6"><div className="animate-pulse h-48 rounded-lg bg-white/[0.04]" /></div>;
+    return <div className="app-panel rounded-2xl p-6"><div className="animate-pulse h-48 rounded-lg bg-white/[0.04]" /></div>;
   }
 
   return (
     <div className="space-y-6">
       {toast && <Toast toast={toast} />}
 
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
-          <Palette size={20} className="text-[#C77DFF]" />
-          <h2 className="text-xl font-semibold text-white">Appearance</h2>
+          <Palette size={20} className="text-[#F38978]" />
+          <h2 className="text-xl font-semibold text-[#251E1F]">Appearance</h2>
         </div>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Customize how the application looks.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">Customize how the application looks.</p>
 
         <div className="mt-6 space-y-6">
           {/* Theme */}
           <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/70">Theme</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Theme</p>
             <div className="grid grid-cols-3 gap-3">
               {themes.map((t) => {
                 const Icon = t.icon;
@@ -82,10 +82,10 @@ export default function AppearanceSection() {
                 return (
                   <button key={t.id} type="button" onClick={() => save({ ...settings, theme: t.id })}
                     className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition ${
-                      isActive ? "border-[#C77DFF]/50 bg-[#C77DFF]/10 shadow-lg shadow-[#9D4EDD]/15" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
+                      isActive ? "border-[#F38978]/50 bg-[#F38978]/10 shadow-lg shadow-[#f2b5a9]/15" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
                     }`}>
-                    <Icon size={22} className={isActive ? "text-[#C77DFF]" : "text-[#d8c6e8]"} />
-                    <span className={`text-xs font-medium ${isActive ? "text-white" : "text-[#d8c6e8]"}`}>{t.label}</span>
+                    <Icon size={22} className={isActive ? "text-[#F38978]" : "text-[#7b6660]"} />
+                    <span className={`text-xs font-medium ${isActive ? "text-[#251E1F]" : "text-[#7b6660]"}`}>{t.label}</span>
                   </button>
                 );
               })}
@@ -94,12 +94,12 @@ export default function AppearanceSection() {
 
           {/* Accent Color */}
           <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/70">Accent Color</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Accent Color</p>
             <div className="flex flex-wrap gap-3">
               {accentColors.map((c) => (
                 <button key={c.value} type="button" onClick={() => save({ ...settings, accent_color: c.value })}
                   className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
-                    settings.accent_color === c.value ? "ring-2 ring-white ring-offset-2 ring-offset-[#090014]" : "hover:scale-110"
+                    settings.accent_color === c.value ? "ring-2 ring-white ring-offset-2 ring-offset-[#fff8f5]" : "hover:scale-110"
                   }`}
                   style={{ backgroundColor: c.value }}
                   title={c.label}>
@@ -111,14 +111,14 @@ export default function AppearanceSection() {
 
           {/* Font Size */}
           <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/70">Font Size</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Font Size</p>
             <div className="flex gap-3">
               {fontSizes.map((f) => (
                 <button key={f.value} type="button" onClick={() => save({ ...settings, font_size: f.value })}
                   className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition ${
                     settings.font_size === f.value
-                      ? "border-[#C77DFF]/50 bg-[#C77DFF]/10 text-white"
-                      : "border-white/10 bg-white/[0.03] text-[#d8c6e8] hover:bg-white/[0.06]"
+                    ? "border-[#F38978]/50 bg-[#F38978]/10 text-[#251E1F]"
+                      : "border-white/10 bg-white/[0.03] text-[#7b6660] hover:bg-white/[0.06]"
                   }`}>
                   {f.label}
                 </button>
@@ -129,11 +129,11 @@ export default function AppearanceSection() {
           {/* Compact Mode */}
           <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
             <div>
-              <span className="text-sm font-medium text-white">Compact Mode</span>
-              <p className="text-xs text-[#d8c6e8]">Reduce spacing and padding throughout the UI</p>
+              <span className="text-sm font-medium text-[#251E1F]">Compact Mode</span>
+              <p className="text-xs text-[#7b6660]">Reduce spacing and padding throughout the UI</p>
             </div>
             <button type="button" onClick={() => save({ ...settings, compact_mode: !settings.compact_mode })}
-              className={`relative h-6 w-11 rounded-full transition ${settings.compact_mode ? "bg-[#7B2FF7]" : "bg-white/15"}`}>
+              className={`relative h-6 w-11 rounded-full transition ${settings.compact_mode ? "bg-[#F38978]" : "bg-white/15"}`}>
               <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${settings.compact_mode ? "translate-x-[22px]" : "translate-x-0.5"}`} />
             </button>
           </div>

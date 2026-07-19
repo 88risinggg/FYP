@@ -122,7 +122,7 @@ export default function SettingsPage() {
       <section className="flex flex-col gap-6 lg:flex-row">
         {/* Settings Sidebar */}
         <nav className="w-full shrink-0 lg:w-64">
-          <div className="neon-glass neon-border rounded-2xl p-3">
+          <div className="app-panel rounded-2xl p-3">
             <div className="space-y-0.5">
               {settingsMenu.map((item) => {
                 const Icon = item.icon;
@@ -136,14 +136,14 @@ export default function SettingsPage() {
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
                       isActive
                         ? isDanger
-                          ? "bg-rose-500/15 text-rose-300 shadow-lg shadow-rose-500/10"
-                          : "bg-gradient-to-r from-[#7B2FF7]/20 to-[#FF4DDB]/10 text-white shadow-lg shadow-[#9D4EDD]/15"
+                          ? "bg-rose-500/15 text-rose-700 shadow-lg shadow-rose-500/10"
+                          : "bg-gradient-to-r from-[#FDD9CD] to-[#fff3ee] text-[#251E1F] shadow-lg shadow-[#f2b5a9]/20"
                         : isDanger
-                          ? "text-rose-400/70 hover:bg-rose-500/10 hover:text-rose-300"
-                          : "text-[#d8c6e8] hover:bg-white/[0.06] hover:text-white"
+                          ? "text-rose-500/70 hover:bg-rose-500/10 hover:text-rose-700"
+                          : "text-[#7b6660] hover:bg-[#FDD9CD]/45 hover:text-[#251E1F]"
                     }`}
                   >
-                    <Icon size={16} className={isActive && !isDanger ? "text-[#C77DFF]" : ""} />
+                    <Icon size={16} className={isActive && !isDanger ? "text-[#F38978]" : ""} />
                     <span>{item.label}</span>
                   </button>
                 );

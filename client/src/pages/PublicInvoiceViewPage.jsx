@@ -143,8 +143,8 @@ export default function PublicInvoiceViewPage() {
           </div>
 
           {invoice.status !== "Paid" ? (
-            <div className="mt-6 rounded-xl border border-[#C77DFF]/30 bg-[#C77DFF]/10 p-4 text-center">
-              <p className="text-sm text-[#d8c6e8]">
+            <div className="mt-6 rounded-xl border border-[#F38978]/30 bg-[#F38978]/10 p-4 text-center">
+              <p className="text-sm text-[#7b6660]">
                 Payment is due by <strong className="text-white">{formatDate(invoice.due_date)}</strong>.
                 Please contact the sender for payment instructions.
               </p>

@@ -111,12 +111,12 @@ export default function SecuritySection() {
       {toast && <Toast toast={toast} />}
 
       {/* Change Password */}
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
-          <Key size={20} className="text-[#C77DFF]" />
+          <Key size={20} className="text-[#F38978]" />
           <h2 className="text-xl font-semibold text-white">Change Password</h2>
         </div>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Ensure your account is using a strong password.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">Ensure your account is using a strong password.</p>
 
         <form onSubmit={handleChangePassword} className="mt-5 max-w-md space-y-4">
           <PasswordField label="Current Password" value={form.currentPassword}
@@ -132,7 +132,7 @@ export default function SecuritySection() {
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
                 <div className={`h-full rounded-full transition-all duration-300 ${strength.color}`} style={{ width: strength.width }} />
               </div>
-              <p className="text-xs text-[#d8c6e8]">Strength: {strength.label}</p>
+              <p className="text-xs text-[#7b6660]">Strength: {strength.label}</p>
             </div>
           )}
 
@@ -141,7 +141,7 @@ export default function SecuritySection() {
             show={showNew} onToggle={() => setShowNew(!showNew)} />
 
           <button type="submit" disabled={saving}
-            className="neon-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
+            className="primary-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
             Update Password
           </button>
@@ -149,25 +149,25 @@ export default function SecuritySection() {
       </div>
 
       {/* Two-Factor Authentication */}
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
-          <Shield size={20} className="text-[#C77DFF]" />
+          <Shield size={20} className="text-[#F38978]" />
           <h2 className="text-xl font-semibold text-white">Two-Factor Authentication</h2>
         </div>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Add an extra layer of security to your account.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">Add an extra layer of security to your account.</p>
 
         <div className="mt-5 space-y-3">
           {["Google Authenticator", "Microsoft Authenticator", "Email OTP", "SMS OTP"].map((method) => (
             <div key={method} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] p-4">
               <div className="flex items-center gap-3">
-                <Smartphone size={18} className="text-[#d8c6e8]" />
+                <Smartphone size={18} className="text-[#7b6660]" />
                 <span className="text-sm font-medium text-white">{method}</span>
               </div>
               <button type="button" onClick={() => handleToggle2FA(method)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                   twoFa.two_fa_enabled && twoFa.two_fa_method === method
                     ? "bg-emerald-500/15 text-emerald-300"
-                    : "bg-white/[0.06] text-[#d8c6e8] hover:bg-white/10 hover:text-white"
+                    : "bg-white/[0.06] text-[#7b6660] hover:bg-white/10 hover:text-white"
                 }`}>
                 {twoFa.two_fa_enabled && twoFa.two_fa_method === method ? "Enabled" : "Enable"}
               </button>
@@ -178,7 +178,7 @@ export default function SecuritySection() {
         {/* Recovery Codes */}
         <div className="mt-5 border-t border-white/10 pt-5">
           <h3 className="text-sm font-semibold text-white">Recovery Codes</h3>
-          <p className="mt-1 text-xs text-[#d8c6e8]">Generate backup codes in case you lose access to your authenticator.</p>
+          <p className="mt-1 text-xs text-[#7b6660]">Generate backup codes in case you lose access to your authenticator.</p>
           <div className="mt-3 flex gap-3">
             <button type="button" onClick={handleGenerateCodes} disabled={loadingCodes}
               className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/10 disabled:opacity-50">
@@ -194,7 +194,7 @@ export default function SecuritySection() {
           {recoveryCodes && (
             <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg border border-white/10 bg-white/[0.03] p-3 sm:grid-cols-4">
               {recoveryCodes.map((code) => (
-                <span key={code} className="rounded bg-white/[0.06] px-2 py-1 text-center font-mono text-xs text-[#C77DFF]">{code}</span>
+                <span key={code} className="rounded bg-white/[0.06] px-2 py-1 text-center font-mono text-xs text-[#F38978]">{code}</span>
               ))}
             </div>
           )}
@@ -207,12 +207,12 @@ export default function SecuritySection() {
 function PasswordField({ label, value, onChange, show, onToggle }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-[#d8c6e8]">{label}</label>
+      <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">{label}</label>
       <div className="relative">
         <input type={show ? "text" : "password"} value={value} onChange={onChange} required
-          className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 pr-10 text-sm text-white outline-none transition focus:border-[#C77DFF]/50 focus:ring-1 focus:ring-[#C77DFF]/30" />
+          className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 pr-10 text-sm text-white outline-none transition focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30" />
         <button type="button" onClick={onToggle}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#d8c6e8] hover:text-white">
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7b6660] hover:text-white">
           {show ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
       </div>

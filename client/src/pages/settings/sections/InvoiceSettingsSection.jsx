@@ -62,19 +62,19 @@ export default function InvoiceSettingsSection() {
   }
 
   if (loading) {
-    return <div className="neon-glass neon-border rounded-2xl p-6"><div className="animate-pulse h-64 rounded-lg bg-white/[0.04]" /></div>;
+    return <div className="app-panel rounded-2xl p-6"><div className="animate-pulse h-64 rounded-lg bg-white/[0.04]" /></div>;
   }
 
   return (
     <div className="space-y-6">
       {toast && <Toast toast={toast} />}
 
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
-          <FileText size={20} className="text-[#C77DFF]" />
+          <FileText size={20} className="text-[#F38978]" />
           <h2 className="text-xl font-semibold text-white">Invoice Settings</h2>
         </div>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Configure default invoice generation parameters.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">Configure default invoice generation parameters.</p>
 
         <form onSubmit={handleSave} className="mt-6 space-y-6">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -91,7 +91,7 @@ export default function InvoiceSettingsSection() {
 
           {/* Toggle Options */}
           <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/70">Automation</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Automation</p>
             <ToggleRow label="Auto Generate PDF" name="auto_generate_pdf" checked={form.auto_generate_pdf} onChange={handleChange} />
             <ToggleRow label="Auto Email Invoice" name="auto_email_invoice" checked={form.auto_email_invoice} onChange={handleChange} />
             <ToggleRow label="Late Payment Reminder" name="late_payment_reminder" checked={form.late_payment_reminder} onChange={handleChange} />
@@ -104,7 +104,7 @@ export default function InvoiceSettingsSection() {
           </div>
 
           <button type="submit" disabled={saving}
-            className="neon-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
+            className="primary-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
             Save Settings
           </button>
@@ -117,9 +117,9 @@ export default function InvoiceSettingsSection() {
 function Field({ label, name, value, onChange, type = "text" }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-[#d8c6e8]">{label}</label>
+      <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">{label}</label>
       <input type={type} name={name} value={value} onChange={onChange}
-        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#C77DFF]/50 focus:ring-1 focus:ring-[#C77DFF]/30" />
+        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30" />
     </div>
   );
 }
@@ -127,10 +127,10 @@ function Field({ label, name, value, onChange, type = "text" }) {
 function SelectField({ label, name, value, onChange, options }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-[#d8c6e8]">{label}</label>
+      <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">{label}</label>
       <select name={name} value={value} onChange={onChange}
-        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#C77DFF]/50 focus:ring-1 focus:ring-[#C77DFF]/30">
-        {options.map((o) => <option key={o.value} value={o.value} className="bg-[#120022]">{o.label}</option>)}
+        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30">
+        {options.map((o) => <option key={o.value} value={o.value} className="bg-[#fff3ee]">{o.label}</option>)}
       </select>
     </div>
   );
@@ -139,9 +139,9 @@ function SelectField({ label, name, value, onChange, options }) {
 function TextArea({ label, name, value, onChange }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-[#d8c6e8]">{label}</label>
+      <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">{label}</label>
       <textarea name={name} value={value || ""} onChange={onChange} rows={3}
-        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition resize-none focus:border-[#C77DFF]/50 focus:ring-1 focus:ring-[#C77DFF]/30" />
+        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition resize-none focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30" />
     </div>
   );
 }
@@ -152,7 +152,7 @@ function ToggleRow({ label, name, checked, onChange }) {
       <span className="text-sm text-white">{label}</span>
       <label className="relative cursor-pointer">
         <input type="checkbox" name={name} checked={checked} onChange={onChange} className="peer sr-only" />
-        <div className="h-6 w-11 rounded-full bg-white/15 transition peer-checked:bg-[#7B2FF7]" />
+        <div className="h-6 w-11 rounded-full bg-white/15 transition peer-checked:bg-[#F38978]" />
         <div className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-[22px]" />
       </label>
     </div>

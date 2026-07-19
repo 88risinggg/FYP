@@ -778,7 +778,7 @@ export default function AdminInvoicePerformancePage() {
               type="button"
               onClick={handleExport}
               disabled={exporting}
-              className="neon-button inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold disabled:cursor-wait disabled:opacity-70"
+              className="primary-button inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold disabled:cursor-wait disabled:opacity-70"
             >
               <Download size={16} />
               {exporting ? "Exporting" : "Export"}

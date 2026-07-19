@@ -7,7 +7,7 @@ const providers = [
   { id: "microsoft", name: "Microsoft", color: "text-blue-400", bg: "bg-blue-500/10" },
   { id: "xero", name: "Xero", color: "text-sky-400", bg: "bg-sky-500/10" },
   { id: "quickbooks", name: "QuickBooks", color: "text-emerald-400", bg: "bg-emerald-500/10" },
-  { id: "slack", name: "Slack", color: "text-purple-400", bg: "bg-purple-500/10" }
+  { id: "slack", name: "Slack", color: "text-[#F38978]", bg: "bg-[#FDD9CD]/45" }
 ];
 
 export default function ConnectedAccountsSection() {
@@ -75,12 +75,12 @@ export default function ConnectedAccountsSection() {
     <div className="space-y-6">
       {toast && <Toast toast={toast} />}
 
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
-          <Link2 size={20} className="text-[#C77DFF]" />
+          <Link2 size={20} className="text-[#F38978]" />
           <h2 className="text-xl font-semibold text-white">Connected Accounts</h2>
         </div>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Manage your connected third-party services.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">Manage your connected third-party services.</p>
 
         {loading ? (
           <div className="mt-6 space-y-3">
@@ -101,13 +101,13 @@ export default function ConnectedAccountsSection() {
                       <span className={`text-sm font-bold ${provider.color}`}>{provider.name.charAt(0)}</span>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-white">{provider.name}</p>
+                    <p className="text-sm font-medium text-[#251E1F]">{provider.name}</p>
                       {connected ? (
-                        <p className="text-xs text-[#d8c6e8]">
+                        <p className="text-xs text-[#7b6660]">
                           {connected.account_email || "Connected"} &middot; Last sync: {formatDate(connected.last_sync)}
                         </p>
                       ) : (
-                        <p className="text-xs text-[#d8c6e8]/60">Not connected</p>
+                        <p className="text-xs text-[#7b6660]/60">Not connected</p>
                       )}
                     </div>
                   </div>
@@ -116,17 +116,17 @@ export default function ConnectedAccountsSection() {
                     {connected ? (
                       <>
                         <button type="button" onClick={() => handleConnect(provider.id)} disabled={isLoading}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-[#d8c6e8] transition hover:bg-white/10 hover:text-white disabled:opacity-50">
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-[#7b6660] transition hover:bg-white/10 hover:text-[#251E1F] disabled:opacity-50">
                           <RefreshCw size={12} /> Reconnect
                         </button>
                         <button type="button" onClick={() => handleDisconnect(provider.id)} disabled={isLoading}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400/20 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-50">
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400/20 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-50">
                           {isLoading ? <Loader2 size={12} className="animate-spin" /> : <Unlink size={12} />} Disconnect
                         </button>
                       </>
                     ) : (
                       <button type="button" onClick={() => handleConnect(provider.id)} disabled={isLoading}
-                        className="neon-button inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold disabled:opacity-50">
+                        className="primary-button inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold disabled:opacity-50">
                         {isLoading ? <Loader2 size={12} className="animate-spin" /> : <Link2 size={12} />} Connect
                       </button>
                     )}

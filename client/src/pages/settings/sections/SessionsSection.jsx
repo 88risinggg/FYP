@@ -51,17 +51,17 @@ export default function SessionsSection() {
   }
 
   if (loading) {
-    return <div className="neon-glass neon-border rounded-2xl p-6"><div className="animate-pulse h-48 rounded-lg bg-white/[0.04]" /></div>;
+    return <div className="app-panel rounded-2xl p-6"><div className="animate-pulse h-48 rounded-lg bg-white/[0.04]" /></div>;
   }
 
   return (
     <div className="space-y-6">
       {toast && <Toast toast={toast} />}
 
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Monitor size={20} className="text-[#C77DFF]" />
+            <Monitor size={20} className="text-[#F38978]" />
             <h2 className="text-xl font-semibold text-white">Login Sessions</h2>
           </div>
           <button type="button" onClick={() => setConfirmLogoutAll(true)}
@@ -69,10 +69,10 @@ export default function SessionsSection() {
             <LogOut size={13} /> Logout All Devices
           </button>
         </div>
-        <p className="mt-1 text-sm text-[#d8c6e8]">View and manage your active login sessions.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">View and manage your active login sessions.</p>
 
         {sessions.length === 0 ? (
-          <div className="mt-6 rounded-lg border border-dashed border-white/15 bg-white/[0.035] px-4 py-8 text-center text-sm text-[#d8c6e8]">
+          <div className="mt-6 rounded-lg border border-dashed border-white/15 bg-white/[0.035] px-4 py-8 text-center text-sm text-[#7b6660]">
             No active sessions recorded.
           </div>
         ) : (
@@ -80,7 +80,7 @@ export default function SessionsSection() {
             {sessions.map((session) => (
               <div key={session.session_id} className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-[#d8c6e8]">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-[#7b6660]">
                     {session.device?.toLowerCase().includes("mobile") ? <Smartphone size={18} /> : <Monitor size={18} />}
                   </div>
                   <div>
@@ -88,10 +88,10 @@ export default function SessionsSection() {
                       {session.browser || "Unknown"} on {session.os || "Unknown"}
                       {session.is_current ? <span className="ml-2 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">CURRENT</span> : null}
                     </p>
-                    <p className="mt-0.5 text-xs text-[#d8c6e8]">
+                    <p className="mt-0.5 text-xs text-[#7b6660]">
                       {session.device || "Unknown device"} &middot; {session.ip_address || "N/A"} &middot; {session.location || "Unknown location"}
                     </p>
-                    <p className="mt-0.5 text-xs text-[#d8c6e8]/60">Login: {formatDate(session.login_time)}</p>
+                    <p className="mt-0.5 text-xs text-[#7b6660]/60">Login: {formatDate(session.login_time)}</p>
                   </div>
                 </div>
                 {!session.is_current && (
@@ -109,16 +109,16 @@ export default function SessionsSection() {
       {/* Confirm Logout All Modal */}
       {confirmLogoutAll && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-sm rounded-2xl border border-white/10 bg-[#120022] p-6 shadow-2xl">
+          <div className="mx-4 w-full max-w-sm rounded-2xl border border-white/10 bg-[#fff3ee] p-6 shadow-2xl">
             <h3 className="text-lg font-semibold text-white">Logout All Devices</h3>
-            <p className="mt-2 text-sm text-[#d8c6e8]">This will terminate all active sessions including your current one. You will need to log in again.</p>
+            <p className="mt-2 text-sm text-[#7b6660]">This will terminate all active sessions including your current one. You will need to log in again.</p>
             <div className="mt-5 flex gap-3">
               <button type="button" onClick={handleLogoutAll} disabled={actionLoading === "all"}
                 className="flex-1 rounded-xl bg-rose-500/20 px-4 py-2.5 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/30 disabled:opacity-50">
                 {actionLoading === "all" ? "Logging out..." : "Confirm Logout All"}
               </button>
               <button type="button" onClick={() => setConfirmLogoutAll(false)}
-                className="flex-1 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-[#d8c6e8] transition hover:bg-white/10">
+                className="flex-1 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-[#7b6660] transition hover:bg-white/10">
                 Cancel
               </button>
             </div>

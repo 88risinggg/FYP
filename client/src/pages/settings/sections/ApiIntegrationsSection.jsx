@@ -51,40 +51,40 @@ export default function ApiIntegrationsSection() {
   }
 
   if (loading) {
-    return <div className="neon-glass neon-border rounded-2xl p-6"><div className="animate-pulse h-48 rounded-lg bg-white/[0.04]" /></div>;
+    return <div className="app-panel rounded-2xl p-6"><div className="animate-pulse h-48 rounded-lg bg-white/[0.04]" /></div>;
   }
 
   return (
     <div className="space-y-6">
       {toast && <Toast toast={toast} />}
 
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
-          <Key size={20} className="text-[#C77DFF]" />
+          <Key size={20} className="text-[#F38978]" />
           <h2 className="text-xl font-semibold text-white">API & Integrations</h2>
         </div>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Manage your API keys and webhook configuration.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">Manage your API keys and webhook configuration.</p>
 
         <div className="mt-6 space-y-5">
           {/* API Key */}
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/70">API Key</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">API Key</p>
             {settings.api_key ? (
               <div className="mt-2 flex items-center gap-2">
                 <code className="flex-1 overflow-hidden text-ellipsis rounded-lg bg-white/[0.06] px-3 py-2 font-mono text-xs text-white">
                   {settings.api_key}
                 </code>
                 <button type="button" onClick={() => copyToClipboard(settings.api_key, "api")}
-                  className="rounded-lg border border-white/10 bg-white/[0.06] p-2 text-[#d8c6e8] transition hover:bg-white/10 hover:text-white">
+                  className="rounded-lg border border-white/10 bg-white/[0.06] p-2 text-[#7b6660] transition hover:bg-white/10 hover:text-white">
                   {copied === "api" ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
                 </button>
               </div>
             ) : (
-              <p className="mt-2 text-sm text-[#d8c6e8]/60">No API key generated yet.</p>
+              <p className="mt-2 text-sm text-[#7b6660]/60">No API key generated yet.</p>
             )}
             <div className="mt-3 flex gap-2">
               <button type="button" onClick={handleGenerate} disabled={generating}
-                className="neon-button inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold disabled:opacity-50">
+                className="primary-button inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold disabled:opacity-50">
                 {generating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
                 {settings.api_key ? "Regenerate" : "Generate"} API Key
               </button>
@@ -94,13 +94,13 @@ export default function ApiIntegrationsSection() {
           {/* Webhook Secret */}
           {settings.webhook_secret && (
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/70">Webhook Secret</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Webhook Secret</p>
               <div className="mt-2 flex items-center gap-2">
                 <code className="flex-1 overflow-hidden text-ellipsis rounded-lg bg-white/[0.06] px-3 py-2 font-mono text-xs text-white">
                   {settings.webhook_secret}
                 </code>
                 <button type="button" onClick={() => copyToClipboard(settings.webhook_secret, "secret")}
-                  className="rounded-lg border border-white/10 bg-white/[0.06] p-2 text-[#d8c6e8] transition hover:bg-white/10 hover:text-white">
+                  className="rounded-lg border border-white/10 bg-white/[0.06] p-2 text-[#7b6660] transition hover:bg-white/10 hover:text-white">
                   {copied === "secret" ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
                 </button>
               </div>
@@ -109,24 +109,24 @@ export default function ApiIntegrationsSection() {
 
           {/* Webhook URL */}
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/70">Webhook Configuration</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Webhook Configuration</p>
             <div className="mt-3 space-y-3">
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#d8c6e8]">Webhook URL</label>
+                <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">Webhook URL</label>
                 <input type="url" value={settings.webhook_url || ""} onChange={(e) => setSettings((p) => ({ ...p, webhook_url: e.target.value }))}
                   placeholder="https://your-domain.com/webhook"
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-[#d8c6e8]/40 focus:border-[#C77DFF]/50 focus:ring-1 focus:ring-[#C77DFF]/30" />
+                  className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-[#7b6660]/40 focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30" />
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-white">Enable Webhooks</span>
                 <button type="button" onClick={() => setSettings((p) => ({ ...p, webhooks_enabled: !p.webhooks_enabled }))}
-                  className={`relative h-6 w-11 rounded-full transition ${settings.webhooks_enabled ? "bg-[#7B2FF7]" : "bg-white/15"}`}>
+                  className={`relative h-6 w-11 rounded-full transition ${settings.webhooks_enabled ? "bg-[#F38978]" : "bg-white/15"}`}>
                   <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${settings.webhooks_enabled ? "translate-x-[22px]" : "translate-x-0.5"}`} />
                 </button>
               </div>
             </div>
             <button type="button" onClick={handleSave} disabled={saving}
-              className="mt-4 neon-button inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold disabled:opacity-50">
+              className="mt-4 primary-button inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold disabled:opacity-50">
               {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
               Save Webhook Settings
             </button>

@@ -21,20 +21,20 @@ const rolePermissions = {
 export default function RolesPermissionsSection() {
   return (
     <div className="space-y-6">
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
-          <Shield size={20} className="text-[#C77DFF]" />
+          <Shield size={20} className="text-[#F38978]" />
           <h2 className="text-xl font-semibold text-white">Roles & Permissions</h2>
         </div>
-        <p className="mt-1 text-sm text-[#d8c6e8]">View the permission matrix for each role. This is read-only.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">View the permission matrix for each role. This is read-only.</p>
 
         <div className="mt-6 overflow-x-auto">
           <table className="w-full min-w-[700px] text-left text-sm">
             <thead>
               <tr className="border-b border-white/10">
-                <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-[#C77DFF]/80">Module / Action</th>
+                <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">Module / Action</th>
                 {roles.map((role) => (
-                  <th key={role} className="px-2 py-3 text-center text-xs font-semibold uppercase tracking-wide text-[#d8c6e8]">{role}</th>
+                  <th key={role} className="px-2 py-3 text-center text-xs font-semibold uppercase tracking-wide text-[#7b6660]">{role}</th>
                 ))}
               </tr>
             </thead>
@@ -44,7 +44,7 @@ export default function RolesPermissionsSection() {
                   <tr key={`${perm.module}-${action}`} className="border-b border-white/5 hover:bg-white/[0.02]">
                     <td className="px-3 py-2.5">
                       {actionIdx === 0 && (
-                        <span className="text-xs font-semibold text-[#C77DFF]/70">{perm.module} &middot; </span>
+                        <span className="text-xs font-semibold text-[#F38978]/70">{perm.module} &middot; </span>
                       )}
                       <span className="text-white">{action}</span>
                     </td>

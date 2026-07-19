@@ -32,7 +32,7 @@ export default function FinanceRequestsPage() {
       <p className="mt-1 text-sm text-[#7b6660]">Release HR-approved salary advances and expense reimbursements.</p>
     </div>
     {error && <div className="rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-200">{error}</div>}
-    <div className="neon-glass neon-border rounded-2xl p-6">
+    <div className="app-panel rounded-2xl p-6">
       <div className="flex items-center gap-3"><Banknote className="text-[#F38978]" /><div><h3 className="font-semibold text-[#251E1F]">Salary advance release queue</h3><p className="text-sm text-[#7b6660]">Requests shown here have already passed HR approval.</p></div></div>
       {loading ? <Loader2 className="mx-auto my-10 animate-spin text-[#F38978]" /> : requests.length === 0 ? <p className="py-10 text-center text-sm text-[#7b6660]">No salary advances in the finance queue.</p> : <div className="mt-5 space-y-3">{requests.map((request) => <div key={request.finance_request_id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f0d2ca] bg-black/10 p-4">
         <div><p className="font-semibold text-[#251E1F]">{request.staff_name || `Staff #${request.staff_id}`} · ${Number(request.amount).toFixed(2)}</p><p className="mt-1 text-xs text-[#7b6660]">{request.reason} · {request.advance_request_id} · {new Date(request.created_at).toLocaleDateString("en-SG")}</p></div>

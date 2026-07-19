@@ -61,7 +61,7 @@ export default function StaffClaimsPage() {
   return (
     <div className="space-y-6">
       {message && <div className={`rounded-xl border p-4 text-sm ${message.type === "error" ? "border-red-400/30 bg-red-400/10 text-red-200" : "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"}`}>{message.text}</div>}
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-start gap-3">
           <ReceiptText className="mt-0.5 text-[#F38978]" />
           <div><h3 className="font-semibold text-[#251E1F]">Submit an expense claim</h3><p className="mt-1 text-sm text-[#7b6660]">A receipt or supporting document is required for compliance review.</p></div>
@@ -90,7 +90,7 @@ export default function StaffClaimsPage() {
         </form>
       </div>
 
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <h3 className="font-semibold text-[#251E1F]">Claim history</h3>
         {loading ? <Loader2 className="mx-auto my-12 animate-spin text-[#F38978]" /> : claims.length === 0 ? <p className="py-12 text-center text-sm text-[#7b6660]">No claims submitted yet.</p> : (
           <div className="mt-4 space-y-3">{claims.map((claim) => (

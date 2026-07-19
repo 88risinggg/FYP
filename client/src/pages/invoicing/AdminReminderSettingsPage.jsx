@@ -245,7 +245,7 @@ export default function AdminReminderSettingsPage() {
             setErrors([]);
             setMessage("");
           }}
-          className="neon-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold"
+          className="primary-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold"
         >
           <Plus size={17} />
           New Reminder Rule
@@ -260,7 +260,7 @@ export default function AdminReminderSettingsPage() {
               key={card.label}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="neon-glass neon-border rounded-lg p-5"
+              className="app-panel rounded-lg p-5"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -291,7 +291,7 @@ export default function AdminReminderSettingsPage() {
 
       <form onSubmit={handleSave} className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="space-y-6">
-          <div className="neon-glass neon-border rounded-lg p-5">
+          <div className="app-panel rounded-lg p-5">
             <div className="mb-5 flex items-center gap-3">
               <CalendarClock className="text-[#F38978]" size={22} />
               <h3 className="text-lg font-semibold text-[#251E1F]">Reminder Configuration</h3>
@@ -343,7 +343,7 @@ export default function AdminReminderSettingsPage() {
             </div>
           </div>
 
-          <div className="neon-glass neon-border rounded-lg p-5">
+          <div className="app-panel rounded-lg p-5">
             <div className="mb-5 flex items-center gap-3">
               <Clock3 className="text-[#F38978]" size={22} />
               <h3 className="text-lg font-semibold text-[#251E1F]">Overdue Reminder Intervals</h3>
@@ -364,7 +364,7 @@ export default function AdminReminderSettingsPage() {
             </div>
           </div>
 
-          <div className="neon-glass neon-border rounded-lg p-5">
+          <div className="app-panel rounded-lg p-5">
             <h3 className="text-lg font-semibold text-[#251E1F]">Reminder Options</h3>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {[
@@ -381,7 +381,7 @@ export default function AdminReminderSettingsPage() {
             </div>
           </div>
 
-          <div className="neon-glass neon-border rounded-lg p-5">
+          <div className="app-panel rounded-lg p-5">
             <div className="mb-5 flex items-center justify-between gap-4">
               <h3 className="text-lg font-semibold text-[#251E1F]">Email Template</h3>
               <div className="flex gap-2">
@@ -430,7 +430,7 @@ export default function AdminReminderSettingsPage() {
         </div>
 
         <aside className="space-y-6">
-          <div className="neon-glass neon-border rounded-lg p-5">
+          <div className="app-panel rounded-lg p-5">
             <h3 className="text-lg font-semibold text-[#251E1F]">Reminder Timeline Preview</h3>
             <div className="mt-5 space-y-4">
               {timeline.map((item, index) => {
@@ -451,7 +451,7 @@ export default function AdminReminderSettingsPage() {
                 );
               })}
             </div>
-            <button type="submit" className="neon-button mt-6 inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold">
+            <button type="submit" className="primary-button mt-6 inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold">
               <Save size={16} />
               Save Reminder Settings
             </button>
@@ -459,7 +459,7 @@ export default function AdminReminderSettingsPage() {
         </aside>
       </form>
 
-      <div className="neon-glass neon-border overflow-hidden rounded-lg">
+      <div className="app-panel overflow-hidden rounded-lg">
         <div className="border-b border-[#f0d2ca] px-5 py-4">
           <h3 className="text-lg font-semibold text-[#251E1F]">Reminder Schedule Rules</h3>
         </div>
@@ -503,7 +503,7 @@ export default function AdminReminderSettingsPage() {
         </div>
       </div>
 
-      <div className="neon-glass neon-border overflow-hidden rounded-lg">
+      <div className="app-panel overflow-hidden rounded-lg">
         <div className="border-b border-[#f0d2ca] px-5 py-4">
           <h3 className="text-lg font-semibold text-[#251E1F]">Reminder Logs</h3>
         </div>

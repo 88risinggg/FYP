@@ -60,38 +60,38 @@ export default function CompanySettingsSection() {
   }
 
   if (loading) {
-    return <div className="neon-glass neon-border rounded-2xl p-6"><div className="animate-pulse h-64 rounded-lg bg-white/[0.04]" /></div>;
+    return <div className="app-panel rounded-2xl p-6"><div className="animate-pulse h-64 rounded-lg bg-white/[0.04]" /></div>;
   }
 
   return (
     <div className="space-y-6">
       {toast && <Toast toast={toast} />}
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
-          <Building2 size={20} className="text-[#C77DFF]" />
+          <Building2 size={20} className="text-[#F38978]" />
           <h2 className="text-xl font-semibold text-white">Company Settings</h2>
         </div>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Manage your organization details.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">Manage your organization details.</p>
 
         <form onSubmit={handleSave} className="mt-6 space-y-6">
           {/* Company Logo */}
           <div className="flex items-center gap-5">
             <div className="relative">
-              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-[#C77DFF]/10 ring-2 ring-[#C77DFF]/25">
+              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-[#F38978]/10 ring-2 ring-[#F38978]/25">
                 {form.company_logo ? (
                   <img src={form.company_logo} alt="Logo" className="h-full w-full object-contain" />
                 ) : (
-                  <Building2 size={24} className="text-[#C77DFF]" />
+                  <Building2 size={24} className="text-[#F38978]" />
                 )}
               </div>
-              <label className="absolute -bottom-1 -right-1 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-[#7B2FF7] text-white shadow transition hover:bg-[#9D4EDD]">
+              <label className="absolute -bottom-1 -right-1 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-[#F38978] text-white shadow transition hover:bg-[#E77463]">
                 <Camera size={11} />
                 <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
               </label>
             </div>
             <div>
               <p className="text-sm font-medium text-white">Company Logo</p>
-              <p className="text-xs text-[#d8c6e8]">Upload your company logo (PNG, SVG)</p>
+              <p className="text-xs text-[#7b6660]">Upload your company logo (PNG, SVG)</p>
             </div>
           </div>
 
@@ -107,14 +107,14 @@ export default function CompanySettingsSection() {
             <Field label="Financial Year" name="financial_year" value={form.financial_year} onChange={handleChange} />
             <Field label="Fiscal Start Date" name="fiscal_start_date" value={form.fiscal_start_date} onChange={handleChange} type="date" />
             <div className="md:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[#d8c6e8]">Address</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">Address</label>
               <textarea name="address" value={form.address || ""} onChange={handleChange} rows={2}
-                className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition resize-none focus:border-[#C77DFF]/50 focus:ring-1 focus:ring-[#C77DFF]/30" />
+                className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition resize-none focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30" />
             </div>
           </div>
 
           <button type="submit" disabled={saving}
-            className="neon-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
+            className="primary-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
             Save Settings
           </button>
@@ -127,9 +127,9 @@ export default function CompanySettingsSection() {
 function Field({ label, name, value, onChange, type = "text" }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-[#d8c6e8]">{label}</label>
+      <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">{label}</label>
       <input type={type} name={name} value={value || ""} onChange={onChange}
-        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#C77DFF]/50 focus:ring-1 focus:ring-[#C77DFF]/30" />
+        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30" />
     </div>
   );
 }
@@ -137,10 +137,10 @@ function Field({ label, name, value, onChange, type = "text" }) {
 function SelectField({ label, name, value, onChange, options }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-[#d8c6e8]">{label}</label>
+      <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">{label}</label>
       <select name={name} value={value} onChange={onChange}
-        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#C77DFF]/50 focus:ring-1 focus:ring-[#C77DFF]/30">
-        {options.map((o) => <option key={o.value} value={o.value} className="bg-[#120022]">{o.label}</option>)}
+        className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30">
+        {options.map((o) => <option key={o.value} value={o.value} className="bg-[#fff3ee]">{o.label}</option>)}
       </select>
     </div>
   );

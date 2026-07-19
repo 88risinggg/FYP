@@ -141,7 +141,7 @@ export default function AdminBackupPage() {
 
   if (loading) {
     return (
-      <section className="neon-glass neon-border rounded-lg p-8 text-center text-[#d8c6e8]">
+      <section className="app-panel rounded-lg p-8 text-center text-[#7b6660]">
         <Loader2 className="mx-auto animate-spin" size={24} />
         <p className="mt-2">Loading backup data...</p>
       </section>
@@ -152,9 +152,9 @@ export default function AdminBackupPage() {
     <section className="space-y-6">
       {/* Header */}
       <div>
-        <p className="text-sm font-medium text-[#C77DFF]">Data Protection</p>
+        <p className="text-sm font-medium text-[#F38978]">Data Protection</p>
         <h2 className="mt-1 text-2xl font-semibold text-white">Database Backup & Restore</h2>
-        <p className="mt-2 text-sm text-[#d8c6e8]">
+        <p className="mt-2 text-sm text-[#7b6660]">
           Create backups of your database and restore from previous backups when needed.
         </p>
       </div>
@@ -173,14 +173,14 @@ export default function AdminBackupPage() {
       )}
 
       {/* Create Backup Section */}
-      <div className="neon-glass neon-border rounded-lg p-6">
+      <div className="app-panel rounded-lg p-6">
         <div className="flex items-center gap-3 mb-5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#C77DFF]/10 text-[#C77DFF]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#F38978]/10 text-[#F38978]">
             <HardDrive size={20} />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-white">Create New Backup</h3>
-            <p className="text-sm text-[#d8c6e8]">Choose between a full or partial database backup</p>
+            <p className="text-sm text-[#7b6660]">Choose between a full or partial database backup</p>
           </div>
         </div>
 
@@ -191,8 +191,8 @@ export default function AdminBackupPage() {
             onClick={() => { setBackupType("FULL"); setShowTableSelector(false); }}
             className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
               backupType === "FULL"
-                ? "border-[#C77DFF]/50 bg-[#C77DFF]/15 text-white"
-                : "border-white/10 bg-white/[0.05] text-[#d8c6e8] hover:bg-white/10"
+                ? "border-[#F38978]/50 bg-[#F38978]/15 text-white"
+                : "border-white/10 bg-white/[0.05] text-[#7b6660] hover:bg-white/10"
             }`}
           >
             <Database size={16} />
@@ -203,8 +203,8 @@ export default function AdminBackupPage() {
             onClick={() => { setBackupType("PARTIAL"); setShowTableSelector(true); }}
             className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
               backupType === "PARTIAL"
-                ? "border-[#C77DFF]/50 bg-[#C77DFF]/15 text-white"
-                : "border-white/10 bg-white/[0.05] text-[#d8c6e8] hover:bg-white/10"
+                ? "border-[#F38978]/50 bg-[#F38978]/15 text-white"
+                : "border-white/10 bg-white/[0.05] text-[#7b6660] hover:bg-white/10"
             }`}
           >
             <Archive size={16} />
@@ -215,8 +215,8 @@ export default function AdminBackupPage() {
             onClick={() => { setBackupType("INCREMENTAL"); setShowTableSelector(false); }}
             className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
               backupType === "INCREMENTAL"
-                ? "border-[#C77DFF]/50 bg-[#C77DFF]/15 text-white"
-                : "border-white/10 bg-white/[0.05] text-[#d8c6e8] hover:bg-white/10"
+                ? "border-[#F38978]/50 bg-[#F38978]/15 text-white"
+                : "border-white/10 bg-white/[0.05] text-[#7b6660] hover:bg-white/10"
             }`}
           >
             <RotateCcw size={16} />
@@ -227,8 +227,8 @@ export default function AdminBackupPage() {
             onClick={() => { setBackupType("DIFFERENTIAL"); setShowTableSelector(false); }}
             className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
               backupType === "DIFFERENTIAL"
-                ? "border-[#C77DFF]/50 bg-[#C77DFF]/15 text-white"
-                : "border-white/10 bg-white/[0.05] text-[#d8c6e8] hover:bg-white/10"
+                ? "border-[#F38978]/50 bg-[#F38978]/15 text-white"
+                : "border-white/10 bg-white/[0.05] text-[#7b6660] hover:bg-white/10"
             }`}
           >
             <HardDrive size={16} />
@@ -237,7 +237,7 @@ export default function AdminBackupPage() {
         </div>
 
         {/* Type Description */}
-        <div className="mb-5 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-[#d8c6e8]">
+        <div className="mb-5 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-[#7b6660]">
           {backupType === "FULL" && "Full Backup — Creates a complete snapshot of all tables and data in the database."}
           {backupType === "PARTIAL" && "Partial Backup — Backs up only the tables you select below."}
           {backupType === "INCREMENTAL" && "Incremental Backup — Backs up only data that has changed since the last backup (any type)."}
@@ -248,21 +248,21 @@ export default function AdminBackupPage() {
         {showTableSelector && (
           <div className="mb-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-medium text-[#d8c6e8]">
+              <p className="text-sm font-medium text-[#7b6660]">
                 Select tables to backup ({selectedTables.length} of {tables.length} selected)
               </p>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={selectAllTables}
-                  className="text-xs text-[#C77DFF] hover:underline"
+                  className="text-xs text-[#F38978] hover:underline"
                 >
                   Select All
                 </button>
                 <button
                   type="button"
                   onClick={deselectAllTables}
-                  className="text-xs text-[#d8c6e8] hover:underline"
+                  className="text-xs text-[#7b6660] hover:underline"
                 >
                   Deselect All
                 </button>
@@ -274,15 +274,15 @@ export default function AdminBackupPage() {
                   key={table}
                   className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm cursor-pointer transition ${
                     selectedTables.includes(table)
-                      ? "bg-[#C77DFF]/15 text-white"
-                      : "text-[#d8c6e8] hover:bg-white/[0.06]"
+                      ? "bg-[#F38978]/15 text-white"
+                      : "text-[#7b6660] hover:bg-white/[0.06]"
                   }`}
                 >
                   <input
                     type="checkbox"
                     checked={selectedTables.includes(table)}
                     onChange={() => toggleTable(table)}
-                    className="rounded border-white/20 bg-white/10 text-[#C77DFF] focus:ring-[#C77DFF]/50"
+                    className="rounded border-white/20 bg-white/10 text-[#F38978] focus:ring-[#F38978]/50"
                   />
                   {table}
                 </label>
@@ -296,7 +296,7 @@ export default function AdminBackupPage() {
           type="button"
           onClick={handleCreateBackup}
           disabled={creating}
-          className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#7B2FF7] to-[#C77DFF] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#9D4EDD]/30 hover:opacity-90 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#F38978] to-[#F38978] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#E77463]/30 hover:opacity-90 disabled:opacity-50"
         >
           {creating ? (
             <>
@@ -313,26 +313,26 @@ export default function AdminBackupPage() {
       </div>
 
       {/* Backup History */}
-      <div className="neon-glass neon-border rounded-lg p-6">
+      <div className="app-panel rounded-lg p-6">
         <div className="flex items-center gap-3 mb-5">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.07] text-emerald-300">
             <Archive size={20} />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-white">Backup History</h3>
-            <p className="text-sm text-[#d8c6e8]">{backups.length} backup(s) available</p>
+            <p className="text-sm text-[#7b6660]">{backups.length} backup(s) available</p>
           </div>
         </div>
 
         {backups.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-white/15 bg-white/[0.035] px-4 py-8 text-center text-sm text-[#d8c6e8]">
+          <div className="rounded-lg border border-dashed border-white/15 bg-white/[0.035] px-4 py-8 text-center text-sm text-[#7b6660]">
             No backups created yet. Create your first backup above.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-[#d8c6e8]/70">
+                <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-[#7b6660]/70">
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Size</th>
@@ -356,16 +356,16 @@ export default function AdminBackupPage() {
                             : backup.type === "INCREMENTAL"
                             ? "bg-sky-400/10 text-sky-200 border border-sky-300/20"
                             : backup.type === "DIFFERENTIAL"
-                            ? "bg-purple-400/10 text-purple-200 border border-purple-300/20"
+                            ? "bg-[#FDD9CD]/45 text-[#F38978] border border-[#f0d2ca]"
                             : "bg-amber-400/10 text-amber-200 border border-amber-300/20"
                         }`}
                       >
                         {backup.type}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-[#d8c6e8]">{formatSize(backup.file_size)}</td>
-                    <td className="px-4 py-3 text-[#d8c6e8]">{formatDate(backup.date)}</td>
-                    <td className="px-4 py-3 text-[#d8c6e8]">{backup.created_by || "-"}</td>
+                    <td className="px-4 py-3 text-[#7b6660]">{formatSize(backup.file_size)}</td>
+                    <td className="px-4 py-3 text-[#7b6660]">{formatDate(backup.date)}</td>
+                    <td className="px-4 py-3 text-[#7b6660]">{backup.created_by || "-"}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
                         <button
@@ -387,7 +387,7 @@ export default function AdminBackupPage() {
                                 URL.revokeObjectURL(url);
                               });
                           }}
-                          className="rounded-lg p-2 text-[#d8c6e8] hover:bg-white/10 hover:text-white"
+                          className="rounded-lg p-2 text-[#7b6660] hover:bg-white/10 hover:text-white"
                           title="Download"
                         >
                           <Download size={16} />
@@ -421,9 +421,9 @@ export default function AdminBackupPage() {
       {/* Restore Confirmation Modal */}
       {restoreTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="neon-glass neon-border w-full max-w-md rounded-xl p-6">
+          <div className="app-panel w-full max-w-md rounded-xl p-6">
             <h3 className="text-lg font-semibold text-white mb-2">Confirm Restore</h3>
-            <p className="text-sm text-[#d8c6e8] mb-1">
+            <p className="text-sm text-[#7b6660] mb-1">
               Are you sure you want to restore from this backup?
             </p>
             <p className="text-sm text-rose-300 mb-4">
@@ -431,7 +431,7 @@ export default function AdminBackupPage() {
             </p>
             <div className="rounded-lg border border-white/10 bg-white/[0.05] p-3 mb-5 text-sm">
               <p className="text-white font-medium">{restoreTarget.name}</p>
-              <p className="text-[#d8c6e8]">
+              <p className="text-[#7b6660]">
                 {restoreTarget.type} • {formatSize(restoreTarget.file_size)} • {formatDate(restoreTarget.date)}
               </p>
             </div>
@@ -439,7 +439,7 @@ export default function AdminBackupPage() {
               <button
                 type="button"
                 onClick={() => setRestoreTarget(null)}
-                className="rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2 text-sm font-medium text-[#d8c6e8] hover:bg-white/10"
+                className="rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2 text-sm font-medium text-[#7b6660] hover:bg-white/10"
               >
                 Cancel
               </button>

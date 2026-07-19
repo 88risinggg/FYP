@@ -38,19 +38,19 @@ export default function LanguageSection() {
   }
 
   if (loading) {
-    return <div className="neon-glass neon-border rounded-2xl p-6"><div className="animate-pulse h-48 rounded-lg bg-white/[0.04]" /></div>;
+    return <div className="app-panel rounded-2xl p-6"><div className="animate-pulse h-48 rounded-lg bg-white/[0.04]" /></div>;
   }
 
   return (
     <div className="space-y-6">
       {toast && <Toast toast={toast} />}
 
-      <div className="neon-glass neon-border rounded-2xl p-6">
+      <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
-          <Globe size={20} className="text-[#C77DFF]" />
+          <Globe size={20} className="text-[#F38978]" />
           <h2 className="text-xl font-semibold text-white">Language</h2>
         </div>
-        <p className="mt-1 text-sm text-[#d8c6e8]">Choose your preferred display language.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">Choose your preferred display language.</p>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
           {languages.map((lang) => {
@@ -59,15 +59,15 @@ export default function LanguageSection() {
               <button key={lang.value} type="button" onClick={() => handleSelect(lang.value)}
                 className={`flex items-center gap-4 rounded-xl border p-4 text-left transition ${
                   isActive
-                    ? "border-[#C77DFF]/50 bg-[#C77DFF]/10 shadow-lg shadow-[#9D4EDD]/15"
+                    ? "border-[#F38978]/50 bg-[#F38978]/10 shadow-lg shadow-[#E77463]/15"
                     : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
                 }`}>
                 <span className="text-2xl">{lang.flag}</span>
                 <div className="flex-1">
-                  <p className={`text-sm font-medium ${isActive ? "text-white" : "text-[#d8c6e8]"}`}>{lang.label}</p>
-                  <p className="text-xs text-[#d8c6e8]/60">{lang.native}</p>
+                  <p className={`text-sm font-medium ${isActive ? "text-white" : "text-[#7b6660]"}`}>{lang.label}</p>
+                  <p className="text-xs text-[#7b6660]/60">{lang.native}</p>
                 </div>
-                {isActive && <Check size={16} className="text-[#C77DFF]" />}
+                {isActive && <Check size={16} className="text-[#F38978]" />}
               </button>
             );
           })}
