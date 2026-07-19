@@ -229,38 +229,38 @@ async function getInvoices(req, res) {
     let statusByInvoiceId = {};
 
     if (invoiceIds.length > 0) {
-      // Load items from items_json column (no separate invoice_item table)
+      // Try loading items - attempt invoice_item table first, then items_json column
       try {
         const [itemRows] = await pool.query(
-          "SELECT invoice_id, items_json FROM invoice WHERE invoice_id IN (?) AND items_json IS NOT NULL",
+          "SELECT item_id, description, quantity, unit_price, amount, invoice_invoice_id FROM invoice_item WHERE invoice_invoice_id IN (?) ORDER BY item_id ASC",
           [invoiceIds]
         );
-        itemRows.forEach((row) => {
-          try {
-            const items = typeof row.items_json === "string" ? JSON.parse(row.items_json) : (row.items_json || []);
-            itemsByInvoiceId[row.invoice_id] = items.map((item, idx) => ({
-              item_id: idx + 1,
-              description: item.description,
-              quantity: item.quantity,
-              unit_price: item.unit_price,
-              amount: item.amount,
-              invoice_invoice_id: row.invoice_id
-            }));
-          } catch { itemsByInvoiceId[row.invoice_id] = []; }
-        });
+        itemsByInvoiceId = itemRows.reduce((acc, item) => {
+          acc[item.invoice_invoice_id] = acc[item.invoice_invoice_id] || [];
+          acc[item.invoice_invoice_id].push(item);
+          return acc;
+        }, {});
       } catch {
-        // Fallback: try legacy invoice_item table
+        // invoice_item table doesn't exist, try items_json column on invoice table
         try {
           const [itemRows] = await pool.query(
-            "SELECT item_id, description, quantity, unit_price, amount, invoice_invoice_id FROM invoice_item WHERE invoice_invoice_id IN (?) ORDER BY item_id ASC",
+            "SELECT invoice_id, items_json FROM invoice WHERE invoice_id IN (?) AND items_json IS NOT NULL",
             [invoiceIds]
           );
-          itemsByInvoiceId = itemRows.reduce((acc, item) => {
-            acc[item.invoice_invoice_id] = acc[item.invoice_invoice_id] || [];
-            acc[item.invoice_invoice_id].push(item);
-            return acc;
-          }, {});
-        } catch { /* no items available */ }
+          itemRows.forEach((row) => {
+            try {
+              const items = typeof row.items_json === "string" ? JSON.parse(row.items_json) : (row.items_json || []);
+              itemsByInvoiceId[row.invoice_id] = items.map((item, idx) => ({
+                item_id: idx + 1,
+                description: item.description,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                amount: item.amount,
+                invoice_invoice_id: row.invoice_id
+              }));
+            } catch { itemsByInvoiceId[row.invoice_id] = []; }
+          });
+        } catch { /* no items available from either source */ }
       }
 
       // Resolve the latest operational status from audit_logs (note: table is audit_logs not audit_log)
@@ -422,23 +422,27 @@ async function createInvoice(req, res) {
 
     const invoicePrimaryId = invoiceResult.insertId;
 
-    // Batch-insert line items
-    const itemValues = invoice.items.map((item) => [
-      item.description,
-      item.quantity,
-      item.unit_price,
-      item.amount,
-      invoicePrimaryId
-    ]);
-
+    // Store line items in items_json column on the invoice table
     await connection.query(
-      `
-        INSERT INTO invoice_item
-          (description, quantity, unit_price, amount, invoice_invoice_id)
-        VALUES ?
-      `,
-      [itemValues]
+      "UPDATE invoice SET items_json = ? WHERE invoice_id = ?",
+      [JSON.stringify(invoice.items), invoicePrimaryId]
     );
+
+    // Also try to insert into invoice_item table (may not exist)
+    try {
+      const itemValues = invoice.items.map((item) => [
+        item.description,
+        item.quantity,
+        item.unit_price,
+        item.amount,
+        invoicePrimaryId
+      ]);
+
+      await connection.query(
+        `INSERT INTO invoice_item (description, quantity, unit_price, amount, invoice_invoice_id) VALUES ?`,
+        [itemValues]
+      );
+    } catch { /* invoice_item table may not exist — items stored in items_json */ }
 
     // Audit trail: record creation and initial status
     await writeAuditLog(
