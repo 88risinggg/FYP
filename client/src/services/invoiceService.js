@@ -101,6 +101,10 @@ export function fetchInvoiceReports() {
   return apiRequest("/api/reports/invoices");
 }
 
+export function fetchFinancialExport() {
+  return apiRequest("/api/reports/invoices/export");
+}
+
 export function fetchPaymentHistory(invoiceId) {
   return apiRequest(`/api/payments/history/${invoiceId}`);
 }

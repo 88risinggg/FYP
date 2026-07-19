@@ -1,65 +1,64 @@
 /**
  * Report Controller
  *
- * Generates financial reports and analytics for the Finance dashboard.
- * Provides:
- * - Revenue summary metrics
- * - Monthly revenue trends
- * - Invoice status distribution
- * - Aging receivables analysis
- * - Top customer revenue breakdown
- * - Financial statements (Income Statement, Cash Flow, Ratios)
+ * Financial reports using the Vaniday commission model:
+ * - Total Revenue (Inflow) = full amount collected from customers via Stripe
+ * - Vaniday Commission = platform's share (commission_rate %)
+ * - Salon Share (Payout) = amount paid out to salon partners
+ * - Gross Revenue = Total Inflow - Salon Payouts = Vaniday Commission
+ *
+ * Also provides: monthly trends, aging receivables, status distribution,
+ * top customers, income statement, cash flow, and financial ratios.
  */
 
 const { pool } = require("../config/db");
-const { toCurrencyNumber } = require("./invoiceController");
+
+function toCurrency(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
+}
 
 /**
  * GET /api/reports/invoices
- *
- * Returns comprehensive invoice analytics and financial statement data.
- * All monetary values are normalized to 2 decimal places.
- *
- * Response includes:
- * - summary: Total revenue, paid, outstanding, invoice count
- * - monthlyRevenue: Revenue and collections per month
- * - statusDistribution: Count and total per invoice status
- * - agingReceivables: Outstanding amounts by age bucket (Current, 1-30, 31-60, 60+)
- * - topCustomers: Top 8 customers by revenue
- * - financialStatement: Income Statement, Cash Flow Summary, Financial Ratios
  */
 async function getInvoiceReports(req, res) {
   try {
-    // Overall revenue summary
+    // Summary with commission breakdown
     const [summaryRows] = await pool.query(`
       SELECT
         COALESCE(SUM(total_amount), 0) AS total_revenue,
         COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS paid_revenue,
-        COALESCE(SUM(CASE WHEN status <> 'Paid' THEN total_amount ELSE 0 END), 0) AS outstanding_revenue,
+        COALESCE(SUM(CASE WHEN status != 'Paid' THEN total_amount ELSE 0 END), 0) AS outstanding_revenue,
+        COALESCE(SUM(vaniday_share), 0) AS total_commission,
+        COALESCE(SUM(salon_share), 0) AS total_salon_payout,
+        COALESCE(SUM(CASE WHEN status = 'Paid' THEN vaniday_share ELSE 0 END), 0) AS collected_commission,
+        COALESCE(SUM(CASE WHEN status = 'Paid' THEN salon_share ELSE 0 END), 0) AS collected_salon_payout,
+        COALESCE(AVG(commission_rate), 0) AS avg_commission_rate,
         COUNT(*) AS invoice_count
       FROM invoice
     `);
 
-    // Monthly revenue breakdown with collections
+    // Monthly revenue with commission breakdown
     const [monthlyRows] = await pool.query(`
       SELECT
         DATE_FORMAT(issue_date, '%Y-%m') AS month,
         COALESCE(SUM(total_amount), 0) AS revenue,
         COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS collected,
+        COALESCE(SUM(vaniday_share), 0) AS commission,
+        COALESCE(SUM(salon_share), 0) AS salon_payout,
         COUNT(*) AS invoice_count
       FROM invoice
       GROUP BY DATE_FORMAT(issue_date, '%Y-%m')
       ORDER BY month ASC
     `);
 
-    // Invoice count and total grouped by status
+    // Status distribution
     const [statusRows] = await pool.query(`
       SELECT status, COUNT(*) AS count, COALESCE(SUM(total_amount), 0) AS total
-      FROM invoice
-      GROUP BY status
+      FROM invoice GROUP BY status
     `);
 
-    // Aging receivables: categorize unpaid invoices by days overdue
+    // Aging receivables
     const [agingRows] = await pool.query(`
       SELECT
         CASE
@@ -70,136 +69,193 @@ async function getInvoiceReports(req, res) {
         END AS bucket,
         COUNT(*) AS count,
         COALESCE(SUM(total_amount), 0) AS total
-      FROM invoice
-      WHERE status <> 'Paid'
+      FROM invoice WHERE status != 'Paid'
       GROUP BY bucket
       ORDER BY FIELD(bucket, 'Current', '1-30 Days', '31-60 Days', '60+ Days')
     `);
 
-    // Top 8 customers by total revenue
+    // Top customers
     const [customerRows] = await pool.query(`
-      SELECT
-        c.customer_id,
-        c.name,
-        COUNT(i.invoice_id) AS invoice_count,
-        COALESCE(SUM(i.total_amount), 0) AS total
+      SELECT c.customer_id, c.name, COUNT(i.invoice_id) AS invoice_count,
+             COALESCE(SUM(i.total_amount), 0) AS total,
+             COALESCE(SUM(i.vaniday_share), 0) AS commission
       FROM customer c
       LEFT JOIN invoice i ON i.customer_id = c.customer_id
       GROUP BY c.customer_id, c.name
-      ORDER BY total DESC
-      LIMIT 8
+      ORDER BY total DESC LIMIT 8
     `);
 
-    // Financial Statement: Paid invoices aggregates
-    const [paidInvoices] = await pool.query(`
-      SELECT
-        COUNT(*) AS paid_count,
-        COALESCE(SUM(total_amount), 0) AS total_collected,
-        COALESCE(AVG(total_amount), 0) AS avg_invoice_value
+    // Paid invoice stats
+    const [paidStats] = await pool.query(`
+      SELECT COUNT(*) AS paid_count, COALESCE(SUM(total_amount), 0) AS total_collected,
+             COALESCE(AVG(total_amount), 0) AS avg_invoice_value
       FROM invoice WHERE status = 'Paid'
     `);
 
-    // Financial Statement: Overdue invoices
-    const [overdueInvoices] = await pool.query(`
-      SELECT
-        COUNT(*) AS overdue_count,
-        COALESCE(SUM(total_amount), 0) AS overdue_total
+    // Overdue stats
+    const [overdueStats] = await pool.query(`
+      SELECT COUNT(*) AS overdue_count, COALESCE(SUM(total_amount), 0) AS overdue_total
       FROM invoice WHERE status = 'Overdue'
     `);
 
-    // Cash Flow: Current month revenue
-    const [thisMonthRevenue] = await pool.query(`
-      SELECT COALESCE(SUM(total_amount), 0) AS revenue
-      FROM invoice
-      WHERE DATE_FORMAT(issue_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')
+    // This month / last month for growth
+    const [thisMonthRes] = await pool.query(`
+      SELECT COALESCE(SUM(total_amount), 0) AS revenue, COALESCE(SUM(vaniday_share), 0) AS commission
+      FROM invoice WHERE DATE_FORMAT(issue_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')
+    `);
+    const [lastMonthRes] = await pool.query(`
+      SELECT COALESCE(SUM(total_amount), 0) AS revenue, COALESCE(SUM(vaniday_share), 0) AS commission
+      FROM invoice WHERE DATE_FORMAT(issue_date, '%Y-%m') = DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m')
     `);
 
-    // Cash Flow: Previous month revenue for growth calculation
-    const [lastMonthRevenue] = await pool.query(`
-      SELECT COALESCE(SUM(total_amount), 0) AS revenue
-      FROM invoice
-      WHERE DATE_FORMAT(issue_date, '%Y-%m') = DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m')
-    `);
+    const [customerCount] = await pool.query("SELECT COUNT(*) AS count FROM customer");
 
-    // Total customer count for per-customer calculations
-    const [customerCount] = await pool.query(`SELECT COUNT(*) AS count FROM customer`);
-
-    // Calculate financial ratios
-    const summary = summaryRows[0] || {};
-    const paid = paidInvoices[0] || {};
-    const overdue = overdueInvoices[0] || {};
-    const totalRev = Number(summary.total_revenue || 0);
-    const paidRev = Number(summary.paid_revenue || 0);
-    const collectionRate = totalRev > 0 ? ((paidRev / totalRev) * 100) : 0;
-    const revenuePerCustomer = Number(customerCount[0]?.count || 1) > 0
-      ? totalRev / Number(customerCount[0].count)
-      : 0;
-
-    // Month-over-month growth percentage
-    const thisMonth = Number(thisMonthRevenue[0]?.revenue || 0);
-    const lastMonth = Number(lastMonthRevenue[0]?.revenue || 0);
-    const momGrowth = lastMonth > 0
-      ? toCurrencyNumber(((thisMonth - lastMonth) / lastMonth) * 100)
-      : 0;
+    // Calculations
+    const s = summaryRows[0] || {};
+    const paid = paidStats[0] || {};
+    const overdue = overdueStats[0] || {};
+    const totalRev = Number(s.total_revenue || 0);
+    const paidRev = Number(s.paid_revenue || 0);
+    const totalCommission = Number(s.total_commission || 0);
+    const totalSalonPayout = Number(s.total_salon_payout || 0);
+    const collectedCommission = Number(s.collected_commission || 0);
+    const collectedSalonPayout = Number(s.collected_salon_payout || 0);
+    const collectionRate = totalRev > 0 ? (paidRev / totalRev) * 100 : 0;
+    const custCount = Number(customerCount[0]?.count || 1);
+    const thisMonth = Number(thisMonthRes[0]?.revenue || 0);
+    const lastMonth = Number(lastMonthRes[0]?.revenue || 0);
+    const momGrowth = lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth) * 100 : 0;
 
     res.json({
       summary: {
-        total_revenue: toCurrencyNumber(summary.total_revenue),
-        paid_revenue: toCurrencyNumber(summary.paid_revenue),
-        outstanding_revenue: toCurrencyNumber(summary.outstanding_revenue),
-        invoice_count: Number(summary.invoice_count || 0)
+        total_revenue: toCurrency(totalRev),
+        paid_revenue: toCurrency(paidRev),
+        outstanding_revenue: toCurrency(s.outstanding_revenue),
+        invoice_count: Number(s.invoice_count || 0),
+        total_commission: toCurrency(totalCommission),
+        total_salon_payout: toCurrency(totalSalonPayout),
+        avg_commission_rate: toCurrency(s.avg_commission_rate),
+        // Gross Revenue = Inflow - Salon Payouts (i.e. Vaniday's platform revenue)
+        gross_revenue: toCurrency(totalCommission)
       },
       monthlyRevenue: monthlyRows.map((row) => ({
         ...row,
-        revenue: toCurrencyNumber(row.revenue),
-        collected: toCurrencyNumber(row.collected)
+        revenue: toCurrency(row.revenue),
+        collected: toCurrency(row.collected),
+        commission: toCurrency(row.commission),
+        salon_payout: toCurrency(row.salon_payout)
       })),
-      statusDistribution: statusRows.map((row) => ({
-        ...row,
-        total: toCurrencyNumber(row.total)
-      })),
-      agingReceivables: agingRows.map((row) => ({
-        ...row,
-        total: toCurrencyNumber(row.total)
-      })),
+      statusDistribution: statusRows.map((row) => ({ ...row, total: toCurrency(row.total) })),
+      agingReceivables: agingRows.map((row) => ({ ...row, total: toCurrency(row.total) })),
       topCustomers: customerRows.map((row) => ({
         ...row,
-        total: toCurrencyNumber(row.total)
+        total: toCurrency(row.total),
+        commission: toCurrency(row.commission)
       })),
       financialStatement: {
         incomeStatement: {
-          grossRevenue: toCurrencyNumber(summary.total_revenue),
-          collections: toCurrencyNumber(paid.total_collected),
-          outstanding: toCurrencyNumber(summary.outstanding_revenue),
-          overdue: toCurrencyNumber(overdue.overdue_total),
-          netReceivable: toCurrencyNumber(totalRev - Number(paid.total_collected))
+          grossRevenue: toCurrency(totalCommission),
+          totalInflow: toCurrency(totalRev),
+          salonPayouts: toCurrency(totalSalonPayout),
+          collections: toCurrency(collectedCommission),
+          outstanding: toCurrency(totalCommission - collectedCommission),
+          overdue: toCurrency(overdue.overdue_total),
+          netReceivable: toCurrency(totalCommission - collectedCommission)
         },
         cashFlow: {
-          totalInflow: toCurrencyNumber(paid.total_collected),
-          pendingInflow: toCurrencyNumber(summary.outstanding_revenue),
-          overdueAmount: toCurrencyNumber(overdue.overdue_total),
-          thisMonthRevenue: toCurrencyNumber(thisMonth),
-          lastMonthRevenue: toCurrencyNumber(lastMonth),
-          monthOverMonthGrowth: momGrowth
+          totalInflow: toCurrency(paidRev),
+          salonPayouts: toCurrency(collectedSalonPayout),
+          platformRevenue: toCurrency(collectedCommission),
+          pendingInflow: toCurrency(s.outstanding_revenue),
+          overdueAmount: toCurrency(overdue.overdue_total),
+          thisMonthRevenue: toCurrency(thisMonth),
+          lastMonthRevenue: toCurrency(lastMonth),
+          monthOverMonthGrowth: toCurrency(momGrowth)
         },
         ratios: {
-          collectionRate: toCurrencyNumber(collectionRate),
-          avgInvoiceValue: toCurrencyNumber(paid.avg_invoice_value),
-          revenuePerCustomer: toCurrencyNumber(revenuePerCustomer),
-          totalCustomers: Number(customerCount[0]?.count || 0),
+          collectionRate: toCurrency(collectionRate),
+          avgInvoiceValue: toCurrency(paid.avg_invoice_value),
+          avgCommissionRate: toCurrency(s.avg_commission_rate),
+          revenuePerCustomer: toCurrency(totalRev / custCount),
+          totalCustomers: custCount,
           paidInvoiceCount: Number(paid.paid_count || 0),
           overdueInvoiceCount: Number(overdue.overdue_count || 0)
         }
       }
     });
   } catch (error) {
-    res.status(500).json({
-      message: "Failed to load invoice reports.",
-      detail: error.message
+    res.status(500).json({ message: "Failed to load invoice reports.", detail: error.message });
+  }
+}
+
+/**
+ * GET /api/reports/invoices/export
+ * Returns JSON data structured for PDF/Excel export on the frontend.
+ */
+async function exportFinancialReport(req, res) {
+  try {
+    const [invoices] = await pool.query(`
+      SELECT i.invoiceId, i.status, i.issue_date, i.due_date, i.total_amount,
+             i.commission_rate, i.vaniday_share, i.salon_share, i.payment_date,
+             i.payment_method, i.transaction_id,
+             c.name AS customer_name, c.email AS customer_email
+      FROM invoice i
+      INNER JOIN customer c ON c.customer_id = i.customer_id
+      ORDER BY i.issue_date DESC, i.invoice_id DESC
+    `);
+
+    const [summary] = await pool.query(`
+      SELECT
+        COALESCE(SUM(total_amount), 0) AS total_revenue,
+        COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS paid_revenue,
+        COALESCE(SUM(vaniday_share), 0) AS total_commission,
+        COALESCE(SUM(salon_share), 0) AS total_salon_payout,
+        COALESCE(SUM(CASE WHEN status = 'Paid' THEN vaniday_share ELSE 0 END), 0) AS collected_commission,
+        COALESCE(AVG(commission_rate), 0) AS avg_commission_rate,
+        COUNT(*) AS invoice_count,
+        SUM(CASE WHEN status = 'Paid' THEN 1 ELSE 0 END) AS paid_count,
+        SUM(CASE WHEN status = 'Overdue' THEN 1 ELSE 0 END) AS overdue_count
+      FROM invoice
+    `);
+
+    const s = summary[0] || {};
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      companyName: process.env.COMPANY_NAME || "PayNivo",
+      summary: {
+        totalInflow: toCurrency(s.total_revenue),
+        salonPayouts: toCurrency(s.total_salon_payout),
+        grossRevenue: toCurrency(s.total_commission),
+        collectedRevenue: toCurrency(s.collected_commission),
+        outstandingRevenue: toCurrency(Number(s.total_commission) - Number(s.collected_commission)),
+        avgCommissionRate: toCurrency(s.avg_commission_rate),
+        invoiceCount: Number(s.invoice_count || 0),
+        paidCount: Number(s.paid_count || 0),
+        overdueCount: Number(s.overdue_count || 0)
+      },
+      invoices: invoices.map((inv) => ({
+        invoiceId: inv.invoiceId,
+        customer: inv.customer_name,
+        email: inv.customer_email,
+        status: inv.status,
+        issueDate: inv.issue_date,
+        dueDate: inv.due_date,
+        totalAmount: toCurrency(inv.total_amount),
+        commissionRate: Number(inv.commission_rate || 0),
+        vanidayShare: toCurrency(inv.vaniday_share),
+        salonShare: toCurrency(inv.salon_share),
+        paymentDate: inv.payment_date,
+        paymentMethod: inv.payment_method,
+        transactionId: inv.transaction_id
+      }))
     });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to export report.", detail: error.message });
   }
 }
 
 module.exports = {
-  getInvoiceReports
+  getInvoiceReports,
+  exportFinancialReport
 };

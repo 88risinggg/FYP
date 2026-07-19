@@ -428,13 +428,13 @@ async function getPendingApplications(req, res) {
   try {
     const [applications] = await pool.query(
       `SELECT la.id, la.staff_id, s.name AS staff_name,
-              d.department_name AS department, lt.name AS leave_type_name,
+              s.department_name AS department, lt.name AS leave_type_name,
               la.start_date, la.end_date, la.total_days,
               la.reason, la.attachment_path, la.status, la.created_at
        FROM leave_application la
        JOIN staff s ON la.staff_id = s.employee_id
        JOIN leave_type lt ON la.leave_type_id = lt.id
-       LEFT JOIN department d ON s.department_id = d.department_id
+       
        WHERE la.status = 'pending'
        ORDER BY la.created_at ASC`
     );
@@ -467,7 +467,7 @@ async function getAllApplications(req, res) {
     const [applications] = await pool.query(
       `SELECT la.id, la.staff_id,
               s.name AS staff_name,
-              d.department_name AS department, lt.name AS leave_type_name,
+              s.department_name AS department, lt.name AS leave_type_name,
               la.start_date, la.end_date, la.total_days,
               la.reason, la.status, la.hr_comment,
               la.reviewed_by, la.created_at,
@@ -478,7 +478,7 @@ async function getAllApplications(req, res) {
        FROM leave_application la
        JOIN staff s ON la.staff_id = s.employee_id
        JOIN leave_type lt ON la.leave_type_id = lt.id
-       LEFT JOIN department d ON s.department_id = d.department_id
+       
        LEFT JOIN user r ON la.reviewed_by = r.user_id
        LEFT JOIN staff rs ON r.user_id = rs.user_user_id
        ORDER BY la.created_at DESC
@@ -510,14 +510,14 @@ async function getAllBalances(req, res) {
     const [rows] = await pool.query(
       `SELECT lb.staff_id,
               s.name AS staff_name,
-              d.department_name AS department,
+              s.department_name AS department,
               lt.id AS leave_type_id, lt.name AS leave_type_name,
               lb.entitled, lb.used, lb.carried_forward,
               (lb.entitled + lb.carried_forward - lb.used) AS remaining
        FROM leave_balance lb
        JOIN staff s ON lb.staff_id = s.employee_id
        JOIN leave_type lt ON lb.leave_type_id = lt.id
-       LEFT JOIN department d ON s.department_id = d.department_id
+       
        WHERE lb.year = ?
        ORDER BY s.name ASC, lt.name ASC`,
       [currentYear]

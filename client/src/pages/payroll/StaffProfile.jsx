@@ -153,8 +153,8 @@ export default function StaffProfile({ onProfileSaved }) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {[1,2,3,4].map(i => (
           <div key={i} className="space-y-2">
-            <div className="h-3 w-16 rounded bg-white/80 animate-pulse" />
-            <div className="h-10 rounded-md bg-white/80 animate-pulse" />
+            <div className="h-3 w-16 rounded bg-[#f0d2ca]/60 animate-pulse" />
+            <div className="h-10 rounded-md bg-[#f0d2ca]/40 animate-pulse" />
           </div>
         ))}
       </div>
@@ -163,12 +163,12 @@ export default function StaffProfile({ onProfileSaved }) {
 
   if (fetchError) return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="rounded-xl border border-red-400/20 bg-red-400/5 px-6 py-5">
-        <p className="text-sm text-red-200">{fetchError}</p>
+      <div className="rounded-xl border border-red-300/40 bg-red-50 px-6 py-5">
+        <p className="text-sm text-red-700">{fetchError}</p>
         <button
           type="button"
           onClick={() => { setLoading(true); setFetchError(null); window.location.reload(); }}
-          className="mt-3 rounded-lg bg-red-500/20 px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-500/30"
+          className="mt-3 rounded-lg bg-red-100 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-200"
         >
           Try Again
         </button>
@@ -182,12 +182,12 @@ export default function StaffProfile({ onProfileSaved }) {
       {toast && (
         <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[70] w-full max-w-md rounded-xl border px-5 py-4 shadow-2xl backdrop-blur-sm animate-[slideDown_0.3s_ease-out] ${
           toast.type === "error"
-            ? "border-red-400/30 bg-red-950/90 text-red-100"
-            : "border-emerald-400/30 bg-emerald-950/90 text-emerald-100"
+            ? "border-red-300/40 bg-red-50 text-red-700"
+            : "border-emerald-300/40 bg-emerald-50 text-emerald-700"
         }`}>
           <div className="flex items-center gap-3">
             <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-              toast.type === "error" ? "bg-red-500/20 text-red-300" : "bg-emerald-500/20 text-emerald-300"
+              toast.type === "error" ? "bg-red-100 text-red-600" : "bg-emerald-100 text-emerald-600"
             }`}>
               {toast.type === "error" ? "✕" : "✓"}
             </span>
@@ -235,8 +235,8 @@ export default function StaffProfile({ onProfileSaved }) {
 
         {contactsLoading ? (
           <div className="space-y-3">
-            <div className="h-4 rounded bg-white/80 animate-pulse" style={{ width: "70%" }} />
-            <div className="h-4 rounded bg-white/80 animate-pulse" style={{ width: "50%" }} />
+            <div className="h-4 rounded bg-[#f0d2ca]/60 animate-pulse" style={{ width: "70%" }} />
+            <div className="h-4 rounded bg-[#f0d2ca]/40 animate-pulse" style={{ width: "50%" }} />
           </div>
         ) : contacts.length === 0 && !showAddForm && !editingContact ? (
           <p className="text-sm text-[#7b6660]/60">No emergency contacts added yet</p>
@@ -254,7 +254,7 @@ export default function StaffProfile({ onProfileSaved }) {
                   </div>
                   <div className="flex items-center gap-2">
                     {contact.is_primary === 1 && (
-                      <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] font-medium text-cyan-300">Primary</span>
+                      <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] font-medium text-cyan-700">Primary</span>
                     )}
                     <button
                       type="button"
@@ -266,7 +266,7 @@ export default function StaffProfile({ onProfileSaved }) {
                     <button
                       type="button"
                       onClick={() => handleDeleteContact(contact.contact_id)}
-                      className="text-xs text-red-400 hover:text-red-300"
+                      className="text-xs text-red-500 hover:text-red-700"
                     >
                       Delete
                     </button>
@@ -294,7 +294,7 @@ export default function StaffProfile({ onProfileSaved }) {
             <p className="text-sm font-medium text-[#251E1F]">{editingContact ? 'Edit Contact' : 'Add Emergency Contact'}</p>
 
             {contactError && (
-              <p className="text-xs text-red-400">{contactError}</p>
+              <p className="text-xs text-red-600">{contactError}</p>
             )}
 
             <label className="block">

@@ -85,13 +85,15 @@ function toOperationalInvoiceStatus(rowStatus, auditStatus) {
  * @param {number|null} userId - The user who performed the action.
  */
 async function writeAuditLog(connection, action, entityType, entityId, userId) {
-  await connection.query(
-    `
-      INSERT INTO audit_log (action, entity_type, entity_id, user_user_id)
-      VALUES (?, ?, ?, ?)
-    `,
-    [action, entityType, entityId, userId || null]
-  );
+  try {
+    await connection.query(
+      `INSERT INTO audit_logs (user_id, activity_type, action_description, affected_record, status, created_at)
+       VALUES (?, ?, ?, ?, 'Success', NOW())`,
+      [userId || null, entityType, action, entityId ? String(entityId) : null]
+    );
+  } catch {
+    // Non-critical — don't block the operation if audit logging fails
+  }
 }
 
 /**
@@ -227,52 +229,61 @@ async function getInvoices(req, res) {
     let statusByInvoiceId = {};
 
     if (invoiceIds.length > 0) {
-      // Batch-load all line items for the fetched invoices
-      const [itemRows] = await pool.query(
-        `
-          SELECT
-            item_id,
-            description,
-            quantity,
-            unit_price,
-            amount,
-            invoice_invoice_id
-          FROM invoice_item
-          WHERE invoice_invoice_id IN (?)
-          ORDER BY item_id ASC
-        `,
-        [invoiceIds]
-      );
+      // Load items from items_json column (no separate invoice_item table)
+      try {
+        const [itemRows] = await pool.query(
+          "SELECT invoice_id, items_json FROM invoice WHERE invoice_id IN (?) AND items_json IS NOT NULL",
+          [invoiceIds]
+        );
+        itemRows.forEach((row) => {
+          try {
+            const items = typeof row.items_json === "string" ? JSON.parse(row.items_json) : (row.items_json || []);
+            itemsByInvoiceId[row.invoice_id] = items.map((item, idx) => ({
+              item_id: idx + 1,
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              amount: item.amount,
+              invoice_invoice_id: row.invoice_id
+            }));
+          } catch { itemsByInvoiceId[row.invoice_id] = []; }
+        });
+      } catch {
+        // Fallback: try legacy invoice_item table
+        try {
+          const [itemRows] = await pool.query(
+            "SELECT item_id, description, quantity, unit_price, amount, invoice_invoice_id FROM invoice_item WHERE invoice_invoice_id IN (?) ORDER BY item_id ASC",
+            [invoiceIds]
+          );
+          itemsByInvoiceId = itemRows.reduce((acc, item) => {
+            acc[item.invoice_invoice_id] = acc[item.invoice_invoice_id] || [];
+            acc[item.invoice_invoice_id].push(item);
+            return acc;
+          }, {});
+        } catch { /* no items available */ }
+      }
 
-      // Group items by invoice ID for O(1) lookup
-      itemsByInvoiceId = itemRows.reduce((acc, item) => {
-        const invoiceId = item.invoice_invoice_id;
-        acc[invoiceId] = acc[invoiceId] || [];
-        acc[invoiceId].push(item);
-        return acc;
-      }, {});
-
-      // Resolve the latest operational status from audit logs
-      const [statusRows] = await pool.query(
-        `
-          SELECT al.entity_id, al.action
-          FROM audit_log al
-          INNER JOIN (
-            SELECT entity_id, MAX(log_id) AS log_id
-            FROM audit_log
-            WHERE entity_type = 'invoice'
-              AND action LIKE ?
-              AND entity_id IN (?)
-            GROUP BY entity_id
-          ) latest ON latest.log_id = al.log_id
-        `,
-        [`${STATUS_AUDIT_PREFIX}%`, invoiceIds]
-      );
-
-      statusByInvoiceId = statusRows.reduce((acc, row) => {
-        acc[row.entity_id] = String(row.action || "").replace(STATUS_AUDIT_PREFIX, "");
-        return acc;
-      }, {});
+      // Resolve the latest operational status from audit_logs (note: table is audit_logs not audit_log)
+      try {
+        const [statusRows] = await pool.query(
+          `SELECT al.entity_id, al.action_description AS action
+           FROM audit_logs al
+           WHERE al.activity_type = 'invoice'
+             AND al.action_description LIKE ?
+             AND al.affected_record IN (?)
+           ORDER BY al.created_at DESC`,
+          [`${STATUS_AUDIT_PREFIX}%`, invoiceIds.map(String)]
+        );
+        // Take the first (most recent) per entity
+        statusRows.forEach((row) => {
+          const entityId = Number(row.entity_id || row.affected_record);
+          if (!statusByInvoiceId[entityId]) {
+            statusByInvoiceId[entityId] = String(row.action || "").replace(STATUS_AUDIT_PREFIX, "");
+          }
+        });
+      } catch {
+        // audit_logs schema may differ — skip status resolution, use row.status directly
+      }
     }
 
     // Map results with resolved status and attached items

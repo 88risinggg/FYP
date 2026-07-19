@@ -146,7 +146,7 @@ async function commitUpload(sessionId, selectedRowIds, userId) {
       if (hasValidEmpId) {
         await connection.query(
           `INSERT INTO staff (employee_id, name, email, phone, hire_date, base_salary,
-           status, department_id, created_at, updated_at)
+           status, department_name, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
           [
             Number(empId),
@@ -156,13 +156,13 @@ async function commitUpload(sessionId, selectedRowIds, userId) {
             row.data.hire_date,
             row.data.base_salary || 0,
             statusInt,
-            row.data.department_id || null,
+            row.data.department_name || null,
           ]
         );
       } else {
         await connection.query(
           `INSERT INTO staff (name, email, phone, hire_date, base_salary,
-           status, department_id, created_at, updated_at)
+           status, department_name, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
           [
             row.data.name,
@@ -171,7 +171,7 @@ async function commitUpload(sessionId, selectedRowIds, userId) {
             row.data.hire_date,
             row.data.base_salary || 0,
             statusInt,
-            row.data.department_id || null,
+            row.data.department_name || null,
           ]
         );
       }

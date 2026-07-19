@@ -59,7 +59,7 @@ async function createCheckoutSession(invoice) {
       invoice_id: String(invoice.invoice_id),
       invoiceId: invoice.invoiceId
     },
-    expires_at: Math.floor(Date.now() / 1000) + 24 * 60 * 60 // 24 hours
+    expires_at: Math.floor(Date.now() / 1000) + 23 * 60 * 60 // 23 hours (Stripe requires < 24h from creation)
   });
 
   console.log(`[STRIPE] Checkout session created for ${invoice.invoiceId}: ${session.id}`);
