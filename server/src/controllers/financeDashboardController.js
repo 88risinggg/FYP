@@ -153,13 +153,13 @@ async function getFinanceNotifications(req, res) {
       SELECT
         notification_id,
         type,
-        subject AS title,
+        title,
         message,
-        CASE WHEN status = 'Unread' THEN 0 ELSE 1 END AS is_read,
-        sent_at AS created_at
+        is_read,
+        created_at
       FROM notification
-      WHERE user_user_id = ?
-      ORDER BY sent_at DESC
+      WHERE user_id = ?
+      ORDER BY created_at DESC
       LIMIT 50
     `, [userId]);
 
@@ -189,7 +189,7 @@ async function getUnreadCount(req, res) {
     }
 
     const [rows] = await pool.query(
-      "SELECT COUNT(*) AS count FROM notification WHERE user_user_id = ? AND status = 'Unread'",
+      "SELECT COUNT(*) AS count FROM notification WHERE user_id = ? AND is_read = 0",
       [userId]
     );
 
@@ -213,7 +213,7 @@ async function markNotificationRead(req, res) {
     const userId = req.user?.userId;
 
     await pool.query(
-      "UPDATE notification SET status = 'Read' WHERE notification_id = ? AND user_user_id = ?",
+      "UPDATE notification SET is_read = 1 WHERE notification_id = ? AND user_id = ?",
       [notificationId, userId]
     );
 
@@ -236,7 +236,7 @@ async function markAllNotificationsRead(req, res) {
     const userId = req.user?.userId;
 
     await pool.query(
-      "UPDATE notification SET status = 'Read' WHERE user_user_id = ? AND status = 'Unread'",
+      "UPDATE notification SET is_read = 1 WHERE user_id = ? AND is_read = 0",
       [userId]
     );
 

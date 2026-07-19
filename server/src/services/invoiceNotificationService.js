@@ -32,7 +32,7 @@ async function createNotification(data) {
       );
       if (userRows.length > 0) {
         await pool.query(
-          "INSERT INTO notification (user_user_id, type, subject, message, status, sent_at) VALUES (?, ?, ?, ?, 'Unread', NOW())",
+          "INSERT INTO notification (user_id, type, title, message, is_read, created_at) VALUES (?, ?, ?, ?, 0, NOW())",
           [userId, type || "system", title, message || null]
         );
       }
@@ -43,9 +43,9 @@ async function createNotification(data) {
       );
 
       if (users.length > 0) {
-        const values = users.map((u) => [u.user_id, type || "system", title, message || null, "Unread"]);
+        const values = users.map((u) => [u.user_id, type || "system", title, message || null, 0]);
         await pool.query(
-          "INSERT INTO notification (user_user_id, type, subject, message, status, sent_at) VALUES ?",
+          "INSERT INTO notification (user_id, type, title, message, is_read, created_at) VALUES ?",
           [values.map((v) => [...v, new Date()])]
         );
       }

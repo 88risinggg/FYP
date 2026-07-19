@@ -21,19 +21,16 @@ async function getNotificationsByUserId(req, res) {
 
   try {
     const [rows] = await pool.query(
-      `SELECT notification_id, type, subject AS title, message, 
-              CASE WHEN status = 'Unread' THEN 0 ELSE 1 END AS is_read, 
-              sent_at AS created_at
+      `SELECT notification_id, type, title, message, is_read, created_at
        FROM notification
-       WHERE user_user_id = ?
-       ORDER BY sent_at DESC
+       WHERE user_id = ?
+       ORDER BY created_at DESC
        LIMIT 50`,
       [userId]
     );
 
     return res.json(rows);
   } catch (error) {
-    // If notification table doesn't exist, return empty array
     if (error.code === "ER_NO_SUCH_TABLE") {
       return res.json([]);
     }
@@ -51,7 +48,7 @@ async function markAsRead(req, res) {
 
   try {
     const [result] = await pool.query(
-      "UPDATE notification SET status = 'Read' WHERE notification_id = ? AND user_user_id = ?",
+      "UPDATE notification SET is_read = 1 WHERE notification_id = ? AND user_id = ?",
       [notificationId, req.user.userId]
     );
 
@@ -79,7 +76,7 @@ async function markAllAsRead(req, res) {
 
   try {
     await pool.query(
-      "UPDATE notification SET status = 'Read' WHERE user_user_id = ? AND status = 'Unread'",
+      "UPDATE notification SET is_read = 1 WHERE user_id = ? AND is_read = 0",
       [userId]
     );
 
@@ -109,7 +106,7 @@ async function createNotification(req, res) {
 
   try {
     const [result] = await pool.query(
-      "INSERT INTO notification (user_user_id, type, subject, message, status, sent_at) VALUES (?, ?, ?, ?, 'Unread', NOW())",
+      "INSERT INTO notification (user_id, type, title, message, is_read, created_at) VALUES (?, ?, ?, ?, 0, NOW())",
       [user_id, type || "system", title, message || null]
     );
 
@@ -126,7 +123,7 @@ async function createNotification(req, res) {
 async function createNotificationInternal(userId, type, title, message) {
   try {
     await pool.query(
-      "INSERT INTO notification (user_user_id, type, subject, message, status, sent_at) VALUES (?, ?, ?, ?, 'Unread', NOW())",
+      "INSERT INTO notification (user_id, type, title, message, is_read, created_at) VALUES (?, ?, ?, ?, 0, NOW())",
       [userId, type, title, message || null]
     );
   } catch (error) {
