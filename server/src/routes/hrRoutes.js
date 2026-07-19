@@ -319,7 +319,7 @@ router.get("/staff", authenticateToken, allowRoles("Admin", "HR"), (_req, res) =
   (async () => {
     try {
       const [rows] = await pool.query(
-        'SELECT employee_id, employee_code, name, date_of_birth, email, phone, address, department_id, hire_date, status, race, religion, base_salary, bank, account_no, user_user_id, created_at, updated_at FROM staff LIMIT 1000'
+        'SELECT employee_id, employee_code, name, date_of_birth, gender, email, phone, address, department_name, hire_date, status, race, religion, base_salary, bank, account_no, user_user_id, created_at, updated_at FROM staff LIMIT 1000'
       );
       // If DB has rows, return them; otherwise fall back to in-memory staffProfiles
       if (Array.isArray(rows) && rows.length > 0) return res.json(rows);
@@ -338,7 +338,7 @@ router.post("/staff", authenticateToken, allowRoles("Admin", "HR"), (req, res) =
       const now = new Date().toISOString();
       const insertCols = [
         'employee_id','employee_code','name','date_of_birth','email','phone','address',
-        'department_id','hire_date','base_salary','status',
+        'department_name','hire_date','base_salary','status',
         'created_at','updated_at','user_user_id',
         'race','religion','bank','account_no'
       ];
@@ -350,7 +350,7 @@ router.post("/staff", authenticateToken, allowRoles("Admin", "HR"), (req, res) =
         body.email || '',
         body.phone || '',
         body.address || null,
-        body.department_id || null,
+        body.department_name || body.department_id || null,
         body.hire_date || null,
         body.base_salary ? Number(body.base_salary) : 0,
         body.status || 'Active',
@@ -628,7 +628,7 @@ router.post(
             const [result] = await pool.query(
               `INSERT INTO staff (
                 employee_id, name, email, phone, date_of_birth, address, hire_date, base_salary,
-                status, created_at, updated_at, department_id, user_user_id,
+                status, created_at, updated_at, department_name, user_user_id,
                 race, religion, bank, account_no, employee_code
               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
@@ -1386,7 +1386,7 @@ router.get("/legacy-payslips", authenticateToken, allowRoles("Admin", "HR", "Fin
         s.employee_id,
         s.email AS staff_email,
         s.base_salary,
-        s.department_id
+        s.department_name
       FROM payslip ps
       JOIN payroll p ON ps.payroll_payroll_id = p.payroll_id
       JOIN staff s ON p.staff_employee_id = s.employee_id

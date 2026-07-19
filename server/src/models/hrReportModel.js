@@ -109,7 +109,7 @@ async function fetchLeaveReport({ year, departmentId, leaveType, status } = {}) 
   let sql = `
     SELECT
       la.id AS leave_application_id, la.staff_id AS employee_id,
-      s.name AS employee_name, s.department_id,
+      s.name AS employee_name, s.department_name AS department_id,
       lt.name AS leave_type,
       la.start_date, la.end_date, la.total_days,
       la.status, la.reason
@@ -125,7 +125,7 @@ async function fetchLeaveReport({ year, departmentId, leaveType, status } = {}) 
     params.push(year);
   }
   if (departmentId) {
-    sql += " AND s.department_id = ?";
+    sql += " AND s.department_name = ?";
     params.push(departmentId);
   }
   if (leaveType) {
@@ -153,7 +153,7 @@ async function fetchLeaveReportForStaff(staffId, { year } = {}) {
   let sql = `
     SELECT
       la.id AS leave_application_id, la.staff_id AS employee_id,
-      s.name AS employee_name, s.department_id,
+      s.name AS employee_name, s.department_name AS department_id,
       lt.name AS leave_type,
       la.start_date, la.end_date, la.total_days,
       la.status, la.reason
@@ -185,15 +185,14 @@ async function fetchEmployeeReport({ departmentId, status } = {}) {
   let sql = `
     SELECT
       s.employee_id, s.employee_code, s.name, s.email, s.phone,
-      d.department_name AS department, s.hire_date, s.base_salary, s.status
+      s.department_name AS department, s.hire_date, s.base_salary, s.status
     FROM staff s
-    LEFT JOIN department d ON d.department_id = s.department_id
     WHERE 1=1
   `;
   const params = [];
 
   if (departmentId) {
-    sql += " AND s.department_id = ?";
+    sql += " AND s.department_name = ?";
     params.push(departmentId);
   }
   if (status) {

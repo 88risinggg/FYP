@@ -2,10 +2,10 @@ import { CheckCircle2, Circle, Clock3, XCircle } from "lucide-react";
 import { getClaimWorkflowSteps } from "../../utils/claimWorkflow.js";
 
 const stateStyles = {
-  complete: "border-emerald-300/40 bg-emerald-50 text-emerald-700",
-  current: "border-amber-300/40 bg-amber-50 text-amber-700",
-  rejected: "border-red-300/40 bg-red-50 text-red-700",
-  pending: "border-[#f0d2ca] bg-white/70 text-[#7b6660]"
+  complete: "border-emerald-400/40 bg-emerald-50 text-emerald-700",
+  current: "border-amber-400/40 bg-amber-50 text-amber-700",
+  rejected: "border-red-400/40 bg-red-50 text-red-700",
+  pending: "border-[#f0d2ca] bg-[#fff8f5] text-[#7b6660]"
 };
 
 const stateIcons = {

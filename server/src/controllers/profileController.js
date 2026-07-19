@@ -15,7 +15,7 @@ async function createProfile(req, res) {
 
   const {
     user_user_id, employee_code, name, date_of_birth, email,
-    phone, address, department_id, hire_date, status,
+    phone, address, department_name, hire_date, status,
     race, religion, base_salary, bank, account_no
   } = req.body;
 
@@ -25,20 +25,20 @@ async function createProfile(req, res) {
 
   try {
     const [result] = await pool.query(
-      `INSERT INTO staff (user_user_id, employee_code, name, date_of_birth, email, phone, address, department_id, hire_date, status, race, religion, base_salary, bank, account_no)
+      `INSERT INTO staff (user_user_id, employee_code, name, date_of_birth, email, phone, address, department_name, hire_date, status, race, religion, base_salary, bank, account_no)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         user_user_id, employee_code || null, name, date_of_birth || null, email,
-        phone || null, address || null, department_id || null,
+        phone || null, address || null, department_name || null,
         hire_date || null, status ?? 1, race || null, religion || null,
         base_salary || 0, bank || null, account_no || null
       ]
     );
 
     const [rows] = await pool.query(
-      `SELECT s.*, d.department_name AS department
+      `SELECT s.*, s.department_name AS department
        FROM staff s
-       LEFT JOIN department d ON s.department_id = d.department_id
+       
        WHERE s.employee_id = ?`,
       [result.insertId]
     );
@@ -81,9 +81,8 @@ async function getProfileByUserId(req, res) {
         s.base_salary AS salary,
         s.bank,
         s.account_no,
-        d.department_name AS department
+        s.department_name AS department
        FROM staff s
-       LEFT JOIN department d ON s.department_id = d.department_id
        WHERE s.user_user_id = ?`,
       [userId]
     );
@@ -159,9 +158,9 @@ async function getAllProfiles(req, res) {
         s.base_salary AS salary,
         s.hire_date,
         s.status,
-        d.department_name AS department
+        s.department_name AS department
        FROM staff s
-       LEFT JOIN department d ON s.department_id = d.department_id
+       
        ORDER BY s.employee_id`
     );
 
@@ -187,7 +186,7 @@ async function updateProfileByUserId(req, res) {
     return res.status(403).json({ message: "Access denied" });
   }
 
-  const { name, email, phone, address, base_salary, bank, account_no, department_id } = req.body;
+  const { name, email, phone, address, base_salary, bank, account_no, department_name, department_id } = req.body;
 
   try {
     const fields = [];
@@ -204,7 +203,8 @@ async function updateProfileByUserId(req, res) {
     // Protected fields — only Admin/HR can change these
     if (userRole === "Admin" || userRole === "HR") {
       if (typeof base_salary !== 'undefined') { fields.push('base_salary = ?'); values.push(base_salary); }
-      if (typeof department_id !== 'undefined') { fields.push('department_id = ?'); values.push(department_id); }
+      const deptValue = department_name || department_id;
+      if (typeof deptValue !== 'undefined') { fields.push('department_name = ?'); values.push(deptValue); }
     }
 
     if (fields.length === 0) {
