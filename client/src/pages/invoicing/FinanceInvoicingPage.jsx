@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import * as XLSX from "xlsx";
 import {
@@ -51,9 +51,30 @@ import {
   scheduleBulkInvoices,
   sendInvoice,
   sendInvoiceReminder,
-  validateBulkInvoiceRows
+  validateBulkInvoiceRows,
+  fetchFinancialExport
 } from "../../services/invoiceService.js";
 import { getStoredSession } from "../../services/sessionService.js";
+import {
+  startNotificationPolling,
+  markNotificationRead as apiMarkNotificationRead,
+  markAllNotificationsRead as apiMarkAllNotificationsRead
+} from "../../services/financeNotificationService.js";
+import {
+  createPdfDocument,
+  addCoverPage,
+  addPageFooter,
+  addSectionHeader,
+  addChartImage,
+  addMetricRow,
+  captureElement,
+  generateAndDownloadPdf,
+  PAGE_MARGIN,
+  CONTENT_WIDTH_A4,
+  BRAND_COLOR,
+  DARK_COLOR,
+  GRAY_COLOR
+} from "../../services/pdfExportService.js";
 
 const financeSidebarSections = [
   {
@@ -112,12 +133,12 @@ const financeSidebarSections = [
 const invoiceStatuses = ["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdue"];
 
 const statusStyles = {
-  Draft: "border-slate-400/25 bg-slate-400/10 text-slate-200",
-  Scheduled: "border-[#f0d2ca] bg-[#fff3ee] text-[#7b6660]",
-  Sent: "border-blue-400/30 bg-blue-500/15 text-blue-200",
-  Viewed: "border-cyan-400/30 bg-cyan-500/15 text-cyan-200",
-  Paid: "border-emerald-400/30 bg-emerald-500/15 text-emerald-200",
-  Overdue: "border-rose-400/30 bg-rose-500/15 text-rose-200"
+  Draft: "border-slate-400/25 bg-slate-400/10 text-slate-700",
+  Scheduled: "border-violet-400/30 bg-violet-500/15 text-violet-700",
+  Sent: "border-blue-400/30 bg-blue-500/15 text-blue-700",
+  Viewed: "border-cyan-400/30 bg-cyan-500/15 text-cyan-700",
+  Paid: "border-emerald-400/30 bg-emerald-500/15 text-emerald-700",
+  Overdue: "border-rose-400/30 bg-rose-500/15 text-rose-700"
 };
 
 const emptyItem = {
@@ -139,6 +160,42 @@ const invoiceTemplateHeaders = [
   "Invoice Date",
   "Due Date",
   "Amount"
+];
+
+const DEMO_INVOICES = [
+  { invoice_id: 1, invoiceId: "INV-000001", customer_name: "Luxe Hair Studio", customer_email: "bookings@luxehairstudio.sg", customer_id: 1, issue_date: "2026-05-20", due_date: "2026-06-19", total_amount: 4850.00, status: "Paid", scheduled_at: null },
+  { invoice_id: 2, invoiceId: "INV-000002", customer_name: "The Nail Artistry", customer_email: "hello@thenailartistry.sg", customer_id: 2, issue_date: "2026-06-25", due_date: "2026-07-25", total_amount: 3760.00, status: "Sent", scheduled_at: null },
+  { invoice_id: 3, invoiceId: "INV-000003", customer_name: "Serenity Spa & Wellness", customer_email: "reservations@serenityspa.sg", customer_id: 3, issue_date: "2026-07-01", due_date: "2026-07-31", total_amount: 8920.00, status: "Draft", scheduled_at: null },
+  { invoice_id: 4, invoiceId: "INV-000004", customer_name: "Glow Aesthetics Clinic", customer_email: "appointments@glowaesthetics.sg", customer_id: 4, issue_date: "2026-06-10", due_date: "2026-07-10", total_amount: 12680.00, status: "Overdue", scheduled_at: null },
+  { invoice_id: 5, invoiceId: "INV-000005", customer_name: "Brow & Lash Bar", customer_email: "info@browlashbar.sg", customer_id: 5, issue_date: "2026-06-18", due_date: "2026-07-18", total_amount: 6540.50, status: "Overdue", scheduled_at: null },
+  { invoice_id: 6, invoiceId: "INV-000006", customer_name: "KBeauty Haven", customer_email: "hello@kbeautyhaven.sg", customer_id: 6, issue_date: "2026-06-20", due_date: "2026-07-20", total_amount: 4280.00, status: "Paid", scheduled_at: null },
+  { invoice_id: 7, invoiceId: "INV-000007", customer_name: "Zen Reflexology Centre", customer_email: "bookings@zenreflexology.sg", customer_id: 7, issue_date: "2026-07-05", due_date: "2026-08-04", total_amount: 2950.00, status: "Sent", scheduled_at: null },
+  { invoice_id: 8, invoiceId: "INV-000008", customer_name: "Prestige Barbers", customer_email: "appointments@prestigebarbers.sg", customer_id: 8, issue_date: "2026-07-10", due_date: "2026-08-09", total_amount: 5120.00, status: "Draft", scheduled_at: null },
+  { invoice_id: 9, invoiceId: "INV-000009", customer_name: "Skin Lab Express", customer_email: "info@skinlabexpress.sg", customer_id: 9, issue_date: "2026-06-28", due_date: "2026-07-28", total_amount: 9450.00, status: "Viewed", scheduled_at: null },
+  { invoice_id: 10, invoiceId: "INV-000010", customer_name: "Orchid Beauty Lounge", customer_email: "bookings@orchidbeauty.sg", customer_id: 10, issue_date: "2026-06-15", due_date: "2026-07-15", total_amount: 7380.00, status: "Paid", scheduled_at: null },
+  { invoice_id: 11, invoiceId: "INV-000011", customer_name: "The Waxing Boutique", customer_email: "hello@waxingboutique.sg", customer_id: 11, issue_date: "2026-07-08", due_date: "2026-08-07", total_amount: 2190.00, status: "Scheduled", scheduled_at: "2026-07-20T09:00:00" },
+  { invoice_id: 12, invoiceId: "INV-000012", customer_name: "Radiance Medi-Spa", customer_email: "info@radiancespa.sg", customer_id: 12, issue_date: "2026-05-28", due_date: "2026-06-27", total_amount: 11200.00, status: "Overdue", scheduled_at: null },
+  { invoice_id: 13, invoiceId: "INV-000013", customer_name: "Aura Hair & Beauty", customer_email: "bookings@aurahairbeauty.sg", customer_id: 13, issue_date: "2026-06-05", due_date: "2026-07-05", total_amount: 3150.00, status: "Paid", scheduled_at: null },
+  { invoice_id: 14, invoiceId: "INV-000014", customer_name: "Bliss Nail Studio", customer_email: "hello@blissnails.sg", customer_id: 14, issue_date: "2026-07-12", due_date: "2026-08-11", total_amount: 5880.00, status: "Draft", scheduled_at: null },
+  { invoice_id: 15, invoiceId: "INV-000015", customer_name: "Rejuve Wellness Clinic", customer_email: "appointments@rejuveclinic.sg", customer_id: 15, issue_date: "2026-07-02", due_date: "2026-08-01", total_amount: 3690.00, status: "Sent", scheduled_at: null }
+];
+
+const DEMO_CUSTOMERS = [
+  { customer_id: 1, name: "Luxe Hair Studio", email: "bookings@luxehairstudio.sg", address: "391B Orchard Road, #03-12, Ngee Ann City, Singapore 238874", created_at: "2026-01-10T08:30:00.000Z" },
+  { customer_id: 2, name: "The Nail Artistry", email: "hello@thenailartistry.sg", address: "68 Orchard Road, #04-58, Plaza Singapura, Singapore 238839", created_at: "2026-01-15T09:00:00.000Z" },
+  { customer_id: 3, name: "Serenity Spa & Wellness", email: "reservations@serenityspa.sg", address: "2 Bayfront Avenue, #B1-05, Marina Bay Sands, Singapore 018972", created_at: "2026-02-01T10:15:00.000Z" },
+  { customer_id: 4, name: "Glow Aesthetics Clinic", email: "appointments@glowaesthetics.sg", address: "1 Raffles Place, #05-19, One Raffles Place, Singapore 048616", created_at: "2026-02-08T11:00:00.000Z" },
+  { customer_id: 5, name: "Brow & Lash Bar", email: "info@browlashbar.sg", address: "313 Orchard Road, #02-28, 313@Somerset, Singapore 238895", created_at: "2026-02-20T14:30:00.000Z" },
+  { customer_id: 6, name: "KBeauty Haven", email: "hello@kbeautyhaven.sg", address: "181 Orchard Road, #04-01, Orchard Central, Singapore 238896", created_at: "2026-03-05T09:45:00.000Z" },
+  { customer_id: 7, name: "Zen Reflexology Centre", email: "bookings@zenreflexology.sg", address: "6 Raffles Boulevard, #03-128, Marina Square, Singapore 039594", created_at: "2026-03-12T08:00:00.000Z" },
+  { customer_id: 8, name: "Prestige Barbers", email: "appointments@prestigebarbers.sg", address: "252 North Bridge Road, #01-15, Raffles City, Singapore 179103", created_at: "2026-03-18T13:20:00.000Z" },
+  { customer_id: 9, name: "Skin Lab Express", email: "info@skinlabexpress.sg", address: "290 Orchard Road, #12-01, Paragon, Singapore 238859", created_at: "2026-04-01T10:00:00.000Z" },
+  { customer_id: 10, name: "Orchid Beauty Lounge", email: "bookings@orchidbeauty.sg", address: "3 Temasek Boulevard, #02-435, Suntec City, Singapore 038983", created_at: "2026-04-10T11:30:00.000Z" },
+  { customer_id: 11, name: "The Waxing Boutique", email: "hello@waxingboutique.sg", address: "1 HarbourFront Walk, #01-153, VivoCity, Singapore 098585", created_at: "2026-04-22T09:15:00.000Z" },
+  { customer_id: 12, name: "Radiance Medi-Spa", email: "info@radiancespa.sg", address: "2 Orchard Turn, #B2-15, ION Orchard, Singapore 238801", created_at: "2026-05-03T14:00:00.000Z" },
+  { customer_id: 13, name: "Aura Hair & Beauty", email: "bookings@aurahairbeauty.sg", address: "50 Jurong Gateway Road, #03-11, JEM, Singapore 608549", created_at: "2026-05-15T12:45:00.000Z" },
+  { customer_id: 14, name: "Bliss Nail Studio", email: "hello@blissnails.sg", address: "23 Serangoon Central, #04-42, NEX, Singapore 556083", created_at: "2026-06-01T08:30:00.000Z" },
+  { customer_id: 15, name: "Rejuve Wellness Clinic", email: "appointments@rejuveclinic.sg", address: "80 Marine Parade Road, #09-05, Parkway Parade, Singapore 449269", created_at: "2026-06-10T10:00:00.000Z" }
 ];
 
 function formatCurrency(value) {
@@ -223,14 +280,14 @@ function openPrintableInvoice(invoice) {
     const qrLibUrl = "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js";
 
     const paymentSection = (isPayable && paymentUrl) ? `
-      <div style="margin-top: 32px; padding: 24px; background: #FFF8F5; border-radius: 12px; text-align: center; border: 1px solid #EAD6CF;">
+      <div style="margin-top: 32px; padding: 24px; background: #f8f4ff; border-radius: 12px; text-align: center; border: 1px solid #e5e0f0;">
         <h3 style="margin: 0 0 4px; font-size: 16px; color: #1a1a2e;">Pay This Invoice Online</h3>
         <p style="margin: 0 0 16px; font-size: 12px; color: #666;">Secure payment powered by Stripe</p>
-        <a href="${escapeHtml(paymentUrl)}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #F38978; color: white; padding: 14px 36px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px; cursor: pointer;">
-          Pay Now — ${escapeHtml(formatCurrency(invoice.total_amount))}
+        <a href="${escapeHtml(paymentUrl)}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #7B2FF7; color: white; padding: 14px 36px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px; cursor: pointer;">
+          Pay Now â€” ${escapeHtml(formatCurrency(invoice.total_amount))}
         </a>
         <p style="margin: 12px 0 0; font-size: 10px; color: #888;">Click the button above or copy this link into your browser:</p>
-        <p style="margin: 4px 0 0; font-size: 11px; word-break: break-all;"><a href="${escapeHtml(paymentUrl)}" target="_blank" style="color: #F38978; text-decoration: underline;">${escapeHtml(paymentUrl)}</a></p>
+        <p style="margin: 4px 0 0; font-size: 11px; word-break: break-all;"><a href="${escapeHtml(paymentUrl)}" target="_blank" style="color: #7B2FF7; text-decoration: underline;">${escapeHtml(paymentUrl)}</a></p>
         <div style="margin-top: 20px; padding-top: 16px; border-top: 1px dashed #ddd;">
           <p style="font-size: 12px; color: #666; margin: 0 0 12px;">Scan QR code to pay:</p>
           <div id="stripe-qr" style="display: inline-block; background: white; padding: 8px; border-radius: 8px; border: 1px solid #e5e7eb;"></div>
@@ -241,7 +298,7 @@ function openPrintableInvoice(invoice) {
 
     const paidBanner = (invoice.status === "Paid") ? `
       <div style="margin-top: 32px; padding: 16px; background: #ecfdf5; border-radius: 12px; text-align: center; border: 1px solid #a7f3d0;">
-        <p style="margin: 0; font-size: 14px; font-weight: 600; color: #065f46;">✅ This invoice has been paid. Thank you!</p>
+        <p style="margin: 0; font-size: 14px; font-weight: 600; color: #065f46;">âœ… This invoice has been paid. Thank you!</p>
       </div>
     ` : "";
 
@@ -259,9 +316,9 @@ function openPrintableInvoice(invoice) {
           <script src="${qrLibUrl}"><\/script>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; color: #111827; margin: 40px; }
-            header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #F38978; padding-bottom: 20px; }
-            h1 { margin: 0 0 4px; font-size: 28px; color: #F38978; }
-            .brand { font-size: 32px; font-weight: 900; color: #F38978; margin: 0; }
+            header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #7B2FF7; padding-bottom: 20px; }
+            h1 { margin: 0 0 4px; font-size: 28px; color: #7B2FF7; }
+            .brand { font-size: 32px; font-weight: 900; color: #7B2FF7; margin: 0; }
             .muted { color: #6b7280; }
             table { width: 100%; border-collapse: collapse; margin-top: 28px; }
             th, td { border-bottom: 1px solid #e5e7eb; padding: 10px; text-align: left; }
@@ -296,7 +353,7 @@ function openPrintableInvoice(invoice) {
           <div class="total">Total: SGD ${escapeHtml(formatCurrency(invoice.total_amount))}</div>
           ${paymentSection}
           ${paidBanner}
-          <div class="footer">Generated by PayNivo • Automated Invoicing & Payroll System</div>
+          <div class="footer">Generated by PayNivo â€¢ Automated Invoicing & Payroll System</div>
           <script>
             function renderQR(elementId, data, size) {
               if (!data || !document.getElementById(elementId)) return;
@@ -355,32 +412,32 @@ function getItemAmount(item) {
 
 function InvoiceStatusBadge({ status }) {
   return (
-    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyles[status] || statusStyles.Draft}`}>
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusStyles[status] || statusStyles.Draft}`}>
       {status}
     </span>
   );
 }
 
-function MetricCard({ label, value, accent = "text-white" }) {
+function MetricCard({ label, value, accent = "text-[#251E1F]" }) {
   return (
-    <div className="app-panel rounded-xl px-5 py-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#7b6660]/70">
+    <div className="neon-glass neon-border rounded-xl px-5 py-4">
+      <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">
         {label}
       </p>
-      <p className={`mt-2 text-2xl font-semibold ${accent}`}>{value}</p>
+      <p className={`mt-2 text-3xl font-bold ${accent}`}>{value}</p>
     </div>
   );
 }
 
 function SectionShell({ eyebrow, title, description, action, children }) {
   return (
-    <section className="app-panel rounded-2xl p-5">
-      <div className="flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-center lg:justify-between">
+    <section className="neon-glass neon-border rounded-2xl p-5">
+      <div className="flex flex-col gap-4 border-b border-[#f0d2ca] pb-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#F38978]">{eyebrow}</p>
-          <h2 className="mt-1 text-2xl font-semibold text-white">{title}</h2>
+          <p className="text-sm font-bold text-[#F38978]">{eyebrow}</p>
+          <h2 className="mt-1 text-2xl font-bold text-[#251E1F]">{title}</h2>
           {description ? (
-            <p className="mt-2 max-w-3xl text-sm text-[#7b6660]/75">{description}</p>
+            <p className="mt-2 max-w-3xl text-sm text-[#7b6660]">{description}</p>
           ) : null}
         </div>
         {action}
@@ -396,7 +453,7 @@ function ErrorBanner({ message }) {
   }
 
   return (
-    <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+    <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700">
       {message}
     </div>
   );
@@ -404,7 +461,7 @@ function ErrorBanner({ message }) {
 
 function LoadingPanel({ label }) {
   return (
-    <div className="flex items-center justify-center gap-3 rounded-xl border border-white/10 px-5 py-16 text-[#7b6660]">
+    <div className="flex items-center justify-center gap-3 rounded-xl border border-[#f0d2ca] px-5 py-16 text-[#7b6660]">
       <Loader2 size={20} className="animate-spin" />
       {label}
     </div>
@@ -416,21 +473,19 @@ function InvoiceDetailsModal({ invoice, onClose }) {
     return null;
   }
 
-  const isPayable = !["Paid", "Cancelled", "Refunded"].includes(invoice.status);
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#fff8f5]/80 p-4 backdrop-blur">
-      <div className="app-panel my-6 w-full max-w-3xl rounded-2xl">
-        <div className="flex items-start justify-between border-b border-white/10 p-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#090014]/80 p-4 backdrop-blur">
+      <div className="neon-glass neon-border my-6 w-full max-w-3xl rounded-2xl">
+        <div className="flex items-start justify-between border-b border-[#f0d2ca] p-5">
           <div>
             <p className="text-sm text-[#F38978]">{invoice.invoiceId}</p>
-            <h2 className="mt-1 text-xl font-semibold text-white">{invoice.customer_name}</h2>
-            <p className="mt-1 text-sm text-[#7b6660]/75">{invoice.customer_email}</p>
+            <h2 className="mt-1 text-xl font-semibold text-[#251E1F]">{invoice.customer_name}</h2>
+            <p className="mt-1 text-sm text-[#7b6660]">{invoice.customer_email}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-[#7b6660] hover:bg-white/10 hover:text-white"
+            className="rounded-lg p-2 text-[#7b6660] hover:bg-[#FDD9CD]/30 hover:text-[#251E1F]"
             aria-label="Close invoice details"
           >
             <X size={20} />
@@ -439,97 +494,30 @@ function InvoiceDetailsModal({ invoice, onClose }) {
 
         <div className="grid gap-4 p-5 sm:grid-cols-4">
           <div>
-            <p className="text-xs text-[#7b6660]/60">Issue Date</p>
-            <p className="mt-1 text-sm font-medium text-white">{formatDate(invoice.issue_date)}</p>
+            <p className="text-xs text-[#7b6660]/70">Issue Date</p>
+            <p className="mt-1 text-sm font-medium text-[#251E1F]">{formatDate(invoice.issue_date)}</p>
           </div>
           <div>
-            <p className="text-xs text-[#7b6660]/60">Due Date</p>
-            <p className="mt-1 text-sm font-medium text-white">{formatDate(invoice.due_date)}</p>
+            <p className="text-xs text-[#7b6660]/70">Due Date</p>
+            <p className="mt-1 text-sm font-medium text-[#251E1F]">{formatDate(invoice.due_date)}</p>
           </div>
           <div>
-            <p className="text-xs text-[#7b6660]/60">Status</p>
+            <p className="text-xs text-[#7b6660]/70">Status</p>
             <div className="mt-1">
               <InvoiceStatusBadge status={invoice.status} />
             </div>
           </div>
           <div>
-            <p className="text-xs text-[#7b6660]/60">Total</p>
-            <p className="mt-1 text-sm font-semibold text-white">{formatCurrency(invoice.total_amount)}</p>
+            <p className="text-xs text-[#7b6660]/70">Total</p>
+            <p className="mt-1 text-sm font-semibold text-[#251E1F]">{formatCurrency(invoice.total_amount)}</p>
           </div>
         </div>
 
-        {/* Stripe Payment Section */}
-        {(invoice.payment_status || invoice.payment_url || invoice.transaction_id) ? (
-          <div className="mx-5 mb-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
-            <h3 className="text-sm font-semibold text-[#F38978] mb-3 flex items-center gap-2">
-              <CreditCard size={14} />
-              Stripe Payment Details
-            </h3>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {invoice.payment_status ? (
-                <div>
-                  <p className="text-xs text-[#7b6660]/60">Payment Status</p>
-                  <span className={`inline-flex mt-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                    invoice.payment_status === "paid"
-                      ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-200"
-                      : invoice.payment_status === "failed"
-                      ? "border-rose-400/30 bg-rose-500/15 text-rose-200"
-                      : "border-amber-400/30 bg-amber-500/15 text-amber-100"
-                  }`}>
-                    {invoice.payment_status.toUpperCase()}
-                  </span>
-                </div>
-              ) : null}
-              {invoice.payment_method ? (
-                <div>
-                  <p className="text-xs text-[#7b6660]/60">Payment Method</p>
-                  <p className="mt-1 text-sm font-medium text-white capitalize">{invoice.payment_method}</p>
-                </div>
-              ) : null}
-              {invoice.payment_date ? (
-                <div>
-                  <p className="text-xs text-[#7b6660]/60">Payment Date</p>
-                  <p className="mt-1 text-sm font-medium text-white">{formatDateTime(invoice.payment_date)}</p>
-                </div>
-              ) : null}
-              {invoice.transaction_id ? (
-                <div>
-                  <p className="text-xs text-[#7b6660]/60">Transaction ID</p>
-                  <p className="mt-1 text-xs font-mono text-[#7b6660] break-all">{invoice.transaction_id}</p>
-                </div>
-              ) : null}
-            </div>
-            {invoice.payment_url && isPayable ? (
-              <div className="mt-3 flex items-center gap-3">
-                <a
-                  href={invoice.payment_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#F38978] px-4 py-2 text-xs font-bold text-white hover:bg-[#E77463]"
-                >
-                  <CreditCard size={14} />
-                  Pay Now
-                </a>
-                <span className="text-xs text-[#7b6660]/50 break-all flex-1">{invoice.payment_url}</span>
-              </div>
-            ) : null}
-            {invoice.qr_code_url && isPayable ? (
-              <div className="mt-3 text-center">
-                <p className="text-xs text-[#7b6660]/70 mb-2">Scan QR Code to Pay</p>
-                <img
-                  src={invoice.qr_code_url}
-                  alt="Payment QR Code"
-                  className="mx-auto h-32 w-32 rounded-lg border border-white/10 bg-white p-1"
-                />
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="px-5 pb-5">
-          <div className="overflow-hidden rounded-xl border border-white/10">
+        {/* Line Items - Primary Content */}
+        <div className="px-5 pb-4">
+          <div className="overflow-hidden rounded-xl border border-[#f0d2ca]">
             <table className="w-full text-left text-sm">
-              <thead className="bg-white/[0.06] text-xs uppercase tracking-wide text-[#7b6660]/70">
+              <thead className="bg-[#FDD9CD]/20 text-xs uppercase tracking-wide text-[#7b6660]">
                 <tr>
                   <th className="px-4 py-3">Description</th>
                   <th className="px-4 py-3 text-right">Qty</th>
@@ -538,18 +526,74 @@ function InvoiceDetailsModal({ invoice, onClose }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10">
-                {invoice.items?.map((item) => (
-                  <tr key={item.item_id} className="text-[#251E1F]">
-                    <td className="px-4 py-3">{item.description}</td>
-                    <td className="px-4 py-3 text-right">{item.quantity}</td>
-                    <td className="px-4 py-3 text-right">{formatCurrency(item.unit_price)}</td>
-                    <td className="px-4 py-3 text-right font-medium">{formatCurrency(item.amount)}</td>
+                {invoice.items && invoice.items.length > 0 ? (
+                  invoice.items.map((item, idx) => (
+                    <tr key={item.item_id || idx} className="text-[#251E1F]">
+                      <td className="px-4 py-3">{item.description}</td>
+                      <td className="px-4 py-3 text-right">{item.quantity}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrency(item.unit_price)}</td>
+                      <td className="px-4 py-3 text-right font-medium">{formatCurrency(item.amount)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="4" className="px-4 py-6 text-center text-sm text-[#7b6660]">No line items available</td>
                   </tr>
-                ))}
+                )}
               </tbody>
+              <tfoot className="border-t border-[#f0d2ca] bg-[#FDD9CD]/10">
+                <tr>
+                  <td colSpan="3" className="px-4 py-3 text-right text-sm font-bold text-[#251E1F]">Total</td>
+                  <td className="px-4 py-3 text-right text-sm font-bold text-[#251E1F]">{formatCurrency(invoice.total_amount)}</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
+
+        {/* Payment Info - Compact Summary (only shown if there's payment activity) */}
+        {(invoice.payment_status || invoice.transaction_id || invoice.payment_date) ? (
+          <div className="mx-5 mb-5 rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-[#F38978] mb-2 flex items-center gap-2">
+              <CreditCard size={13} />
+              Payment Information
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {invoice.payment_status ? (
+                <div>
+                  <p className="text-xs text-[#7b6660]/70">Status</p>
+                  <span className={`inline-flex mt-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                    invoice.payment_status === "paid"
+                      ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-700"
+                      : invoice.payment_status === "failed"
+                      ? "border-rose-400/30 bg-rose-500/15 text-rose-700"
+                      : "border-amber-400/30 bg-amber-500/15 text-amber-700"
+                  }`}>
+                    {invoice.payment_status.toUpperCase()}
+                  </span>
+                </div>
+              ) : null}
+              {invoice.payment_method ? (
+                <div>
+                  <p className="text-xs text-[#7b6660]/70">Method</p>
+                  <p className="mt-1 text-sm font-medium text-[#251E1F] capitalize">{invoice.payment_method}</p>
+                </div>
+              ) : null}
+              {invoice.payment_date ? (
+                <div>
+                  <p className="text-xs text-[#7b6660]/70">Paid On</p>
+                  <p className="mt-1 text-sm font-medium text-[#251E1F]">{formatDateTime(invoice.payment_date)}</p>
+                </div>
+              ) : null}
+              {invoice.transaction_id ? (
+                <div className="sm:col-span-3">
+                  <p className="text-xs text-[#7b6660]/70">Transaction ID</p>
+                  <p className="mt-1 text-xs font-mono text-[#7b6660] break-all">{invoice.transaction_id}</p>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -619,17 +663,17 @@ function InvoiceCreationModal({ customers, nextInvoiceId, onCancel, onCreated })
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#fff8f5]/80 p-4 backdrop-blur">
-      <div className="app-panel my-6 w-full max-w-5xl rounded-2xl p-5">
-        <div className="flex flex-col gap-3 border-b border-white/10 pb-5 sm:flex-row sm:items-center sm:justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#090014]/80 p-4 backdrop-blur">
+      <div className="neon-glass neon-border my-6 w-full max-w-5xl rounded-2xl p-5">
+        <div className="flex flex-col gap-3 border-b border-[#f0d2ca] pb-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-[#F38978]">Create Single Invoice</p>
-            <h2 className="mt-1 text-xl font-semibold text-white">{nextInvoiceId || "INV-0001"}</h2>
+            <h2 className="mt-1 text-xl font-semibold text-[#251E1F]">{nextInvoiceId || "INV-0001"}</h2>
           </div>
           <button
             type="button"
             onClick={onCancel}
-            className="self-start rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-[#7b6660] hover:bg-white/10 hover:text-white sm:self-auto"
+            className="self-start rounded-lg border border-[#f0d2ca] px-4 py-2 text-sm font-medium text-[#7b6660] hover:bg-[#FDD9CD]/30 hover:text-[#251E1F] sm:self-auto"
           >
             Cancel
           </button>
@@ -645,7 +689,7 @@ function InvoiceCreationModal({ customers, nextInvoiceId, onCancel, onCreated })
             <select
               value={form.customer_id}
               onChange={(event) => setForm((current) => ({ ...current, customer_id: event.target.value }))}
-              className="mt-2 w-full rounded-xl border border-white/10 bg-[#fff3ee]/90 px-3 py-3 text-sm text-white outline-none focus:border-[#F38978]"
+              className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white px-3 py-3 text-sm text-[#251E1F] outline-none focus:border-[#F38978]"
             >
               <option value="">Select customer</option>
               {customers.map((customer) => (
@@ -661,7 +705,7 @@ function InvoiceCreationModal({ customers, nextInvoiceId, onCancel, onCreated })
               type="date"
               value={form.issue_date}
               onChange={(event) => setForm((current) => ({ ...current, issue_date: event.target.value }))}
-              className="mt-2 w-full rounded-xl border border-white/10 bg-[#fff3ee]/90 px-3 py-3 text-sm text-white outline-none focus:border-[#F38978]"
+              className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white px-3 py-3 text-sm text-[#251E1F] outline-none focus:border-[#F38978]"
             />
           </label>
           <label className="block">
@@ -670,14 +714,14 @@ function InvoiceCreationModal({ customers, nextInvoiceId, onCancel, onCreated })
               type="date"
               value={form.due_date}
               onChange={(event) => setForm((current) => ({ ...current, due_date: event.target.value }))}
-              className="mt-2 w-full rounded-xl border border-white/10 bg-[#fff3ee]/90 px-3 py-3 text-sm text-white outline-none focus:border-[#F38978]"
+              className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white px-3 py-3 text-sm text-[#251E1F] outline-none focus:border-[#F38978]"
             />
           </label>
         </div>
 
-        <div className="mt-6 overflow-x-auto rounded-xl border border-white/10">
+        <div className="mt-6 overflow-x-auto rounded-xl border border-[#f0d2ca]">
           <table className="min-w-[760px] w-full text-left text-sm">
-            <thead className="bg-white/[0.06] text-xs uppercase tracking-wide text-[#7b6660]/70">
+            <thead className="bg-[#FDD9CD]/20 text-xs uppercase tracking-wide text-[#7b6660]">
               <tr>
                 <th className="px-4 py-3">Description</th>
                 <th className="w-28 px-4 py-3 text-right">Qty</th>
@@ -695,7 +739,7 @@ function InvoiceCreationModal({ customers, nextInvoiceId, onCancel, onCreated })
                       value={item.description}
                       onChange={(event) => updateItem(index, "description", event.target.value)}
                       placeholder="Service or product description"
-                      className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-white outline-none placeholder:text-[#7b6660]/45 focus:border-[#F38978]"
+                      className="w-full rounded-lg border border-[#f0d2ca] bg-[#FDD9CD]/20 px-3 py-2 text-[#251E1F] outline-none placeholder:text-[#7b6660]/60 focus:border-[#F38978]"
                     />
                   </td>
                   <td className="px-4 py-3">
@@ -705,7 +749,7 @@ function InvoiceCreationModal({ customers, nextInvoiceId, onCancel, onCreated })
                       step="1"
                       value={item.quantity}
                       onChange={(event) => updateItem(index, "quantity", event.target.value)}
-                      className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-right text-white outline-none focus:border-[#F38978]"
+                      className="w-full rounded-lg border border-[#f0d2ca] bg-[#FDD9CD]/20 px-3 py-2 text-right text-[#251E1F] outline-none focus:border-[#F38978]"
                     />
                   </td>
                   <td className="px-4 py-3">
@@ -715,10 +759,10 @@ function InvoiceCreationModal({ customers, nextInvoiceId, onCancel, onCreated })
                       step="0.01"
                       value={item.unit_price}
                       onChange={(event) => updateItem(index, "unit_price", event.target.value)}
-                      className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-right text-white outline-none focus:border-[#F38978]"
+                      className="w-full rounded-lg border border-[#f0d2ca] bg-[#FDD9CD]/20 px-3 py-2 text-right text-[#251E1F] outline-none focus:border-[#F38978]"
                     />
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold text-white">
+                  <td className="px-4 py-3 text-right font-semibold text-[#251E1F]">
                     {formatCurrency(getItemAmount(item))}
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -726,7 +770,7 @@ function InvoiceCreationModal({ customers, nextInvoiceId, onCancel, onCreated })
                       type="button"
                       onClick={() => removeItem(index)}
                       disabled={form.items.length === 1}
-                      className="rounded-lg p-2 text-[#7b6660] hover:bg-white/10 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg p-2 text-[#7b6660] hover:bg-[#FDD9CD]/30 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
                       aria-label="Remove item"
                     >
                       <Trash2 size={16} />
@@ -742,13 +786,13 @@ function InvoiceCreationModal({ customers, nextInvoiceId, onCancel, onCreated })
           <button
             type="button"
             onClick={addItem}
-            className="inline-flex items-center gap-2 self-start rounded-xl border border-[#F38978]/30 px-4 py-2 text-sm font-semibold text-[#6F4F47] hover:bg-[#F38978]/10"
+            className="inline-flex items-center gap-2 self-start rounded-xl border border-[#F38978]/30 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/10"
           >
             <Plus size={16} />
             Add Item
           </button>
 
-          <div className="w-full max-w-sm rounded-xl border border-white/10 bg-white/[0.05] p-4">
+          <div className="w-full max-w-sm rounded-xl border border-[#f0d2ca] bg-white/[0.05] p-4">
             <div className="flex justify-between py-1 text-sm text-[#7b6660]">
               <span>Subtotal</span>
               <span>{formatCurrency(subtotal)}</span>
@@ -757,7 +801,7 @@ function InvoiceCreationModal({ customers, nextInvoiceId, onCancel, onCreated })
               <span>Tax</span>
               <span>{formatCurrency(0)}</span>
             </div>
-            <div className="mt-3 flex justify-between border-t border-white/10 pt-3 text-base font-semibold text-white">
+            <div className="mt-3 flex justify-between border-t border-[#f0d2ca] pt-3 text-base font-semibold text-[#251E1F]">
               <span>Total</span>
               <span>{formatCurrency(subtotal)}</span>
             </div>
@@ -769,7 +813,7 @@ function InvoiceCreationModal({ customers, nextInvoiceId, onCancel, onCreated })
             type="button"
             onClick={submitInvoice}
             disabled={isSaving}
-            className="primary-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold disabled:opacity-60"
+            className="neon-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold disabled:opacity-60"
           >
             {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
             {isSaving ? "Creating..." : "Create Draft Invoice"}
@@ -807,19 +851,19 @@ function ScheduleInvoiceModal({ selectedCount, onCancel, onConfirm }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#fff8f5]/80 p-4 backdrop-blur">
-      <div className="app-panel w-full max-w-lg rounded-2xl p-5">
-        <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#090014]/80 p-4 backdrop-blur">
+      <div className="neon-glass neon-border w-full max-w-lg rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-4 border-b border-[#f0d2ca] pb-5">
           <div>
             <p className="text-sm font-semibold text-[#F38978]">Schedule Invoice</p>
-            <h2 className="mt-1 text-xl font-semibold text-white">
+            <h2 className="mt-1 text-xl font-semibold text-[#251E1F]">
               {selectedCount} {selectedCount === 1 ? "invoice" : "invoices"} selected
             </h2>
           </div>
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg p-2 text-[#7b6660] hover:bg-white/10 hover:text-white"
+            className="rounded-lg p-2 text-[#7b6660] hover:bg-[#FDD9CD]/30 hover:text-[#251E1F]"
             aria-label="Close schedule dialog"
           >
             <X size={20} />
@@ -836,7 +880,7 @@ function ScheduleInvoiceModal({ selectedCount, onCancel, onConfirm }) {
                 value={date}
                 min={toDateInputValue(new Date())}
                 onChange={(event) => setDate(event.target.value)}
-                className="mt-2 w-full rounded-xl border border-white/10 bg-[#fff3ee]/90 px-3 py-3 text-sm text-white outline-none focus:border-[#F38978]"
+                className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white px-3 py-3 text-sm text-[#251E1F] outline-none focus:border-[#F38978]"
               />
             </label>
             <label className="block">
@@ -845,7 +889,7 @@ function ScheduleInvoiceModal({ selectedCount, onCancel, onConfirm }) {
                 type="time"
                 value={time}
                 onChange={(event) => setTime(event.target.value)}
-                className="mt-2 w-full rounded-xl border border-white/10 bg-[#fff3ee]/90 px-3 py-3 text-sm text-white outline-none focus:border-[#F38978]"
+                className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white px-3 py-3 text-sm text-[#251E1F] outline-none focus:border-[#F38978]"
               />
             </label>
           </div>
@@ -855,7 +899,7 @@ function ScheduleInvoiceModal({ selectedCount, onCancel, onConfirm }) {
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-xl border border-white/10 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10"
+            className="rounded-xl border border-[#f0d2ca] px-5 py-3 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/30"
           >
             Cancel
           </button>
@@ -863,7 +907,7 @@ function ScheduleInvoiceModal({ selectedCount, onCancel, onConfirm }) {
             type="button"
             onClick={confirmSchedule}
             disabled={isSaving}
-            className="primary-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+            className="neon-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
           >
             <CalendarClock size={16} />
             {isSaving ? "Scheduling..." : "Confirm Schedule"}
@@ -885,7 +929,7 @@ function InvoiceTable({
 }) {
   if (invoices.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-white/15 px-5 py-12 text-center text-sm text-[#7b6660]">
+      <div className="rounded-xl border border-dashed border-[#f0d2ca] px-5 py-12 text-center text-sm text-[#7b6660]">
         No invoices found.
       </div>
     );
@@ -896,9 +940,9 @@ function InvoiceTable({
   const allVisibleSelected = schedulableInvoices.length > 0 && selectedVisibleCount === schedulableInvoices.length;
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-white/10">
+    <div className="overflow-x-auto rounded-xl border border-[#f0d2ca]">
       <table className="min-w-[1080px] w-full text-left text-sm">
-        <thead className="bg-white/[0.06] text-xs uppercase tracking-wide text-[#7b6660]/70">
+        <thead className="bg-[#FDD9CD]/20 text-xs uppercase tracking-wide text-[#7b6660]">
           <tr>
             <th className="w-12 px-4 py-3">
               <input
@@ -906,42 +950,42 @@ function InvoiceTable({
                 checked={allVisibleSelected}
                 disabled={schedulableInvoices.length === 0}
                 onChange={(event) => onToggleAll(event.target.checked)}
-                className="h-4 w-4 rounded border-white/20 bg-[#fff3ee] accent-[#F38978] disabled:opacity-30"
+                className="h-4 w-4 rounded border-[#f0d2ca] bg-white accent-[#C77DFF] disabled:opacity-30"
                 aria-label="Select all draft invoices"
               />
             </th>
-            <th className="px-4 py-3">Invoice Number</th>
-            <th className="px-4 py-3">Customer</th>
-            <th className="px-4 py-3">Issue Date</th>
-            <th className="px-4 py-3">Due Date</th>
-            <th className="px-4 py-3">Scheduled</th>
-            <th className="px-4 py-3 text-right">Total Amount</th>
-            <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3 text-right">Actions</th>
+            <th className="px-4 py-3 font-bold">Invoice Number</th>
+            <th className="px-4 py-3 font-bold">Customer</th>
+            <th className="px-4 py-3 font-bold">Issue Date</th>
+            <th className="px-4 py-3 font-bold">Due Date</th>
+            <th className="px-4 py-3 font-bold">Scheduled</th>
+            <th className="px-4 py-3 font-bold text-right">Total Amount</th>
+            <th className="px-4 py-3 font-bold">Status</th>
+            <th className="px-4 py-3 font-bold text-right">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-white/10">
           {invoices.map((invoice) => (
-            <tr key={invoice.invoice_id} className="text-[#251E1F] transition hover:bg-white/[0.04]">
+            <tr key={invoice.invoice_id} className="text-[#251E1F] transition hover:bg-[#FDD9CD]/10">
               <td className="px-4 py-4">
                 <input
                   type="checkbox"
                   checked={selectedInvoiceIds.has(invoice.invoice_id)}
                   disabled={invoice.status !== "Draft"}
                   onChange={(event) => onToggleInvoice(invoice.invoice_id, event.target.checked)}
-                  className="h-4 w-4 rounded border-white/20 bg-[#fff3ee] accent-[#F38978] disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="h-4 w-4 rounded border-[#f0d2ca] bg-white accent-[#C77DFF] disabled:opacity-30 disabled:cursor-not-allowed"
                   aria-label={`Select invoice ${invoice.invoiceId}`}
                 />
               </td>
-              <td className="px-4 py-4 font-semibold text-white">{invoice.invoiceId}</td>
+              <td className="px-4 py-4 font-bold text-[#251E1F]">{invoice.invoiceId}</td>
               <td className="px-4 py-4">
-                <p className="font-medium text-white">{invoice.customer_name}</p>
-                <p className="text-xs text-[#7b6660]/65">{invoice.customer_email}</p>
+                <p className="font-bold text-[#251E1F]">{invoice.customer_name}</p>
+                <p className="text-xs text-[#7b6660]">{invoice.customer_email}</p>
               </td>
               <td className="px-4 py-4">{formatDate(invoice.issue_date)}</td>
               <td className="px-4 py-4">{formatDate(invoice.due_date)}</td>
               <td className="px-4 py-4 text-[#7b6660]">{invoice.scheduled_at ? formatDateTime(invoice.scheduled_at) : "-"}</td>
-              <td className="px-4 py-4 text-right font-semibold">{formatCurrency(invoice.total_amount)}</td>
+              <td className="px-4 py-4 text-right font-bold text-[#251E1F]">{formatCurrency(invoice.total_amount)}</td>
               <td className="px-4 py-4">
                 <InvoiceStatusBadge status={invoice.status} />
               </td>
@@ -950,7 +994,7 @@ function InvoiceTable({
                   <button
                     type="button"
                     onClick={() => onView(invoice)}
-                    className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-[#6F4F47] hover:bg-white/10"
+                    className="inline-flex items-center gap-2 rounded-lg border border-[#f0d2ca] px-3 py-2 text-xs font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/30"
                   >
                     <Eye size={14} />
                     View Details
@@ -959,7 +1003,7 @@ function InvoiceTable({
                     <button
                       type="button"
                       onClick={() => onSend(invoice.invoice_id)}
-                      className="inline-flex items-center gap-2 rounded-lg border border-blue-400/30 px-3 py-2 text-xs font-semibold text-blue-100 hover:bg-blue-500/10"
+                      className="inline-flex items-center gap-2 rounded-lg border border-blue-400/30 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-500/10"
                     >
                       <Send size={14} />
                       Send Invoice
@@ -968,7 +1012,7 @@ function InvoiceTable({
                   <button
                     type="button"
                     onClick={() => openPrintableInvoice(invoice)}
-                    className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-[#6F4F47] hover:bg-white/10"
+                    className="inline-flex items-center gap-2 rounded-lg border border-[#f0d2ca] px-3 py-2 text-xs font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/30"
                   >
                     <Download size={14} />
                     Download PDF
@@ -977,7 +1021,7 @@ function InvoiceTable({
                     <button
                       type="button"
                       onClick={() => onScheduleInvoice(invoice.invoice_id)}
-                      className="inline-flex items-center gap-2 rounded-lg border border-[#f0d2ca] px-3 py-2 text-xs font-semibold text-[#7b6660] hover:bg-[#FDD9CD]/45"
+                      className="inline-flex items-center gap-2 rounded-lg border border-violet-400/30 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-500/10"
                     >
                       <CalendarClock size={14} />
                       Schedule Invoice
@@ -987,7 +1031,7 @@ function InvoiceTable({
                     <button
                       type="button"
                       onClick={() => downloadReceipt(invoice)}
-                      className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/30 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/10"
+                      className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/30 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/10"
                     >
                       <ReceiptText size={14} />
                       Download Receipt
@@ -1001,7 +1045,7 @@ function InvoiceTable({
                           await sendInvoiceReminder(invoice.invoice_id);
                         } catch { /* handled by UI */ }
                       }}
-                      className="inline-flex items-center gap-2 rounded-lg border border-amber-400/30 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-500/10"
+                      className="inline-flex items-center gap-2 rounded-lg border border-amber-400/30 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-500/10"
                     >
                       <Mail size={14} />
                       Send Reminder
@@ -1040,14 +1084,14 @@ function CustomersView({ customers, invoices, isLoading, error, onViewInvoices }
       title="Organization Clients"
       description="Search customer records and jump directly into their associated invoice history."
       action={
-        <div className="flex w-full max-w-sm items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2">
+        <div className="flex w-full max-w-sm items-center gap-2 rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/20 px-3 py-2">
           <Search size={16} className="text-[#F38978]" />
           <input
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search customers..."
-            className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[#7b6660]/60"
+            className="w-full bg-transparent text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/70"
           />
         </div>
       }
@@ -1056,9 +1100,9 @@ function CustomersView({ customers, invoices, isLoading, error, onViewInvoices }
       {isLoading ? (
         <LoadingPanel label="Loading customers..." />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-white/10">
+        <div className="overflow-x-auto rounded-xl border border-[#f0d2ca]">
           <table className="min-w-[860px] w-full text-left text-sm">
-            <thead className="bg-white/[0.06] text-xs uppercase tracking-wide text-[#7b6660]/70">
+            <thead className="bg-[#FDD9CD]/20 text-xs uppercase tracking-wide text-[#7b6660]">
               <tr>
                 <th className="px-4 py-3">Customer Name</th>
                 <th className="px-4 py-3">Email</th>
@@ -1073,8 +1117,8 @@ function CustomersView({ customers, invoices, isLoading, error, onViewInvoices }
                 const invoiceCount = Number(customer.invoice_count ?? invoices.filter((invoice) => invoice.customer_id === customer.customer_id).length);
 
                 return (
-                  <tr key={customer.customer_id} className="text-[#251E1F] hover:bg-white/[0.04]">
-                    <td className="px-4 py-4 font-semibold text-white">{customer.name}</td>
+                  <tr key={customer.customer_id} className="text-[#251E1F] hover:bg-[#FDD9CD]/10">
+                    <td className="px-4 py-4 font-semibold text-[#251E1F]">{customer.name}</td>
                     <td className="px-4 py-4">{customer.email || "-"}</td>
                     <td className="px-4 py-4">{customer.address || "-"}</td>
                     <td className="px-4 py-4">{formatDate(customer.created_at)}</td>
@@ -1083,7 +1127,7 @@ function CustomersView({ customers, invoices, isLoading, error, onViewInvoices }
                       <button
                         type="button"
                         onClick={() => onViewInvoices(customer.customer_id)}
-                        className="rounded-lg border border-[#F38978]/30 px-3 py-2 text-xs font-semibold text-[#6F4F47] hover:bg-[#F38978]/10"
+                        className="rounded-lg border border-[#F38978]/30 px-3 py-2 text-xs font-semibold text-[#251E1F] hover:bg-[#F38978]/10"
                       >
                         View Associated Invoices
                       </button>
@@ -1173,7 +1217,7 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
       title: "Track & Monitor",
       icon: Eye,
       completed: statusCounts.Sent > 0 || statusCounts.Paid > 0,
-      details: ["Status tracking (Draft→Paid)", "Overdue detection", "Fraud risk assessment"]
+      details: ["Status tracking (Draftâ†’Paid)", "Overdue detection", "Fraud risk assessment"]
     },
     {
       key: "payment",
@@ -1209,31 +1253,31 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#F38978]/80">
             Finance Invoicing Workflow
           </p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">Dashboard</h2>
+          <h2 className="mt-2 text-2xl font-semibold text-[#251E1F]">Dashboard</h2>
         </div>
       </div>
 
       {error ? <div className="mt-4"><ErrorBanner message={error} /></div> : null}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="app-panel rounded-2xl p-5">
+        <div className="neon-glass rounded-2xl p-5">
           <p className="text-sm text-[#7b6660]">Total Revenue</p>
-          <p className="mt-3 text-3xl font-semibold text-white">{formatCurrency(totals.totalRevenue)}</p>
+          <p className="mt-3 text-3xl font-semibold text-[#251E1F]">{formatCurrency(totals.totalRevenue)}</p>
           <p className="mt-2 text-xs font-semibold text-[#7b6660]">{invoices.length} invoices</p>
         </div>
-        <div className="app-panel rounded-2xl p-5">
+        <div className="neon-glass rounded-2xl p-5">
           <p className="text-sm text-[#7b6660]">Collected</p>
           <p className="mt-3 text-3xl font-semibold text-[#7CFFB2]">{formatCurrency(totals.paidRevenue)}</p>
           <p className="mt-2 text-xs font-semibold text-[#7b6660]">{statusCounts.Paid} paid</p>
         </div>
-        <div className="app-panel rounded-2xl p-5">
+        <div className="neon-glass rounded-2xl p-5">
           <p className="text-sm text-[#7b6660]">Pending</p>
           <p className="mt-3 text-3xl font-semibold text-[#FFB86B]">{formatCurrency(totals.pendingAmount)}</p>
           <p className="mt-2 text-xs font-semibold text-[#7b6660]">{statusCounts.Sent + statusCounts.Scheduled} invoices</p>
         </div>
-        <div className="app-panel rounded-2xl p-5">
+        <div className="neon-glass rounded-2xl p-5">
           <p className="text-sm text-[#7b6660]">Overdue</p>
-          <p className="mt-3 text-3xl font-semibold text-rose-300">{formatCurrency(totals.overdueAmount)}</p>
+          <p className="mt-3 text-3xl font-semibold text-rose-700">{formatCurrency(totals.overdueAmount)}</p>
           <p className="mt-2 text-xs font-semibold text-[#7b6660]">{statusCounts.Overdue} overdue</p>
         </div>
       </div>
@@ -1241,23 +1285,23 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <div className="mb-4">
-            <h3 className="text-lg font-semibold text-white">Invoicing Workflow</h3>
-            <p className="mt-1 text-sm text-[#7b6660]">End-to-end invoice lifecycle from creation to reconciliation.</p>
+            <h3 className="text-lg font-bold text-[#251E1F]">Invoicing Workflow</h3>
+            <p className="mt-1 text-sm font-medium text-[#7b6660]">End-to-end invoice lifecycle from creation to reconciliation.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {invoiceWorkflowSteps.map((step) => {
               const Icon = step.icon;
               return (
-                <article key={step.key} className="app-panel rounded-2xl p-5">
+                <article key={step.key} className="neon-glass neon-border rounded-2xl p-5">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978] ring-1 ring-[#F38978]/25">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F38978]/10 text-[#F38978] ring-1 ring-[#F38978]/25">
                       <Icon size={24} />
                     </div>
-                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${step.completed ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-white/10 bg-white/[0.06] text-[#7b6660]"}`}>
+                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${step.completed ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-[#f0d2ca] bg-[#FDD9CD]/20 text-[#7b6660]"}`}>
                       {step.completed ? "Active" : "Pending"}
                     </span>
                   </div>
-                  <h3 className="mt-5 text-base font-semibold text-white">{step.title}</h3>
+                  <h3 className="mt-5 text-base font-semibold text-[#251E1F]">{step.title}</h3>
                   <ul className="mt-3 space-y-2 text-sm text-[#7b6660]">
                     {step.details.map((detail) => (
                       <li key={detail} className="flex gap-2">
@@ -1272,22 +1316,22 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
           </div>
         </div>
 
-        <aside className="app-panel rounded-2xl p-6">
+        <aside className="neon-glass neon-border rounded-2xl p-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F38978]/20 text-[#F38978]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#7B2FF7]/20 text-[#F38978]">
               <ShieldCheck size={21} />
             </div>
             <div>
-              <h3 className="font-semibold text-white">Invoice Status Tracker</h3>
+              <h3 className="font-semibold text-[#251E1F]">Invoice Status Tracker</h3>
               <p className="text-sm text-[#7b6660]">{invoices.length} total invoices</p>
             </div>
           </div>
           <div className="mt-6 space-y-3 text-sm text-[#7b6660]">
             {invoiceStatuses.map((status) => (
-              <div key={status} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-3">
+              <div key={status} className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-3">
                 <CheckCircle2 size={17} className={statusCounts[status] > 0 ? "text-[#7CFFB2]" : "text-[#7b6660]/50"} />
                 <span className="flex-1">{status}</span>
-                <span className="font-semibold text-white">{statusCounts[status]}</span>
+                <span className="font-semibold text-[#251E1F]">{statusCounts[status]}</span>
               </div>
             ))}
           </div>
@@ -1296,7 +1340,7 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
             <button
               type="button"
               onClick={() => navigate("/dashboard/invoicing/finance/invoices")}
-              className="primary-button flex w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold"
+              className="neon-button flex w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold"
             >
               <ReceiptText size={17} />
               View All Invoices
@@ -1304,7 +1348,7 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
             <button
               type="button"
               onClick={() => navigate("/dashboard/invoicing/finance/customers")}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/20 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/30"
             >
               <Building2 size={17} />
               Customer Directory
@@ -1313,53 +1357,53 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
         </aside>
       </div>
 
-      <div className="mt-6 app-panel rounded-2xl p-6">
-        <h3 className="text-lg font-semibold text-white">Quick Overview</h3>
-        <p className="mt-1 text-sm text-[#7b6660]">Key performance metrics at a glance.</p>
+      <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
+        <h3 className="text-lg font-bold text-[#251E1F]">Quick Overview</h3>
+        <p className="mt-1 text-sm font-medium text-[#7b6660]">Key performance metrics at a glance.</p>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F38978]/15 text-[#F38978]">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F38978]/10 text-[#F38978]">
                 <Building2 size={18} />
               </div>
               <div>
                 <p className="text-xs text-[#7b6660]">Active Customers</p>
-                <p className="text-lg font-semibold text-white">{customers.length}</p>
+                <p className="text-lg font-semibold text-[#251E1F]">{customers.length}</p>
               </div>
             </div>
           </div>
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#7CFFB2]/15 text-[#7CFFB2]">
                 <TrendingUp size={18} />
               </div>
               <div>
                 <p className="text-xs text-[#7b6660]">Collection Rate</p>
-                <p className="text-lg font-semibold text-white">
+                <p className="text-lg font-semibold text-[#251E1F]">
                   {invoices.length > 0 ? Math.round((statusCounts.Paid / invoices.length) * 100) : 0}%
                 </p>
               </div>
             </div>
           </div>
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#FFB86B]/15 text-[#FFB86B]">
                 <Clock size={18} />
               </div>
               <div>
                 <p className="text-xs text-[#7b6660]">Drafts Pending</p>
-                <p className="text-lg font-semibold text-white">{statusCounts.Draft}</p>
+                <p className="text-lg font-semibold text-[#251E1F]">{statusCounts.Draft}</p>
               </div>
             </div>
           </div>
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-400/15 text-rose-300">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-400/15 text-rose-700">
                 <AlertCircle size={18} />
               </div>
               <div>
                 <p className="text-xs text-[#7b6660]">Overdue Action</p>
-                <p className="text-lg font-semibold text-white">{statusCounts.Overdue}</p>
+                <p className="text-lg font-semibold text-[#251E1F]">{statusCounts.Overdue}</p>
               </div>
             </div>
           </div>
@@ -1395,67 +1439,67 @@ function AdminInvoiceConfigPanel({ settings, reminderRules }) {
   const activeReminders = Array.isArray(reminderRules) ? reminderRules.filter((r) => r.enabled) : [];
 
   return (
-    <div className="mt-6 app-panel rounded-2xl p-6">
+    <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F38978]/20 text-[#F38978]">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#7B2FF7]/20 text-[#F38978]">
             <Settings2 size={21} />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-white">Admin Invoice Rules</h3>
+            <h3 className="text-lg font-semibold text-[#251E1F]">Admin Invoice Rules</h3>
             <p className="text-sm text-[#7b6660]">Read-only invoice configuration, numbering, tax, and reminder rules from Admin.</p>
           </div>
         </div>
         <div className="flex items-center gap-2 text-xs text-[#7b6660]">
           <Lock size={14} className="text-[#F38978]" />
           <span>Admin controlled</span>
-          <span className="text-[#7b6660]/50">•</span>
+          <span className="text-[#7b6660]/50">â€¢</span>
           <span>Last updated: {formattedUpdate}</span>
         </div>
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-          <p className="text-xs text-[#7b6660]/70">Invoice Prefix</p>
-          <p className="mt-1 text-lg font-semibold text-white">{settings.invoicePrefix || "INV"}</p>
+        <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+          <p className="text-xs text-[#7b6660]">Invoice Prefix</p>
+          <p className="mt-1 text-lg font-semibold text-[#251E1F]">{settings.invoicePrefix || "INV"}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-          <p className="text-xs text-[#7b6660]/70">Numbering Style</p>
-          <p className="mt-1 text-sm font-semibold text-white">{settings.numberingStyle || "PREFIX-DATE-NUMBER"}</p>
+        <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+          <p className="text-xs text-[#7b6660]">Numbering Style</p>
+          <p className="mt-1 text-sm font-semibold text-[#251E1F]">{settings.numberingStyle || "PREFIX-DATE-NUMBER"}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-          <p className="text-xs text-[#7b6660]/70">Default Currency</p>
-          <p className="mt-1 text-lg font-semibold text-white">{settings.defaultCurrency || "SGD"}</p>
+        <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+          <p className="text-xs text-[#7b6660]">Default Currency</p>
+          <p className="mt-1 text-lg font-semibold text-[#251E1F]">{settings.defaultCurrency || "SGD"}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-          <p className="text-xs text-[#7b6660]/70">Payment Terms</p>
-          <p className="mt-1 text-sm font-semibold text-white">{settings.paymentTerms || "Net 30"}</p>
+        <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+          <p className="text-xs text-[#7b6660]">Payment Terms</p>
+          <p className="mt-1 text-sm font-semibold text-[#251E1F]">{settings.paymentTerms || "Net 30"}</p>
         </div>
       </div>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-          <p className="text-xs text-[#7b6660]/70">Due Period</p>
-          <p className="mt-1 text-sm font-semibold text-white">{settings.dueDays || 30} days</p>
+        <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+          <p className="text-xs text-[#7b6660]">Due Period</p>
+          <p className="mt-1 text-sm font-semibold text-[#251E1F]">{settings.dueDays || 30} days</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-          <p className="text-xs text-[#7b6660]/70">Tax Type & Rate</p>
-          <p className="mt-1 text-sm font-semibold text-white">{settings.taxType || "GST"} @ {settings.defaultTaxRate || 0}%</p>
+        <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+          <p className="text-xs text-[#7b6660]">Tax Type & Rate</p>
+          <p className="mt-1 text-sm font-semibold text-[#251E1F]">{settings.taxType || "GST"} @ {settings.defaultTaxRate || 0}%</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-          <p className="text-xs text-[#7b6660]/70">Late Fee</p>
-          <p className="mt-1 text-sm font-semibold text-white">{settings.lateFeePercent || 0}% after {settings.gracePeriodDays || 0} day grace</p>
+        <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+          <p className="text-xs text-[#7b6660]">Late Fee</p>
+          <p className="mt-1 text-sm font-semibold text-[#251E1F]">{settings.lateFeePercent || 0}% after {settings.gracePeriodDays || 0} day grace</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-          <p className="text-xs text-[#7b6660]/70">Active Reminders</p>
-          <p className="mt-1 text-sm font-semibold text-white">{activeReminders.length} rule(s) enabled</p>
+        <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+          <p className="text-xs text-[#7b6660]">Active Reminders</p>
+          <p className="mt-1 text-sm font-semibold text-[#251E1F]">{activeReminders.length} rule(s) enabled</p>
         </div>
       </div>
 
       {activeReminders.length > 0 ? (
-        <div className="mt-5 overflow-x-auto rounded-xl border border-white/10">
+        <div className="mt-5 overflow-x-auto rounded-xl border border-[#f0d2ca]">
           <table className="min-w-[600px] w-full text-left text-sm">
-            <thead className="bg-white/[0.06] text-xs uppercase tracking-wide text-[#7b6660]/70">
+            <thead className="bg-[#FDD9CD]/20 text-xs uppercase tracking-wide text-[#7b6660]">
               <tr>
                 <th className="px-4 py-3">Rule Name</th>
                 <th className="px-4 py-3">Frequency</th>
@@ -1468,7 +1512,7 @@ function AdminInvoiceConfigPanel({ settings, reminderRules }) {
             <tbody className="divide-y divide-white/10">
               {activeReminders.map((rule, idx) => (
                 <tr key={rule.id || idx} className="text-[#251E1F]">
-                  <td className="px-4 py-3 font-medium text-white">{rule.name || rule.ruleName || `Rule ${idx + 1}`}</td>
+                  <td className="px-4 py-3 font-medium text-[#251E1F]">{rule.name || rule.ruleName || `Rule ${idx + 1}`}</td>
                   <td className="px-4 py-3">{rule.frequency || "Daily"}</td>
                   <td className="px-4 py-3">{rule.firstReminderDays || "-"} days</td>
                   <td className="px-4 py-3">{rule.secondReminderDays || "-"} days</td>
@@ -1482,20 +1526,20 @@ function AdminInvoiceConfigPanel({ settings, reminderRules }) {
       ) : null}
 
       {settings.companyName ? (
-        <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.04] p-4">
+        <div className="mt-5 rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Company Details</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-3 text-sm">
             <div>
-              <p className="text-[#7b6660]/70">Company Name</p>
-              <p className="font-semibold text-white">{settings.companyName}</p>
+              <p className="text-[#7b6660]">Company Name</p>
+              <p className="font-semibold text-[#251E1F]">{settings.companyName}</p>
             </div>
             <div>
-              <p className="text-[#7b6660]/70">Support Email</p>
-              <p className="font-semibold text-white">{settings.supportEmail || "-"}</p>
+              <p className="text-[#7b6660]">Support Email</p>
+              <p className="font-semibold text-[#251E1F]">{settings.supportEmail || "-"}</p>
             </div>
             <div>
-              <p className="text-[#7b6660]/70">Address</p>
-              <p className="font-semibold text-white">{settings.companyAddress || "-"}</p>
+              <p className="text-[#7b6660]">Address</p>
+              <p className="font-semibold text-[#251E1F]">{settings.companyAddress || "-"}</p>
             </div>
           </div>
         </div>
@@ -1519,15 +1563,15 @@ function InvoiceCompliancePanel({ invoices, fraudSummary }) {
   const fraudActive = Boolean(fraudSummary && fraudSummary.assessedCount > 0);
 
   const checks = [
-    { label: "No duplicate invoice numbers", status: noDuplicateNumbers, detail: noDuplicateNumbers ? "All invoice IDs are unique" : "Duplicate invoice numbers detected — potential fraud", severity: "Critical" },
-    { label: "Purchase Order exists for all invoices", status: allHavePO, detail: allHavePO ? "All invoices have a PO reference" : "Some invoices missing PO — requires verification", severity: "High" },
+    { label: "No duplicate invoice numbers", status: noDuplicateNumbers, detail: noDuplicateNumbers ? "All invoice IDs are unique" : "Duplicate invoice numbers detected â€” potential fraud", severity: "Critical" },
+    { label: "Purchase Order exists for all invoices", status: allHavePO, detail: allHavePO ? "All invoices have a PO reference" : "Some invoices missing PO â€” requires verification", severity: "High" },
     { label: "Vendor approved & KYC complete", status: !fraudSummary?.flaggedCount, detail: fraudSummary?.flaggedCount ? `${fraudSummary.flaggedCount} invoice(s) flagged for vendor issues` : "All vendors verified", severity: "High" },
     { label: "Invoice amounts within approval limits", status: noHighRisk, detail: noHighRisk ? "No unusually high amounts detected" : `${fraudSummary?.highCount} high-risk amount(s) flagged`, severity: "High" },
     { label: "Bank accounts verified (no recent changes)", status: noMediumRisk && noHighRisk, detail: (noMediumRisk && noHighRisk) ? "No bank account anomalies" : "Bank account changes detected in flagged invoices", severity: "High" },
     { label: "No high-risk country vendors", status: noHighRisk, detail: noHighRisk ? "All vendors from approved jurisdictions" : `${fraudSummary?.highCount} invoice(s) from high-risk sources`, severity: "Critical" },
     { label: "Sanctions & AML screening passed", status: fraudActive && noHighRisk, detail: fraudActive ? "All assessed invoices cleared" : "Fraud detection service not active", severity: "Critical" },
     { label: "Approval workflow completed", status: allHaveCustomer, detail: allHaveCustomer ? "All invoices have assigned approvers" : "Some invoices lack proper approval chain", severity: "High" },
-    { label: "Three-way match (PO, Invoice, Receipt)", status: allHavePO && noDuplicateNumbers, detail: (allHavePO && noDuplicateNumbers) ? "Matching verified for all invoices" : "Mismatch detected — review required", severity: "High" },
+    { label: "Three-way match (PO, Invoice, Receipt)", status: allHavePO && noDuplicateNumbers, detail: (allHavePO && noDuplicateNumbers) ? "Matching verified for all invoices" : "Mismatch detected â€” review required", severity: "High" },
     { label: "No overdue invoices pending action", status: noStaleOverdue, detail: noStaleOverdue ? "All invoices within payment terms" : `${overdueInvoices.length} overdue invoice(s) require follow-up`, severity: "Medium" },
     { label: "Fraud detection engine active", status: fraudActive, detail: fraudActive ? `${fraudSummary?.assessedCount || 0} invoice(s) scanned` : "Fraud detection not responding", severity: "Critical" },
     { label: "No invoice splitting detected", status: noMediumRisk, detail: noMediumRisk ? "No split invoice patterns found" : "Potential invoice splitting detected", severity: "High" },
@@ -1543,87 +1587,182 @@ function InvoiceCompliancePanel({ invoices, fraudSummary }) {
   async function handleSendFraudReport() {
     setReportSending(true);
     try {
-      // Build report data from failed checks and fraud summary
-      const reportData = [
-        ["Fraud Compliance Report", "", "", ""],
-        ["Generated", new Date().toLocaleString(), "", ""],
-        ["", "", "", ""],
-        ["Check", "Status", "Severity", "Detail"],
-        ...checks.map((c) => [c.label, c.status ? "PASS" : "FAIL", c.severity, c.detail]),
-        ["", "", "", ""],
-        ["Fraud Summary", "", "", ""],
-        ["Total Assessed", fraudSummary?.assessedCount || 0, "", ""],
-        ["High Risk", fraudSummary?.highCount || 0, "", ""],
-        ["Medium Risk", fraudSummary?.mediumCount || 0, "", ""],
-        ["Low Risk", fraudSummary?.lowCount || 0, "", ""],
-        ["Flagged for Review", fraudSummary?.flaggedCount || 0, "", ""],
-        ["Average Risk Score", fraudSummary?.averageScore || 0, "", ""]
-      ];
+      await generateAndDownloadPdf(
+        async () => {
+          const doc = createPdfDocument("portrait");
+          const timestamp = new Date().toLocaleString("en-SG");
+          const pageCtx = { pageNum: 1, timestamp };
 
-      // Create Excel workbook
-      const ws = XLSX.utils.aoa_to_sheet(reportData);
-      ws["!cols"] = [{ wch: 40 }, { wch: 15 }, { wch: 12 }, { wch: 50 }];
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Fraud Report");
-      XLSX.writeFile(wb, `fraud_compliance_report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+          // Cover page
+          addCoverPage(doc, {
+            title: "Fraud Detection Report",
+            subtitle: "Compliance & Risk Assessment",
+            generatedBy: "Finance Team",
+            date: timestamp
+          });
+          addPageFooter(doc, pageCtx.pageNum, null, timestamp);
 
-      // Send notification to Finance via API
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-      const token = localStorage.getItem("authToken");
-      await fetch(`${API_BASE}/api/fraud/report-notification`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          failed_checks: failed.map((c) => ({ label: c.label, severity: c.severity, detail: c.detail })),
-          summary: fraudSummary
-        })
-      });
+          // Page 2 - Summary Statistics
+          doc.addPage();
+          pageCtx.pageNum++;
+          let y = PAGE_MARGIN + 5;
 
-      setReportSent(true);
-      setTimeout(() => setReportSent(false), 4000);
+          y = addSectionHeader(doc, "Fraud Summary Statistics", y);
+          y += 4;
+
+          y = addMetricRow(doc, "Total Invoices Analyzed", String(fraudSummary?.assessedCount || 0), y);
+          y = addMetricRow(doc, "Suspicious Invoices (Flagged)", String(fraudSummary?.flaggedCount || 0), y, { valueColor: [190, 18, 60] });
+          const pct = fraudSummary?.assessedCount > 0
+            ? ((fraudSummary?.flaggedCount || 0) / fraudSummary.assessedCount * 100).toFixed(1) + "%"
+            : "0%";
+          y = addMetricRow(doc, "Fraud Percentage", pct, y, { valueColor: [190, 18, 60] });
+          y = addMetricRow(doc, "Average Risk Score", String(fraudSummary?.averageScore || 0), y);
+          y += 4;
+
+          y = addSectionHeader(doc, "Risk Level Breakdown", y + 4);
+          y += 4;
+          y = addMetricRow(doc, "High Risk Invoices", String(fraudSummary?.highCount || 0), y, { valueColor: [190, 18, 60] });
+          y = addMetricRow(doc, "Medium Risk Invoices", String(fraudSummary?.mediumCount || 0), y, { valueColor: [180, 83, 9] });
+          y = addMetricRow(doc, "Low Risk Invoices", String(fraudSummary?.lowCount || 0), y, { valueColor: [4, 120, 87] });
+          y += 6;
+
+          // Compliance checklist
+          y = addSectionHeader(doc, "Compliance Checklist", y + 4);
+          y += 4;
+          checks.forEach((c) => {
+            const statusLabel = c.status ? "PASS" : "FAIL";
+            const color = c.status ? [4, 120, 87] : [190, 18, 60];
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(...GRAY_COLOR);
+            doc.text(`[${statusLabel}] ${c.label}`, PAGE_MARGIN + 4, y);
+            doc.setFontSize(8);
+            doc.setTextColor(...color);
+            doc.text(`Severity: ${c.severity}`, 170, y, { align: "right" });
+            y += 5;
+            if (y > 270) {
+              addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+              doc.addPage();
+              pageCtx.pageNum++;
+              y = PAGE_MARGIN + 5;
+            }
+          });
+
+          // Capture fraud charts if they exist
+          const fraudSection = document.querySelector('[data-pdf-fraud-charts]');
+          if (fraudSection) {
+            addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+            doc.addPage();
+            pageCtx.pageNum++;
+            let cy = PAGE_MARGIN + 5;
+            cy = addSectionHeader(doc, "Fraud Analysis Charts", cy);
+            cy += 4;
+            const canvas = await captureElement(fraudSection, { scale: 2 });
+            addChartImage(doc, canvas, cy, CONTENT_WIDTH_A4, 180, pageCtx);
+          }
+
+          // Suspicious invoices table
+          const suspiciousInvoices = (invoices || []).filter(
+            (inv) => inv.risk_level === "High" || inv.risk_level === "Medium"
+          );
+          if (suspiciousInvoices.length > 0) {
+            addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+            doc.addPage();
+            pageCtx.pageNum++;
+            let ty = PAGE_MARGIN + 5;
+            ty = addSectionHeader(doc, "Suspicious Invoices", ty);
+            ty += 6;
+
+            // Table headers
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(...DARK_COLOR);
+            doc.text("Invoice", PAGE_MARGIN + 2, ty);
+            doc.text("Customer", PAGE_MARGIN + 30, ty);
+            doc.text("Amount", PAGE_MARGIN + 80, ty);
+            doc.text("Score", PAGE_MARGIN + 110, ty);
+            doc.text("Risk", PAGE_MARGIN + 130, ty);
+            doc.text("Status", PAGE_MARGIN + 150, ty);
+            ty += 4;
+            doc.setDrawColor(240, 210, 202);
+            doc.line(PAGE_MARGIN, ty, 190, ty);
+            ty += 3;
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7.5);
+            suspiciousInvoices.forEach((inv) => {
+              if (ty > 270) {
+                addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+                doc.addPage();
+                pageCtx.pageNum++;
+                ty = PAGE_MARGIN + 10;
+              }
+              doc.setTextColor(...DARK_COLOR);
+              doc.text(inv.invoiceId || "-", PAGE_MARGIN + 2, ty);
+              doc.text((inv.customer_name || "-").substring(0, 20), PAGE_MARGIN + 30, ty);
+              doc.text(formatCurrency(inv.total_amount), PAGE_MARGIN + 80, ty);
+              doc.text(String(inv.risk_score || 0), PAGE_MARGIN + 110, ty);
+              const riskColor = inv.risk_level === "High" ? [190, 18, 60] : [180, 83, 9];
+              doc.setTextColor(...riskColor);
+              doc.text(inv.risk_level || "-", PAGE_MARGIN + 130, ty);
+              doc.setTextColor(...GRAY_COLOR);
+              doc.text(inv.review_status || "-", PAGE_MARGIN + 150, ty);
+              ty += 5;
+            });
+          }
+
+          addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+          return doc;
+        },
+        `fraud_report_${new Date().toISOString().slice(0, 10)}.pdf`,
+        {
+          onError: (msg) => console.error("Fraud PDF export failed:", msg),
+          onSuccess: () => { setReportSent(true); setTimeout(() => setReportSent(false), 4000); }
+        }
+      );
     } catch (err) {
-      console.error("Failed to send fraud report:", err);
+      console.error("Failed to export fraud report:", err);
     } finally {
       setReportSending(false);
     }
   }
 
   return (
-    <div className="mt-6 app-panel rounded-2xl p-6">
+    <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-white">Fraud Compliance Checklist</h3>
+          <h3 className="text-lg font-semibold text-[#251E1F]">Fraud Compliance Checklist</h3>
           <p className="mt-1 text-sm text-[#7b6660]">Automated fraud detection checks on all invoices.</p>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={handleSendFraudReport}
             disabled={reportSending}
-            className="flex items-center gap-2 rounded-lg border border-[#F38978]/30 bg-[#F38978]/10 px-3 py-1.5 text-xs font-medium text-[#F38978] transition hover:bg-[#F38978]/20 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg border border-[#a78bfa]/30 bg-[#a78bfa]/10 px-3 py-1.5 text-xs font-medium text-[#a78bfa] transition hover:bg-[#a78bfa]/20 disabled:opacity-50"
           >
             {reportSending ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-            {reportSent ? "Report Sent ✓" : "Export Fraud Report"}
+            {reportSent ? "Report Sent âœ“" : "Export Fraud Report"}
           </button>
-          <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${passed === checks.length ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-rose-400/25 bg-rose-400/10 text-rose-300"}`}>
+          <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${passed === checks.length ? "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]" : "border-rose-400/25 bg-rose-400/10 text-rose-700"}`}>
             {passed}/{checks.length} passed
           </span>
         </div>
       </div>
       <div className="mt-5 grid gap-3">
         {checks.map((check) => (
-          <div key={check.label} className={`flex items-start gap-3 rounded-xl border p-3 ${check.status ? "border-white/10 bg-white/[0.04]" : "border-rose-400/20 bg-rose-400/[0.04]"}`}>
+          <div key={check.label} className={`flex items-start gap-3 rounded-xl border p-3 ${check.status ? "border-[#f0d2ca] bg-[#FDD9CD]/10" : "border-rose-400/20 bg-rose-400/[0.04]"}`}>
             {check.status
               ? <ShieldCheck size={17} className="mt-0.5 shrink-0 text-[#7CFFB2]" />
               : <ShieldAlert size={17} className="mt-0.5 shrink-0 text-rose-400" />
             }
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-white">{check.label}</p>
-                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${check.severity === "Critical" ? "bg-rose-500/20 text-rose-300" : check.severity === "High" ? "bg-amber-500/20 text-amber-300" : "bg-blue-500/20 text-blue-300"}`}>
+                <p className="text-sm font-medium text-[#251E1F]">{check.label}</p>
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${check.severity === "Critical" ? "bg-rose-500/20 text-rose-700" : check.severity === "High" ? "bg-amber-500/20 text-amber-300" : "bg-blue-500/20 text-blue-300"}`}>
                   {check.severity}
                 </span>
               </div>
-              <p className="mt-0.5 text-xs text-[#7b6660]/70">{check.detail}</p>
+              <p className="mt-0.5 text-xs text-[#7b6660]">{check.detail}</p>
             </div>
           </div>
         ))}
@@ -1656,10 +1795,10 @@ function InvoiceExceptionPanel({ invoices, fraudSummary }) {
   }
 
   return (
-    <div className="mt-6 app-panel rounded-2xl p-6">
+    <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-white">Automated Exception Review</h3>
+          <h3 className="text-lg font-semibold text-[#251E1F]">Automated Exception Review</h3>
           <p className="mt-1 text-sm text-[#7b6660]">System validation on active invoices before payment processing.</p>
         </div>
         <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${exceptions.length ? "border-[#FFB86B]/25 bg-[#FFB86B]/10 text-[#FFE2B8]" : "border-[#7CFFB2]/25 bg-[#7CFFB2]/10 text-[#7CFFB2]"}`}>
@@ -1668,7 +1807,7 @@ function InvoiceExceptionPanel({ invoices, fraudSummary }) {
       </div>
       <div className="mt-5 grid gap-3">
         {exceptions.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-center text-sm text-[#7b6660]">
+          <div className="rounded-xl border border-dashed border-[#f0d2ca] bg-white/[0.03] p-5 text-center text-sm text-[#7b6660]">
             All invoices pass automated validation. No exceptions detected.
           </div>
         ) : (
@@ -1676,10 +1815,10 @@ function InvoiceExceptionPanel({ invoices, fraudSummary }) {
             <div key={exc.message} className={`rounded-xl border p-4 text-sm ${exc.severity === "critical" ? "border-rose-400/25 bg-rose-500/10" : "border-[#FFB86B]/20 bg-[#FFB86B]/10"}`}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <AlertCircle size={16} className={exc.severity === "critical" ? "text-rose-300" : "text-[#FFB86B]"} />
-                  <span className="font-medium text-white">{exc.message}</span>
+                  <AlertCircle size={16} className={exc.severity === "critical" ? "text-rose-700" : "text-[#FFB86B]"} />
+                  <span className="font-medium text-[#251E1F]">{exc.message}</span>
                 </div>
-                <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-white">
+                <span className="rounded-full border border-[#f0d2ca] bg-[#FDD9CD]/20 px-3 py-1 text-xs font-semibold text-[#251E1F]">
                   {exc.count} invoice(s)
                 </span>
               </div>
@@ -1704,19 +1843,19 @@ function InvoiceAccountingPanel({ invoices, totals, statusCounts }) {
   ];
 
   return (
-    <div className="mt-6 app-panel rounded-2xl p-6">
+    <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-white">Accounting Impact in Internal Ledger</h3>
+          <h3 className="text-lg font-semibold text-[#251E1F]">Accounting Impact in Internal Ledger</h3>
           <p className="mt-1 text-sm text-[#7b6660]">Journal totals based on current invoice portfolio.</p>
         </div>
-        <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-[#7b6660]">
+        <span className="rounded-full border border-[#f0d2ca] bg-[#FDD9CD]/20 px-3 py-1 text-xs font-semibold text-[#7b6660]">
           {posted}/{invoices.length} posted
         </span>
       </div>
-      <div className="mt-5 overflow-x-auto rounded-xl border border-white/10">
+      <div className="mt-5 overflow-x-auto rounded-xl border border-[#f0d2ca]">
         <table className="min-w-[600px] w-full text-left text-sm">
-          <thead className="bg-white/[0.06] text-xs uppercase tracking-wide text-[#7b6660]/70">
+          <thead className="bg-[#FDD9CD]/20 text-xs uppercase tracking-wide text-[#7b6660]">
             <tr>
               <th className="px-4 py-3">Account (Dr)</th>
               <th className="px-4 py-3 text-right">Debit</th>
@@ -1727,35 +1866,35 @@ function InvoiceAccountingPanel({ invoices, totals, statusCounts }) {
           <tbody className="divide-y divide-white/10">
             {journalEntries.map((entry, idx) => (
               <tr key={idx} className="text-[#251E1F]">
-                <td className="px-4 py-3 font-medium text-white">{entry.accountDr}</td>
-                <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(entry.debit)}</td>
-                <td className="px-4 py-3 font-medium text-white">{entry.accountCr}</td>
-                <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(entry.credit)}</td>
+                <td className="px-4 py-3 font-medium text-[#251E1F]">{entry.accountDr}</td>
+                <td className="px-4 py-3 text-right font-semibold text-[#251E1F]">{formatCurrency(entry.debit)}</td>
+                <td className="px-4 py-3 font-medium text-[#251E1F]">{entry.accountCr}</td>
+                <td className="px-4 py-3 text-right font-semibold text-[#251E1F]">{formatCurrency(entry.credit)}</td>
               </tr>
             ))}
           </tbody>
-          <tfoot className="border-t border-white/20 bg-white/[0.04]">
+          <tfoot className="border-t border-[#f0d2ca] bg-[#FDD9CD]/10">
             <tr>
               <td className="px-4 py-3 font-semibold text-[#F38978]">Total Debit</td>
-              <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(totalInvoiced + collected)}</td>
+              <td className="px-4 py-3 text-right font-semibold text-[#251E1F]">{formatCurrency(totalInvoiced + collected)}</td>
               <td className="px-4 py-3 font-semibold text-[#F38978]">Total Credit</td>
-              <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(totalInvoiced + collected)}</td>
+              <td className="px-4 py-3 text-right font-semibold text-[#251E1F]">{formatCurrency(totalInvoiced + collected)}</td>
             </tr>
           </tfoot>
         </table>
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-          <p className="text-[#7b6660]/70">Outstanding Receivable</p>
+        <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-3">
+          <p className="text-[#7b6660]">Outstanding Receivable</p>
           <p className="mt-1 font-semibold text-[#FFB86B]">{formatCurrency(outstanding)}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-          <p className="text-[#7b6660]/70">Revenue Collected</p>
+        <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-3">
+          <p className="text-[#7b6660]">Revenue Collected</p>
           <p className="mt-1 font-semibold text-[#7CFFB2]">{formatCurrency(collected)}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-          <p className="text-[#7b6660]/70">Pending Settlement</p>
-          <p className="mt-1 font-semibold text-white">{pending} invoice(s)</p>
+        <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-3">
+          <p className="text-[#7b6660]">Pending Settlement</p>
+          <p className="mt-1 font-semibold text-[#251E1F]">{pending} invoice(s)</p>
         </div>
       </div>
     </div>
@@ -1768,35 +1907,35 @@ function InvoiceAuditTrailPanel({ entries }) {
     .slice(0, 10);
 
   return (
-    <div className="mt-6 app-panel rounded-2xl p-6">
+    <div className="mt-6 neon-glass neon-border rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-white">Audit Trail</h3>
+          <h3 className="text-lg font-semibold text-[#251E1F]">Audit Trail</h3>
           <p className="mt-1 text-sm text-[#7b6660]">Workflow activity captured for Finance review and audit readiness.</p>
         </div>
-        <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-[#7b6660]">
+        <span className="rounded-full border border-[#f0d2ca] bg-[#FDD9CD]/20 px-3 py-1 text-xs font-semibold text-[#7b6660]">
           {sortedEntries.length} event(s)
         </span>
       </div>
       <div className="mt-5 grid gap-3">
         {sortedEntries.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-center text-sm text-[#7b6660]">
+          <div className="rounded-xl border border-dashed border-[#f0d2ca] bg-white/[0.03] p-5 text-center text-sm text-[#7b6660]">
             No audit events recorded yet.
           </div>
         ) : (
           sortedEntries.map((entry, idx) => (
-            <div key={entry.log_id || idx} className="flex items-start gap-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F38978]/15 text-[#F38978]">
+            <div key={entry.log_id || idx} className="flex items-start gap-4 rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F38978]/10 text-[#F38978]">
                 <ClipboardCheck size={16} />
               </div>
               <div className="flex-1">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm font-medium text-white">{entry.action_description || entry.activityType || "Activity"}</p>
-                  <p className="text-xs text-[#7b6660]/70">{formatDateTime(entry.created_at || entry.timestamp)}</p>
+                  <p className="text-sm font-medium text-[#251E1F]">{entry.action_description || entry.activityType || "Activity"}</p>
+                  <p className="text-xs text-[#7b6660]">{formatDateTime(entry.created_at || entry.timestamp)}</p>
                 </div>
                 <p className="mt-1 text-xs text-[#7b6660]">
-                  {entry.user_name || entry.userName || "System"} • {entry.activity_type || entry.activityType || "Invoice"}
-                  {entry.affected_record ? ` • ${entry.affected_record}` : ""}
+                  {entry.user_name || entry.userName || "System"} â€¢ {entry.activity_type || entry.activityType || "Invoice"}
+                  {entry.affected_record ? ` â€¢ ${entry.affected_record}` : ""}
                 </p>
               </div>
             </div>
@@ -1906,10 +2045,10 @@ function InvoicesView({
   return (
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-4">
-        <MetricCard label="Draft" value={formatCurrency(metrics.Draft)} accent="text-slate-100" />
-        <MetricCard label="Sent" value={formatCurrency(metrics.Sent)} accent="text-blue-200" />
-        <MetricCard label="Paid" value={formatCurrency(metrics.Paid)} accent="text-emerald-200" />
-        <MetricCard label="Overdue" value={formatCurrency(metrics.Overdue)} accent="text-rose-200" />
+        <MetricCard label="Draft" value={formatCurrency(metrics.Draft)} accent="text-slate-700" />
+        <MetricCard label="Sent" value={formatCurrency(metrics.Sent)} accent="text-blue-700" />
+        <MetricCard label="Paid" value={formatCurrency(metrics.Paid)} accent="text-emerald-700" />
+        <MetricCard label="Overdue" value={formatCurrency(metrics.Overdue)} accent="text-rose-700" />
       </section>
 
       <SectionShell
@@ -1922,7 +2061,7 @@ function InvoicesView({
               type="button"
               onClick={() => setIsScheduleModalOpen(true)}
               disabled={selectedCount === 0}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#F38978]/30 px-5 py-3 text-sm font-semibold text-[#6F4F47] hover:bg-[#F38978]/10 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#F38978]/30 px-5 py-3 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <CalendarClock size={17} />
               Schedule Invoice
@@ -1930,7 +2069,7 @@ function InvoicesView({
             <button
               type="button"
               onClick={onCreateClick}
-              className="primary-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold"
+              className="neon-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold"
             >
               <Plus size={17} />
               Create Single Invoice
@@ -1942,7 +2081,7 @@ function InvoicesView({
           <div className="space-y-3">
             <ErrorBanner message={error} />
             {scheduleMessage ? (
-              <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+              <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700">
                 {scheduleMessage}
               </div>
             ) : null}
@@ -1951,12 +2090,12 @@ function InvoicesView({
             <button
               type="button"
               onClick={onClearCustomerFilter}
-              className="self-start rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-[#7b6660] hover:bg-white/10 hover:text-white"
+              className="self-start rounded-lg border border-[#f0d2ca] px-3 py-2 text-xs font-semibold text-[#7b6660] hover:bg-[#FDD9CD]/30 hover:text-[#251E1F]"
             >
               Clear customer filter
             </button>
           ) : (
-            <p className="text-xs text-[#7b6660]/65">Next invoice number: {nextInvoiceId || "INV-0001"}</p>
+            <p className="text-xs text-[#7b6660]">Next invoice number: {nextInvoiceId || "INV-0001"}</p>
           )}
         </div>
 
@@ -2170,7 +2309,7 @@ function BulkUploadView({ onProcessed }) {
           });
           setMessage((prev) => `${prev} ${flaggedRows.length} invalid rows flagged for fraud review.`);
         } catch {
-          // Non-fatal — invoices were still sent
+          // Non-fatal â€” invoices were still sent
           setMessage((prev) => `${prev} (Warning: failed to flag invalid rows for fraud review)`);
         }
       }
@@ -2204,7 +2343,7 @@ function BulkUploadView({ onProcessed }) {
             type="button"
             onClick={processRows}
             disabled={selectedCount === 0 || isProcessing}
-            className="primary-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            className="neon-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
           >
             {sendMode === "schedule" ? <CalendarClock size={16} /> : <Send size={16} />}
             {isProcessing ? "Processing..." : sendMode === "schedule" ? `Schedule ${selectedCount} Invoices` : `Send ${selectedCount} Invoices`}
@@ -2215,13 +2354,13 @@ function BulkUploadView({ onProcessed }) {
       <div className="space-y-5">
         <ErrorBanner message={error} />
         {message ? (
-          <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+          <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700">
             {message}
           </div>
         ) : null}
 
         <label
-          className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-[#F38978]/40 bg-white/[0.04] px-6 py-12 text-center hover:bg-white/[0.07]"
+          className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-[#F38978]/40 bg-[#FDD9CD]/10 px-6 py-12 text-center hover:bg-white/[0.07]"
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
@@ -2229,8 +2368,8 @@ function BulkUploadView({ onProcessed }) {
           }}
         >
           <Upload size={34} className="text-[#F38978]" />
-          <span className="mt-3 text-sm font-semibold text-white">Drop Excel invoice file here or choose a file</span>
-          <span className="mt-1 text-xs text-[#7b6660]/65">Only XLS and XLSX invoice templates are supported.</span>
+          <span className="mt-3 text-sm font-semibold text-[#251E1F]">Drop Excel invoice file here or choose a file</span>
+          <span className="mt-1 text-xs text-[#7b6660]">Only XLS and XLSX invoice templates are supported.</span>
           <input
             type="file"
             accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -2241,16 +2380,16 @@ function BulkUploadView({ onProcessed }) {
 
         {/* Send Mode Selector */}
         {validRows.length > 0 && (
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-            <p className="text-sm font-semibold text-white">Send Options</p>
+          <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+            <p className="text-sm font-semibold text-[#251E1F]">Send Options</p>
             <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="sendMode" value="now" checked={sendMode === "now"} onChange={() => setSendMode("now")} className="accent-[#F38978]" />
-                <span className="text-sm text-[#6F4F47]">Send immediately</span>
+                <input type="radio" name="sendMode" value="now" checked={sendMode === "now"} onChange={() => setSendMode("now")} className="accent-[#C77DFF]" />
+                <span className="text-sm text-[#251E1F]">Send immediately</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="sendMode" value="schedule" checked={sendMode === "schedule"} onChange={() => setSendMode("schedule")} className="accent-[#F38978]" />
-                <span className="text-sm text-[#6F4F47]">Schedule for later</span>
+                <input type="radio" name="sendMode" value="schedule" checked={sendMode === "schedule"} onChange={() => setSendMode("schedule")} className="accent-[#C77DFF]" />
+                <span className="text-sm text-[#251E1F]">Schedule for later</span>
               </label>
               {sendMode === "schedule" && (
                 <div className="flex items-center gap-2">
@@ -2259,13 +2398,13 @@ function BulkUploadView({ onProcessed }) {
                     value={scheduleDate}
                     min={toDateInputValue(new Date())}
                     onChange={(e) => setScheduleDate(e.target.value)}
-                    className="rounded-lg border border-white/10 bg-[#fff3ee]/90 px-3 py-2 text-sm text-white outline-none focus:border-[#F38978]"
+                    className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#F38978]"
                   />
                   <input
                     type="time"
                     value={scheduleTime}
                     onChange={(e) => setScheduleTime(e.target.value)}
-                    className="rounded-lg border border-white/10 bg-[#fff3ee]/90 px-3 py-2 text-sm text-white outline-none focus:border-[#F38978]"
+                    className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#F38978]"
                   />
                 </div>
               )}
@@ -2273,16 +2412,16 @@ function BulkUploadView({ onProcessed }) {
           </div>
         )}
 
-        <div className="overflow-x-auto rounded-xl border border-white/10">
+        <div className="overflow-x-auto rounded-xl border border-[#f0d2ca]">
           <table className="min-w-[1060px] w-full text-left text-sm">
-            <thead className="bg-white/[0.06] text-xs uppercase tracking-wide text-[#7b6660]/70">
+            <thead className="bg-[#FDD9CD]/20 text-xs uppercase tracking-wide text-[#7b6660]">
               <tr>
                 <th className="w-12 px-4 py-3">
                   <input
                     type="checkbox"
                     checked={allValidSelected && validRows.length > 0}
                     onChange={(e) => toggleAllRows(e.target.checked)}
-                    className="h-4 w-4 rounded border-white/20 bg-[#fff3ee] accent-[#F38978]"
+                    className="h-4 w-4 rounded border-[#f0d2ca] bg-white accent-[#C77DFF]"
                     aria-label="Select all valid rows"
                   />
                 </th>
@@ -2297,35 +2436,35 @@ function BulkUploadView({ onProcessed }) {
             </thead>
             <tbody className="divide-y divide-white/10">
               {displayRows.map((row, index) => (
-                <tr key={`${row.row_number || index}-${row.invoice_number || index}`} className={`text-[#251E1F] transition ${selectedRowIndices.has(index) ? "bg-[#F38978]/5" : "hover:bg-white/[0.03]"}`}>
+                <tr key={`${row.row_number || index}-${row.invoice_number || index}`} className={`text-[#251E1F] transition ${selectedRowIndices.has(index) ? "bg-[#C77DFF]/5" : "hover:bg-white/[0.03]"}`}>
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
                       checked={selectedRowIndices.has(index)}
                       onChange={(e) => toggleRow(index, e.target.checked)}
                       disabled={validatedRows.length > 0 && !row.is_valid}
-                      className="h-4 w-4 rounded border-white/20 bg-[#fff3ee] accent-[#F38978] disabled:opacity-30"
+                      className="h-4 w-4 rounded border-[#f0d2ca] bg-white accent-[#C77DFF] disabled:opacity-30"
                       aria-label={`Select row ${index + 1}`}
                     />
                   </td>
                   <td className="px-4 py-3">{row.row_number || index + 1}</td>
-                  <td className="px-4 py-3 font-semibold text-white">{row.invoice_number || row["Invoice Number"]}</td>
+                  <td className="px-4 py-3 font-semibold text-[#251E1F]">{row.invoice_number || row["Invoice Number"]}</td>
                   <td className="px-4 py-3">{row.customer_name || row["Customer Name"]}</td>
                   <td className="px-4 py-3">{row.issue_date || row["Invoice Date"]}</td>
                   <td className="px-4 py-3">{row.due_date || row["Due Date"]}</td>
                   <td className="px-4 py-3 text-right">{formatCurrency(row.amount || row.Amount)}</td>
                   <td className="px-4 py-3">
                     {row.is_valid ? (
-                      <span className="text-emerald-200">Ready</span>
+                      <span className="text-emerald-700">Ready</span>
                     ) : (
-                      <span className="text-rose-200">{row.errors?.join("; ") || "Pending validation"}</span>
+                      <span className="text-rose-700">{row.errors?.join("; ") || "Pending validation"}</span>
                     )}
                   </td>
                 </tr>
               ))}
               {rows.length === 0 && validatedRows.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-4 py-10 text-center text-[#7b6660]/70">
+                  <td colSpan="8" className="px-4 py-10 text-center text-[#7b6660]">
                     Imported rows will appear here before database insertion.
                   </td>
                 </tr>
@@ -2338,12 +2477,34 @@ function BulkUploadView({ onProcessed }) {
   );
 }
 
+const DEMO_PAYMENTS_WORKSPACE = {
+  outstandingInvoices: [
+    { invoice_id: 1, invoiceId: "INV-000002", customer_name: "The Nail Artistry", customer_email: "hello@thenailartistry.sg", due_date: "2026-07-25", total_amount: 3760.00, database_status: "Sent" },
+    { invoice_id: 2, invoiceId: "INV-000005", customer_name: "Brow & Lash Bar", customer_email: "info@browlashbar.sg", due_date: "2026-07-18", total_amount: 6540.50, database_status: "Overdue" },
+    { invoice_id: 3, invoiceId: "INV-000008", customer_name: "Zen Reflexology Centre", customer_email: "bookings@zenreflexology.sg", due_date: "2026-08-01", total_amount: 2950.00, database_status: "Sent" },
+    { invoice_id: 4, invoiceId: "INV-000012", customer_name: "Radiance Medi-Spa", customer_email: "info@radiancespa.sg", due_date: "2026-07-10", total_amount: 11200.00, database_status: "Overdue" },
+    { invoice_id: 5, invoiceId: "INV-000015", customer_name: "The Waxing Boutique", customer_email: "hello@waxingboutique.sg", due_date: "2026-08-05", total_amount: 2190.00, database_status: "Viewed" }
+  ],
+  payments: [
+    { payment_id: 1, invoiceId: "INV-000001", customer_name: "Luxe Hair Studio", payment_method: "Stripe", amount: 4850.00, status: "Completed", payment_date: "2026-07-14", transaction_id: "pi_3Qx9K2H" },
+    { payment_id: 2, invoiceId: "INV-000004", customer_name: "Glow Aesthetics Clinic", payment_method: "Bank Transfer", amount: 6240.00, status: "Completed", payment_date: "2026-07-12", transaction_id: "BANK-INV000004" },
+    { payment_id: 3, invoiceId: "INV-000006", customer_name: "KBeauty Haven", payment_method: "PayNow", amount: 1580.00, status: "Completed", payment_date: "2026-07-10", transaction_id: "PN-20260710-001" },
+    { payment_id: 4, invoiceId: "INV-000010", customer_name: "Orchid Beauty Lounge", payment_method: "Stripe", amount: 7380.00, status: "Completed", payment_date: "2026-07-08", transaction_id: "pi_3Qw7J1R" },
+    { payment_id: 5, invoiceId: "INV-000013", customer_name: "Aura Hair & Beauty", payment_method: "Credit Card", amount: 3150.00, status: "Completed", payment_date: "2026-07-05", transaction_id: "CC-20260705-042" }
+  ]
+};
+
 function PaymentsView() {
   const [workspace, setWorkspace] = useState({ outstandingInvoices: [], payments: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [paymentLink, setPaymentLink] = useState("");
-  const outstandingTotal = workspace.outstandingInvoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
+
+  // Use demo data as fallback when the database is empty
+  const displayWorkspace = workspace.outstandingInvoices.length === 0 && workspace.payments.length === 0 && !isLoading
+    ? DEMO_PAYMENTS_WORKSPACE
+    : workspace;
+  const outstandingTotal = displayWorkspace.outstandingInvoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
 
   async function loadPayments() {
     setError("");
@@ -2396,9 +2557,9 @@ function PaymentsView() {
   return (
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-3">
-        <MetricCard label="Outstanding Bills" value={workspace.outstandingInvoices.length} accent="text-white" />
-        <MetricCard label="Outstanding Amount" value={formatCurrency(outstandingTotal)} accent="text-rose-200" />
-        <MetricCard label="Recent Payments" value={workspace.payments.length} accent="text-emerald-200" />
+        <MetricCard label="Outstanding Bills" value={displayWorkspace.outstandingInvoices.length} accent="text-[#251E1F]" />
+        <MetricCard label="Outstanding Amount" value={formatCurrency(outstandingTotal)} accent="text-rose-700" />
+        <MetricCard label="Recent Payments" value={displayWorkspace.payments.length} accent="text-emerald-700" />
       </section>
 
       <SectionShell
@@ -2408,8 +2569,8 @@ function PaymentsView() {
       >
         <ErrorBanner message={error} />
         {paymentLink ? (
-          <div className="mb-5 rounded-xl border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
-            Stripe link: {paymentLink}
+          <div className="mb-5 rounded-xl border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-700">
+            <span className="font-bold">Stripe payment link:</span> {paymentLink}
           </div>
         ) : null}
 
@@ -2417,30 +2578,30 @@ function PaymentsView() {
           <LoadingPanel label="Loading payments..." />
         ) : (
           <div className="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
-            <div className="overflow-x-auto rounded-xl border border-white/10">
+            <div className="overflow-x-auto rounded-xl border border-[#f0d2ca]">
               <table className="min-w-[760px] w-full text-left text-sm">
-                <thead className="bg-white/[0.06] text-xs uppercase tracking-wide text-[#7b6660]/70">
+                <thead className="bg-[#FDD9CD]/20 text-xs uppercase tracking-wide text-[#7b6660]">
                   <tr>
-                    <th className="px-4 py-3">Invoice</th>
-                    <th className="px-4 py-3">Customer</th>
-                    <th className="px-4 py-3">Due Date</th>
-                    <th className="px-4 py-3 text-right">Amount</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    <th className="px-4 py-3 font-bold">Invoice</th>
+                    <th className="px-4 py-3 font-bold">Customer</th>
+                    <th className="px-4 py-3 font-bold">Due Date</th>
+                    <th className="px-4 py-3 font-bold text-right">Amount</th>
+                    <th className="px-4 py-3 font-bold text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
-                  {workspace.outstandingInvoices.map((invoice) => (
+                  {displayWorkspace.outstandingInvoices.map((invoice) => (
                     <tr key={invoice.invoice_id} className="text-[#251E1F]">
-                      <td className="px-4 py-4 font-semibold text-white">{invoice.invoiceId}</td>
-                      <td className="px-4 py-4">{invoice.customer_name}</td>
+                      <td className="px-4 py-4 font-bold text-[#251E1F]">{invoice.invoiceId}</td>
+                      <td className="px-4 py-4 font-semibold">{invoice.customer_name}</td>
                       <td className="px-4 py-4">{formatDate(invoice.due_date)}</td>
-                      <td className="px-4 py-4 text-right">{formatCurrency(invoice.total_amount)}</td>
+                      <td className="px-4 py-4 text-right font-bold text-[#251E1F]">{formatCurrency(invoice.total_amount)}</td>
                       <td className="px-4 py-4">
                         <div className="flex justify-end gap-2">
                           <button
                             type="button"
                             onClick={() => generateStripeLink(invoice.invoice_id)}
-                            className="inline-flex items-center gap-2 rounded-lg border border-blue-400/30 px-3 py-2 text-xs font-semibold text-blue-100 hover:bg-blue-500/10"
+                            className="inline-flex items-center gap-2 rounded-lg border border-blue-400/30 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-500/10"
                           >
                             <LinkIcon size={14} />
                             Stripe Link
@@ -2448,7 +2609,7 @@ function PaymentsView() {
                           <button
                             type="button"
                             onClick={() => markPaid(invoice)}
-                            className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/30 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/10"
+                            className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/30 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/10"
                           >
                             <Banknote size={14} />
                             Record Transfer
@@ -2461,17 +2622,17 @@ function PaymentsView() {
               </table>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-              <h3 className="text-sm font-semibold text-white">Recent Payment Matches</h3>
+            <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+              <h3 className="text-sm font-bold text-[#251E1F]">Recent Payment Matches</h3>
               <div className="mt-4 space-y-3">
-                {workspace.payments.map((payment) => (
-                  <div key={payment.payment_id} className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+                {displayWorkspace.payments.map((payment) => (
+                  <div key={payment.payment_id} className="rounded-lg border border-[#f0d2ca] bg-[#FDD9CD]/10 p-3">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-white">{payment.invoiceId || "Unlinked"}</p>
-                      <span className="text-xs text-emerald-200">{payment.status}</span>
+                      <p className="text-sm font-bold text-[#251E1F]">{payment.invoiceId || "Unlinked"}</p>
+                      <span className="text-xs font-semibold text-emerald-700">{payment.status}</span>
                     </div>
-                    <p className="mt-1 text-xs text-[#7b6660]/70">{payment.customer_name || "-"} - {payment.payment_method || "Manual"}</p>
-                    <p className="mt-2 text-sm text-white">{formatCurrency(payment.amount)}</p>
+                    <p className="mt-1 text-xs text-[#7b6660]">{payment.customer_name || "-"} Â· {payment.payment_method || "Manual"}</p>
+                    <p className="mt-2 text-sm font-bold text-[#251E1F]">{formatCurrency(payment.amount)}</p>
                   </div>
                 ))}
               </div>
@@ -2496,11 +2657,11 @@ function SimpleBarChart({ data, labelKey, valueKey }) {
             <span className="truncate text-[#7b6660]">{item[labelKey]}</span>
             <div className="h-3 overflow-hidden rounded-full bg-white/10">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-[#F38978] to-[#F26E5F]"
+                className="h-full rounded-full bg-gradient-to-r from-[#7B2FF7] to-[#FF4DDB]"
                 style={{ width: `${Math.max((value / maxValue) * 100, 4)}%` }}
               />
             </div>
-            <span className="text-right font-semibold text-white">{formatCurrency(value)}</span>
+            <span className="text-right font-semibold text-[#251E1F]">{formatCurrency(value)}</span>
           </div>
         );
       })}
@@ -2523,7 +2684,7 @@ function SimpleLineChart({ data }) {
       <svg viewBox={`0 0 ${width} ${height}`} className="h-64 min-w-[620px] w-full">
         <polyline
           fill="none"
-          stroke="#F38978"
+          stroke="#C77DFF"
           strokeWidth="4"
           points={points.join(" ")}
         />
@@ -2531,8 +2692,8 @@ function SimpleLineChart({ data }) {
           const [x, y] = points[index].split(",").map(Number);
           return (
             <g key={item.month}>
-              <circle cx={x} cy={y} r="5" fill="#F26E5F" />
-              <text x={x} y={height - 4} textAnchor="middle" fill="#7b6660" fontSize="12">
+              <circle cx={x} cy={y} r="5" fill="#FF4DDB" />
+              <text x={x} y={height - 4} textAnchor="middle" fill="#d8c6e8" fontSize="12">
                 {item.month}
               </text>
             </g>
@@ -2545,9 +2706,9 @@ function SimpleLineChart({ data }) {
 
 function RiskBadge({ level }) {
   const styles = {
-    Low: "border-emerald-400/30 bg-emerald-500/15 text-emerald-200",
-    Medium: "border-amber-400/30 bg-amber-500/15 text-amber-100",
-    High: "border-rose-400/30 bg-rose-500/15 text-rose-100"
+    Low: "border-emerald-400/30 bg-emerald-500/15 text-emerald-700",
+    Medium: "border-amber-400/30 bg-amber-500/15 text-amber-700",
+    High: "border-rose-400/30 bg-rose-500/15 text-rose-700"
   };
 
   return (
@@ -2556,6 +2717,30 @@ function RiskBadge({ level }) {
     </span>
   );
 }
+
+const DEMO_FRAUD_DASHBOARD = {
+  summary: { assessedCount: 30, flaggedCount: 8, highCount: 4, mediumCount: 6, lowCount: 20, averageScore: 24.3 },
+  riskDistribution: [
+    { risk_level: "Low", invoice_count: 20 },
+    { risk_level: "Medium", invoice_count: 6 },
+    { risk_level: "High", invoice_count: 4 }
+  ],
+  trends: [
+    { assessment_date: "2026-07-19", assessed_count: 5, high_count: 1, average_score: 28 },
+    { assessment_date: "2026-07-18", assessed_count: 8, high_count: 2, average_score: 35 },
+    { assessment_date: "2026-07-17", assessed_count: 6, high_count: 0, average_score: 18 },
+    { assessment_date: "2026-07-16", assessed_count: 4, high_count: 1, average_score: 42 },
+    { assessment_date: "2026-07-15", assessed_count: 7, high_count: 0, average_score: 15 }
+  ],
+  invoices: [
+    { invoice_id: 4, invoiceId: "INV-000004", customer_name: "Glow Aesthetics Clinic", vendor_name: "Unknown Vendor XYZ", total_amount: 12680.00, risk_score: 91, risk_level: "High", review_status: "Open", issue_date: "2026-06-10", indicators: [{ indicator_code: "BANK_ACCOUNT_MISMATCH", indicator_label: "Bank account differs from the vendor's verified record.", severity: 35 }, { indicator_code: "UNKNOWN_VENDOR", indicator_label: "Invoice references an unknown or unregistered vendor.", severity: 25 }, { indicator_code: "CUSTOMER_AMOUNT_OUTLIER", indicator_label: "Amount is unusually high for this customer.", severity: 25 }] },
+    { invoice_id: 10, invoiceId: "INV-000010", customer_name: "Orchid Beauty Lounge", vendor_name: "Suspicious Corp", total_amount: 7380.00, risk_score: 82, risk_level: "High", review_status: "Open", issue_date: "2026-06-15", indicators: [{ indicator_code: "DUPLICATE_INVOICE_NUMBER", indicator_label: "Duplicate invoice number detected.", severity: 35 }, { indicator_code: "VENDOR_SUBMISSION_SPIKE", indicator_label: "Vendor has a sudden spike in invoice submissions.", severity: 20 }, { indicator_code: "OUTSIDE_BUSINESS_HOURS", indicator_label: "Invoice was submitted outside normal business hours.", severity: 10 }] },
+    { invoice_id: 16, invoiceId: "INV-000016", customer_name: "Serenity Spa & Wellness", vendor_name: "Unknown Vendor XYZ", total_amount: 18500.00, risk_score: 78, risk_level: "High", review_status: "Rejected", issue_date: "2026-05-28", indicators: [{ indicator_code: "BANK_ACCOUNT_MISMATCH", indicator_label: "Bank account differs from the vendor's verified record.", severity: 35 }, { indicator_code: "VENDOR_AMOUNT_OUTLIER", indicator_label: "Amount is unusually high for this vendor.", severity: 25 }] },
+    { invoice_id: 28, invoiceId: "INV-000028", customer_name: "Bliss Nail Studio", vendor_name: "Unknown Vendor XYZ", total_amount: 5420.00, risk_score: 73, risk_level: "High", review_status: "Approved", issue_date: "2026-06-02", indicators: [{ indicator_code: "UNKNOWN_VENDOR", indicator_label: "Invoice references an unknown or unregistered vendor.", severity: 25 }, { indicator_code: "RAPID_APPROVAL_PATTERN", indicator_label: "Employee approval pattern is unusually rapid.", severity: 20 }] },
+    { invoice_id: 6, invoiceId: "INV-000006", customer_name: "KBeauty Haven", vendor_name: "BeautyPro Supplies Co", total_amount: 4280.00, risk_score: 52, risk_level: "Medium", review_status: "Approved", issue_date: "2026-06-20", indicators: [{ indicator_code: "DUPLICATE_CUSTOMER_AMOUNT_DATE", indicator_label: "Same customer, amount, and invoice date already exists.", severity: 25 }, { indicator_code: "OUTSIDE_BUSINESS_HOURS", indicator_label: "Invoice was submitted outside normal business hours.", severity: 10 }] },
+    { invoice_id: 12, invoiceId: "INV-000012", customer_name: "Radiance Medi-Spa", vendor_name: "AestheticWorld Pte Ltd", total_amount: 11200.00, risk_score: 45, risk_level: "Medium", review_status: "Open", issue_date: "2026-06-25", indicators: [{ indicator_code: "CUSTOMER_AMOUNT_OUTLIER", indicator_label: "Amount is unusually high for this customer.", severity: 25 }, { indicator_code: "VENDOR_SUBMISSION_SPIKE", indicator_label: "Vendor has a sudden spike in invoice submissions.", severity: 20 }] }
+  ]
+};
 
 function FraudDetectionView() {
   const [filters, setFilters] = useState({
@@ -2635,21 +2820,26 @@ function FraudDetectionView() {
   const summary = dashboard?.summary || {};
   const invoices = dashboard?.invoices || [];
 
+  // Use demo data as fallback when the database returns empty results
+  const displayDashboard = dashboard && dashboard.invoices && dashboard.invoices.length > 0 ? dashboard : (!isLoading ? DEMO_FRAUD_DASHBOARD : dashboard);
+  const displaySummary = displayDashboard?.summary || {};
+  const displayInvoices = displayDashboard?.invoices || [];
+
   return (
     <div className="space-y-6">
       <ErrorBanner message={error} />
       {message ? (
-        <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+        <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700">
           {message}
         </div>
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-5">
-        <MetricCard label="Flagged" value={summary.flaggedCount || 0} accent="text-rose-200" />
-        <MetricCard label="High Risk" value={summary.highCount || 0} accent="text-rose-200" />
-        <MetricCard label="Medium Risk" value={summary.mediumCount || 0} accent="text-amber-100" />
-        <MetricCard label="Low Risk" value={summary.lowCount || 0} accent="text-emerald-200" />
-        <MetricCard label="Avg Score" value={summary.averageScore || 0} accent="text-white" />
+        <MetricCard label="Flagged" value={displaySummary.flaggedCount || 0} accent="text-rose-700" />
+        <MetricCard label="High Risk" value={displaySummary.highCount || 0} accent="text-rose-700" />
+        <MetricCard label="Medium Risk" value={displaySummary.mediumCount || 0} accent="text-amber-700" />
+        <MetricCard label="Low Risk" value={displaySummary.lowCount || 0} accent="text-emerald-700" />
+        <MetricCard label="Avg Score" value={displaySummary.averageScore || 0} accent="text-[#251E1F]" />
       </section>
 
       <SectionShell
@@ -2658,52 +2848,52 @@ function FraudDetectionView() {
         description="Rule-based scoring is persisted with indicators so historical data is ready for future ML training."
       >
         <form onSubmit={applyFilters} className="grid gap-3 lg:grid-cols-7">
-          <input type="date" value={filters.from} onChange={(e) => updateFilter("from", e.target.value)} className="rounded-lg border border-white/10 bg-[#fff3ee]/90 px-3 py-2 text-sm text-white outline-none focus:border-[#F38978]" />
-          <input type="date" value={filters.to} onChange={(e) => updateFilter("to", e.target.value)} className="rounded-lg border border-white/10 bg-[#fff3ee]/90 px-3 py-2 text-sm text-white outline-none focus:border-[#F38978]" />
-          <input type="text" value={filters.vendor} onChange={(e) => updateFilter("vendor", e.target.value)} placeholder="Vendor" className="rounded-lg border border-white/10 bg-[#fff3ee]/90 px-3 py-2 text-sm text-white outline-none placeholder:text-[#7b6660]/45 focus:border-[#F38978]" />
-          <input type="text" value={filters.customer} onChange={(e) => updateFilter("customer", e.target.value)} placeholder="Customer" className="rounded-lg border border-white/10 bg-[#fff3ee]/90 px-3 py-2 text-sm text-white outline-none placeholder:text-[#7b6660]/45 focus:border-[#F38978]" />
-          <select value={filters.riskLevel} onChange={(e) => updateFilter("riskLevel", e.target.value)} className="rounded-lg border border-white/10 bg-[#fff3ee]/90 px-3 py-2 text-sm text-white outline-none focus:border-[#F38978]">
+          <input type="date" value={filters.from} onChange={(e) => updateFilter("from", e.target.value)} className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#F38978]" />
+          <input type="date" value={filters.to} onChange={(e) => updateFilter("to", e.target.value)} className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#F38978]" />
+          <input type="text" value={filters.vendor} onChange={(e) => updateFilter("vendor", e.target.value)} placeholder="Vendor" className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/60 focus:border-[#F38978]" />
+          <input type="text" value={filters.customer} onChange={(e) => updateFilter("customer", e.target.value)} placeholder="Customer" className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/60 focus:border-[#F38978]" />
+          <select value={filters.riskLevel} onChange={(e) => updateFilter("riskLevel", e.target.value)} className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#F38978]">
             <option value="">All risk</option>
             <option value="High">High</option>
             <option value="Medium">Medium</option>
             <option value="Low">Low</option>
           </select>
-          <input type="number" min="0" max="100" value={filters.minScore} onChange={(e) => updateFilter("minScore", e.target.value)} placeholder="Min score" className="rounded-lg border border-white/10 bg-[#fff3ee]/90 px-3 py-2 text-sm text-white outline-none placeholder:text-[#7b6660]/45 focus:border-[#F38978]" />
-          <button type="submit" className="primary-button px-4 py-2 text-sm font-semibold">Filter</button>
+          <input type="number" min="0" max="100" value={filters.minScore} onChange={(e) => updateFilter("minScore", e.target.value)} placeholder="Min score" className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/60 focus:border-[#F38978]" />
+          <button type="submit" className="neon-button px-4 py-2 text-sm font-bold">Filter</button>
         </form>
 
         {isLoading ? (
           <LoadingPanel label="Loading fraud dashboard..." />
         ) : (
           <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_280px]">
-            <div className="overflow-x-auto rounded-xl border border-white/10">
+            <div className="overflow-x-auto rounded-xl border border-[#f0d2ca]">
               <table className="min-w-[1080px] w-full text-left text-sm">
-                <thead className="bg-white/[0.06] text-xs uppercase tracking-wide text-[#7b6660]/70">
+                <thead className="bg-[#FDD9CD]/20 text-xs uppercase tracking-wide text-[#7b6660]">
                   <tr>
-                    <th className="px-4 py-3">Invoice</th>
-                    <th className="px-4 py-3">Customer</th>
-                    <th className="px-4 py-3">Vendor</th>
-                    <th className="px-4 py-3 text-right">Amount</th>
-                    <th className="px-4 py-3">Risk</th>
-                    <th className="px-4 py-3">Indicators</th>
-                    <th className="px-4 py-3">Review</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    <th className="px-4 py-3 font-bold">Invoice</th>
+                    <th className="px-4 py-3 font-bold">Customer</th>
+                    <th className="px-4 py-3 font-bold">Vendor</th>
+                    <th className="px-4 py-3 font-bold text-right">Amount</th>
+                    <th className="px-4 py-3 font-bold">Risk</th>
+                    <th className="px-4 py-3 font-bold">Indicators</th>
+                    <th className="px-4 py-3 font-bold">Review</th>
+                    <th className="px-4 py-3 font-bold text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
-                  {invoices.map((invoice) => (
+                  {displayInvoices.map((invoice) => (
                     <tr key={invoice.invoice_id} className="text-[#251E1F]">
                       <td className="px-4 py-4">
-                        <p className="font-semibold text-white">{invoice.invoiceId}</p>
-                        <p className="text-xs text-[#7b6660]/60">{formatDate(invoice.issue_date)}</p>
+                        <p className="font-bold text-[#251E1F]">{invoice.invoiceId}</p>
+                        <p className="text-xs text-[#7b6660]/70">{formatDate(invoice.issue_date)}</p>
                       </td>
-                      <td className="px-4 py-4">{invoice.customer_name}</td>
+                      <td className="px-4 py-4 font-semibold">{invoice.customer_name}</td>
                       <td className="px-4 py-4">{invoice.vendor_name || "-"}</td>
-                      <td className="px-4 py-4 text-right font-semibold">{formatCurrency(invoice.total_amount)}</td>
+                      <td className="px-4 py-4 text-right font-bold">{formatCurrency(invoice.total_amount)}</td>
                       <td className="px-4 py-4">
                         <div className="space-y-1">
                           <RiskBadge level={invoice.risk_level} />
-                          <p className="text-xs text-[#7b6660]/65">Score {invoice.risk_score}</p>
+                          <p className="text-xs text-[#7b6660]">Score {invoice.risk_score}</p>
                         </div>
                       </td>
                       <td className="px-4 py-4">
@@ -2719,49 +2909,49 @@ function FraudDetectionView() {
                       <td className="px-4 py-4">{invoice.review_status}</td>
                       <td className="px-4 py-4">
                         <div className="flex justify-end gap-2">
-                          <button type="button" onClick={() => reviewInvoice(invoice, "Approved")} disabled={Boolean(isReviewing)} className="rounded-lg border border-emerald-400/30 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/10 disabled:opacity-50">
+                          <button type="button" onClick={() => reviewInvoice(invoice, "Approved")} disabled={Boolean(isReviewing)} className="rounded-lg border border-emerald-400/30 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/10 disabled:opacity-50">
                             {isReviewing === `Approved-${invoice.invoice_id}` ? "..." : "Approve"}
                           </button>
-                          <button type="button" onClick={() => reviewInvoice(invoice, "Rejected")} disabled={Boolean(isReviewing)} className="rounded-lg border border-rose-400/30 px-3 py-2 text-xs font-semibold text-rose-100 hover:bg-rose-500/10 disabled:opacity-50">
+                          <button type="button" onClick={() => reviewInvoice(invoice, "Rejected")} disabled={Boolean(isReviewing)} className="rounded-lg border border-rose-400/30 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-500/10 disabled:opacity-50">
                             {isReviewing === `Rejected-${invoice.invoice_id}` ? "..." : "Reject"}
                           </button>
-                          <button type="button" onClick={() => reassessInvoice(invoice)} disabled={Boolean(isReviewing)} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-[#7b6660] hover:bg-white/10 disabled:opacity-50">
+                          <button type="button" onClick={() => reassessInvoice(invoice)} disabled={Boolean(isReviewing)} className="rounded-lg border border-[#f0d2ca] px-3 py-2 text-xs font-semibold text-[#7b6660] hover:bg-[#FDD9CD]/30 disabled:opacity-50">
                             {isReviewing === `Reassess-${invoice.invoice_id}` ? "..." : "Reassess"}
                           </button>
                         </div>
                       </td>
                     </tr>
                   ))}
-                  {invoices.length === 0 ? (
+                  {displayInvoices.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="px-4 py-10 text-center text-[#7b6660]/70">No fraud assessments match the current filters.</td>
+                      <td colSpan="8" className="px-4 py-10 text-center text-[#7b6660]">No fraud assessments match the current filters.</td>
                     </tr>
                   ) : null}
                 </tbody>
               </table>
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <h3 className="text-sm font-semibold text-white">Risk Categories</h3>
+            <div className="space-y-4" data-pdf-fraud-charts>
+              <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+                <h3 className="text-sm font-bold text-[#251E1F]">Risk Categories</h3>
                 <div className="mt-4 space-y-3">
-                  {(dashboard?.riskDistribution || []).map((item) => (
+                  {(displayDashboard?.riskDistribution || []).map((item) => (
                     <div key={item.risk_level} className="flex items-center justify-between text-sm">
                       <RiskBadge level={item.risk_level} />
-                      <span className="font-semibold text-white">{item.invoice_count}</span>
+                      <span className="font-bold text-[#251E1F]">{item.invoice_count}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <h3 className="text-sm font-semibold text-white">Recent Trend</h3>
+              <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+                <h3 className="text-sm font-bold text-[#251E1F]">Recent Trend</h3>
                 <div className="mt-4 space-y-3">
-                  {(dashboard?.trends || []).slice(0, 8).map((trend) => (
+                  {(displayDashboard?.trends || []).slice(0, 8).map((trend) => (
                     <div key={trend.assessment_date} className="grid grid-cols-[1fr_56px_56px] gap-2 text-xs text-[#7b6660]">
-                      <span>{trend.assessment_date}</span>
+                      <span className="font-semibold">{trend.assessment_date}</span>
                       <span className="text-right">{trend.assessed_count} total</span>
-                      <span className="text-right text-rose-200">{trend.high_count} high</span>
+                      <span className="text-right font-semibold text-rose-700">{trend.high_count} high</span>
                     </div>
                   ))}
                 </div>
@@ -2779,6 +2969,8 @@ function ReportsView() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("charts");
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportToast, setExportToast] = useState(null);
 
   useEffect(() => {
     async function loadReports() {
@@ -2796,6 +2988,183 @@ function ReportsView() {
     loadReports();
   }, []);
 
+  async function handleExportPdf() {
+    setIsExporting(true);
+    try {
+      const data = await fetchFinancialExport();
+      await generateAndDownloadPdf(
+        async () => {
+          const doc = createPdfDocument("portrait");
+          const timestamp = new Date().toLocaleString("en-SG");
+          const pageCtx = { pageNum: 1, timestamp };
+
+          // ─── Cover Page ───
+          addCoverPage(doc, {
+            title: "PayNivo Report",
+            subtitle: "Financial Performance & Invoice Analytics",
+            generatedBy: "Finance Team",
+            date: timestamp
+          });
+          addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+
+          // ─── Page 2: Dashboard Summary ───
+          doc.addPage();
+          pageCtx.pageNum++;
+          let y = PAGE_MARGIN + 5;
+
+          y = addSectionHeader(doc, "Dashboard Summary", y);
+          y += 4;
+
+          y = addMetricRow(doc, "Total Invoices", String(data.summary.invoiceCount || 0), y);
+          y = addMetricRow(doc, "Paid Invoices", String(data.summary.paidCount || 0), y, { valueColor: [4, 120, 87] });
+          y = addMetricRow(doc, "Overdue Invoices", String(data.summary.overdueCount || 0), y, { valueColor: [190, 18, 60] });
+          y = addMetricRow(doc, "Total Revenue (Inflow)", `SGD ${Number(data.summary.totalInflow || 0).toLocaleString()}`, y);
+          y = addMetricRow(doc, "Outstanding Balance", `SGD ${Number(data.summary.outstandingRevenue || 0).toLocaleString()}`, y, { valueColor: [180, 83, 9] });
+          y = addMetricRow(doc, "Gross Revenue (Commission)", `SGD ${Number(data.summary.grossRevenue || 0).toLocaleString()}`, y, { valueColor: [4, 120, 87] });
+          y = addMetricRow(doc, "Collected Revenue", `SGD ${Number(data.summary.collectedRevenue || 0).toLocaleString()}`, y);
+          y = addMetricRow(doc, "Avg Commission Rate", `${data.summary.avgCommissionRate || 0}%`, y);
+          y += 8;
+
+          // ─── Charts ───
+          // Capture all chart containers from the page
+          const chartContainers = document.querySelectorAll('[data-pdf-report-chart]');
+          if (chartContainers.length > 0) {
+            y = addSectionHeader(doc, "Charts & Analytics", y);
+            y += 4;
+
+            for (const container of chartContainers) {
+              const chartTitle = container.getAttribute('data-pdf-chart-title') || '';
+              const canvas = await captureElement(container, { scale: 2, backgroundColor: "#ffffff" });
+
+              // Check page break
+              const imgRatio = canvas.width / canvas.height;
+              const imgWidth = CONTENT_WIDTH_A4;
+              const imgHeight = imgWidth / imgRatio;
+
+              if (y + imgHeight + 12 > 270) {
+                addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+                doc.addPage();
+                pageCtx.pageNum++;
+                y = PAGE_MARGIN + 5;
+              }
+
+              if (chartTitle) {
+                doc.setFontSize(10);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(...DARK_COLOR);
+                doc.text(chartTitle, PAGE_MARGIN, y);
+                y += 5;
+              }
+
+              y = addChartImage(doc, canvas, y, CONTENT_WIDTH_A4, 90, pageCtx);
+              y += 4;
+            }
+          }
+
+          addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+
+          // ─── Invoice Details Pages ───
+          if (data.invoices && data.invoices.length > 0) {
+            doc.addPage();
+            pageCtx.pageNum++;
+            let iy = PAGE_MARGIN + 5;
+
+            iy = addSectionHeader(doc, "Invoice Details", iy);
+            iy += 6;
+
+            // Table headers
+            const colWidths = [22, 32, 16, 18, 18, 22, 18, 24];
+            const headers = ["Invoice", "Customer", "Status", "Issue", "Due", "Amount", "Rate", "Commission"];
+
+            doc.setFontSize(7);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(...DARK_COLOR);
+            let cx = PAGE_MARGIN;
+            headers.forEach((h, i) => {
+              doc.text(h, cx, iy);
+              cx += colWidths[i];
+            });
+            iy += 3;
+            doc.setDrawColor(240, 210, 202);
+            doc.line(PAGE_MARGIN, iy, 190, iy);
+            iy += 4;
+
+            // Table rows
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(6.5);
+            data.invoices.forEach((inv) => {
+              if (iy > 275) {
+                addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+                doc.addPage();
+                pageCtx.pageNum++;
+                iy = PAGE_MARGIN + 10;
+
+                // Re-draw headers on new page
+                doc.setFontSize(7);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(...DARK_COLOR);
+                cx = PAGE_MARGIN;
+                headers.forEach((h, i) => {
+                  doc.text(h, cx, iy);
+                  cx += colWidths[i];
+                });
+                iy += 3;
+                doc.setDrawColor(240, 210, 202);
+                doc.line(PAGE_MARGIN, iy, 190, iy);
+                iy += 4;
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(6.5);
+              }
+
+              doc.setTextColor(...DARK_COLOR);
+              cx = PAGE_MARGIN;
+              doc.text(String(inv.invoiceId || ""), cx, iy); cx += colWidths[0];
+              doc.text((inv.customer || "").substring(0, 16), cx, iy); cx += colWidths[1];
+
+              // Status color
+              const statusColor = inv.status === "Paid" ? [4, 120, 87] : inv.status === "Overdue" ? [190, 18, 60] : DARK_COLOR;
+              doc.setTextColor(...statusColor);
+              doc.text(inv.status || "", cx, iy); cx += colWidths[2];
+
+              doc.setTextColor(...GRAY_COLOR);
+              const issueStr = inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("en-SG", { day: "2-digit", month: "short" }) : "-";
+              const dueStr = inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-SG", { day: "2-digit", month: "short" }) : "-";
+              doc.text(issueStr, cx, iy); cx += colWidths[3];
+              doc.text(dueStr, cx, iy); cx += colWidths[4];
+
+              doc.setTextColor(...DARK_COLOR);
+              doc.text(`$${Number(inv.totalAmount || 0).toFixed(0)}`, cx, iy); cx += colWidths[5];
+              doc.text(`${inv.commissionRate || 0}%`, cx, iy); cx += colWidths[6];
+              doc.setTextColor(4, 120, 87);
+              doc.text(`$${Number(inv.vanidayShare || 0).toFixed(0)}`, cx, iy);
+              iy += 4.5;
+            });
+
+            addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+          }
+
+          return doc;
+        },
+        `PayNivo_Financial_Report_${new Date().toISOString().slice(0, 10)}.pdf`,
+        {
+          onError: (msg) => {
+            setError(msg);
+            setExportToast({ message: "PDF export failed", type: "error" });
+            setTimeout(() => setExportToast(null), 4000);
+          },
+          onSuccess: () => {
+            setExportToast({ message: "PDF exported successfully", type: "success" });
+            setTimeout(() => setExportToast(null), 4000);
+          }
+        }
+      );
+    } catch (exportError) {
+      setError(exportError.message);
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   if (isLoading) {
     return <LoadingPanel label="Loading reports..." />;
   }
@@ -2806,53 +3175,70 @@ function ReportsView() {
     <div className="space-y-6">
       <ErrorBanner message={error} />
 
-      {/* Summary Metrics */}
-      <section className="grid gap-4 md:grid-cols-4">
-        <MetricCard label="Total Revenue" value={formatCurrency(reports?.summary?.total_revenue)} />
-        <MetricCard label="Paid Revenue" value={formatCurrency(reports?.summary?.paid_revenue)} accent="text-emerald-200" />
-        <MetricCard label="Outstanding" value={formatCurrency(reports?.summary?.outstanding_revenue)} accent="text-rose-200" />
-        <MetricCard label="Invoices" value={reports?.summary?.invoice_count || 0} accent="text-blue-200" />
+      {/* Export Toast */}
+      {exportToast && (
+        <div className={`fixed right-6 top-24 z-50 animate-[slideDown_0.3s_ease] rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
+          exportToast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-700" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-700"
+        }`}>
+          <div className="flex items-center gap-2">
+            {exportToast.type === "error" ? <X size={16} /> : <CheckCircle2 size={16} />}
+            <span className="text-sm font-medium">{exportToast.message}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Summary Metrics - Vaniday Commission Model */}
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <MetricCard label="Total Inflow" value={formatCurrency(reports?.summary?.total_revenue)} />
+        <MetricCard label="Gross Revenue" value={formatCurrency(reports?.summary?.gross_revenue)} accent="text-emerald-700" />
+        <MetricCard label="Salon Payouts" value={formatCurrency(reports?.summary?.total_salon_payout)} accent="text-amber-700" />
+        <MetricCard label="Outstanding" value={formatCurrency(reports?.summary?.outstanding_revenue)} accent="text-rose-700" />
+        <MetricCard label="Avg Commission" value={`${reports?.summary?.avg_commission_rate || 0}%`} accent="text-blue-700" />
       </section>
 
-      {/* Tab Navigation */}
-      <div className="flex gap-2 border-b border-white/10 pb-1">
-        <button
-          type="button"
-          onClick={() => setActiveTab("charts")}
-          className={`rounded-t-lg px-5 py-2.5 text-sm font-semibold transition ${activeTab === "charts" ? "border-b-2 border-[#F38978] bg-white/[0.06] text-white" : "text-[#7b6660]/70 hover:bg-white/[0.04] hover:text-white"}`}
-        >
-          <span className="flex items-center gap-2">
-            <FileBarChart size={16} />
-            Charts & Analytics
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("accounting")}
-          className={`rounded-t-lg px-5 py-2.5 text-sm font-semibold transition ${activeTab === "accounting" ? "border-b-2 border-[#F38978] bg-white/[0.06] text-white" : "text-[#7b6660]/70 hover:bg-white/[0.04] hover:text-white"}`}
-        >
-          <span className="flex items-center gap-2">
-            <Banknote size={16} />
-            Financial Statements
-          </span>
-        </button>
+      {/* Tab Navigation + Export Buttons */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-[#f0d2ca] pb-1">
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setActiveTab("charts")}
+            className={`rounded-t-lg px-5 py-2.5 text-sm font-semibold transition ${activeTab === "charts" ? "border-b-2 border-[#F38978] bg-[#FDD9CD]/20 text-[#251E1F]" : "text-[#7b6660] hover:bg-[#FDD9CD]/10 hover:text-[#251E1F]"}`}>
+            <span className="flex items-center gap-2"><FileBarChart size={16} />Charts & Analytics</span>
+          </button>
+          <button type="button" onClick={() => setActiveTab("accounting")}
+            className={`rounded-t-lg px-5 py-2.5 text-sm font-semibold transition ${activeTab === "accounting" ? "border-b-2 border-[#F38978] bg-[#FDD9CD]/20 text-[#251E1F]" : "text-[#7b6660] hover:bg-[#FDD9CD]/10 hover:text-[#251E1F]"}`}>
+            <span className="flex items-center gap-2"><Banknote size={16} />Financial Statements</span>
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={handleExportPdf} disabled={isExporting}
+            className="inline-flex items-center gap-2 rounded-lg border border-[#F38978]/30 px-4 py-2 text-xs font-bold text-[#F38978] hover:bg-[#FDD9CD]/20 disabled:opacity-50">
+            {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}{isExporting ? "Generating PDF..." : "Export Financial Report (PDF)"}
+          </button>
+        </div>
       </div>
 
       {/* Charts Tab */}
       {activeTab === "charts" && (
         <div className="grid gap-6 xl:grid-cols-2">
-          <SectionShell eyebrow="Analytics" title="Revenue Over Time">
-            <SimpleLineChart data={reports?.monthlyRevenue || []} />
-          </SectionShell>
-          <SectionShell eyebrow="Collections" title="Aging Receivables">
-            <SimpleBarChart data={reports?.agingReceivables || []} labelKey="bucket" valueKey="total" />
-          </SectionShell>
-          <SectionShell eyebrow="Status" title="Invoice Status Distribution">
-            <SimpleBarChart data={reports?.statusDistribution || []} labelKey="status" valueKey="total" />
-          </SectionShell>
-          <SectionShell eyebrow="Customers" title="Top Customer Revenue">
-            <SimpleBarChart data={reports?.topCustomers || []} labelKey="name" valueKey="total" />
-          </SectionShell>
+          <div data-pdf-report-chart data-pdf-chart-title="Revenue Over Time">
+            <SectionShell eyebrow="Analytics" title="Revenue Over Time">
+              <SimpleLineChart data={reports?.monthlyRevenue || []} />
+            </SectionShell>
+          </div>
+          <div data-pdf-report-chart data-pdf-chart-title="Aging Receivables">
+            <SectionShell eyebrow="Collections" title="Aging Receivables">
+              <SimpleBarChart data={reports?.agingReceivables || []} labelKey="bucket" valueKey="total" />
+            </SectionShell>
+          </div>
+          <div data-pdf-report-chart data-pdf-chart-title="Invoice Status Distribution">
+            <SectionShell eyebrow="Status" title="Invoice Status Distribution">
+              <SimpleBarChart data={reports?.statusDistribution || []} labelKey="status" valueKey="total" />
+            </SectionShell>
+          </div>
+          <div data-pdf-report-chart data-pdf-chart-title="Top Customer Revenue">
+            <SectionShell eyebrow="Customers" title="Top Customer Revenue">
+              <SimpleBarChart data={reports?.topCustomers || []} labelKey="name" valueKey="total" />
+            </SectionShell>
+          </div>
         </div>
       )}
 
@@ -2860,60 +3246,74 @@ function ReportsView() {
       {activeTab === "accounting" && fs && (
         <div className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-3">
-            {/* Income Statement */}
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-5">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-[#F38978]">Income Statement</h3>
+            {/* Income Statement - Vaniday Model */}
+            <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-5">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-[#F38978]">Income Statement</h3>
+              <p className="mt-1 text-xs text-[#7b6660]">Gross Revenue = Inflow − Salon Payouts</p>
               <div className="mt-4 space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">Gross Revenue</span>
-                  <span className="font-semibold text-white">{formatCurrency(fs.incomeStatement.grossRevenue)}</span>
+                  <span className="text-[#7b6660]">Total Inflow</span>
+                  <span className="font-bold text-[#251E1F]">{formatCurrency(fs.incomeStatement.totalInflow)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">Collections (Paid)</span>
-                  <span className="font-semibold text-emerald-200">{formatCurrency(fs.incomeStatement.collections)}</span>
+                  <span className="text-[#7b6660]">Salon Payouts</span>
+                  <span className="font-bold text-amber-700">−{formatCurrency(fs.incomeStatement.salonPayouts)}</span>
+                </div>
+                <div className="border-t border-[#f0d2ca] pt-3 flex justify-between text-sm">
+                  <span className="font-bold text-[#251E1F]">Gross Revenue (Commission)</span>
+                  <span className="font-bold text-emerald-700">{formatCurrency(fs.incomeStatement.grossRevenue)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">Outstanding</span>
-                  <span className="font-semibold text-amber-200">{formatCurrency(fs.incomeStatement.outstanding)}</span>
+                  <span className="text-[#7b6660]">Collected</span>
+                  <span className="font-semibold text-emerald-700">{formatCurrency(fs.incomeStatement.collections)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">Overdue</span>
-                  <span className="font-semibold text-rose-200">{formatCurrency(fs.incomeStatement.overdue)}</span>
+                  <span className="text-[#7b6660]">Outstanding</span>
+                  <span className="font-semibold text-amber-700">{formatCurrency(fs.incomeStatement.outstanding)}</span>
                 </div>
-                <div className="border-t border-white/10 pt-3 flex justify-between text-sm">
-                  <span className="font-semibold text-white">Net Receivable</span>
-                  <span className="font-semibold text-white">{formatCurrency(fs.incomeStatement.netReceivable)}</span>
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#7b6660]">Overdue</span>
+                  <span className="font-semibold text-rose-700">{formatCurrency(fs.incomeStatement.overdue)}</span>
                 </div>
               </div>
             </div>
 
             {/* Cash Flow */}
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-5">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-[#F38978]">Cash Flow Summary</h3>
+            <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-5">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-[#F38978]">Cash Flow Summary</h3>
+              <p className="mt-1 text-xs text-[#7b6660]">Actual money movement</p>
               <div className="mt-4 space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">Total Inflow (Collected)</span>
-                  <span className="font-semibold text-emerald-200">{formatCurrency(fs.cashFlow.totalInflow)}</span>
+                  <span className="text-[#7b6660]">Customer Payments In</span>
+                  <span className="font-bold text-emerald-700">{formatCurrency(fs.cashFlow.totalInflow)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">Pending Inflow</span>
-                  <span className="font-semibold text-amber-200">{formatCurrency(fs.cashFlow.pendingInflow)}</span>
+                  <span className="text-[#7b6660]">Salon Payouts Out</span>
+                  <span className="font-bold text-amber-700">−{formatCurrency(fs.cashFlow.salonPayouts)}</span>
+                </div>
+                <div className="border-t border-[#f0d2ca] pt-3 flex justify-between text-sm">
+                  <span className="font-bold text-[#251E1F]">Net Platform Cash</span>
+                  <span className="font-bold text-[#251E1F]">{formatCurrency(fs.cashFlow.platformRevenue)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">Overdue Amount</span>
-                  <span className="font-semibold text-rose-200">{formatCurrency(fs.cashFlow.overdueAmount)}</span>
-                </div>
-                <div className="border-t border-white/10 pt-3 flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">This Month Revenue</span>
-                  <span className="font-semibold text-white">{formatCurrency(fs.cashFlow.thisMonthRevenue)}</span>
+                  <span className="text-[#7b6660]">Pending Inflow</span>
+                  <span className="font-semibold text-amber-700">{formatCurrency(fs.cashFlow.pendingInflow)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">Last Month Revenue</span>
-                  <span className="font-semibold text-white">{formatCurrency(fs.cashFlow.lastMonthRevenue)}</span>
+                  <span className="text-[#7b6660]">Overdue Amount</span>
+                  <span className="font-semibold text-rose-700">{formatCurrency(fs.cashFlow.overdueAmount)}</span>
+                </div>
+                <div className="border-t border-[#f0d2ca] pt-3 flex justify-between text-sm">
+                  <span className="text-[#7b6660]">This Month</span>
+                  <span className="font-semibold text-[#251E1F]">{formatCurrency(fs.cashFlow.thisMonthRevenue)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">Month-over-Month Growth</span>
-                  <span className={`font-semibold ${Number(fs.cashFlow.monthOverMonthGrowth) >= 0 ? "text-emerald-200" : "text-rose-200"}`}>
+                  <span className="text-[#7b6660]">Last Month</span>
+                  <span className="font-semibold text-[#251E1F]">{formatCurrency(fs.cashFlow.lastMonthRevenue)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#7b6660]">MoM Growth</span>
+                  <span className={`font-bold ${Number(fs.cashFlow.monthOverMonthGrowth) >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
                     {Number(fs.cashFlow.monthOverMonthGrowth) >= 0 ? "+" : ""}{fs.cashFlow.monthOverMonthGrowth}%
                   </span>
                 </div>
@@ -2921,32 +3321,37 @@ function ReportsView() {
             </div>
 
             {/* Financial Ratios */}
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-5">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-[#F38978]">Financial Ratios</h3>
+            <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-5">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-[#F38978]">Financial Ratios</h3>
+              <p className="mt-1 text-xs text-[#7b6660]">Key performance indicators</p>
               <div className="mt-4 space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">Collection Rate</span>
-                  <span className="font-semibold text-white">{fs.ratios.collectionRate}%</span>
+                  <span className="text-[#7b6660]">Collection Rate</span>
+                  <span className="font-bold text-[#251E1F]">{fs.ratios.collectionRate}%</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">Avg Invoice Value</span>
-                  <span className="font-semibold text-white">{formatCurrency(fs.ratios.avgInvoiceValue)}</span>
+                  <span className="text-[#7b6660]">Avg Commission Rate</span>
+                  <span className="font-bold text-[#251E1F]">{fs.ratios.avgCommissionRate}%</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">Revenue per Customer</span>
-                  <span className="font-semibold text-white">{formatCurrency(fs.ratios.revenuePerCustomer)}</span>
-                </div>
-                <div className="border-t border-white/10 pt-3 flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">Total Customers</span>
-                  <span className="font-semibold text-white">{fs.ratios.totalCustomers}</span>
+                  <span className="text-[#7b6660]">Avg Invoice Value</span>
+                  <span className="font-semibold text-[#251E1F]">{formatCurrency(fs.ratios.avgInvoiceValue)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">Paid Invoices</span>
-                  <span className="font-semibold text-emerald-200">{fs.ratios.paidInvoiceCount}</span>
+                  <span className="text-[#7b6660]">Revenue per Customer</span>
+                  <span className="font-semibold text-[#251E1F]">{formatCurrency(fs.ratios.revenuePerCustomer)}</span>
+                </div>
+                <div className="border-t border-[#f0d2ca] pt-3 flex justify-between text-sm">
+                  <span className="text-[#7b6660]">Total Customers</span>
+                  <span className="font-bold text-[#251E1F]">{fs.ratios.totalCustomers}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#7b6660]/75">Overdue Invoices</span>
-                  <span className="font-semibold text-rose-200">{fs.ratios.overdueInvoiceCount}</span>
+                  <span className="text-[#7b6660]">Paid Invoices</span>
+                  <span className="font-bold text-emerald-700">{fs.ratios.paidInvoiceCount}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#7b6660]">Overdue Invoices</span>
+                  <span className="font-bold text-rose-700">{fs.ratios.overdueInvoiceCount}</span>
                 </div>
               </div>
             </div>
@@ -2971,6 +3376,12 @@ export default function FinanceInvoicingPage() {
   const [error, setError] = useState("");
   const [globalSearch, setGlobalSearch] = useState("");
   const [notifications, setNotifications] = useState([]);
+  const [notificationBadgeCount, setNotificationBadgeCount] = useState(0);
+  const stopPollingRef = useRef(null);
+
+  // Use demo data as fallback when database is empty
+  const displayInvoices = invoices.length === 0 && !isLoading ? DEMO_INVOICES : invoices;
+  const displayCustomers = customers.length === 0 && !isLoading ? DEMO_CUSTOMERS : customers;
 
   const activeView = useMemo(() => {
     if (location.pathname.endsWith("/customers")) {
@@ -3012,73 +3423,6 @@ export default function FinanceInvoicingPage() {
     setInvoices(invoiceResponse.invoices || []);
     setCustomers(customerDirectoryResponse.customers || customerResponse.customers || []);
     setNextInvoiceId(numberResponse.invoiceId || "INV-0001");
-
-    // Generate notifications from invoice data
-    const allInvoices = invoiceResponse.invoices || [];
-    let fraudResponse = null;
-    try {
-      fraudResponse = await fetchFraudDashboard({ riskLevel: "High" });
-    } catch {
-      fraudResponse = null;
-    }
-    const newNotifications = [];
-    const overdueInvoices = allInvoices.filter((inv) => inv.status === "Overdue");
-    const scheduledInvoices = allInvoices.filter((inv) => inv.status === "Scheduled");
-    const recentPaid = allInvoices.filter((inv) => inv.status === "Paid").slice(0, 3);
-    const highRiskCount = fraudResponse?.summary?.highCount || 0;
-
-    if (highRiskCount > 0) {
-      newNotifications.push({
-        id: "fraud-high-risk",
-        title: `${highRiskCount} high-risk invoice${highRiskCount > 1 ? "s" : ""} detected`,
-        description: "Fraud review is required before payment processing.",
-        time: "Immediate review",
-        read: false
-      });
-    }
-
-    if (overdueInvoices.length > 0) {
-      newNotifications.push({
-        id: "overdue-alert",
-        title: `${overdueInvoices.length} invoice${overdueInvoices.length > 1 ? "s" : ""} overdue`,
-        description: `Total overdue: ${formatCurrency(overdueInvoices.reduce((s, i) => s + Number(i.total_amount), 0))}`,
-        time: "Action required",
-        read: false
-      });
-    }
-
-    if (scheduledInvoices.length > 0) {
-      newNotifications.push({
-        id: "scheduled-info",
-        title: `${scheduledInvoices.length} invoice${scheduledInvoices.length > 1 ? "s" : ""} scheduled`,
-        description: "Invoices will be sent automatically at the scheduled time.",
-        time: "Pending",
-        read: false
-      });
-    }
-
-    recentPaid.forEach((inv) => {
-      newNotifications.push({
-        id: `paid-${inv.invoice_id}`,
-        title: `Payment received: ${inv.invoiceId}`,
-        description: `${inv.customer_name} - ${formatCurrency(inv.total_amount)}`,
-        time: formatDate(inv.issue_date),
-        read: true
-      });
-    });
-
-    const draftCount = allInvoices.filter((inv) => inv.status === "Draft").length;
-    if (draftCount > 0) {
-      newNotifications.push({
-        id: "draft-reminder",
-        title: `${draftCount} draft invoice${draftCount > 1 ? "s" : ""} pending`,
-        description: "Review and send when ready.",
-        time: "Reminder",
-        read: true
-      });
-    }
-
-    setNotifications(newNotifications);
   }
 
   function handleGlobalSearch(query) {
@@ -3092,9 +3436,19 @@ export default function FinanceInvoicingPage() {
   }
 
   function handleMarkNotificationRead(notifId) {
+    // Mark locally
     setNotifications((current) =>
-      current.map((n) => n.id === notifId ? { ...n, read: true } : n)
+      current.map((n) => (n.notification_id || n.id) === notifId ? { ...n, is_read: 1, read: true } : n)
     );
+    setNotificationBadgeCount((c) => Math.max(0, c - 1));
+    // Mark on server
+    apiMarkNotificationRead(notifId).catch(() => {});
+  }
+
+  function handleMarkAllRead() {
+    setNotifications((current) => current.map((n) => ({ ...n, is_read: 1, read: true })));
+    setNotificationBadgeCount(0);
+    apiMarkAllNotificationsRead().catch(() => {});
   }
 
   useEffect(() => {
@@ -3110,6 +3464,20 @@ export default function FinanceInvoicingPage() {
     }
 
     loadInitialData();
+
+    // Start notification polling (Finance-only, from database)
+    if (session?.user?.role === "Finance") {
+      stopPollingRef.current = startNotificationPolling(({ notifications: notifs, unreadCount }) => {
+        setNotifications(notifs);
+        setNotificationBadgeCount(unreadCount);
+      }, 15000);
+    }
+
+    return () => {
+      if (stopPollingRef.current) {
+        stopPollingRef.current();
+      }
+    };
   }, []);
 
   async function handleSendInvoice(invoiceId) {
@@ -3131,8 +3499,8 @@ export default function FinanceInvoicingPage() {
     if (activeView === "dashboard") {
       return (
         <InvoicingDashboardView
-          invoices={invoices}
-          customers={customers}
+          invoices={displayInvoices}
+          customers={displayCustomers}
           isLoading={isLoading}
           error={error}
           navigate={navigate}
@@ -3143,8 +3511,8 @@ export default function FinanceInvoicingPage() {
     if (activeView === "customers") {
       return (
         <CustomersView
-          customers={customers}
-          invoices={invoices}
+          customers={displayCustomers}
+          invoices={displayInvoices}
           isLoading={isLoading}
           error={error}
           onViewInvoices={(customerId) => navigate(`/dashboard/invoicing/finance/invoices?customerId=${customerId}`)}
@@ -3170,8 +3538,8 @@ export default function FinanceInvoicingPage() {
 
     return (
       <InvoicesView
-        invoices={invoices}
-        customers={customers}
+        invoices={displayInvoices}
+        customers={displayCustomers}
         nextInvoiceId={nextInvoiceId}
         isLoading={isLoading}
         error={error}
@@ -3194,7 +3562,9 @@ export default function FinanceInvoicingPage() {
       searchPlaceholder="Search invoices, customers, payments..."
       onSearch={handleGlobalSearch}
       notifications={notifications}
+      notificationBadgeCount={notificationBadgeCount}
       onMarkNotificationRead={handleMarkNotificationRead}
+      onMarkAllRead={handleMarkAllRead}
     >
       <div className="space-y-6">
         {renderActiveView()}
@@ -3202,7 +3572,7 @@ export default function FinanceInvoicingPage() {
 
       {isCreating ? (
         <InvoiceCreationModal
-          customers={customers}
+          customers={displayCustomers}
           nextInvoiceId={nextInvoiceId}
           onCancel={() => setIsCreating(false)}
           onCreated={handleCreated}

@@ -2,76 +2,8 @@ const { pool } = require("../config/db");
 const { createNotificationInternal } = require("./notificationController");
 const { getActiveHolidaysInRange } = require("../models/publicHolidayModel");
 
-// [STAFF BRANCH - Steven] Auto-seed leave_type table if empty
-(async () => {
-  try {
-    // Ensure the leave_type table exists
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS leave_type (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        default_entitlement INT DEFAULT 0,
-        carry_forward_allowed TINYINT(1) DEFAULT 0,
-        carry_forward_cap INT DEFAULT 0,
-        requires_attachment TINYINT(1) DEFAULT 0,
-        is_paid TINYINT(1) DEFAULT 1,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Ensure the leave_balance table exists
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS leave_balance (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        staff_id INT NOT NULL,
-        leave_type_id INT NOT NULL,
-        year INT NOT NULL,
-        entitled INT DEFAULT 0,
-        used INT DEFAULT 0,
-        carried_forward INT DEFAULT 0,
-        UNIQUE KEY unique_balance (staff_id, leave_type_id, year)
-      )
-    `);
-
-    // Ensure the leave_application table exists
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS leave_application (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        staff_id INT NOT NULL,
-        leave_type_id INT NOT NULL,
-        start_date DATE NOT NULL,
-        end_date DATE NOT NULL,
-        total_days INT NOT NULL,
-        reason TEXT,
-        attachment_path VARCHAR(500),
-        status ENUM('pending', 'approved', 'rejected', 'cancelled') DEFAULT 'pending',
-        hr_comment TEXT,
-        reviewed_by INT,
-        reviewed_at DATETIME,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Seed default leave types if table is empty
-    const [rows] = await pool.query("SELECT COUNT(*) AS cnt FROM leave_type");
-    if (rows[0].cnt === 0) {
-      await pool.query(`
-        INSERT INTO leave_type (name, default_entitlement, carry_forward_allowed, carry_forward_cap, requires_attachment, is_paid) VALUES
-        ('Annual Leave', 14, 1, 5, 0, 1),
-        ('Sick Leave', 14, 0, 0, 1, 1),
-        ('Hospitalisation Leave', 60, 0, 0, 1, 1),
-        ('Unpaid Leave', 0, 0, 0, 0, 0),
-        ('Maternity Leave', 112, 0, 0, 1, 1),
-        ('Paternity Leave', 14, 0, 0, 1, 1),
-        ('Compassionate Leave', 3, 0, 0, 0, 1)
-      `);
-      console.log("[LEAVE] Seeded 7 default leave types");
-    }
-  } catch (err) {
-    console.error("[LEAVE] leave tables init error:", err.message);
-  }
-})();
+// [STAFF BRANCH - Steven] Leave tables disabled - 11 table schema
+// Leave management removed from database structure
 
 /**
  * Calculate the number of working days between two dates (inclusive).
@@ -496,13 +428,13 @@ async function getPendingApplications(req, res) {
   try {
     const [applications] = await pool.query(
       `SELECT la.id, la.staff_id, s.name AS staff_name,
-              d.department_name AS department, lt.name AS leave_type_name,
+              s.department_name AS department, lt.name AS leave_type_name,
               la.start_date, la.end_date, la.total_days,
               la.reason, la.attachment_path, la.status, la.created_at
        FROM leave_application la
        JOIN staff s ON la.staff_id = s.employee_id
        JOIN leave_type lt ON la.leave_type_id = lt.id
-       LEFT JOIN department d ON s.department_id = d.department_id
+       
        WHERE la.status = 'pending'
        ORDER BY la.created_at ASC`
     );
@@ -535,7 +467,7 @@ async function getAllApplications(req, res) {
     const [applications] = await pool.query(
       `SELECT la.id, la.staff_id,
               s.name AS staff_name,
-              d.department_name AS department, lt.name AS leave_type_name,
+              s.department_name AS department, lt.name AS leave_type_name,
               la.start_date, la.end_date, la.total_days,
               la.reason, la.status, la.hr_comment,
               la.reviewed_by, la.created_at,
@@ -546,7 +478,7 @@ async function getAllApplications(req, res) {
        FROM leave_application la
        JOIN staff s ON la.staff_id = s.employee_id
        JOIN leave_type lt ON la.leave_type_id = lt.id
-       LEFT JOIN department d ON s.department_id = d.department_id
+       
        LEFT JOIN user r ON la.reviewed_by = r.user_id
        LEFT JOIN staff rs ON r.user_id = rs.user_user_id
        ORDER BY la.created_at DESC
@@ -578,14 +510,14 @@ async function getAllBalances(req, res) {
     const [rows] = await pool.query(
       `SELECT lb.staff_id,
               s.name AS staff_name,
-              d.department_name AS department,
+              s.department_name AS department,
               lt.id AS leave_type_id, lt.name AS leave_type_name,
               lb.entitled, lb.used, lb.carried_forward,
               (lb.entitled + lb.carried_forward - lb.used) AS remaining
        FROM leave_balance lb
        JOIN staff s ON lb.staff_id = s.employee_id
        JOIN leave_type lt ON lb.leave_type_id = lt.id
-       LEFT JOIN department d ON s.department_id = d.department_id
+       
        WHERE lb.year = ?
        ORDER BY s.name ASC, lt.name ASC`,
       [currentYear]

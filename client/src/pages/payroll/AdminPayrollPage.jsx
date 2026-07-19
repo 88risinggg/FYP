@@ -30,6 +30,7 @@ import {
   addPayslipLayout,
   createUser,
   getAdminPayrollDashboard,
+  getAdminPayrollReports,
   resetUserPassword,
   setDefaultPayslipLayout,
   updatePayrollSetting,
@@ -222,10 +223,10 @@ const otherCpfSettings = [
 const mbmfDefaultSettings = {
   enabled: "Enabled",
   effectiveFrom: "2026-01-01",
-  rateType: "Percentage of Gross Salary",
-  employeeRate: "0.50",
-  employerRate: "0.50",
-  monthlyWageCeiling: "7000.00",
+  rateType: "CPF Board Wage Band",
+  employeeRate: "0",
+  employerRate: "0",
+  monthlyWageCeiling: "999999.00",
   employerExpenseAccount: "6810 - MBMF Employer Expense",
   employeePayableAccount: "2110 - MBMF Payable (Employee)",
   clearingAccount: "2140 - MBMF Payable Clearing",
@@ -3559,7 +3560,10 @@ function getReportLines(report, data = {}, periodMode = "range", fromDate = "", 
       { summary: `Active users: ${stats.activeUsers ?? 0}`, columns: ["Active users", String(stats.activeUsers ?? 0)] },
       { summary: `Pending approvals: ${data.pendingApprovalCount ?? 0}`, columns: ["Pending admin approvals", String(data.pendingApprovalCount ?? 0)] },
       { summary: `Payroll runs: ${data.payrollRuns?.length || 0}`, columns: ["Payroll runs monitored", String(data.payrollRuns?.length || 0)] },
-      { summary: `Payslip layouts: ${stats.payslipLayouts ?? 0}`, columns: ["Active payslip layouts", String(stats.payslipLayouts ?? 0)] }
+      { summary: `Payroll records: ${stats.payrollRecords ?? 0}`, columns: ["Employee payroll records", String(stats.payrollRecords ?? 0)] },
+      { summary: `Gross payroll: ${formatMoney(stats.grossPay)}`, columns: ["Gross payroll", formatMoney(stats.grossPay)] },
+      { summary: `Net payroll: ${formatMoney(stats.netPay)}`, columns: ["Net payroll", formatMoney(stats.netPay)] },
+      { summary: `Total deductions: ${formatMoney(stats.deductions)}`, columns: ["Total deductions", formatMoney(stats.deductions)] }
     ];
   }
 
@@ -3578,7 +3582,7 @@ function getReportLines(report, data = {}, periodMode = "range", fromDate = "", 
   if (report === "Compliance Configuration Report") {
     return (data.settings || [])
       .filter((setting) =>
-        ["cpf_", "sdl_", "mbmf_", "cdac_", "sinda_", "ecf_", "iras_", "ir21_", "foreign_worker_levy_"].some((prefix) =>
+        ["statutory_", "cpf_", "sdl_", "mbmf_", "cdac_", "sinda_", "ecf_", "iras_", "ir21_", "foreign_worker_levy_"].some((prefix) =>
           setting.setting_key.startsWith(prefix)
         )
       )
@@ -3596,6 +3600,18 @@ function getReportLines(report, data = {}, periodMode = "range", fromDate = "", 
         Number(layout.is_default) === 1 ? "Default layout" : layout.status || "Imported"
       ]
     }));
+  }
+
+  if (report === "Payroll Run Financial Report") {
+    return (data.payrollRuns || [])
+      .filter((run) => isWithinReportPeriod(run.created_at, periodMode, fromDate, toDate))
+      .map((run) => ({
+        columns: [
+          `${String(run.payroll_month).padStart(2, "0")}/${run.payroll_year}`,
+          run.status || "Pending",
+          `${Number(run.employee_count || 0)} staff / gross ${formatMoney(run.gross_pay)} / net ${formatMoney(run.net_pay)}`
+        ]
+      }));
   }
 
   return (data.auditLogs || []).map((log) =>
@@ -3617,8 +3633,9 @@ function getReportLines(report, data = {}, periodMode = "range", fromDate = "", 
 function ReportPreviewModal({ data, report, onClose }) {
   const [pdfUrl, setPdfUrl] = useState("");
   const today = new Date().toISOString().slice(0, 10);
+  const yearStart = `${today.slice(0, 4)}-01-01`;
   const [periodMode, setPeriodMode] = useState("range");
-  const [fromDate, setFromDate] = useState(today);
+  const [fromDate, setFromDate] = useState(yearStart);
   const [toDate, setToDate] = useState(today);
 
   useEffect(() => {
@@ -3705,6 +3722,35 @@ function ReportPreviewModal({ data, report, onClose }) {
 }
 function ReportsView({ data }) {
   const [selectedReport, setSelectedReport] = useState("");
+  const [reportData, setReportData] = useState(null);
+  const [reportError, setReportError] = useState("");
+  const [reportLoading, setReportLoading] = useState(true);
+
+  useEffect(() => {
+    if (data?.payrollRuns && data?.settings && data?.auditLogs) {
+      setReportData(data);
+      setReportLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    getAdminPayrollReports()
+      .then((result) => {
+        if (active) setReportData(result);
+      })
+      .catch((error) => {
+        if (active) setReportError(error.message || "Unable to load payroll report data.");
+      })
+      .finally(() => {
+        if (active) setReportLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const effectiveData = reportData || data || {};
   const reportCards = [
     {
       title: "Payroll Control Summary",
@@ -3719,8 +3765,8 @@ function ReportsView({ data }) {
       description: "CPF, SDL, self-help fund, IRAS and statutory rule settings."
     },
     {
-      title: "Payslip Layout Report",
-      description: "Imported payslip templates and the current default layout."
+      title: "Payroll Run Financial Report",
+      description: "Monthly employee count, gross pay, deductions, net pay and run status."
     },
     {
       title: "Audit Activity Report",
@@ -3731,14 +3777,22 @@ function ReportsView({ data }) {
   return (
     <PageShell
       heading="Reports"
-      updatedAt={getOverallUpdatedAt(data)}
+      updatedAt={getOverallUpdatedAt(effectiveData)}
       actions={
         <>
           <ActionButton icon={FileBarChart} onClick={() => setSelectedReport(reportCards[0].title)}>Generate Report</ActionButton>
-          <ActionButton icon={FileText} variant="secondary" onClick={() => setSelectedReport("Payslip Layout Report")}>Payslip Layout Report</ActionButton>
+          <ActionButton icon={FileText} variant="secondary" onClick={() => setSelectedReport("Payroll Run Financial Report")}>Payroll Financial Report</ActionButton>
         </>
       }
     >
+      {reportLoading ? (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm text-[#7b6660]">
+          <Loader2 size={17} className="animate-spin" /> Loading consolidated payroll report data...
+        </div>
+      ) : null}
+      {reportError ? (
+        <div className="mb-4 rounded-xl border border-red-300/40 bg-red-50 p-4 text-sm text-red-700">{reportError}</div>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {reportCards.map((report) => (
           <div key={report.title} className="app-panel rounded-2xl p-6">
@@ -3757,7 +3811,7 @@ function ReportsView({ data }) {
       </div>
       {selectedReport ? (
         <ReportPreviewModal
-          data={data}
+          data={effectiveData}
           report={selectedReport}
           onClose={() => setSelectedReport("")}
         />
@@ -3847,7 +3901,10 @@ export default function AdminPayrollPage() {
   const loadDashboard = async () => {
     try {
       setErrorMessage("");
-      const data = await getAdminPayrollDashboard();
+      setIsLoading(true);
+      const data = location.pathname.endsWith("/reports")
+        ? await getAdminPayrollReports()
+        : await getAdminPayrollDashboard();
       setDashboardData(data);
     } catch (error) {
       setErrorMessage(error.message);
@@ -3858,7 +3915,7 @@ export default function AdminPayrollPage() {
 
   useEffect(() => {
     loadDashboard();
-  }, []);
+  }, [location.pathname]);
 
   const handleImportLayout = async () => {
     const layoutName = window.prompt("Payslip layout name");

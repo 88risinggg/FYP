@@ -6,6 +6,7 @@ const {
   createPayslipLayout,
   getUserById,
   getDashboardStats,
+  getAdminPayrollReportData,
   listAuditLogs,
   listAvailableStaffForUserCreation,
   listMbmfEligibilitySummary,
@@ -20,6 +21,15 @@ const {
   updateUserStatus,
   upsertPayrollSetting
 } = require("../models/adminPayrollModel");
+
+async function getAdminPayrollReports(req, res) {
+  try {
+    res.json(await getAdminPayrollReportData());
+  } catch (error) {
+    console.error("Admin payroll report error:", error.message);
+    res.status(500).json({ message: "Failed to load admin payroll reports." });
+  }
+}
 
 function normalizeFileType(fileType) {
   return String(fileType || "").trim().toUpperCase();
@@ -410,6 +420,7 @@ module.exports = {
   changeUserRole,
   changeUserStatus,
   getAdminPayrollDashboard,
+  getAdminPayrollReports,
   getPayrollRuleConfig,
   getPayslipLayouts,
   makeDefaultPayslipLayout,

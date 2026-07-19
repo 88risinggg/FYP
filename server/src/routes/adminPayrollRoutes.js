@@ -6,6 +6,7 @@ const {
   changeUserRole,
   changeUserStatus,
   getAdminPayrollDashboard,
+  getAdminPayrollReports,
   getPayrollRuleConfig,
   getPayslipLayouts,
   makeDefaultPayslipLayout,
@@ -43,6 +44,7 @@ router.get("/config", requirePayrollConfigReader, getPayrollRuleConfig);
 router.use(requireAdmin);
 
 router.get("/dashboard", getAdminPayrollDashboard);
+router.get("/reports", getAdminPayrollReports);
 router.get("/payslip-layouts", getPayslipLayouts);
 router.post("/users", addUser);
 router.post("/payslip-layouts", addPayslipLayout);

@@ -4,6 +4,10 @@ export function getAdminPayrollDashboard() {
   return apiRequest("/api/payroll/admin/dashboard");
 }
 
+export function getAdminPayrollReports() {
+  return apiRequest("/api/payroll/admin/reports");
+}
+
 export function getPayrollRuleConfig() {
   return apiRequest("/api/payroll/admin/config");
 }

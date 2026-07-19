@@ -165,75 +165,7 @@ function handleDatabaseShapeError(error) {
 }
 
 async function ensureInvoiceSettingsSchema() {
-  try {
-    await pool.execute(
-      `CREATE TABLE IF NOT EXISTS invoice_settings (
-        setting_id INT AUTO_INCREMENT PRIMARY KEY,
-        invoice_prefix VARCHAR(20) NOT NULL DEFAULT 'INV',
-        invoice_year VARCHAR(4) NOT NULL DEFAULT '',
-        separator_style VARCHAR(20) NOT NULL DEFAULT 'hyphen',
-        invoice_format VARCHAR(60) NOT NULL DEFAULT '{PREFIX}-{YYYY}-{NNNN}',
-        next_invoice_number INT NOT NULL DEFAULT 1,
-        numbering_style VARCHAR(40) NOT NULL DEFAULT 'PREFIX-DATE-NUMBER',
-        date_format VARCHAR(20) NOT NULL DEFAULT 'YYYYMM',
-        default_currency VARCHAR(12) NOT NULL DEFAULT 'SGD',
-        default_language VARCHAR(12) NOT NULL DEFAULT 'en',
-        tax_type VARCHAR(30) NOT NULL DEFAULT 'GST',
-        default_tax VARCHAR(30) NOT NULL DEFAULT 'GST_9',
-        default_tax_rate DECIMAL(8,2) NOT NULL DEFAULT 9.00,
-        prices_include_tax TINYINT(1) NOT NULL DEFAULT 0,
-        price_display VARCHAR(30) NOT NULL DEFAULT 'tax_exclusive',
-        payment_terms VARCHAR(60) NOT NULL DEFAULT 'Net 30',
-        due_days INT NOT NULL DEFAULT 30,
-        late_fee_percent DECIMAL(8,2) NOT NULL DEFAULT 0.00,
-        late_fee_type VARCHAR(20) NOT NULL DEFAULT 'percent',
-        grace_period_days INT NOT NULL DEFAULT 0,
-        online_view_link_enabled TINYINT(1) NOT NULL DEFAULT 1,
-        whatsapp_notifications_enabled TINYINT(1) NOT NULL DEFAULT 0,
-        pdf_export_enabled TINYINT(1) NOT NULL DEFAULT 1,
-        excel_export_enabled TINYINT(1) NOT NULL DEFAULT 1,
-        pdf_paper_size VARCHAR(10) NOT NULL DEFAULT 'A4',
-        excel_format VARCHAR(10) NOT NULL DEFAULT 'xlsx',
-        company_logo_url VARCHAR(500) NULL,
-        brand_color VARCHAR(20) NOT NULL DEFAULT '#F38978',
-        show_company_details_on_invoice TINYINT(1) NOT NULL DEFAULT 1,
-        yearly_reset_enabled TINYINT(1) NOT NULL DEFAULT 1,
-        manual_override_enabled TINYINT(1) NOT NULL DEFAULT 0,
-        lock_numbering_after_sent TINYINT(1) NOT NULL DEFAULT 1,
-        prevent_duplicate_numbers TINYINT(1) NOT NULL DEFAULT 1,
-        company_name VARCHAR(255) NOT NULL DEFAULT '',
-        company_address TEXT NULL,
-        support_email VARCHAR(255) NOT NULL DEFAULT '',
-        footer_note TEXT NULL,
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )`
-    );
-
-    const [columns] = await pool.execute("SHOW COLUMNS FROM invoice_settings");
-    const existingColumns = new Set(columns.map((column) => column.Field));
-
-    for (const [columnName, definition] of Object.entries(schemaColumns)) {
-      if (!existingColumns.has(columnName)) {
-        await pool.execute(`ALTER TABLE invoice_settings ADD COLUMN ${columnName} ${definition}`);
-      }
-    }
-
-    await pool.execute(
-      `CREATE TABLE IF NOT EXISTS invoice_numbering_activity (
-        activity_id INT AUTO_INCREMENT PRIMARY KEY,
-        setting_id INT NULL,
-        action VARCHAR(120) NOT NULL,
-        old_value VARCHAR(500) NULL,
-        new_value VARCHAR(500) NULL,
-        changed_by VARCHAR(255) NOT NULL DEFAULT 'Admin',
-        notes VARCHAR(500) NULL,
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )`
-    );
-  } catch (error) {
-    handleDatabaseShapeError(error);
-  }
+  // Disabled - invoice_settings removed from 11-table schema
 }
 
 function boolValue(value, fallback = false) {

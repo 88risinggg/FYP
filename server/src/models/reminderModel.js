@@ -1,7 +1,7 @@
 const { pool } = require("../config/db");
 
 const missingReminderTableMessage =
-  "Reminder database tables are missing. Add reminder_settings and reminder_logs manually in MySQL before using this feature.";
+  "Reminder database tables are missing. Run server/src/migrations/20260719_support_tables.sql and restart the server.";
 
 function isMissingTableError(error) {
   return error?.code === "ER_NO_SUCH_TABLE" || error?.code === "ER_BAD_FIELD_ERROR";

@@ -9,6 +9,7 @@ const { authenticateToken } = require("../middleware/authMiddleware");
 const {
   getFinanceDashboard,
   getFinanceNotifications,
+  getUnreadCount,
   markNotificationRead,
   markAllNotificationsRead
 } = require("../controllers/financeDashboardController");
@@ -19,6 +20,7 @@ router.use(authenticateToken);
 
 router.get("/dashboard", getFinanceDashboard);
 router.get("/notifications", getFinanceNotifications);
+router.get("/notifications/unread-count", getUnreadCount);
 router.put("/notifications/:id/read", markNotificationRead);
 router.put("/notifications/read-all", markAllNotificationsRead);
 

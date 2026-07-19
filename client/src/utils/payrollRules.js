@@ -1,9 +1,9 @@
 export const cpfAgeTierRows = [
   ["55 and below", "20.00", "17.00"],
-  ["Above 55 to 60", "19.00", "16.00"],
-  ["Above 60 to 65", "15.50", "13.00"],
-  ["Above 65 to 70", "12.00", "10.00"],
-  ["Above 70", "7.50", "7.50"]
+  ["Above 55 to 60", "18.00", "16.00"],
+  ["Above 60 to 65", "12.50", "12.50"],
+  ["Above 65 to 70", "7.50", "9.00"],
+  ["Above 70", "5.00", "7.50"]
 ].map(([ageGroup, employeeRate, employerRate]) => ({
   ageGroup,
   slug: slugify(ageGroup),
@@ -60,16 +60,27 @@ export const employerContributionRows = [
 export const mbmfDefaultSettings = {
   enabled: "Enabled",
   effectiveFrom: "2026-01-01",
-  rateType: "Percentage of Gross Salary",
-  employeeRate: "0.50",
-  employerRate: "0.50",
-  monthlyWageCeiling: "7000.00",
+  rateType: "CPF Board Wage Band",
+  employeeRate: "0",
+  employerRate: "0",
+  monthlyWageCeiling: "999999.00",
   employerExpenseAccount: "6810 - MBMF Employer Expense",
   employeePayableAccount: "2110 - MBMF Payable (Employee)",
   clearingAccount: "2140 - MBMF Payable Clearing",
   paymentBankAccount: "1210 - Bank - MBMF",
   applicableReligion: "Muslim"
 };
+
+export const shgContributionBands = {
+  MBMF: [[1000, 3], [2000, 4.5], [3000, 6.5], [4000, 15], [6000, 19.5], [8000, 22], [10000, 24], [Infinity, 26]],
+  CDAC: [[2000, 0.5], [3500, 1], [5000, 1.5], [7500, 2], [Infinity, 3]],
+  SINDA: [[1000, 1], [1500, 3], [2500, 5], [4500, 7], [7500, 9], [10000, 12], [15000, 18], [Infinity, 30]],
+  ECF: [[1000, 2], [1500, 4], [2500, 6], [4000, 9], [7000, 12], [10000, 16], [Infinity, 20]]
+};
+
+export function getShgBandAmount(fund, wages) {
+  return Number(shgContributionBands[fund]?.find(([maximum]) => Number(wages) <= maximum)?.[1] || 0);
+}
 
 export const complianceDefaultSettings = {
   cpfEnabled: "Enabled",

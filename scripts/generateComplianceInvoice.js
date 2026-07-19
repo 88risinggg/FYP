@@ -44,25 +44,25 @@ function addDays(dateStr, days) {
 
 // These must match customer names in the database (from seedDummyData.js)
 const customers = [
-  "Acme Learning Centre",
-  "BrightPath Tuition",
-  "Nova Skills Academy",
-  "Summit Corporate Training",
-  "Urban Tech Institute"
+  "Luxe Hair Studio",
+  "The Nail Artistry",
+  "Serenity Spa & Wellness",
+  "Glow Aesthetics Clinic",
+  "Brow & Lash Bar"
 ];
 
 const vendors = [
-  "Acme Office Supplies Pte Ltd",
-  "TechWorld Solutions Pte Ltd",
-  "CleanPro Services Pte Ltd",
-  "FreshMeals Catering Pte Ltd",
-  "PrintMax Digital Pte Ltd",
-  "SecureNet IT Services Pte Ltd"
+  "BeautyPro Supplies Pte Ltd",
+  "Salon Equipment SG Pte Ltd",
+  "AestheticWorld Trading Pte Ltd",
+  "OrganicGlow Products Pte Ltd",
+  "HairCare Wholesale Pte Ltd",
+  "NailTech Supplies Pte Ltd"
 ];
 
 const fakeVendors = [
   "XYZ Global Enterprises LLC",
-  "Phantom Holdings Ltd",
+  "Phantom Beauty Pte Ltd",
   "QuickPay Solutions BVI",
   "Offshore Billing Corp"
 ];

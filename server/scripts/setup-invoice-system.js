@@ -128,9 +128,8 @@ async function resetDatabase() {
     // Delete in dependency order
     const tables = [
       { query: "DELETE FROM payment", label: "payments" },
-      { query: "DELETE FROM invoice_item", label: "invoice items" },
       { query: "DELETE FROM invoice_notification", label: "notifications" },
-      { query: "DELETE FROM audit_log WHERE entity_type IN ('invoice', 'payment')", label: "audit logs" }
+      { query: "DELETE FROM audit_logs WHERE entity_type IN ('invoice', 'payment')", label: "audit logs" }
     ];
 
     for (const t of tables) {
@@ -158,9 +157,15 @@ async function resetDatabase() {
     const [invoiceResult] = await connection.query("DELETE FROM invoice");
     console.log(`[RESET] Deleted ${invoiceResult.affectedRows} invoices.`);
 
+    // Delete all customers (will be re-created)
+    try {
+      const [custResult] = await connection.query("DELETE FROM customer");
+      console.log(`[RESET] Deleted ${custResult.affectedRows} customers.`);
+    } catch (e) { console.log(`[RESET] customers: ${e.message}`); }
+
     // Reset auto-increment
     await connection.query("ALTER TABLE invoice AUTO_INCREMENT = 1");
-    await connection.query("ALTER TABLE invoice_item AUTO_INCREMENT = 1");
+    try { await connection.query("ALTER TABLE invoice_item AUTO_INCREMENT = 1"); } catch { /* table may not exist */ }
     await connection.query("ALTER TABLE payment AUTO_INCREMENT = 1");
     console.log("[RESET] Auto-increment sequences reset.");
 
@@ -179,33 +184,33 @@ async function generateAndImport() {
   const ExcelJS = require("exceljs");
 
   const customers = [
-    { name: "Acme Corporation", company: "Acme Corp Pte Ltd", email: "billing@acmecorp.sg" },
-    { name: "TechWave Solutions", company: "TechWave Solutions Pte Ltd", email: "accounts@techwave.sg" },
-    { name: "Marina Bay Trading", company: "Marina Bay Trading Co", email: "finance@marinabay.sg" },
-    { name: "Sunrise Digital", company: "Sunrise Digital Pte Ltd", email: "payment@sunrisedigital.sg" },
-    { name: "Pacific Ventures", company: "Pacific Ventures Holdings", email: "ap@pacificventures.sg" },
-    { name: "GreenLeaf Consulting", company: "GreenLeaf Consulting Group", email: "invoices@greenleaf.sg" },
-    { name: "CloudNine Systems", company: "CloudNine Systems Pte Ltd", email: "billing@cloudnine.sg" },
-    { name: "Diamond Electronics", company: "Diamond Electronics Trading", email: "accounts@diamondel.sg" },
-    { name: "Golden Gate Logistics", company: "Golden Gate Logistics Pte Ltd", email: "finance@gglogistics.sg" },
-    { name: "Stellar Marketing", company: "Stellar Marketing Agency", email: "payments@stellarmarketing.sg" },
-    { name: "BluePeak Software", company: "BluePeak Software Pte Ltd", email: "ar@bluepeaksw.sg" },
-    { name: "Orchid Healthcare", company: "Orchid Healthcare Services", email: "billing@orchidhc.sg" },
-    { name: "Zenith Engineering", company: "Zenith Engineering Works", email: "accounts@zenitheng.sg" },
-    { name: "Coral Bay Restaurants", company: "Coral Bay F&B Group", email: "finance@coralbay.sg" },
-    { name: "Atlas Security", company: "Atlas Security Solutions", email: "invoices@atlassec.sg" }
+    { name: "Luxe Hair Studio", company: "Luxe Hair Studio Pte Ltd", email: "bookings@luxehairstudio.sg" },
+    { name: "The Nail Artistry", company: "The Nail Artistry Pte Ltd", email: "hello@thenailartistry.sg" },
+    { name: "Serenity Spa & Wellness", company: "Serenity Spa & Wellness Pte Ltd", email: "reservations@serenityspa.sg" },
+    { name: "Glow Aesthetics Clinic", company: "Glow Aesthetics Clinic Pte Ltd", email: "appointments@glowaesthetics.sg" },
+    { name: "Brow & Lash Bar", company: "Brow & Lash Bar Pte Ltd", email: "info@browlashbar.sg" },
+    { name: "KBeauty Haven", company: "KBeauty Haven Pte Ltd", email: "hello@kbeautyhaven.sg" },
+    { name: "Zen Reflexology Centre", company: "Zen Reflexology Centre Pte Ltd", email: "bookings@zenreflexology.sg" },
+    { name: "Prestige Barbers", company: "Prestige Barbers Pte Ltd", email: "appointments@prestigebarbers.sg" },
+    { name: "Skin Lab Express", company: "Skin Lab Express Pte Ltd", email: "info@skinlabexpress.sg" },
+    { name: "Orchid Beauty Lounge", company: "Orchid Beauty Lounge Pte Ltd", email: "bookings@orchidbeauty.sg" },
+    { name: "The Waxing Boutique", company: "The Waxing Boutique Pte Ltd", email: "hello@waxingboutique.sg" },
+    { name: "Radiance Medi-Spa", company: "Radiance Medi-Spa Pte Ltd", email: "info@radiancespa.sg" },
+    { name: "Aura Hair & Beauty", company: "Aura Hair & Beauty Pte Ltd", email: "bookings@aurahairbeauty.sg" },
+    { name: "Bliss Nail Studio", company: "Bliss Nail Studio Pte Ltd", email: "hello@blissnails.sg" },
+    { name: "Rejuve Wellness Clinic", company: "Rejuve Wellness Clinic Pte Ltd", email: "appointments@rejuveclinic.sg" }
   ];
 
   const serviceDescriptions = [
-    "Web Development Services", "Mobile App Development", "Cloud Infrastructure Setup",
-    "UI/UX Design Consultation", "Database Migration Services", "API Integration Development",
-    "Security Audit & Penetration Testing", "IT Support & Maintenance (Monthly)",
-    "Software License Renewal", "Data Analytics Dashboard Setup", "Email Marketing Campaign",
-    "SEO Optimization Package", "Content Management System Setup", "Server Administration Services",
-    "Network Configuration & Setup", "Custom Report Development", "Training & Onboarding Session",
-    "Technical Documentation", "Performance Optimization", "Disaster Recovery Planning",
-    "Social Media Management", "Graphic Design Package", "Video Production Services",
-    "Hosting Services (Annual)", "Domain Registration & DNS Setup"
+    "Balayage Hair Coloring", "Keratin Smoothing Treatment", "Hair Extensions Installation",
+    "Gel Manicure Session", "Classic Pedicure & Foot Spa", "Nail Art Design Package",
+    "Full Body Massage (90 min)", "Hot Stone Therapy", "Aromatherapy Massage",
+    "Hydrafacial Treatment", "Chemical Peel Session", "Microdermabrasion",
+    "Eyebrow Embroidery", "Lash Lift & Tint", "Eyelash Extensions (Full Set)",
+    "Brazilian Waxing", "Full Leg Waxing", "Underarm Waxing",
+    "Facial Extraction & Treatment", "Anti-Aging Collagen Mask", "LED Light Therapy",
+    "Scalp Treatment & Analysis", "Hair Rebonding", "Digital Perm",
+    "Men's Grooming Package"
   ];
 
   const paymentMethods = ["Credit Card", "Apple Pay", "Google Pay", "GrabPay", "PayNow", "Stripe"];
@@ -453,47 +458,41 @@ async function generateAndImport() {
       );
       const pk = result.insertId;
 
-      // Insert line items
-      const itemValues = inv.items.map((item) => [
-        item.description, item.quantity, item.unitPrice, item.total, pk
-      ]);
+      // Store line items as JSON in invoice table
+      const itemsJson = inv.items.map((item) => ({
+        description: item.description, quantity: item.quantity, unit_price: item.unitPrice, amount: item.total
+      }));
       await connection.query(
-        "INSERT INTO invoice_item (description, quantity, unit_price, amount, invoice_invoice_id) VALUES ?",
-        [itemValues]
+        "UPDATE invoice SET items_json = ? WHERE invoice_id = ?",
+        [JSON.stringify(itemsJson), pk]
       );
 
       // Write audit log for status
-      await connection.query(
-        "INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, 'invoice', ?, NULL)",
-        [`invoice_status:${inv.status}`, pk]
-      );
+      try {
+        await connection.query(
+          "INSERT INTO audit_logs (action, entity_type, entity_id, user_user_id) VALUES (?, 'invoice', ?, NULL)",
+          [`invoice_status:${inv.status}`, pk]
+        );
+      } catch { /* audit_logs table may not exist */ }
 
       // For Paid invoices, also create a payment record
       if (inv.status === "Paid" && stripe) {
-        // Ensure Stripe payment method exists
-        const [existingMethod] = await connection.query(
-          "SELECT payment_method_id FROM payment_method WHERE name = 'Stripe' LIMIT 1"
-        );
-        let paymentMethodId;
-        if (existingMethod.length > 0) {
-          paymentMethodId = existingMethod[0].payment_method_id;
-        } else {
-          const [methodResult] = await connection.query(
-            "INSERT INTO payment_method (name, description, is_active) VALUES ('Stripe', 'Stripe online payments', 1)"
+        try {
+          await connection.query(
+            `INSERT INTO payment (payment_date, amount, status, transaction_id, invoice_invoice_id, payment_method_name)
+             VALUES (?, ?, 'Completed', ?, ?, ?)`,
+            [stripe.paymentDate, String(inv.total), stripe.transactionId, pk, stripe.paymentMethod || "Stripe"]
           );
-          paymentMethodId = methodResult.insertId;
+        } catch (payErr) {
+          console.log(`[IMPORT] Payment insert warning: ${payErr.message}`);
         }
 
-        await connection.query(
-          `INSERT INTO payment (payment_date, amount, status, transaction_id, invoice_invoice_id, payment_method_id)
-           VALUES (?, ?, 'Completed', ?, ?, ?)`,
-          [stripe.paymentDate, String(inv.total), stripe.transactionId, pk, paymentMethodId]
-        );
-
-        await connection.query(
-          "INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES ('stripe_payment_completed', 'payment', ?, NULL)",
-          [pk]
-        );
+        try {
+          await connection.query(
+            "INSERT INTO audit_logs (action, entity_type, entity_id, user_user_id) VALUES ('stripe_payment_completed', 'payment', ?, NULL)",
+            [pk]
+          );
+        } catch { /* audit_logs may have different schema */ }
       }
     }
 
@@ -548,19 +547,13 @@ async function seedFraudData() {
       "SELECT invoice_id, invoiceId FROM invoice ORDER BY invoice_id"
     );
 
-    // Clear existing fraud data
-    await connection.query("DELETE FROM invoice_fraud_indicator");
-    await connection.query("DELETE FROM invoice_fraud_assessment");
-    try { await connection.query("DELETE FROM fraud_alert"); } catch {}
-    try { await connection.query("DELETE FROM invoice_fraud_metadata"); } catch {}
-
     await connection.beginTransaction();
 
     // High risk: indices 3, 9, 15, 27
     // Medium risk: indices 5, 11, 17, 20, 23, 29
     const highRisk = new Set([3, 9, 15, 27]);
     const mediumRisk = new Set([5, 11, 17, 20, 23, 29]);
-    const vendors = ["TechSupply Co", "DigitalWorks Agency", "CloudHosting Pte Ltd", "Unknown Vendor XYZ"];
+    const vendors = ["BeautyPro Supplies Co", "Salon Equipment SG", "AestheticWorld Pte Ltd", "Unknown Vendor XYZ"];
 
     let low = 0, med = 0, high = 0;
 
@@ -591,41 +584,19 @@ async function seedFraudData() {
         low++;
       }
 
-      const [res] = await connection.query(
-        `INSERT INTO invoice_fraud_assessment (invoice_id, risk_score, risk_level, review_status, model_version, assessed_at)
-         VALUES (?, ?, ?, ?, 'rules-v1', NOW())`,
-        [inv.invoice_id, score, level, status]
+      // Store fraud data directly on the invoice table (inline JSON columns)
+      const vendorName = level === "High" ? "Unknown Vendor XYZ" : (level === "Medium" ? randomElement(vendors) : null);
+      const indicatorsJson = indicators.length > 0 ? JSON.stringify(indicators.map(ind => ({
+        indicator_code: ind.code,
+        indicator_label: ind.label,
+        severity: ind.severity
+      }))) : null;
+
+      await connection.query(
+        `UPDATE invoice SET risk_score = ?, risk_level = ?, review_status = ?, fraud_indicators_json = ?, vendor_name = ?, assessed_at = NOW()
+         WHERE invoice_id = ?`,
+        [score, level, status, indicatorsJson, vendorName, inv.invoice_id]
       );
-      const assessId = res.insertId;
-
-      if (indicators.length > 0) {
-        const vals = indicators.map((ind) => [assessId, ind.code, ind.label, ind.severity, JSON.stringify({})]);
-        await connection.query(
-          "INSERT INTO invoice_fraud_indicator (assessment_id, indicator_code, indicator_label, severity, details_json) VALUES ?",
-          [vals]
-        );
-      }
-
-      if (level === "High") {
-        try {
-          await connection.query(
-            `INSERT INTO fraud_alert (assessment_id, invoice_id, alert_type, message, status, created_at)
-             VALUES (?, ?, 'High Risk Invoice', ?, ?, NOW())`,
-            [assessId, inv.invoice_id, `High-risk invoice ${inv.invoiceId} (score: ${score}) requires review.`, status === "Open" ? "Open" : "Resolved"]
-          );
-        } catch {}
-      }
-
-      // Metadata for medium/high risk invoices
-      if (level !== "Low") {
-        try {
-          await connection.query(
-            `INSERT INTO invoice_fraud_metadata (invoice_id, vendor_name, bank_account_hash, source)
-             VALUES (?, ?, ?, 'sample_seed') ON DUPLICATE KEY UPDATE vendor_name = VALUES(vendor_name)`,
-            [inv.invoice_id, level === "High" ? "Unknown Vendor XYZ" : randomElement(vendors), level === "High" ? "mismatch_hash_abc123" : null]
-          );
-        } catch {}
-      }
     }
 
     await connection.commit();

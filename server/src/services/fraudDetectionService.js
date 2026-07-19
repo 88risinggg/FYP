@@ -326,6 +326,17 @@ async function persistAssessment(connection, invoice, indicators, status = "Open
       `,
       [assessmentId, invoice.invoice_id, `High-risk invoice ${invoice.invoiceId} requires finance review.`]
     );
+
+    // Notify Finance users about fraud detection alert (non-blocking, outside transaction)
+    try {
+      const { createNotification } = require("./invoiceNotificationService");
+      createNotification({
+        type: "fraud_alert",
+        title: "Fraud Detection Alert",
+        message: `Invoice ${invoice.invoiceId} flagged as High Risk (score: ${score}). Review required before payment.`,
+        invoiceId: invoice.invoice_id
+      }).catch(() => {});
+    } catch { /* non-blocking */ }
   }
 
   return { assessmentId, riskScore: score, riskLevel, indicators };

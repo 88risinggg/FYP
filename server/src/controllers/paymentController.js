@@ -1,119 +1,51 @@
 /**
  * Payment Controller
  *
- * Handles payment processing including:
- * - Outstanding invoices workspace view
- * - Manual bank transfer payment recording
- * - Stripe payment link generation
- * - Stripe webhook handling
- *
- * Integrates with fraud detection to block high-risk payments.
+ * Uses payment_method_name column (no separate payment_method table).
+ * Fraud checks use invoice.risk_level and invoice.review_status columns.
  */
 
 const { pool } = require("../config/db");
-const { toCurrencyNumber, writeAuditLog } = require("./invoiceController");
 
-/**
- * Ensures a payment method exists in the database.
- * Creates it if not found. Returns the payment_method_id.
- *
- * @param {Object} connection - MySQL connection (from pool.getConnection).
- * @param {string} methodName - Name of the payment method (e.g. "Bank Transfer", "Stripe").
- * @returns {number} The payment_method_id.
- */
-async function ensurePaymentMethod(connection, methodName) {
-  const [existingRows] = await connection.query(
-    "SELECT payment_method_id FROM payment_method WHERE name = ? LIMIT 1",
-    [methodName]
-  );
-
-  if (existingRows.length > 0) {
-    return existingRows[0].payment_method_id;
-  }
-
-  const [result] = await connection.query(
-    `
-      INSERT INTO payment_method (name, description, is_active)
-      VALUES (?, ?, 1)
-    `,
-    [methodName, `${methodName} payments`]
-  );
-
-  return result.insertId;
+function toCurrencyNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 }
 
 /**
- * Checks if an invoice is eligible for payment based on fraud assessment.
- * High-risk invoices that haven't been manually approved are blocked.
- *
- * @param {Object} connection - MySQL connection or pool.
- * @param {number} invoiceId - The invoice primary key.
- * @returns {Object} { allowed: boolean, message?: string }
+ * Check if invoice can be paid (fraud gate).
  */
 async function ensureInvoiceCanBePaid(connection, invoiceId) {
   const [rows] = await connection.query(
-    `
-      SELECT risk_score, risk_level, review_status
-      FROM invoice_fraud_assessment
-      WHERE invoice_id = ?
-      LIMIT 1
-    `,
+    "SELECT risk_level, review_status FROM invoice WHERE invoice_id = ? LIMIT 1",
     [invoiceId]
   );
-
-  const assessment = rows[0];
-  if (assessment?.risk_level === "High" && assessment.review_status !== "Approved") {
-    return {
-      allowed: false,
-      message: "High-risk invoices require manual fraud review before payment processing."
-    };
+  const invoice = rows[0];
+  if (invoice?.risk_level === "High" && invoice.review_status !== "Approved") {
+    return { allowed: false, message: "High-risk invoices require manual fraud review before payment processing." };
   }
-
   return { allowed: true };
 }
 
 /**
  * GET /api/payments
- *
- * Returns the payment workspace data:
- * - Outstanding (unpaid) invoices sorted by due date
- * - Recent payment records (last 25)
- *
- * Used by the Finance Payments view to display pending and completed payments.
  */
 async function getPaymentsWorkspace(req, res) {
   try {
-    // Fetch all unpaid invoices with customer details
     const [outstandingInvoices] = await pool.query(`
-      SELECT
-        i.invoice_id,
-        i.invoiceId,
-        i.issue_date,
-        i.due_date,
-        i.total_amount,
-        i.status AS database_status,
-        c.name AS customer_name,
-        c.email AS customer_email
+      SELECT i.invoice_id, i.invoiceId, i.issue_date, i.due_date, i.total_amount,
+             i.status AS database_status, c.name AS customer_name, c.email AS customer_email
       FROM invoice i
       INNER JOIN customer c ON c.customer_id = i.customer_id
-      WHERE i.status <> 'Paid'
+      WHERE i.status NOT IN ('Paid', 'Cancelled', 'Refunded')
       ORDER BY i.due_date ASC, i.invoice_id DESC
     `);
 
-    // Fetch recent payments with method and invoice details
     const [payments] = await pool.query(`
-      SELECT
-        p.payment_id,
-        p.payment_date,
-        p.amount,
-        p.status,
-        p.transaction_id,
-        p.invoice_invoice_id,
-        pm.name AS payment_method,
-        i.invoiceId,
-        c.name AS customer_name
+      SELECT p.payment_id, p.payment_date, p.amount, p.status, p.transaction_id,
+             p.invoice_invoice_id, p.payment_method_name AS payment_method,
+             i.invoiceId, c.name AS customer_name
       FROM payment p
-      LEFT JOIN payment_method pm ON pm.payment_method_id = p.payment_method_id
       LEFT JOIN invoice i ON i.invoice_id = p.invoice_invoice_id
       LEFT JOIN customer c ON c.customer_id = i.customer_id
       ORDER BY p.payment_date DESC, p.payment_id DESC
@@ -121,99 +53,52 @@ async function getPaymentsWorkspace(req, res) {
     `);
 
     res.json({
-      outstandingInvoices: outstandingInvoices.map((invoice) => ({
-        ...invoice,
-        total_amount: toCurrencyNumber(invoice.total_amount)
-      })),
+      outstandingInvoices: outstandingInvoices.map((inv) => ({ ...inv, total_amount: toCurrencyNumber(inv.total_amount) })),
       payments
     });
   } catch (error) {
-    res.status(500).json({
-      message: "Failed to load payment workspace.",
-      detail: error.message
-    });
+    res.status(500).json({ message: "Failed to load payment workspace.", detail: error.message });
   }
 }
 
 /**
  * POST /api/payments/manual
- *
- * Records a manual bank transfer payment for an invoice.
- * Updates the invoice status to "Paid" and creates audit log entries.
- * Validates against fraud assessment before allowing payment.
- *
- * Request body: { invoice_id: number, amount: number, transaction_id?: string }
- * Success response: 201 with payment_id.
- * Error responses: 400 (validation), 404 (invoice not found), 500 (server error).
  */
 async function recordManualPayment(req, res) {
   const invoiceId = Number(req.body.invoice_id);
   const amount = toCurrencyNumber(req.body.amount);
   const transactionId = String(req.body.transaction_id || "").trim() || `MANUAL-${Date.now()}`;
 
-  // Validate required fields
   if (!invoiceId || amount <= 0) {
     return res.status(400).json({ message: "Invoice and positive payment amount are required." });
   }
 
   const connection = await pool.getConnection();
-
   try {
     await connection.beginTransaction();
 
-    // Lock invoice row to prevent concurrent payment
     const [invoiceRows] = await connection.query(
       "SELECT invoice_id, total_amount FROM invoice WHERE invoice_id = ? LIMIT 1 FOR UPDATE",
       [invoiceId]
     );
+    if (invoiceRows.length === 0) { await connection.rollback(); return res.status(404).json({ message: "Invoice not found." }); }
 
-    if (invoiceRows.length === 0) {
-      await connection.rollback();
-      return res.status(404).json({ message: "Invoice not found." });
-    }
-
-    // Check fraud assessment allows payment
     const paymentCheck = await ensureInvoiceCanBePaid(connection, invoiceId);
-    if (!paymentCheck.allowed) {
-      await connection.rollback();
-      return res.status(400).json({ message: paymentCheck.message });
-    }
+    if (!paymentCheck.allowed) { await connection.rollback(); return res.status(400).json({ message: paymentCheck.message }); }
 
-    // Get or create payment method record
-    const paymentMethodId = await ensurePaymentMethod(connection, "Bank Transfer");
-
-    // Insert payment record
-    const [paymentResult] = await connection.query(
-      `
-        INSERT INTO payment
-          (payment_date, amount, status, transaction_id, invoice_invoice_id, payment_method_id)
-        VALUES (NOW(), ?, 'Completed', ?, ?, ?)
-      `,
-      [String(amount), transactionId, invoiceId, paymentMethodId]
-    );
-
-    // Update invoice status to Paid
     await connection.query(
-      "UPDATE invoice SET status = 'Paid' WHERE invoice_id = ?",
-      [invoiceId]
+      `INSERT INTO payment (payment_date, amount, status, transaction_id, invoice_invoice_id, payment_method_name)
+       VALUES (NOW(), ?, 'Completed', ?, ?, 'Bank Transfer')`,
+      [String(amount), transactionId, invoiceId]
     );
 
-    // Write audit logs for payment and status change
-    await writeAuditLog(connection, "manual_payment_recorded", "payment", paymentResult.insertId, req.user?.userId);
-    await writeAuditLog(connection, "invoice_status:Paid", "invoice", invoiceId, req.user?.userId);
-
+    await connection.query("UPDATE invoice SET status = 'Paid', payment_date = NOW(), transaction_id = ? WHERE invoice_id = ?", [transactionId, invoiceId]);
     await connection.commit();
 
-    res.status(201).json({
-      message: "Manual payment recorded.",
-      payment_id: paymentResult.insertId
-    });
+    res.status(201).json({ message: "Manual payment recorded." });
   } catch (error) {
     await connection.rollback();
-    res.status(500).json({
-      message: "Failed to record manual payment.",
-      detail: error.message
-    });
+    res.status(500).json({ message: "Failed to record manual payment.", detail: error.message });
   } finally {
     connection.release();
   }
@@ -221,82 +106,53 @@ async function recordManualPayment(req, res) {
 
 /**
  * POST /api/payments/stripe-link
- *
- * Generates a Stripe payment link for an invoice.
- * Validates against fraud assessment before generating link.
- * Currently returns a mock/test Stripe URL (production would use Stripe SDK).
- *
- * Request body: { invoice_id: number }
- * Success response: { paymentUrl: string, invoice_id, invoiceId }
  */
 async function createStripePaymentLink(req, res) {
   const invoiceId = Number(req.body.invoice_id);
-
-  if (!invoiceId) {
-    return res.status(400).json({ message: "Invoice is required." });
-  }
+  if (!invoiceId) return res.status(400).json({ message: "Invoice is required." });
 
   try {
-    // Fetch invoice with customer email for Stripe
     const [rows] = await pool.query(
-      `
-        SELECT i.invoice_id, i.invoiceId, i.total_amount, c.email
-        FROM invoice i
-        INNER JOIN customer c ON c.customer_id = i.customer_id
-        WHERE i.invoice_id = ?
-        LIMIT 1
-      `,
+      `SELECT i.invoice_id, i.invoiceId, i.total_amount, c.email
+       FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id
+       WHERE i.invoice_id = ? LIMIT 1`,
       [invoiceId]
     );
-
-    if (rows.length === 0) {
-      return res.status(404).json({ message: "Invoice not found." });
-    }
+    if (rows.length === 0) return res.status(404).json({ message: "Invoice not found." });
 
     const invoice = rows[0];
-
-    // Validate against fraud rules
     const paymentCheck = await ensureInvoiceCanBePaid(pool, invoiceId);
-    if (!paymentCheck.allowed) {
-      return res.status(400).json({ message: paymentCheck.message });
-    }
+    if (!paymentCheck.allowed) return res.status(400).json({ message: paymentCheck.message });
 
-    // Generate Stripe checkout session (real or mock depending on config)
     const { createCheckoutSession } = require("../services/stripeService");
-    const checkoutResult = await createCheckoutSession({
+    const result = await createCheckoutSession({
       invoice_id: invoice.invoice_id,
       invoiceId: invoice.invoiceId,
       total_amount: invoice.total_amount,
       customer_email: invoice.email
     });
 
+    // Save stripe session to invoice
+    await pool.query(
+      "UPDATE invoice SET stripe_session_id = ?, payment_url = ? WHERE invoice_id = ?",
+      [result.sessionId, result.paymentUrl, invoiceId]
+    );
+
     res.json({
       message: "Stripe payment link generated.",
       invoice_id: invoice.invoice_id,
       invoiceId: invoice.invoiceId,
-      paymentUrl: checkoutResult.paymentUrl,
-      sessionId: checkoutResult.sessionId,
-      provider: checkoutResult.provider
+      paymentUrl: result.paymentUrl,
+      sessionId: result.sessionId,
+      provider: result.provider
     });
   } catch (error) {
-    res.status(500).json({
-      message: "Failed to create payment link.",
-      detail: error.message
-    });
+    res.status(500).json({ message: "Failed to create payment link.", detail: error.message });
   }
 }
 
 /**
  * POST /api/payments/stripe/webhook
- *
- * Handles incoming Stripe webhook events.
- * Verifies webhook signature (when configured) and processes payment events:
- * - checkout.session.completed: Records payment, marks invoice as Paid
- * - payment_intent.succeeded: Alternative payment confirmation
- * - payment_intent.payment_failed: Logs failed payment attempt
- *
- * In demo mode (no STRIPE_SECRET_KEY), accepts raw JSON body.
- * Stores transaction_id, payment_method, payment_date, and payment_intent_id on the invoice.
  */
 async function stripeWebhook(req, res) {
   const { verifyWebhookEvent } = require("../services/stripeService");
@@ -306,257 +162,79 @@ async function stripeWebhook(req, res) {
     const signature = req.headers["stripe-signature"] || "";
     const rawBody = req.rawBody || JSON.stringify(req.body);
     event = verifyWebhookEvent(rawBody, signature);
-
-    if (!event) {
-      return res.status(400).json({ message: "Webhook verification failed." });
-    }
+    if (!event) return res.status(400).json({ message: "Webhook verification failed." });
   } catch (error) {
-    console.error("[STRIPE WEBHOOK] Verification error:", error.message);
     return res.status(400).json({ message: "Webhook signature verification failed." });
   }
 
-  const eventType = event.type || event.eventType || "unknown";
-  console.log(`[STRIPE WEBHOOK] Received event: ${eventType}`);
+  const eventType = event.type || "unknown";
 
   try {
     if (eventType === "checkout.session.completed") {
       const session = event.data?.object || event;
-      const invoiceId = Number(session.metadata?.invoice_id || session.invoice_id);
-      const amount = session.amount_total ? session.amount_total / 100 : Number(session.amount || 0);
+      const invoiceId = Number(session.metadata?.invoice_id);
+      const amount = session.amount_total ? session.amount_total / 100 : 0;
       const transactionId = session.payment_intent || session.id || `STRIPE-${Date.now()}`;
-      const paymentMethodType = session.payment_method_types?.[0] || "card";
 
-      if (!invoiceId) {
-        return res.status(400).json({ message: "Missing invoice_id in session metadata." });
-      }
+      if (!invoiceId) return res.status(400).json({ message: "Missing invoice_id in metadata." });
 
       const connection = await pool.getConnection();
       try {
         await connection.beginTransaction();
+        const [invRows] = await connection.query("SELECT invoice_id, status, total_amount FROM invoice WHERE invoice_id = ? LIMIT 1", [invoiceId]);
+        if (invRows.length === 0) { await connection.rollback(); return res.status(404).json({ message: "Invoice not found." }); }
+        if (invRows[0].status === "Paid") { await connection.rollback(); return res.json({ received: true, message: "Already paid." }); }
 
-        // Check invoice exists and is payable
-        const [invoiceRows] = await connection.query(
-          "SELECT invoice_id, status, total_amount FROM invoice WHERE invoice_id = ? LIMIT 1",
-          [invoiceId]
-        );
-
-        if (invoiceRows.length === 0) {
-          await connection.rollback();
-          return res.status(404).json({ message: "Invoice not found." });
-        }
-
-        if (invoiceRows[0].status === "Paid") {
-          await connection.rollback();
-          return res.json({ message: "Invoice already paid.", received: true });
-        }
-
-        const paymentAmount = amount || Number(invoiceRows[0].total_amount);
-        const paymentMethodId = await ensurePaymentMethod(connection, "Stripe");
-
-        // Insert payment record
+        const payAmount = amount || Number(invRows[0].total_amount);
         await connection.query(
-          `INSERT INTO payment (payment_date, amount, status, transaction_id, invoice_invoice_id, payment_method_id)
-           VALUES (NOW(), ?, 'Completed', ?, ?, ?)`,
-          [String(paymentAmount), transactionId, invoiceId, paymentMethodId]
+          `INSERT INTO payment (payment_date, amount, status, transaction_id, invoice_invoice_id, payment_method_name)
+           VALUES (NOW(), ?, 'Completed', ?, ?, 'Stripe')`,
+          [String(payAmount), transactionId, invoiceId]
         );
-
-        // Update invoice status to Paid and store Stripe metadata
         await connection.query(
-          `UPDATE invoice SET
-            status = 'Paid',
-            payment_status = 'paid',
-            payment_method = ?,
-            payment_date = NOW(),
-            transaction_id = ?,
-            payment_intent_id = ?
-          WHERE invoice_id = ?`,
-          [paymentMethodType, transactionId, transactionId, invoiceId]
+          "UPDATE invoice SET status = 'Paid', payment_status = 'paid', payment_method = 'card', payment_date = NOW(), transaction_id = ? WHERE invoice_id = ?",
+          [transactionId, invoiceId]
         );
-
-        await writeAuditLog(connection, "stripe_payment_completed", "payment", invoiceId, null);
-        await writeAuditLog(connection, "invoice_status:Paid", "invoice", invoiceId, null);
-
         await connection.commit();
-        console.log(`[STRIPE WEBHOOK] Payment recorded for invoice ${invoiceId}, txn: ${transactionId}`);
 
-        // Notify Finance users (non-blocking)
+        // Notify Finance about Stripe payment (non-blocking)
         try {
-          const { notifyPaymentSuccess } = require("../services/invoiceNotificationService");
-          const [invDetail] = await pool.query(
-            `SELECT i.invoiceId, c.name AS customer_name, i.total_amount
-             FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id
-             WHERE i.invoice_id = ? LIMIT 1`,
+          const [invInfo] = await pool.query(
+            `SELECT i.invoiceId, c.name AS customer_name FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id WHERE i.invoice_id = ?`,
             [invoiceId]
           );
-          if (invDetail[0]) {
-            notifyPaymentSuccess(invDetail[0].invoiceId, invDetail[0].customer_name, invDetail[0].total_amount).catch(() => {});
+          if (invInfo.length > 0) {
+            const { notifyPaymentSuccess } = require("../services/invoiceNotificationService");
+            notifyPaymentSuccess(invInfo[0].invoiceId, invInfo[0].customer_name, payAmount).catch(() => {});
           }
-        } catch { /* non-critical */ }
-
-        // Send payment receipt email to customer (non-blocking)
-        try {
-          const { sendPaymentReceiptEmail } = require("../services/invoiceDeliveryService");
-          const [invDetail] = await pool.query(
-            `SELECT i.invoiceId, i.total_amount, c.name AS customer_name, c.email AS customer_email
-             FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id
-             WHERE i.invoice_id = ? LIMIT 1`,
-            [invoiceId]
-          );
-          if (invDetail[0] && sendPaymentReceiptEmail) {
-            sendPaymentReceiptEmail(invDetail[0], transactionId).catch(() => {});
-          }
-        } catch { /* non-critical */ }
-      } catch (dbError) {
-        await connection.rollback();
-        throw dbError;
-      } finally {
-        connection.release();
-      }
-    } else if (eventType === "payment_intent.succeeded") {
-      const intent = event.data?.object || event;
-      const invoiceId = Number(intent.metadata?.invoice_id);
-      console.log(`[STRIPE WEBHOOK] Payment intent succeeded: ${intent.id}`);
-
-      // Update payment_intent_id on the invoice if we can identify it
-      if (invoiceId) {
-        try {
-          await pool.query(
-            `UPDATE invoice SET payment_intent_id = ?, payment_status = 'paid' WHERE invoice_id = ? AND payment_intent_id IS NULL`,
-            [intent.id, invoiceId]
-          );
-        } catch { /* non-critical */ }
-      }
-    } else if (eventType === "payment_intent.payment_failed") {
-      const intent = event.data?.object || event;
-      const failureMessage = intent.last_payment_error?.message || "Unknown failure";
-      const invoiceId = Number(intent.metadata?.invoice_id);
-      console.log(`[STRIPE WEBHOOK] Payment failed: ${intent.id} - ${failureMessage}`);
-
-      // Update invoice payment_status to failed
-      if (invoiceId) {
-        try {
-          await pool.query(
-            `UPDATE invoice SET payment_status = 'failed' WHERE invoice_id = ? AND status != 'Paid'`,
-            [invoiceId]
-          );
-        } catch { /* non-critical */ }
-      }
-
-      // Notify Finance users about payment failure
-      try {
-        if (invoiceId) {
-          const { notifyPaymentFailed } = require("../services/invoiceNotificationService");
-          const [invDetail] = await pool.query(
-            `SELECT i.invoiceId, c.name AS customer_name
-             FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id
-             WHERE i.invoice_id = ? LIMIT 1`,
-            [invoiceId]
-          );
-          if (invDetail[0]) {
-            notifyPaymentFailed(invDetail[0].invoiceId, invDetail[0].customer_name).catch(() => {});
-          }
-        }
-      } catch { /* non-critical */ }
-    } else if (eventType === "charge.refunded") {
-      const charge = event.data?.object || event;
-      const invoiceId = Number(charge.metadata?.invoice_id);
-      console.log(`[STRIPE WEBHOOK] Charge refunded: ${charge.id}`);
-
-      if (invoiceId) {
-        try {
-          await pool.query(
-            "UPDATE invoice SET status = 'Refunded', payment_status = 'refunded' WHERE invoice_id = ? AND status = 'Paid'",
-            [invoiceId]
-          );
-          await pool.query(
-            `INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, 'invoice', ?, NULL)`,
-            ["invoice_status:Refunded", invoiceId]
-          );
-
-          const { notifyPaymentRefunded } = require("../services/invoiceNotificationService");
-          const [invDetail] = await pool.query(
-            `SELECT i.invoiceId, c.name AS customer_name
-             FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id
-             WHERE i.invoice_id = ? LIMIT 1`,
-            [invoiceId]
-          );
-          if (invDetail[0]) {
-            notifyPaymentRefunded(invDetail[0].invoiceId, invDetail[0].customer_name).catch(() => {});
-          }
-        } catch (refundError) {
-          console.error("[STRIPE WEBHOOK] Refund processing error:", refundError.message);
-        }
-      }
-    } else {
-      console.log(`[STRIPE WEBHOOK] Unhandled event type: ${eventType}`);
+        } catch { /* non-blocking */ }
+      } catch (dbErr) { await connection.rollback(); throw dbErr; }
+      finally { connection.release(); }
     }
 
     res.json({ received: true });
   } catch (error) {
-    console.error("[STRIPE WEBHOOK] Processing error:", error.message);
     res.status(500).json({ message: "Webhook processing failed.", detail: error.message });
   }
 }
 
 /**
  * GET /api/payments/history/:invoiceId
- *
- * Returns the payment history for a specific invoice.
- * Includes all payment attempts, methods, statuses, and transaction IDs.
- *
- * URL param: invoiceId (invoice primary key)
  */
 async function getPaymentHistory(req, res) {
   const invoiceId = Number(req.params.invoiceId);
-
-  if (!invoiceId) {
-    return res.status(400).json({ message: "Invoice ID is required." });
-  }
+  if (!invoiceId) return res.status(400).json({ message: "Invoice ID is required." });
 
   try {
     const [payments] = await pool.query(`
-      SELECT
-        p.payment_id,
-        p.payment_date,
-        p.amount,
-        p.status,
-        p.transaction_id,
-        pm.name AS payment_method
-      FROM payment p
-      LEFT JOIN payment_method pm ON pm.payment_method_id = p.payment_method_id
-      WHERE p.invoice_invoice_id = ?
-      ORDER BY p.payment_date DESC
+      SELECT payment_id, payment_date, amount, status, transaction_id, payment_method_name AS payment_method
+      FROM payment WHERE invoice_invoice_id = ?
+      ORDER BY payment_date DESC
     `, [invoiceId]);
 
-    // Also fetch Stripe metadata from the invoice itself
-    let invoicePaymentData = {};
-    try {
-      const [invRows] = await pool.query(
-        `SELECT payment_url, stripe_session_id, payment_intent_id, payment_status,
-                payment_method, payment_date, transaction_id
-         FROM invoice WHERE invoice_id = ? LIMIT 1`,
-        [invoiceId]
-      );
-      invoicePaymentData = invRows[0] || {};
-    } catch { /* columns may not exist */ }
-
-    res.json({
-      payments,
-      stripeMetadata: {
-        paymentUrl: invoicePaymentData.payment_url || null,
-        sessionId: invoicePaymentData.stripe_session_id || null,
-        paymentIntentId: invoicePaymentData.payment_intent_id || null,
-        paymentStatus: invoicePaymentData.payment_status || null,
-        paymentMethod: invoicePaymentData.payment_method || null,
-        paidAt: invoicePaymentData.payment_date || null,
-        transactionId: invoicePaymentData.transaction_id || null
-      }
-    });
+    res.json({ payments });
   } catch (error) {
-    res.status(500).json({
-      message: "Failed to fetch payment history.",
-      detail: error.message
-    });
+    res.status(500).json({ message: "Failed to fetch payment history.", detail: error.message });
   }
 }
 
