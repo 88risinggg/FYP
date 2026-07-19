@@ -35,15 +35,15 @@ router.get("/:payslipId/pdf", authenticateToken, async (req, res) => {
     // Get payslip with employee and payroll data
     const [rows] = await pool.query(
       `SELECT
-        ps.payslip_id, ps.file_path,
+        p.payroll_id AS payslip_id, p.payslip_file_path AS file_path,
         p.payroll_month, p.payroll_year, p.net_salary, p.total_allowances, p.total_deductions,
         p.employee_cpf, p.employer_cpf,
-        s.name AS employee_name, s.employee_code, s.department, s.designation, s.base_salary,
+        s.name AS employee_name, s.employee_code, s.department_name AS department,
+        NULL AS designation, s.base_salary,
         s.user_user_id
-      FROM payslip ps
-      INNER JOIN payroll p ON ps.payroll_payroll_id = p.payroll_id
+      FROM payroll p
       INNER JOIN staff s ON p.staff_employee_id = s.employee_id
-      WHERE ps.payslip_id = ?
+      WHERE p.payroll_id = ?
       LIMIT 1`,
       [payslipId]
     );

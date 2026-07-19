@@ -103,24 +103,6 @@ async function createTables() {
       FOREIGN KEY (user_id) REFERENCES user(user_id) ON DELETE CASCADE
     );
 
-    -- Payroll Settings
-    CREATE TABLE IF NOT EXISTS payroll_settings (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      user_id INT NOT NULL UNIQUE,
-      payroll_frequency VARCHAR(20) DEFAULT 'monthly',
-      salary_payment_day INT DEFAULT 25,
-      cpf_contribution TINYINT(1) DEFAULT 1,
-      tax_settings TEXT,
-      working_hours DECIMAL(4,1) DEFAULT 44.0,
-      overtime_enabled TINYINT(1) DEFAULT 1,
-      payroll_approval_required TINYINT(1) DEFAULT 1,
-      payslip_template VARCHAR(50) DEFAULT 'standard',
-      payroll_lock TINYINT(1) DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES user(user_id) ON DELETE CASCADE
-    );
-
     -- Company Settings
     CREATE TABLE IF NOT EXISTS company_settings (
       id INT AUTO_INCREMENT PRIMARY KEY,

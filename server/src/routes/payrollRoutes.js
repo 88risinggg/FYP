@@ -1,6 +1,7 @@
 const express = require("express");
 const ExcelJS = require("exceljs");
-const { payrollRateConfig, payslips, PAYSLIP_STATUSES } = require("../services/data");
+const { payrollRateConfig } = require("../services/data");
+const { pool } = require("../config/db");
 const { addAudit } = require("../services/audit");
 const { authenticateToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/rolesMiddleware");
@@ -55,7 +56,6 @@ router.put("/rates", authenticateToken, allowRoles("Admin"), (req, res) => {
 // Finance approval - transition finance_pending → finance_approved
 router.put("/payslips/:id/finance-approve", authenticateToken, allowRoles("Admin", "Finance"), async (req, res) => {
   try {
-    const { pool } = require("../config/db");
     const payslipId = req.params.id;
 
     const [rows] = await pool.query('SELECT *, payroll_id AS payslip_id, payslip_status AS status FROM payroll WHERE payroll_id = ? LIMIT 1', [payslipId]);
@@ -64,7 +64,7 @@ router.put("/payslips/:id/finance-approve", authenticateToken, allowRoles("Admin
     }
 
     const payslip = rows[0];
-    if (payslip.status !== 'draft' && payslip.status !== 'finance_pending') {
+    if (!['draft', 'finance_pending'].includes(String(payslip.status).toLowerCase())) {
       return res.status(400).json({ message: `Cannot approve payslip in ${payslip.status} status. Expected draft or finance_pending.` });
     }
 
@@ -83,7 +83,6 @@ router.put("/payslips/:id/finance-approve", authenticateToken, allowRoles("Admin
 // HR -> Finance: send payslip for finance review (draft -> finance_pending)
 router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
   try {
-    const { pool } = require("../config/db");
     const payslipId = req.params.id;
 
     const [rows] = await pool.query('SELECT *, payroll_id AS payslip_id, payslip_status AS status FROM payroll WHERE payroll_id = ? LIMIT 1', [payslipId]);
@@ -92,7 +91,7 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("Admin
     }
 
     const payslip = rows[0];
-    if (payslip.status !== 'draft' && payslip.status !== 'finance_pending') {
+    if (!['draft', 'finance_pending'].includes(String(payslip.status).toLowerCase())) {
       return res.status(400).json({ message: `Cannot send payslip in ${payslip.status} status.` });
     }
 
@@ -112,7 +111,6 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("Admin
 router.put("/payslips/bulk-send-to-finance", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
   try {
     const { payslip_ids, allDrafts } = req.body || {};
-    const { pool } = require("../config/db");
 
     let targetIds = [];
     if (allDrafts) {
@@ -167,7 +165,7 @@ router.put("/payslips/:id/finance-reject", authenticateToken, allowRoles("Admin"
     }
 
     const payslip = rows[0];
-    if (payslip.status !== 'draft' && payslip.status !== 'finance_pending') {
+    if (!['draft', 'finance_pending'].includes(String(payslip.status).toLowerCase())) {
       return res.status(400).json({ message: `Cannot reject payslip in ${payslip.status} status.` });
     }
 
@@ -184,63 +182,52 @@ router.put("/payslips/:id/finance-reject", authenticateToken, allowRoles("Admin"
 });
 
 // Admin final approval - transition admin_pending → sent_to_staff
-router.put("/payslips/:id/admin-approve", authenticateToken, allowRoles("Admin"), (req, res) => {
-  const payslip = payslips.find((p) => p.payslip_id === req.params.id);
-  if (!payslip) {
-    return res.status(404).json({ message: "Payslip not found" });
+router.put("/payslips/:id/admin-approve", authenticateToken, allowRoles("Admin"), async (req, res) => {
+  try {
+    const [result] = await pool.query(
+      `UPDATE payroll
+       SET payslip_status = 'sent_to_staff', payslip_sent_at = NOW()
+       WHERE payroll_id = ? AND LOWER(payslip_status) IN ('admin_pending', 'finance_approved')`,
+      [req.params.id]
+    );
+    if (!result.affectedRows) {
+      return res.status(409).json({ message: "Payslip not found or not ready for Admin approval" });
+    }
+    addAudit(req.user.email, `Admin approved payslip ${req.params.id} and sent to staff`, "Payroll");
+    const [[payslip]] = await pool.query(
+      "SELECT *, payroll_id AS payslip_id, payslip_status AS status FROM payroll WHERE payroll_id = ?",
+      [req.params.id]
+    );
+    return res.json({ message: "Payslip approved by Admin and sent to staff", payslip });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to approve payslip", error: error.message });
   }
-
-  if (payslip.status !== PAYSLIP_STATUSES.ADMIN_PENDING) {
-    return res.status(400).json({
-      message: `Cannot approve payslip in ${payslip.status} status. Expected admin_pending.`
-    });
-  }
-
-  payslip.status = PAYSLIP_STATUSES.SENT_TO_STAFF;
-  payslip.admin_approval = true;
-  payslip.admin_approved_at = new Date().toISOString();
-  payslip.admin_approved_by = req.user.email;
-  payslip.admin_rejection_reason = null;
-  payslip.sent_to_staff_at = new Date().toISOString();
-  payslip.updated_at = new Date().toISOString();
-
-  addAudit(req.user.email, `Admin approved payslip ${req.params.id} and sent to staff`, "Payroll");
-  res.json({
-    message: "Payslip approved by Admin and sent to staff",
-    payslip
-  });
 });
 
 // Admin rejection
-router.put("/payslips/:id/admin-reject", authenticateToken, allowRoles("Admin"), (req, res) => {
-  const payslip = payslips.find((p) => p.payslip_id === req.params.id);
-  if (!payslip) {
-    return res.status(404).json({ message: "Payslip not found" });
-  }
-
+router.put("/payslips/:id/admin-reject", authenticateToken, allowRoles("Admin"), async (req, res) => {
   const { reason } = req.body;
   if (!reason) {
     return res.status(400).json({ message: "Rejection reason is required" });
   }
-
-  if (payslip.status !== PAYSLIP_STATUSES.ADMIN_PENDING) {
-    return res.status(400).json({
-      message: `Cannot reject payslip in ${payslip.status} status.`
-    });
+  try {
+    const [result] = await pool.query(
+      `UPDATE payroll SET payslip_status = 'Draft'
+       WHERE payroll_id = ? AND LOWER(payslip_status) = 'admin_pending'`,
+      [req.params.id]
+    );
+    if (!result.affectedRows) {
+      return res.status(409).json({ message: "Payslip not found or not awaiting Admin approval" });
+    }
+    addAudit(req.user.email, `Admin rejected payslip ${req.params.id}: ${reason}`, "Payroll");
+    const [[payslip]] = await pool.query(
+      "SELECT *, payroll_id AS payslip_id, payslip_status AS status FROM payroll WHERE payroll_id = ?",
+      [req.params.id]
+    );
+    return res.json({ message: "Payslip rejected by Admin", payslip });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to reject payslip", error: error.message });
   }
-
-  payslip.status = PAYSLIP_STATUSES.DRAFT;
-  payslip.admin_approval = false;
-  payslip.admin_approved_at = null;
-  payslip.admin_approved_by = null;
-  payslip.admin_rejection_reason = reason;
-  payslip.updated_at = new Date().toISOString();
-
-  addAudit(req.user.email, `Admin rejected payslip ${req.params.id}: ${reason}`, "Payroll");
-  res.json({
-    message: "Payslip rejected by Admin",
-    payslip
-  });
 });
 
 module.exports = router;

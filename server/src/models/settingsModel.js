@@ -162,10 +162,18 @@ async function upsertInvoiceSettings(userId, data) {
 
 async function getPayrollSettings(userId) {
   const [rows] = await pool.query(
-    "SELECT * FROM payroll_settings WHERE user_id = ?",
-    [userId]
+    `SELECT configuration_value
+     FROM payroll_configuration
+     WHERE configuration_type = 'user_preferences' AND configuration_key = ?
+     LIMIT 1`,
+    [String(userId)]
   );
-  return rows[0] || null;
+  if (!rows[0]) return null;
+  try {
+    return JSON.parse(rows[0].configuration_value);
+  } catch {
+    return null;
+  }
 }
 
 async function upsertPayrollSettings(userId, data) {
@@ -174,13 +182,16 @@ async function upsertPayrollSettings(userId, data) {
     "tax_settings", "working_hours", "overtime_enabled",
     "payroll_approval_required", "payslip_template", "payroll_lock"
   ];
-  const values = fields.map((f) => data[f] ?? null);
+  const settings = Object.fromEntries(fields.map((field) => [field, data[field] ?? null]));
 
   await pool.query(
-    `INSERT INTO payroll_settings (user_id, ${fields.join(", ")})
-     VALUES (?, ${fields.map(() => "?").join(", ")})
-     ON DUPLICATE KEY UPDATE ${fields.map((f) => `${f} = VALUES(${f})`).join(", ")}`,
-    [userId, ...values]
+    `INSERT INTO payroll_configuration
+       (configuration_type, configuration_key, configuration_value, updated_by)
+     VALUES ('user_preferences', ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       configuration_value = VALUES(configuration_value),
+       updated_by = VALUES(updated_by)`,
+    [String(userId), JSON.stringify(settings), userId]
   );
 }
 

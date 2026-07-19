@@ -1,5 +1,16 @@
 const { pool } = require("../config/db");
 const { DEFAULT_PAYROLL_RULES_2026 } = require("../services/statutoryPayrollEngine");
+const ROLE_NAMES = Object.freeze({ 1: "Admin", 2: "Finance", 3: "HR", 4: "Staff" });
+
+function parseJson(value, fallback = {}) {
+  if (!value) return fallback;
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
 
 async function getAdminPayrollReportData() {
   const [[[userStats]], [payrollRuns], [roleSummary], [users], [auditLogs]] = await Promise.all([
@@ -86,9 +97,10 @@ async function getAdminPayrollReportData() {
 
 async function logAdminAction({ action, entityType, entityId, userId }) {
   await pool.execute(
-    `INSERT INTO audit_log (action, entity_type, entity_id, user_user_id)
-    VALUES (?, ?, ?, ?)`,
-    [action, entityType, entityId, userId || null]
+    `INSERT INTO audit_logs
+      (activity_type, action_description, affected_record, user_id, status)
+     VALUES (?, ?, ?, ?, 'Success')`,
+    [entityType, action, entityId == null ? null : String(entityId), userId || null]
   );
 }
 
@@ -97,13 +109,13 @@ async function getDashboardStats() {
     "SELECT COUNT(*) AS total FROM user WHERE status = 1"
   );
   const [[settings]] = await pool.execute(
-    "SELECT COUNT(*) AS total FROM payroll_setting"
+    "SELECT COUNT(*) AS total FROM payroll_configuration WHERE configuration_type = 'setting'"
   );
   const [[layouts]] = await pool.execute(
-    "SELECT COUNT(*) AS total FROM payslip_layout WHERE status = 'Active'"
+    "SELECT COUNT(*) AS total FROM payroll_configuration WHERE configuration_type = 'payslip_layout' AND status = 'Active'"
   );
   const [[logs]] = await pool.execute(
-    "SELECT COUNT(*) AS total FROM audit_log"
+    "SELECT COUNT(*) AS total FROM audit_logs"
   );
 
   return {
@@ -117,29 +129,37 @@ async function getDashboardStats() {
 async function listPayslipLayouts() {
   const [rows] = await pool.execute(
     `SELECT
-      payslip_layout.layout_id,
-      payslip_layout.layout_name,
-      payslip_layout.file_path,
-      payslip_layout.file_type,
-      payslip_layout.is_default,
-      payslip_layout.status,
-      payslip_layout.created_at,
-      payslip_layout.updated_at,
+      payroll_configuration.configuration_id AS layout_id,
+      payroll_configuration.configuration_value,
+      payroll_configuration.is_default,
+      payroll_configuration.status,
+      payroll_configuration.created_at,
+      payroll_configuration.updated_at,
       user.name AS created_by_name
-    FROM payslip_layout
-    LEFT JOIN user ON payslip_layout.created_by = user.user_id
-    ORDER BY payslip_layout.is_default DESC, payslip_layout.updated_at DESC`
+    FROM payroll_configuration
+    LEFT JOIN user ON payroll_configuration.created_by = user.user_id
+    WHERE payroll_configuration.configuration_type = 'payslip_layout'
+    ORDER BY payroll_configuration.is_default DESC, payroll_configuration.updated_at DESC`
   );
 
-  return rows;
+  return rows.map((row) => {
+    const value = parseJson(row.configuration_value, {});
+    const { configuration_value, ...layout } = row;
+    return {
+      ...layout,
+      layout_name: value.layoutName || "Payslip layout",
+      file_path: value.filePath || "",
+      file_type: value.fileType || ""
+    };
+  });
 }
 
 async function createPayslipLayout({ layoutName, filePath, fileType, createdBy }) {
   const [result] = await pool.execute(
-    `INSERT INTO payslip_layout
-      (layout_name, file_path, file_type, created_by)
-    VALUES (?, ?, ?, ?)`,
-    [layoutName, filePath, fileType, createdBy || null]
+    `INSERT INTO payroll_configuration
+      (configuration_type, configuration_key, configuration_value, created_by)
+    VALUES ('payslip_layout', UUID(), ?, ?)`,
+    [JSON.stringify({ layoutName, filePath, fileType }), createdBy || null]
   );
 
   return result.insertId;
@@ -151,7 +171,9 @@ async function setDefaultPayslipLayout(layoutId) {
   try {
     await connection.beginTransaction();
     const [[layout]] = await connection.execute(
-      "SELECT layout_id FROM payslip_layout WHERE layout_id = ?",
+      `SELECT configuration_id
+       FROM payroll_configuration
+       WHERE configuration_id = ? AND configuration_type = 'payslip_layout'`,
       [layoutId]
     );
 
@@ -160,9 +182,13 @@ async function setDefaultPayslipLayout(layoutId) {
       return false;
     }
 
-    await connection.execute("UPDATE payslip_layout SET is_default = 0");
     await connection.execute(
-      "UPDATE payslip_layout SET is_default = 1, status = 'Active' WHERE layout_id = ?",
+      "UPDATE payroll_configuration SET is_default = 0 WHERE configuration_type = 'payslip_layout'"
+    );
+    await connection.execute(
+      `UPDATE payroll_configuration
+       SET is_default = 1, status = 'Active'
+       WHERE configuration_id = ? AND configuration_type = 'payslip_layout'`,
       [layoutId]
     );
     await connection.commit();
@@ -179,15 +205,16 @@ async function setDefaultPayslipLayout(layoutId) {
 async function listPayrollSettings() {
   const [rows] = await pool.execute(
     `SELECT
-      payroll_setting.setting_id,
-      payroll_setting.setting_key,
-      payroll_setting.setting_value,
-      payroll_setting.description,
-      payroll_setting.updated_at,
+      payroll_configuration.configuration_id AS setting_id,
+      payroll_configuration.configuration_key AS setting_key,
+      payroll_configuration.configuration_value AS setting_value,
+      payroll_configuration.description,
+      payroll_configuration.updated_at,
       user.name AS updated_by_name
-    FROM payroll_setting
-    LEFT JOIN user ON payroll_setting.updated_by = user.user_id
-    ORDER BY payroll_setting.setting_key`
+    FROM payroll_configuration
+    LEFT JOIN user ON payroll_configuration.updated_by = user.user_id
+    WHERE payroll_configuration.configuration_type = 'setting'
+    ORDER BY payroll_configuration.configuration_key`
   );
 
   return rows;
@@ -198,7 +225,11 @@ async function listMbmfEligibilitySummary() {
     "SELECT COUNT(*) AS total FROM staff"
   );
   const [[setting]] = await pool.execute(
-    "SELECT setting_value FROM payroll_setting WHERE setting_key = 'mbmf_applicable_religion' LIMIT 1"
+    `SELECT configuration_value AS setting_value
+     FROM payroll_configuration
+     WHERE configuration_type = 'setting'
+       AND configuration_key = 'mbmf_applicable_religion'
+     LIMIT 1`
   );
   const applicableReligion = String(setting?.setting_value || "Muslim").trim();
   const [religionColumns] = await pool.execute(
@@ -250,11 +281,11 @@ async function listMbmfEligibilitySummary() {
 
 async function upsertPayrollSetting({ settingKey, settingValue, description, updatedBy }) {
   await pool.execute(
-    `INSERT INTO payroll_setting
-      (setting_key, setting_value, description, updated_by)
-    VALUES (?, ?, ?, ?)
+    `INSERT INTO payroll_configuration
+      (configuration_type, configuration_key, configuration_value, description, updated_by)
+    VALUES ('setting', ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE
-      setting_value = VALUES(setting_value),
+      configuration_value = VALUES(configuration_value),
       description = VALUES(description),
       updated_by = VALUES(updated_by)`,
     [settingKey, settingValue, description || null, updatedBy || null]
@@ -301,15 +332,15 @@ async function listPayrollRuns() {
 async function listAuditLogs() {
   const [rows] = await pool.execute(
     `SELECT
-      audit_log.log_id,
-      audit_log.action,
-      audit_log.entity_type,
-      audit_log.entity_id,
-      audit_log.created_at,
-      user.name AS user_name
-    FROM audit_log
-    LEFT JOIN user ON audit_log.user_user_id = user.user_id
-    ORDER BY audit_log.created_at DESC
+      audit_logs.audit_log_id AS log_id,
+      audit_logs.action_description AS action,
+      audit_logs.activity_type AS entity_type,
+      audit_logs.affected_record AS entity_id,
+      audit_logs.created_at,
+      COALESCE(audit_logs.user_name, user.name, 'System') AS user_name
+    FROM audit_logs
+    LEFT JOIN user ON audit_logs.user_id = user.user_id
+    ORDER BY audit_logs.created_at DESC
     LIMIT 25`
   );
 
@@ -317,19 +348,18 @@ async function listAuditLogs() {
 }
 
 async function listUsersWithRoles() {
-  const [rows] = await pool.execute(
-    `SELECT
-      role.role_id,
-      role.role_name,
-      role.description,
-      COUNT(user.user_id) AS user_count
-    FROM role
-    LEFT JOIN user ON user.role_id = role.role_id
-    GROUP BY role.role_id, role.role_name, role.description
-    ORDER BY role.role_id`
+  const [counts] = await pool.execute(
+    `SELECT role_name, COUNT(*) AS user_count
+     FROM user
+     GROUP BY role_name`
   );
-
-  return rows;
+  const countByRole = Object.fromEntries(counts.map((row) => [row.role_name, Number(row.user_count)]));
+  return Object.entries(ROLE_NAMES).map(([roleId, roleName]) => ({
+    role_id: Number(roleId),
+    role_name: roleName,
+    description: `${roleName} payroll access`,
+    user_count: countByRole[roleName] || 0
+  }));
 }
 
 async function listAvailableStaffForUserCreation() {
@@ -342,10 +372,9 @@ async function listAvailableStaffForUserCreation() {
       staff.hire_date,
       staff.base_salary,
       staff.status,
-      department.department_id,
-      department.department_name
+      NULL AS department_id,
+      staff.department_name
     FROM staff
-    LEFT JOIN department ON staff.department_id = department.department_id
     WHERE staff.user_user_id IS NULL
     ORDER BY staff.name`
   );
@@ -362,8 +391,11 @@ async function listUsers() {
       user.status,
       user.created_at,
       user.updated_at,
-      role.role_id,
-      role.role_name,
+      CASE user.role_name
+        WHEN 'Admin' THEN 1 WHEN 'Finance' THEN 2 WHEN 'HR' THEN 3 WHEN 'Staff' THEN 4
+        ELSE 0
+      END AS role_id,
+      user.role_name,
       staff.employee_id,
       staff.employee_code,
       staff.phone,
@@ -376,12 +408,10 @@ async function listUsers() {
       staff.bank,
       staff.account_no,
       staff.status AS staff_status,
-      department.department_id,
-      department.department_name
+      NULL AS department_id,
+      staff.department_name
     FROM user
-    JOIN role ON user.role_id = role.role_id
     LEFT JOIN staff ON staff.user_user_id = user.user_id
-    LEFT JOIN department ON staff.department_id = department.department_id
     ORDER BY user.name`
   );
 
@@ -406,12 +436,8 @@ async function createUserAccount({ email, name, passwordHash, roleId, status, st
       };
     }
 
-    const [[role]] = await connection.execute(
-      "SELECT role_id FROM role WHERE role_id = ?",
-      [roleId]
-    );
-
-    if (!role) {
+    const roleName = ROLE_NAMES[roleId];
+    if (!roleName) {
       await connection.rollback();
       return {
         invalidRole: true
@@ -444,9 +470,9 @@ async function createUserAccount({ email, name, passwordHash, roleId, status, st
     }
 
     const [result] = await connection.execute(
-      `INSERT INTO user (email, name, password, status, role_id)
+      `INSERT INTO user (email, name, password, status, role_name)
       VALUES (?, ?, ?, ?, ?)`,
-      [email, name, passwordHash, status, roleId]
+      [email, name, passwordHash, status, roleName]
     );
     const userId = result.insertId;
 
@@ -463,9 +489,10 @@ async function createUserAccount({ email, name, passwordHash, roleId, status, st
     }
 
     await connection.execute(
-      `INSERT INTO audit_log (action, entity_type, entity_id, user_user_id)
-      VALUES (?, ?, ?, ?)`,
-      ["Created user account", "user", userId, adminUserId || null]
+      `INSERT INTO audit_logs
+        (activity_type, action_description, affected_record, user_id, status)
+       VALUES ('user', 'Created user account', ?, ?, 'Success')`,
+      [String(userId), adminUserId || null]
     );
 
     await connection.commit();
@@ -488,10 +515,12 @@ async function getUserById(userId) {
       user.name,
       user.email,
       user.status,
-      user.role_id,
-      role.role_name
+      CASE user.role_name
+        WHEN 'Admin' THEN 1 WHEN 'Finance' THEN 2 WHEN 'HR' THEN 3 WHEN 'Staff' THEN 4
+        ELSE 0
+      END AS role_id,
+      user.role_name
     FROM user
-    JOIN role ON user.role_id = role.role_id
     WHERE user.user_id = ?`,
     [userId]
   );
@@ -518,9 +547,11 @@ async function updateUserStatus({ userId, status, adminUserId }) {
 }
 
 async function updateUserRole({ userId, roleId, adminUserId }) {
+  const roleName = ROLE_NAMES[roleId];
+  if (!roleName) return false;
   const [result] = await pool.execute(
-    "UPDATE user SET role_id = ? WHERE user_id = ?",
-    [roleId, userId]
+    "UPDATE user SET role_name = ? WHERE user_id = ?",
+    [roleName, userId]
   );
 
   if (result.affectedRows > 0) {

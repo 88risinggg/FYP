@@ -273,7 +273,9 @@ router.put("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res
 
       try {
         await pool.query(
-          'INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, ?, ?, ?)',
+          `INSERT INTO audit_logs
+             (action_description, activity_type, affected_record, user_id, status)
+           VALUES (?, ?, ?, ?, 'Success')`,
           [`Updated staff record ${id}`, 'HR', String(id), req.user.userId || null]
         );
       } catch (_e) { /* ignore audit errors */ }
@@ -300,8 +302,12 @@ router.delete("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, 
         return res.json({ message: 'Staff record deleted (in-memory)', deletedStaff });
       }
       try {
-        await pool.query('INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, ?, ?, ?)',
-          [`Deleted staff record ${id}`, 'HR', id, req.user.userId || null]);
+        await pool.query(
+          `INSERT INTO audit_logs
+             (action_description, activity_type, affected_record, user_id, status)
+           VALUES (?, ?, ?, ?, 'Success')`,
+          [`Deleted staff record ${id}`, 'HR', String(id), req.user.userId || null]
+        );
       } catch (e) {}
       return res.json({ message: 'Staff record deleted successfully', deletedId: id });
     } catch (err) {
@@ -370,8 +376,12 @@ router.post("/staff", authenticateToken, allowRoles("Admin", "HR"), (req, res) =
         upsertStaffProfile(rows[0]);
         // insert audit
         try {
-          await pool.query('INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, ?, ?, ?)',
-            [`Added staff record ${employee_id}`, 'HR', employee_id, req.user.userId || null]);
+          await pool.query(
+            `INSERT INTO audit_logs
+               (action_description, activity_type, affected_record, user_id, status)
+             VALUES (?, ?, ?, ?, 'Success')`,
+            [`Added staff record ${employee_id}`, 'HR', String(employee_id), req.user.userId || null]
+          );
         } catch (e) {}
         return res.status(201).json(rows[0]);
       }
@@ -1193,10 +1203,14 @@ router.post("/legacy-payslips/quick-generate", authenticateToken, allowRoles("Ad
       return res.status(400).json({ message: "No active staff found in database" });
     }
 
-    // Get donation settings from payroll_setting if available
+    // Get donation settings from the consolidated configuration table if available
     let donationConfig = {};
     try {
-      const [settings] = await pool.query("SELECT setting_key, setting_value FROM payroll_setting WHERE setting_key LIKE 'donation_%'");
+      const [settings] = await pool.query(
+        `SELECT configuration_key AS setting_key, configuration_value AS setting_value
+         FROM payroll_configuration
+         WHERE configuration_type = 'setting' AND configuration_key LIKE 'donation_%'`
+      );
       settings.forEach(s => {
         try { donationConfig[s.setting_key] = JSON.parse(s.setting_value); } catch (_) { donationConfig[s.setting_key] = s.setting_value; }
       });
@@ -1240,34 +1254,27 @@ router.post("/legacy-payslips/quick-generate", authenticateToken, allowRoles("Ad
         const netSalary = parseFloat((baseSalary - totalDeductions).toFixed(2));
 
         // Insert payroll record
-        const [payrollResult] = await conn.query(
-          `INSERT INTO payroll 
-            (staff_employee_id, payroll_month, payroll_year, payroll_run_id, total_allowances, total_deductions, net_salary)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [staff.employee_id, numMonth, numYear, payrollRunId, 0, totalDeductions, netSalary]
-        );
-
-        // Insert payslip record
+        const deductionBreakdown = {
+          employeeCpf: parseFloat(cpfEmployee.toFixed(2)),
+          selfHelpGroups: donationAmount > 0
+            ? [{ fund: 'MBMF/SINDA/CDAC', amount: parseFloat(donationAmount.toFixed(2)) }]
+            : [],
+          otherDeductions: []
+        };
         await conn.query(
-          'INSERT INTO payslip (payroll_payroll_id, status, generated_at) VALUES (?, ?, NOW())',
-          [payrollResult.insertId, 'draft']
+          `INSERT INTO payroll
+            (staff_employee_id, payroll_month, payroll_year, payroll_run_id,
+             gross_salary, total_allowances, allowance_breakdown, total_deductions,
+             employee_cpf, employer_cpf, mbmf_amount, deduction_breakdown,
+             net_salary, source, payslip_status, payslip_generated_at)
+           VALUES (?, ?, ?, ?, ?, 0, JSON_ARRAY(), ?, ?, ?, ?, ?, ?, 'automated_2026', 'Draft', NOW())`,
+          [
+            staff.employee_id, numMonth, numYear, payrollRunId, baseSalary,
+            totalDeductions, parseFloat(cpfEmployee.toFixed(2)),
+            parseFloat(cpfEmployer.toFixed(2)), parseFloat(donationAmount.toFixed(2)),
+            JSON.stringify(deductionBreakdown), netSalary
+          ]
         );
-
-        // Insert CPF deduction line item
-        if (cpfEmployee > 0) {
-          await conn.query(
-            'INSERT INTO payroll_deduction (payroll_payroll_id, deduction_type, amount) VALUES (?, ?, ?)',
-            [payrollResult.insertId, 'CPF Employee', parseFloat(cpfEmployee.toFixed(2))]
-          );
-        }
-
-        // Insert donation deduction if applicable
-        if (donationAmount > 0) {
-          await conn.query(
-            'INSERT INTO payroll_deduction (payroll_payroll_id, deduction_type, amount) VALUES (?, ?, ?)',
-            [payrollResult.insertId, 'MBMF/SINDA/CDAC', parseFloat(donationAmount.toFixed(2))]
-          );
-        }
 
         generated.push({
           employee_id: staff.employee_id,
@@ -1371,12 +1378,12 @@ router.get("/legacy-payslips", authenticateToken, allowRoles("Admin", "HR", "Fin
   try {
     let sql = `
       SELECT
-        ps.payslip_id,
-        ps.status,
-        ps.file_path,
-        ps.generated_at,
-        ps.sent_to_staff_at,
-        ps.updated_at,
+        p.payroll_id AS payslip_id,
+        p.payslip_status AS status,
+        p.payslip_file_path AS file_path,
+        p.payslip_generated_at AS generated_at,
+        p.payslip_sent_at AS sent_to_staff_at,
+        p.created_at AS updated_at,
         p.payroll_month AS period_month,
         p.payroll_year AS period_year,
         p.net_salary AS net_pay,
@@ -1387,18 +1394,17 @@ router.get("/legacy-payslips", authenticateToken, allowRoles("Admin", "HR", "Fin
         s.email AS staff_email,
         s.base_salary,
         s.department_name
-      FROM payslip ps
-      JOIN payroll p ON ps.payroll_payroll_id = p.payroll_id
+      FROM payroll p
       JOIN staff s ON p.staff_employee_id = s.employee_id
     `;
     const params = [];
     const conditions = [];
 
     if (req.user.role === "Finance") {
-      conditions.push("ps.status IN (?, ?)");
+      conditions.push("p.payslip_status IN (?, ?)");
       params.push('finance_pending', 'finance_approved');
     } else if (req.user.role === "Staff") {
-      conditions.push("s.user_user_id = ? AND ps.status = ?");
+      conditions.push("s.user_user_id = ? AND p.payslip_status = ?");
       params.push(req.user.userId, 'sent_to_staff');
     }
 
@@ -2093,7 +2099,14 @@ router.put("/loan-requests/:id/installments/:installmentId/pay", authenticateTok
 
 router.get("/payslips/:id", authenticateToken, allowRoles("Admin", "HR", "Finance", "Staff"), async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM payslip WHERE payslip_id = ? LIMIT 1', [req.params.id]);
+    const [rows] = await pool.query(
+      `SELECT p.*, p.payroll_id AS payslip_id, p.payslip_status AS status,
+              p.payslip_file_path AS file_path, p.payslip_generated_at AS generated_at,
+              p.payslip_sent_at AS sent_to_staff_at, s.email AS staff_email
+       FROM payroll p JOIN staff s ON p.staff_employee_id = s.employee_id
+       WHERE p.payroll_id = ? LIMIT 1`,
+      [req.params.id]
+    );
     if (!rows.length) return res.status(404).json({ message: "Payslip not found" });
     const payslip = rows[0];
     if (req.user.role === "Staff") {
@@ -2115,17 +2128,24 @@ router.get("/payslips/:id", authenticateToken, allowRoles("Admin", "HR", "Financ
 
 router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR", "Admin"), async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM payslip WHERE payslip_id = ? LIMIT 1', [req.params.id]);
+    const [rows] = await pool.query(
+      'SELECT payroll_id AS payslip_id, payslip_status AS status FROM payroll WHERE payroll_id = ? LIMIT 1',
+      [req.params.id]
+    );
     if (!rows.length) return res.status(404).json({ message: "Payslip not found" });
     const payslip = rows[0];
-    if (payslip.status !== 'draft') {
+    if (String(payslip.status).toLowerCase() !== 'draft') {
       return res.status(400).json({ message: "Only draft payslips can be sent to Finance" });
     }
-    await pool.query('UPDATE payslip SET status = ?, updated_at = NOW() WHERE payslip_id = ?',
+    await pool.query('UPDATE payroll SET payslip_status = ? WHERE payroll_id = ?',
       ['finance_pending', req.params.id]);
     try {
-      await pool.query('INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, ?, ?, ?)',
-        [`Sent payslip ${req.params.id} to Finance for approval`, 'HR', null, req.user.userId || null]);
+      await pool.query(
+        `INSERT INTO audit_logs
+           (action_description, activity_type, affected_record, user_id, status)
+         VALUES (?, 'Payroll', ?, ?, 'Success')`,
+        [`Sent payslip ${req.params.id} to Finance for approval`, String(req.params.id), req.user.userId || null]
+      );
     } catch(e) {}
     return res.json({ message: "Payslip sent to Finance for approval" });
   } catch (err) {
@@ -2135,19 +2155,26 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR", 
 
 router.put("/payslips/:id/send-to-staff", authenticateToken, allowRoles("HR", "Admin"), async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM payslip WHERE payslip_id = ? LIMIT 1', [req.params.id]);
+    const [rows] = await pool.query(
+      'SELECT payroll_id AS payslip_id, payslip_status AS status FROM payroll WHERE payroll_id = ? LIMIT 1',
+      [req.params.id]
+    );
     if (!rows.length) return res.status(404).json({ message: "Payslip not found" });
     const payslip = rows[0];
     if (payslip.status !== 'finance_approved') {
       return res.status(400).json({ message: "Payslip must be approved by Finance before sending to staff" });
     }
     await pool.query(
-      'UPDATE payslip SET status = ?, sent_to_staff_at = NOW(), updated_at = NOW() WHERE payslip_id = ?',
+      'UPDATE payroll SET payslip_status = ?, payslip_sent_at = NOW() WHERE payroll_id = ?',
       ['sent_to_staff', req.params.id]
     );
     try {
-      await pool.query('INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, ?, ?, ?)',
-        [`Sent payslip ${req.params.id} to staff`, 'HR', null, req.user.userId || null]);
+      await pool.query(
+        `INSERT INTO audit_logs
+           (action_description, activity_type, affected_record, user_id, status)
+         VALUES (?, 'Payroll', ?, ?, 'Success')`,
+        [`Sent payslip ${req.params.id} to staff`, String(req.params.id), req.user.userId || null]
+      );
     } catch(e) {}
     addAudit(req.user.email, `Sent payslip ${req.params.id} to staff`, "HR");
     return res.json({ message: "Payslip sent to staff successfully" });
@@ -2162,10 +2189,11 @@ router.get("/notifications", authenticateToken, allowRoles("HR", "Admin"), (_req
 router.get("/audit-log", authenticateToken, allowRoles("HR", "Admin"), async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT al.action, al.entity_type, al.created_at, u.name AS user_name
-       FROM audit_log al
-       LEFT JOIN user u ON al.user_user_id = u.user_id
-       WHERE al.entity_type IN ('HR', 'Payroll', 'Staff')
+      `SELECT al.action_description AS action, al.activity_type AS entity_type,
+              al.created_at, COALESCE(al.user_name, u.name, 'System') AS user_name
+       FROM audit_logs al
+       LEFT JOIN user u ON al.user_id = u.user_id
+       WHERE al.activity_type IN ('HR', 'Payroll', 'Staff')
        ORDER BY al.created_at DESC LIMIT 10`
     );
     return res.json(rows);
@@ -2179,20 +2207,10 @@ router.get("/staff/export/excel", authenticateToken, allowRoles("Admin", "HR"), 
   try {
     const ExcelJS = require("exceljs");
     const [rows] = await pool.query(
-      'SELECT employee_id, name, email, phone, department_id, hire_date, base_salary, status, race, religion, bank, account_no FROM staff LIMIT 5000'
+      `SELECT employee_id, name, email, phone, department_name, hire_date,
+              base_salary, status, race, religion, bank, account_no
+       FROM staff LIMIT 5000`
     );
-
-    // Look up department names
-    let departments = [];
-    try {
-      const [deptRows] = await pool.query("SELECT department_id, name FROM department");
-      departments = deptRows;
-    } catch (_e) { /* ignore if table doesn't exist */ }
-
-    function getDeptName(id) {
-      const dept = departments.find(d => d.department_id === id);
-      return dept ? dept.name : (id || "");
-    }
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Staff Records");
@@ -2218,7 +2236,7 @@ router.get("/staff/export/excel", authenticateToken, allowRoles("Admin", "HR"), 
         name: row.name || "",
         email: row.email || "",
         phone: row.phone || "",
-        department: getDeptName(row.department_id),
+        department: row.department_name || "",
         hire_date: row.hire_date ? new Date(row.hire_date).toLocaleDateString("en-SG") : "",
         base_salary: row.base_salary || "",
         status: row.status === 1 || row.status === "1" ? "Active" : "Inactive",
