@@ -26,10 +26,6 @@ async function startServer() {
     startReminderNotificationScheduler();
   });
 
-  // Secondary listener for Singpass callback (staging demo requires port 3080)
-  const { startCallbackServer } = require("./controllers/singpassController");
-  startCallbackServer();
-
   server.on("error", (error) => {
     if (error.code === "EADDRINUSE") {
       console.error(`Port ${port} is already in use. Stop the existing dev server or set a different PORT in server/.env.`);
