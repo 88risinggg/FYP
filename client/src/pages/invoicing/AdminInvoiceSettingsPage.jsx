@@ -4,18 +4,20 @@ import {
   ChevronDown,
   Circle,
   Clock3,
+  Eye,
   FileSpreadsheet,
   FileText,
   Hash,
-  ImageUp,
   Info,
   ListChecks,
+  LockKeyhole,
   Loader2,
-  Palette,
+  Mail,
+  Landmark,
   RotateCcw,
   Save,
+  Send,
   Settings2,
-  Upload,
   XCircle
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -23,11 +25,10 @@ import { Link, useLocation } from "react-router-dom";
 
 import {
   getInvoiceSettings,
-  updateInvoiceSettings,
-  uploadInvoiceLogo
+  previewInvoiceTemplate,
+  sendInvoiceSettingsTestEmail,
+  updateInvoiceSettings
 } from "../../services/adminInvoiceSettingsService.js";
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 const tabs = [
   { label: "General", slug: "general" },
@@ -58,6 +59,25 @@ const defaultForm = {
   separatorStyle: "",
   invoiceFormat: "",
   nextInvoiceNumber: 1,
+  companyName: "",
+  companyRegistrationNumber: "",
+  companyAddress: "",
+  registeredOfficeAddress: "",
+  financeEmail: "",
+  supportEmail: "",
+  bankAccountHolderName: "",
+  bankName: "",
+  bankAccountNumber: "",
+  bicSwift: "",
+  paynowIdentifier: "",
+  paymentReferenceInstruction: "",
+  payoutStatement: "",
+  computerGeneratedStatement: "",
+  senderName: "",
+  replyToEmail: "",
+  emailSubjectTemplate: "",
+  emailBodyTemplate: "",
+  attachPdfInvoice: true,
   general: {
     defaultCurrency: "",
     defaultLanguage: "",
@@ -87,8 +107,6 @@ const defaultForm = {
     preventDuplicateNumbers: true
   }
 };
-
-const supportedLogoTypes = ["image/png", "image/jpeg", "image/jpg"];
 
 const generalSelectFields = [
   { label: "Default Currency", section: "general", field: "defaultCurrency", optionsKey: "currencies" },
@@ -227,21 +245,6 @@ function formatDateTime(value) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(date);
-}
-
-function buildLogoUrl(value) {
-  if (!value) return "";
-  if (/^https?:\/\//i.test(value)) return value;
-  return `${apiBaseUrl}${value}`;
-}
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("Unable to read logo file."));
-    reader.readAsDataURL(file);
-  });
 }
 
 function titleFromKey(key) {
@@ -567,7 +570,6 @@ function NumberingTab({
   activity,
   lastSavedAt,
   saving,
-  uploading,
   onCancel,
   onRootFieldChange,
   onSeparatorChange,
@@ -656,16 +658,229 @@ function NumberingTab({
         <div className="rounded-xl border border-[#f0d2ca] bg-white/95 p-4 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
           <p className="mb-3 text-xs font-bold text-[#7b6660]">Last saved</p>
           <p className="mb-4 text-sm font-bold text-[#251E1F]">{formatDateTime(lastSavedAt)}</p>
-          <button type="submit" disabled={saving || uploading} className={buttonClasses.primary}>
+          <button type="submit" disabled={saving} className={buttonClasses.primary}>
             {saving ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}
             {saving ? "Saving..." : "Save & Publish Settings"}
           </button>
-          <button type="button" onClick={onCancel} disabled={saving || uploading} className={buttonClasses.secondary}>
+          <button type="button" onClick={onCancel} disabled={saving} className={buttonClasses.secondary}>
             <RotateCcw size={16} />
             Cancel
           </button>
         </div>
       </aside>
+    </div>
+  );
+}
+
+function TextSetting({ label, field, form, onChange, note, multiline = false, type = "text" }) {
+  const className = "w-full rounded-lg border border-[#ead3cc] bg-white px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/20";
+  return (
+    <Field label={label} note={note}>
+      {multiline ? (
+        <textarea rows={4} value={form[field] || ""} onChange={(event) => onChange(field, event.target.value)} className={className} />
+      ) : (
+        <input type={type} value={form[field] || ""} onChange={(event) => onChange(field, event.target.value)} className={className} />
+      )}
+    </Field>
+  );
+}
+
+function TabSaveButton({ saving }) {
+  return (
+    <div className="flex justify-end">
+      <button type="submit" disabled={saving} className="primary-button inline-flex items-center gap-2 px-5 py-3 text-sm font-bold disabled:opacity-60">
+        {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+        {saving ? "Saving..." : "Save Settings"}
+      </button>
+    </div>
+  );
+}
+
+function FixedTemplateTab({ form, saving }) {
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+
+  useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
+
+  useEffect(() => {
+    if (!previewUrl) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") closePreview();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [previewUrl]);
+
+  async function showPreview() {
+    setPreviewing(true);
+    setPreviewError("");
+    try {
+      const blob = await previewInvoiceTemplate(form);
+      setPreviewUrl((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return URL.createObjectURL(blob);
+      });
+    } catch (error) {
+      setPreviewError(error.message);
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  function closePreview() {
+    setPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return "";
+    });
+  }
+
+  return (
+    <div className="space-y-5">
+      <SettingsCard title="Approved Invoice Design" icon={LockKeyhole}>
+        <div className="rounded-xl border border-[#cfe8d9] bg-[#f5fbf7] p-5">
+          <p className="font-bold text-[#251E1F]">The invoice layout is fixed and approved.</p>
+          <p className="mt-2 text-sm leading-6 text-[#527260]">
+            PDFs always use the approved A4 design. Section positions, typography, navy and coral colours, item table, totals, payment information, and footer cannot be rearranged or replaced.
+          </p>
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          {["A4 portrait", "Fixed colours and font", "Required fields always shown"].map((value) => (
+            <div key={value} className="rounded-lg border border-[#ead3cc] bg-[#fff8f5] px-4 py-3 text-sm font-bold text-[#251E1F]">{value}</div>
+          ))}
+        </div>
+        <p className="mt-4 text-xs text-[#7b6660]">Company logo and company values remain dynamic; the HTML/CSS structure does not.</p>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button type="button" onClick={showPreview} disabled={previewing} className="primary-button inline-flex items-center gap-2 px-5 py-3 text-sm font-bold disabled:opacity-60">
+            {previewing ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
+            {previewing ? "Generating Preview..." : "Preview Invoice"}
+          </button>
+        </div>
+        {previewError ? <p className="mt-3 text-sm font-semibold text-rose-700">{previewError}</p> : null}
+      </SettingsCard>
+      <TabSaveButton saving={saving} />
+
+      {previewUrl ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-[#251E1F]/35 p-3 backdrop-blur-[2px] sm:p-6 lg:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="invoice-preview-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closePreview();
+          }}
+        >
+          <div className="flex h-[min(82vh,780px)] min-h-[520px] w-full max-w-[820px] flex-col overflow-hidden rounded-2xl border border-[#ead3cc] bg-[#fffaf8] shadow-[0_24px_70px_rgba(37,30,31,0.28)]">
+            <div className="h-1.5 shrink-0 bg-[#F38978]" />
+            <div className="flex items-center justify-between gap-4 border-b border-[#ead3cc] bg-white px-4 py-3 sm:px-5">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#fff1ed] text-[#F38978]">
+                  <FileText size={20} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 id="invoice-preview-title" className="truncate text-base font-bold text-[#251E1F] sm:text-lg">Invoice Preview</h3>
+                    <span className="hidden rounded-full bg-[#f5fbf7] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#527260] sm:inline">Draft</span>
+                  </div>
+                  <p className="truncate text-xs text-[#7b6660]">Approved A4 template · Preview only</p>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <a href={previewUrl} target="_blank" rel="noreferrer" className="hidden rounded-lg border border-[#ead3cc] bg-white px-3 py-2 text-xs font-bold text-[#251E1F] transition-colors hover:border-[#F38978] hover:bg-[#fff8f5] sm:inline-flex">
+                  Open in new tab
+                </a>
+                <button type="button" onClick={closePreview} autoFocus aria-label="Close invoice preview" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#ead3cc] bg-white text-[#7b6660] transition-colors hover:border-[#F38978] hover:bg-[#fff1ed] hover:text-[#F38978]">
+                  <XCircle size={19} />
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 bg-[#eee9e7] p-2 sm:p-4">
+              <iframe title="Invoice PDF preview" src={previewUrl} className="h-full w-full rounded-lg border border-[#d9cfcb] bg-white shadow-sm" />
+            </div>
+            <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[#ead3cc] bg-white px-4 py-3 sm:px-5">
+              <div className="flex items-start gap-2 text-xs text-[#7b6660]">
+                <Info size={14} className="mt-0.5 shrink-0 text-[#F38978]" />
+                <span>No invoice is created and the invoice number is not used.</span>
+              </div>
+              <button type="button" onClick={closePreview} className="shrink-0 rounded-lg bg-[#F38978] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#e87562]">
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PaymentSettingsTab({ form, onChange, saving }) {
+  return (
+    <div className="space-y-5">
+      <SettingsCard title="Bank Transfer & PayNow" icon={Landmark}>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <TextSetting label="Bank Account Holder" field="bankAccountHolderName" form={form} onChange={onChange} />
+          <TextSetting label="Bank Name" field="bankName" form={form} onChange={onChange} />
+          <TextSetting label="Bank Account Number" field="bankAccountNumber" form={form} onChange={onChange} />
+          <TextSetting label="BIC / SWIFT" field="bicSwift" form={form} onChange={onChange} />
+          <TextSetting label="PayNow Identifier" field="paynowIdentifier" form={form} onChange={onChange} />
+          <TextSetting label="Payment Reference Instruction" field="paymentReferenceInstruction" form={form} onChange={onChange} multiline />
+          <TextSetting label="Payout Statement" field="payoutStatement" form={form} onChange={onChange} multiline />
+          <TextSetting label="Computer-generated Statement" field="computerGeneratedStatement" form={form} onChange={onChange} multiline />
+        </div>
+      </SettingsCard>
+      <TabSaveButton saving={saving} />
+    </div>
+  );
+}
+
+function EmailSettingsTab({ form, onChange, saving }) {
+  const [recipient, setRecipient] = useState(form.replyToEmail || form.financeEmail || "");
+  const [testing, setTesting] = useState(false);
+  const [testMessage, setTestMessage] = useState("");
+
+  async function sendTest() {
+    setTesting(true);
+    setTestMessage("");
+    try {
+      const response = await sendInvoiceSettingsTestEmail(recipient);
+      setTestMessage(response.message || "Test email sent.");
+    } catch (error) {
+      setTestMessage(error.message);
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <SettingsCard title="Invoice Email" icon={Mail}>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <TextSetting label="Sender Name" field="senderName" form={form} onChange={onChange} />
+          <TextSetting label="Reply-to Email" field="replyToEmail" form={form} onChange={onChange} type="email" />
+          <TextSetting label="Support Email" field="supportEmail" form={form} onChange={onChange} type="email" />
+          <TextSetting label="Subject Template" field="emailSubjectTemplate" form={form} onChange={onChange} />
+          <div className="lg:col-span-2"><TextSetting label="Email Body" field="emailBodyTemplate" form={form} onChange={onChange} multiline note="Supported placeholders: {{invoice_number}}, {{customer_name}}, {{amount_due}}, {{due_date}}, {{company_name}}, {{online_view_url}}, {{payment_url}}" /></div>
+          <Toggle label="Attach PDF Invoice" note="Attach the fixed approved invoice PDF to outgoing invoice emails." checked={form.attachPdfInvoice !== false} onChange={(value) => onChange("attachPdfInvoice", value)} />
+        </div>
+        <div className="mt-5 rounded-xl border border-[#ead3cc] bg-[#fff8f5] p-4">
+          <p className="text-xs font-bold text-[#251E1F]">Send Test Email</p>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            <input type="email" value={recipient} onChange={(event) => setRecipient(event.target.value)} placeholder="recipient@example.com" className="min-w-0 flex-1 rounded-lg border border-[#ead3cc] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#F38978]" />
+            <button type="button" onClick={sendTest} disabled={testing || !recipient} className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#F38978] px-4 py-2.5 text-sm font-bold text-[#F38978] disabled:opacity-50">
+              {testing ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Test Email
+            </button>
+          </div>
+          {testMessage ? <p className="mt-2 text-xs text-[#6f5b55]">{testMessage}</p> : null}
+        </div>
+      </SettingsCard>
+      <TabSaveButton saving={saving} />
     </div>
   );
 }
@@ -678,16 +893,14 @@ function TabPlaceholder({ label }) {
   );
 }
 
-function ActionPanel({ saving, uploading, onCancel }) {
-  const disabled = saving || uploading;
-
+function ActionPanel({ saving, onCancel }) {
   return (
     <div className="rounded-xl border border-[#f0d2ca] bg-white/95 p-4 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
-      <button type="submit" disabled={disabled} className={buttonClasses.primary}>
+      <button type="submit" disabled={saving} className={buttonClasses.primary}>
         {saving ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}
         {saving ? "Saving..." : "Save & Publish Settings"}
       </button>
-      <button type="button" onClick={onCancel} disabled={disabled} className={buttonClasses.secondary}>
+      <button type="button" onClick={onCancel} disabled={saving} className={buttonClasses.secondary}>
         <RotateCcw size={16} />
         Cancel
       </button>
@@ -705,7 +918,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
   const [workflow, setWorkflow] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState([]);
 
@@ -715,7 +927,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
     ? "/admin/invoice-settings"
     : "/dashboard/invoicing/admin/invoice-settings";
 
-  const logoUrl = useMemo(() => buildLogoUrl(form.branding.companyLogoUrl), [form.branding.companyLogoUrl]);
   const numberingPreview = useMemo(() => {
     const startNumber = Number(form.nextInvoiceNumber) || 1;
     return Array.from({ length: 5 }, (_, index) => buildInvoiceNumber(form, startNumber + index));
@@ -854,53 +1065,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
     setMessage("Unsaved changes have been reset.");
   }
 
-  async function handleLogoChange(event) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    setMessage("");
-    setErrors([]);
-
-    if (!file) return;
-    if (!supportedLogoTypes.includes(file.type)) {
-      setErrors(["Logo must be a PNG, JPG, or JPEG image."]);
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      setErrors(["Logo file must be 2MB or smaller."]);
-      return;
-    }
-
-    setUploading(true);
-    try {
-      const dataUrl = await readFileAsDataUrl(file);
-      const data = await uploadInvoiceLogo({
-        fileName: file.name,
-        contentType: file.type,
-        dataUrl
-      });
-      const nextLogoUrl = data.companyLogoUrl || data.settings?.branding?.companyLogoUrl || "";
-      setForm((current) => ({
-        ...current,
-        branding: {
-          ...current.branding,
-          companyLogoUrl: nextLogoUrl
-        }
-      }));
-      setSavedForm((current) => ({
-        ...current,
-        branding: {
-          ...current.branding,
-          companyLogoUrl: nextLogoUrl
-        }
-      }));
-      setMessage(data.message || "Invoice logo uploaded.");
-    } catch (error) {
-      setErrors([error.message]);
-    } finally {
-      setUploading(false);
-    }
-  }
-
   if (loading) {
     return (
       <section className="-m-4 min-h-[calc(100vh-5rem)] bg-[#fff6f2] p-6 text-[#251E1F] sm:-m-6">
@@ -967,13 +1131,18 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
             activity={numberingActivity}
             lastSavedAt={savedForm.updatedAt}
             saving={saving}
-            uploading={uploading}
             onCancel={handleCancel}
             onRootFieldChange={setRootField}
             onSeparatorChange={handleSeparatorChange}
             onFormatChange={handleFormatChange}
             onSequenceRuleChange={setSequenceRule}
           />
+        ) : currentTab === "template" ? (
+          <FixedTemplateTab form={form} saving={saving} />
+        ) : currentTab === "email" ? (
+          <EmailSettingsTab form={form} onChange={setRootField} saving={saving} />
+        ) : currentTab === "payments" ? (
+          <PaymentSettingsTab form={form} onChange={setRootField} saving={saving} />
         ) : currentTab !== "general" ? (
           <TabPlaceholder label={currentTabConfig.label} />
         ) : (
@@ -1024,6 +1193,17 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
                 </div>
               </SettingsCard>
 
+              <SettingsCard title="Company Information" icon={Settings2}>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <TextSetting label="Company Name" field="companyName" form={form} onChange={setRootField} />
+                  <TextSetting label="Company Registration Number" field="companyRegistrationNumber" form={form} onChange={setRootField} />
+                  <TextSetting label="Finance Email" field="financeEmail" form={form} onChange={setRootField} type="email" />
+                  <TextSetting label="Support Email" field="supportEmail" form={form} onChange={setRootField} type="email" />
+                  <TextSetting label="Company Address" field="companyAddress" form={form} onChange={setRootField} multiline />
+                  <TextSetting label="Registered-office Address" field="registeredOfficeAddress" form={form} onChange={setRootField} multiline />
+                </div>
+              </SettingsCard>
+
               <SettingsCard title="Export Settings" icon={FileSpreadsheet}>
                 <div className="grid gap-4 lg:grid-cols-2">
                   {exportToggles.map((config) => (
@@ -1046,51 +1226,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
                 </div>
               </SettingsCard>
 
-              <SettingsCard title="Company Branding" icon={Palette}>
-                <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
-                  <div>
-                    <p className="text-xs font-bold text-[#251E1F]">Company Logo</p>
-                    <div className="mt-2 grid gap-4 sm:grid-cols-2">
-                      <label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#e2c6be] bg-[#fff8f5] p-5 text-center transition hover:border-[#F38978] hover:bg-[#fff0eb]">
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg,image/jpg"
-                          onChange={handleLogoChange}
-                          className="sr-only"
-                        />
-                        {uploading ? (
-                          <Loader2 size={24} className="animate-spin text-[#F38978]" />
-                        ) : (
-                          <Upload size={24} className="text-[#F38978]" />
-                        )}
-                        <span className="mt-3 rounded-lg border border-[#ead3cc] bg-white px-4 py-2 text-xs font-bold text-[#251E1F]">
-                          {uploading ? "Uploading..." : "Upload Logo"}
-                        </span>
-                        <span className="mt-2 text-xs text-[#7b6660]">PNG, JPG up to 2MB</span>
-                      </label>
-                      <div className="flex min-h-40 items-center justify-center rounded-xl border border-[#ead3cc] bg-white p-4">
-                        {logoUrl ? (
-                          <img src={logoUrl} alt="Uploaded company logo" className="max-h-28 max-w-full object-contain" />
-                        ) : (
-                          <div className="text-center text-[#8d7b76]">
-                            <ImageUp size={30} className="mx-auto text-[#F38978]" />
-                            <p className="mt-3 text-xs font-semibold">No logo uploaded</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <Toggle
-                      label="Show Company Details on Invoice"
-                      note="Controls whether your company name, address, logo, and contact details appear on generated invoices."
-                      checked={form.branding.showCompanyDetailsOnInvoice}
-                      onChange={(value) => setSectionField("branding", "showCompanyDetailsOnInvoice", value)}
-                    />
-                  </div>
-                </div>
-              </SettingsCard>
-
               <div className="flex items-start gap-3 rounded-xl border border-[#cfe8d9] bg-white/95 p-4 text-sm text-[#527260] shadow-[0_10px_28px_rgba(37,30,31,0.04)]">
                 <Info size={18} className="mt-0.5 shrink-0 text-[#F38978]" />
                 <p>
@@ -1102,7 +1237,7 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
             <aside className="space-y-5">
               <ConfigurationStatusPanel status={configurationStatus} />
               <WorkflowPanel workflow={workflow} />
-              <ActionPanel saving={saving} uploading={uploading} onCancel={handleCancel} />
+              <ActionPanel saving={saving} onCancel={handleCancel} />
             </aside>
           </div>
         )}

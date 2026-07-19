@@ -134,28 +134,44 @@ async function upsertNotificationSettings(userId, data) {
 // ─── Invoice Settings ───────────────────────────────────────────────────────
 
 async function getInvoiceSettings(userId) {
-  const [rows] = await pool.query(
-    "SELECT * FROM invoice_settings WHERE user_id = ?",
-    [userId]
-  );
-  return rows[0] || null;
+  const invoiceSettingsModel = require("./invoiceSettingsModel");
+  return invoiceSettingsModel.getInvoiceSettings();
 }
 
 async function upsertInvoiceSettings(userId, data) {
-  const fields = [
-    "invoice_prefix", "next_invoice_number", "default_due_days",
-    "default_currency", "tax_rate", "payment_terms", "auto_generate_pdf",
-    "auto_email_invoice", "late_payment_reminder", "invoice_footer",
-    "invoice_notes", "company_logo", "invoice_template"
-  ];
-  const values = fields.map((f) => data[f] ?? null);
-
-  await pool.query(
-    `INSERT INTO invoice_settings (user_id, ${fields.join(", ")})
-     VALUES (?, ${fields.map(() => "?").join(", ")})
-     ON DUPLICATE KEY UPDATE ${fields.map((f) => `${f} = VALUES(${f})`).join(", ")}`,
-    [userId, ...values]
-  );
+  const invoiceSettingsModel = require("./invoiceSettingsModel");
+  const current = (await invoiceSettingsModel.getInvoiceSettings()) || invoiceSettingsModel.defaultSettings;
+  const dueDays = Number(data.default_due_days ?? current.dueDays ?? 30);
+  await invoiceSettingsModel.saveInvoiceSettings({
+    ...current,
+    invoicePrefix: data.invoice_prefix ?? current.invoicePrefix,
+    nextInvoiceNumber: data.next_invoice_number ?? current.nextInvoiceNumber,
+    dueDays,
+    defaultCurrency: data.default_currency ?? current.defaultCurrency,
+    defaultTaxRate: data.tax_rate ?? current.defaultTaxRate,
+    paymentTerms: data.payment_terms ?? current.paymentTerms,
+    footerNote: data.invoice_footer ?? current.footerNote,
+    attachPdfInvoice: data.auto_email_invoice === undefined
+      ? current.attachPdfInvoice
+      : Boolean(data.auto_email_invoice),
+    general: {
+      ...current.general,
+      defaultCurrency: data.default_currency ?? current.general?.defaultCurrency,
+      paymentTerms: data.payment_terms ?? current.general?.paymentTerms
+    },
+    export: {
+      ...current.export,
+      pdfExportEnabled: data.auto_generate_pdf === undefined
+        ? current.export?.pdfExportEnabled
+        : Boolean(data.auto_generate_pdf),
+      pdfPaperSize: "A4"
+    },
+    branding: {
+      ...current.branding,
+      companyLogoUrl: data.company_logo ?? current.branding?.companyLogoUrl,
+      showCompanyDetailsOnInvoice: true
+    }
+  });
 }
 
 // ─── Payroll Settings ───────────────────────────────────────────────────────

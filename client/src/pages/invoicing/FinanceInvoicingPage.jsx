@@ -598,9 +598,9 @@ function InvoiceDetailsModal({ invoice, onClose }) {
   );
 }
 
-function InvoiceCreationModal({ customers, nextInvoiceId, onCancel, onCreated }) {
+function InvoiceCreationModal({ customers, nextInvoiceId, defaultDueDate: configuredDueDate, onCancel, onCreated }) {
   const today = toDateInputValue(new Date());
-  const defaultDueDate = toDateInputValue(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000));
+  const defaultDueDate = configuredDueDate || toDateInputValue(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000));
   const [form, setForm] = useState({
     customer_id: "",
     issue_date: today,
@@ -3448,6 +3448,7 @@ export default function FinanceInvoicingPage() {
   const [invoices, setInvoices] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [nextInvoiceId, setNextInvoiceId] = useState("");
+  const [defaultInvoiceDueDate, setDefaultInvoiceDueDate] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -3501,6 +3502,7 @@ export default function FinanceInvoicingPage() {
     setInvoices(invoiceResponse.invoices || []);
     setCustomers(customerDirectoryResponse.customers || customerResponse.customers || []);
     setNextInvoiceId(numberResponse.invoiceId || "INV-0001");
+    setDefaultInvoiceDueDate(numberResponse.defaultDueDate || "");
   }
 
   function handleGlobalSearch(query) {
@@ -3652,6 +3654,7 @@ export default function FinanceInvoicingPage() {
         <InvoiceCreationModal
           customers={displayCustomers}
           nextInvoiceId={nextInvoiceId}
+          defaultDueDate={defaultInvoiceDueDate}
           onCancel={() => setIsCreating(false)}
           onCreated={handleCreated}
         />

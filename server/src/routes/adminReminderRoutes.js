@@ -17,7 +17,7 @@ const {
   getValidationErrors,
   getValidationSummary
 } = require("../controllers/adminDashboardController");
-const { getSettings, postInvoiceLogo, putSettings } = require("../controllers/invoiceSettingsController");
+const { getSettings, postInvoiceLogo, postInvoicePreview, postTestInvoiceEmail, putSettings } = require("../controllers/invoiceSettingsController");
 const { authenticateToken, requireRole } = require("../middleware/authMiddleware");
 
 const router = express.Router();
@@ -33,6 +33,8 @@ router.get("/dashboard/validation-errors", getValidationErrors);
 router.get("/invoice-settings", getSettings);
 router.put("/invoice-settings", putSettings);
 router.post("/invoice-settings/logo", postInvoiceLogo);
+router.post("/invoice-settings/preview", postInvoicePreview);
+router.post("/invoice-settings/test-email", postTestInvoiceEmail);
 router.get("/reminder-settings", getReminderSettings);
 router.post("/reminder-settings", postReminderSetting);
 router.put("/reminder-settings/:id", putReminderSetting);

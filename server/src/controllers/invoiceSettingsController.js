@@ -3,6 +3,8 @@ const path = require("path");
 
 const {
   addNumberingActivity,
+  buildInvoiceNumber,
+  calculateDueDate,
   calculateConfigurationStatus,
   defaultSettings,
   getInvoiceSettings,
@@ -13,6 +15,8 @@ const {
   updateInvoiceLogo
 } = require("../models/invoiceSettingsModel");
 const { getClientIp, logAuditEvent } = require("../models/auditLogModel");
+const { sendInvoiceSettingsTestEmail } = require("../services/invoiceDeliveryService");
+const { generateInvoicePDF } = require("../services/pdfService");
 
 const uploadDirectory = path.join(__dirname, "..", "..", "uploads", "invoice-logos");
 
@@ -43,6 +47,25 @@ function normalizeSettings(body) {
     separatorStyle: String(body.separatorStyle || defaultSettings.separatorStyle).trim(),
     invoiceFormat: String(body.invoiceFormat || defaultSettings.invoiceFormat).trim(),
     nextInvoiceNumber: Number(body.nextInvoiceNumber),
+    companyName: String(body.companyName || "").trim(),
+    companyRegistrationNumber: String(body.companyRegistrationNumber || "").trim(),
+    companyAddress: String(body.companyAddress || "").trim(),
+    registeredOfficeAddress: String(body.registeredOfficeAddress || "").trim(),
+    financeEmail: String(body.financeEmail || "").trim(),
+    supportEmail: String(body.supportEmail || "").trim(),
+    bankAccountHolderName: String(body.bankAccountHolderName || "").trim(),
+    bankName: String(body.bankName || "").trim(),
+    bankAccountNumber: String(body.bankAccountNumber || "").trim(),
+    bicSwift: String(body.bicSwift || "").trim(),
+    paynowIdentifier: String(body.paynowIdentifier || "").trim(),
+    paymentReferenceInstruction: String(body.paymentReferenceInstruction || "").trim(),
+    payoutStatement: String(body.payoutStatement || "").trim(),
+    computerGeneratedStatement: String(body.computerGeneratedStatement || "").trim(),
+    senderName: String(body.senderName || "").trim(),
+    replyToEmail: String(body.replyToEmail || "").trim(),
+    emailSubjectTemplate: String(body.emailSubjectTemplate || "").trim(),
+    emailBodyTemplate: String(body.emailBodyTemplate || "").trim(),
+    attachPdfInvoice: body.attachPdfInvoice !== false,
     general: {
       ...defaultSettings.general,
       ...general,
@@ -61,15 +84,15 @@ function normalizeSettings(body) {
       ...exportSettings,
       pdfExportEnabled: Boolean(exportSettings.pdfExportEnabled),
       excelExportEnabled: Boolean(exportSettings.excelExportEnabled),
-      pdfPaperSize: String(exportSettings.pdfPaperSize || "").trim(),
+      pdfPaperSize: "A4",
       excelFormat: String(exportSettings.excelFormat || "").trim()
     },
     branding: {
       ...defaultSettings.branding,
       ...branding,
       companyLogoUrl: String(branding.companyLogoUrl || "").trim(),
-      brandColor: String(branding.brandColor || defaultSettings.branding.brandColor).trim(),
-      showCompanyDetailsOnInvoice: Boolean(branding.showCompanyDetailsOnInvoice)
+      brandColor: defaultSettings.branding.brandColor,
+      showCompanyDetailsOnInvoice: true
     },
     sequenceRules: {
       ...defaultSettings.sequenceRules,
@@ -140,6 +163,21 @@ function validateSettings(settings) {
   if (!Number.isInteger(Number(settings.nextInvoiceNumber)) || Number(settings.nextInvoiceNumber) < 1) {
     errors.push("Next invoice number must be 1 or higher.");
   }
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  [settings.financeEmail, settings.supportEmail, settings.replyToEmail]
+    .filter(Boolean)
+    .forEach((email) => {
+      if (!emailPattern.test(email)) errors.push(`Invalid email address: ${email}`);
+    });
+  const allowedPlaceholders = new Set([
+    "invoice_number", "customer_name", "amount_due", "due_date",
+    "company_name", "online_view_url", "payment_url"
+  ]);
+  [settings.emailSubjectTemplate, settings.emailBodyTemplate].forEach((template) => {
+    for (const match of String(template || "").matchAll(/\{\{([^}]+)\}\}/g)) {
+      if (!allowedPlaceholders.has(match[1])) errors.push(`Unsupported email placeholder: {{${match[1]}}}`);
+    }
+  });
   return errors;
 }
 
@@ -294,8 +332,57 @@ async function postInvoiceLogo(req, res) {
   }
 }
 
+async function postTestInvoiceEmail(req, res) {
+  const recipient = String(req.body.recipient || req.user?.email || "").trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+    return res.status(400).json({ message: "Enter a valid test-email recipient." });
+  }
+
+  try {
+    const result = await sendInvoiceSettingsTestEmail(recipient);
+    res.json({ message: `Test invoice email sent to ${recipient}.`, result });
+  } catch (error) {
+    handleSettingsError(error, res, "Unable to send the test invoice email.");
+  }
+}
+
+async function postInvoicePreview(req, res) {
+  try {
+    const settings = normalizeSettings(req.body);
+    const errors = validateSettings(settings);
+    if (errors.length > 0) {
+      return res.status(400).json({ message: errors[0], errors });
+    }
+
+    const issueDate = new Date();
+    const invoice = {
+      invoiceId: buildInvoiceNumber(settings, issueDate, settings.nextInvoiceNumber),
+      status: "Draft",
+      issue_date: issueDate.toISOString().slice(0, 10),
+      due_date: calculateDueDate(settings, issueDate),
+      total_amount: 188.5,
+      amount_paid: 25,
+      customer_name: "Sample Customer",
+      customer_email: "customer@example.com",
+      customer_address: "Sample customer address",
+      items: [
+        { description: "Professional service", quantity: 2, unit_price: 75, amount: 150 },
+        { description: "Administrative fee", quantity: 1, unit_price: 38.5, amount: 38.5 }
+      ]
+    };
+    const pdf = await generateInvoicePDF(invoice, { settings });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", 'inline; filename="invoice-template-preview.pdf"');
+    res.send(pdf);
+  } catch (error) {
+    handleSettingsError(error, res, "Unable to generate the invoice preview.");
+  }
+}
+
 module.exports = {
   getSettings,
   postInvoiceLogo,
+  postInvoicePreview,
+  postTestInvoiceEmail,
   putSettings
 };

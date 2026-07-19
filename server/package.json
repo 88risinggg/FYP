@@ -7,6 +7,8 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "db:invoice-upload-history": "node scripts/create-invoice-upload-history-tables.js",
+    "db:invoice-settings": "node scripts/create-canonical-invoice-settings.js",
+    "verify:invoice-pdf": "node scripts/verify-approved-invoice-pdf.js",
     "test": "jest --forceExit --detectOpenHandles",
     "test:coverage": "jest --forceExit --detectOpenHandles --coverage"
   },

@@ -30,10 +30,7 @@ const optionLists = {
     { value: "Due on Receipt", label: "Due on Receipt" }
   ],
   lateFeeTypes: [{ value: "percent", label: "%" }],
-  pdfPaperSizes: [
-    { value: "A4", label: "A4" },
-    { value: "A5", label: "A5" }
-  ],
+  pdfPaperSizes: [{ value: "A4", label: "A4 (fixed approved layout)" }],
   excelFormats: [{ value: "xlsx", label: ".xlsx" }],
   separatorStyles: [
     { value: "hyphen", label: "Hyphen (-)" },
@@ -74,8 +71,24 @@ const defaultSettings = {
   lateFeePercent: 0,
   gracePeriodDays: 0,
   companyName: "",
+  companyRegistrationNumber: "",
   companyAddress: "",
+  registeredOfficeAddress: "",
+  financeEmail: "",
   supportEmail: "",
+  bankAccountHolderName: "",
+  bankName: "",
+  bankAccountNumber: "",
+  bicSwift: "",
+  paynowIdentifier: "",
+  paymentReferenceInstruction: "Please include your invoice number as the payment reference.",
+  payoutStatement: "We will process payouts according to the agreed payment schedule.",
+  computerGeneratedStatement: "This is a computer-generated invoice and no signature is required.",
+  senderName: "",
+  replyToEmail: "",
+  emailSubjectTemplate: "Invoice {{invoice_number}} from {{company_name}}",
+  emailBodyTemplate: "Dear {{customer_name}},\n\nYour invoice {{invoice_number}} for {{amount_due}} is due on {{due_date}}.\n\nThank you,\n{{company_name}}",
+  attachPdfInvoice: true,
   footerNote: "Thank you for your business.",
   general: {
     defaultCurrency: "SGD",
@@ -142,8 +155,24 @@ const schemaColumns = {
   lock_numbering_after_sent: "TINYINT(1) NOT NULL DEFAULT 1",
   prevent_duplicate_numbers: "TINYINT(1) NOT NULL DEFAULT 1",
   company_name: "VARCHAR(255) NOT NULL DEFAULT ''",
+  company_registration_number: "VARCHAR(100) NOT NULL DEFAULT ''",
   company_address: "TEXT NULL",
+  registered_office_address: "TEXT NULL",
+  finance_email: "VARCHAR(255) NOT NULL DEFAULT ''",
   support_email: "VARCHAR(255) NOT NULL DEFAULT ''",
+  bank_account_holder_name: "VARCHAR(255) NOT NULL DEFAULT ''",
+  bank_name: "VARCHAR(255) NOT NULL DEFAULT ''",
+  bank_account_number: "VARCHAR(100) NOT NULL DEFAULT ''",
+  bic_swift: "VARCHAR(50) NOT NULL DEFAULT ''",
+  paynow_identifier: "VARCHAR(100) NOT NULL DEFAULT ''",
+  payment_reference_instruction: "TEXT NULL",
+  payout_statement: "TEXT NULL",
+  computer_generated_statement: "TEXT NULL",
+  sender_name: "VARCHAR(255) NOT NULL DEFAULT ''",
+  reply_to_email: "VARCHAR(255) NOT NULL DEFAULT ''",
+  email_subject_template: "VARCHAR(500) NOT NULL DEFAULT 'Invoice {{invoice_number}} from {{company_name}}'",
+  email_body_template: "TEXT NULL",
+  attach_pdf_invoice: "TINYINT(1) NOT NULL DEFAULT 1",
   footer_note: "TEXT NULL",
   created_at: "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
   updated_at: "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
@@ -252,8 +281,24 @@ function mapSettings(row) {
     lateFeePercent: numberValue(row.late_fee_percent, defaultSettings.lateFeePercent),
     gracePeriodDays: numberValue(row.grace_period_days, defaultSettings.gracePeriodDays),
     companyName: row.company_name || "",
+    companyRegistrationNumber: row.company_registration_number || "",
     companyAddress: row.company_address || "",
+    registeredOfficeAddress: row.registered_office_address || "",
+    financeEmail: row.finance_email || "",
     supportEmail: row.support_email || "",
+    bankAccountHolderName: row.bank_account_holder_name || "",
+    bankName: row.bank_name || "",
+    bankAccountNumber: row.bank_account_number || "",
+    bicSwift: row.bic_swift || "",
+    paynowIdentifier: row.paynow_identifier || "",
+    paymentReferenceInstruction: row.payment_reference_instruction || defaultSettings.paymentReferenceInstruction,
+    payoutStatement: row.payout_statement || defaultSettings.payoutStatement,
+    computerGeneratedStatement: row.computer_generated_statement || defaultSettings.computerGeneratedStatement,
+    senderName: row.sender_name || "",
+    replyToEmail: row.reply_to_email || "",
+    emailSubjectTemplate: row.email_subject_template || defaultSettings.emailSubjectTemplate,
+    emailBodyTemplate: row.email_body_template || defaultSettings.emailBodyTemplate,
+    attachPdfInvoice: boolValue(row.attach_pdf_invoice, defaultSettings.attachPdfInvoice),
     footerNote: row.footer_note || defaultSettings.footerNote,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -281,16 +326,13 @@ function mapSettings(row) {
     export: {
       pdfExportEnabled: boolValue(row.pdf_export_enabled, defaultSettings.export.pdfExportEnabled),
       excelExportEnabled: boolValue(row.excel_export_enabled, defaultSettings.export.excelExportEnabled),
-      pdfPaperSize: row.pdf_paper_size || defaultSettings.export.pdfPaperSize,
+      pdfPaperSize: "A4",
       excelFormat: row.excel_format || defaultSettings.export.excelFormat
     },
     branding: {
       companyLogoUrl: row.company_logo_url || "",
-      brandColor: row.brand_color || defaultSettings.branding.brandColor,
-      showCompanyDetailsOnInvoice: boolValue(
-        row.show_company_details_on_invoice,
-        defaultSettings.branding.showCompanyDetailsOnInvoice
-      )
+      brandColor: defaultSettings.branding.brandColor,
+      showCompanyDetailsOnInvoice: true
     },
     sequenceRules: {
       yearlyReset: boolValue(row.yearly_reset_enabled, defaultSettings.sequenceRules.yearlyReset),
@@ -346,18 +388,34 @@ function toDbRow(settings) {
     whatsapp_notifications_enabled: general.whatsappNotificationsEnabled ? 1 : 0,
     pdf_export_enabled: exportSettings.pdfExportEnabled ? 1 : 0,
     excel_export_enabled: exportSettings.excelExportEnabled ? 1 : 0,
-    pdf_paper_size: exportSettings.pdfPaperSize || defaultSettings.export.pdfPaperSize,
+    pdf_paper_size: "A4",
     excel_format: exportSettings.excelFormat || defaultSettings.export.excelFormat,
     company_logo_url: branding.companyLogoUrl || "",
-    brand_color: branding.brandColor || defaultSettings.branding.brandColor,
-    show_company_details_on_invoice: branding.showCompanyDetailsOnInvoice ? 1 : 0,
+    brand_color: defaultSettings.branding.brandColor,
+    show_company_details_on_invoice: 1,
     yearly_reset_enabled: sequenceRules.yearlyReset ? 1 : 0,
     manual_override_enabled: sequenceRules.allowManualOverride ? 1 : 0,
     lock_numbering_after_sent: sequenceRules.lockNumberingAfterSent ? 1 : 0,
     prevent_duplicate_numbers: sequenceRules.preventDuplicateNumbers ? 1 : 0,
     company_name: settings.companyName || defaultSettings.companyName,
+    company_registration_number: settings.companyRegistrationNumber || defaultSettings.companyRegistrationNumber,
     company_address: settings.companyAddress || defaultSettings.companyAddress,
+    registered_office_address: settings.registeredOfficeAddress || defaultSettings.registeredOfficeAddress,
+    finance_email: settings.financeEmail || defaultSettings.financeEmail,
     support_email: settings.supportEmail || defaultSettings.supportEmail,
+    bank_account_holder_name: settings.bankAccountHolderName || defaultSettings.bankAccountHolderName,
+    bank_name: settings.bankName || defaultSettings.bankName,
+    bank_account_number: settings.bankAccountNumber || defaultSettings.bankAccountNumber,
+    bic_swift: settings.bicSwift || defaultSettings.bicSwift,
+    paynow_identifier: settings.paynowIdentifier || defaultSettings.paynowIdentifier,
+    payment_reference_instruction: settings.paymentReferenceInstruction || defaultSettings.paymentReferenceInstruction,
+    payout_statement: settings.payoutStatement || defaultSettings.payoutStatement,
+    computer_generated_statement: settings.computerGeneratedStatement || defaultSettings.computerGeneratedStatement,
+    sender_name: settings.senderName || defaultSettings.senderName,
+    reply_to_email: settings.replyToEmail || defaultSettings.replyToEmail,
+    email_subject_template: settings.emailSubjectTemplate || defaultSettings.emailSubjectTemplate,
+    email_body_template: settings.emailBodyTemplate || defaultSettings.emailBodyTemplate,
+    attach_pdf_invoice: settings.attachPdfInvoice === false ? 0 : 1,
     footer_note: settings.footerNote || defaultSettings.footerNote
   };
 }
@@ -402,6 +460,59 @@ async function getInvoiceSettings() {
   } catch (error) {
     handleDatabaseShapeError(error);
   }
+}
+
+async function getInvoiceSettingsForUpdate(connection) {
+  const [rows] = await connection.execute(
+    "SELECT * FROM invoice_settings ORDER BY setting_id ASC LIMIT 1 FOR UPDATE"
+  );
+
+  if (rows[0]) return mapSettings(rows[0]);
+
+  const dbRow = toDbRow(defaultSettings);
+  const columns = Object.keys(dbRow);
+  const placeholders = columns.map(() => "?").join(", ");
+  const [result] = await connection.execute(
+    `INSERT INTO invoice_settings (${columns.join(", ")}) VALUES (${placeholders})`,
+    columns.map((column) => dbRow[column])
+  );
+  const [createdRows] = await connection.execute(
+    "SELECT * FROM invoice_settings WHERE setting_id = ? FOR UPDATE",
+    [result.insertId]
+  );
+  return mapSettings(createdRows[0]);
+}
+
+async function nextAvailableInvoiceNumber(connection, settings, date = new Date()) {
+  let sequence = Math.max(1, Number(settings.nextInvoiceNumber) || 1);
+
+  for (let attempt = 0; attempt < 10000; attempt += 1) {
+    const invoiceId = buildInvoiceNumber(settings, date, sequence);
+    const [rows] = await connection.execute(
+      "SELECT invoice_id FROM invoice WHERE invoiceId = ? LIMIT 1",
+      [invoiceId]
+    );
+    if (!rows.length) return { invoiceId, sequence };
+    sequence += 1;
+  }
+
+  throw new Error("Unable to find an available invoice number.");
+}
+
+async function previewNextInvoiceNumber(date = new Date()) {
+  const settings = (await getInvoiceSettings()) || defaultSettings;
+  const result = await nextAvailableInvoiceNumber(pool, settings, date);
+  return { ...result, settings };
+}
+
+async function reserveNextInvoiceNumber(connection, date = new Date()) {
+  const settings = await getInvoiceSettingsForUpdate(connection);
+  const result = await nextAvailableInvoiceNumber(connection, settings, date);
+  await connection.execute(
+    "UPDATE invoice_settings SET next_invoice_number = ? WHERE setting_id = ?",
+    [result.sequence + 1, settings.settingId]
+  );
+  return { ...result, settings };
 }
 
 async function saveInvoiceSettings(settings) {
@@ -502,10 +613,13 @@ module.exports = {
   calculateDueDate,
   defaultSettings,
   getInvoiceSettings,
+  getInvoiceSettingsForUpdate,
   invoiceStatusWorkflow,
   listNumberingActivity,
   missingInvoiceSettingsMessage,
   optionLists,
+  previewNextInvoiceNumber,
+  reserveNextInvoiceNumber,
   saveInvoiceSettings,
   updateInvoiceLogo
 };

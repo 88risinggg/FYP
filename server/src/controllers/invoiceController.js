@@ -10,6 +10,11 @@
 const { pool } = require("../config/db");
 const { assessInvoiceRisk } = require("../services/fraudDetectionService");
 const { sendInvoiceEmail } = require("../services/invoiceDeliveryService");
+const {
+  calculateDueDate,
+  previewNextInvoiceNumber,
+  reserveNextInvoiceNumber
+} = require("../models/invoiceSettingsModel");
 
 /** Set of valid invoice statuses used throughout the application. */
 const VALID_STATUSES = new Set(["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdue"]);
@@ -348,16 +353,12 @@ async function getCustomers(req, res) {
  */
 async function getNextInvoiceNumber(req, res) {
   try {
-    const [rows] = await pool.query(`
-      SELECT invoiceId
-      FROM invoice
-      WHERE invoiceId LIKE 'INV-%'
-      ORDER BY invoice_id DESC
-      LIMIT 1
-    `);
+    const preview = await previewNextInvoiceNumber();
 
     res.json({
-      invoiceId: buildNextInvoiceNumber(rows[0]?.invoiceId)
+      invoiceId: preview.invoiceId,
+      defaultDueDate: calculateDueDate(preview.settings),
+      paymentTerms: preview.settings.paymentTerms
     });
   } catch (error) {
     res.status(500).json({
@@ -392,16 +393,8 @@ async function createInvoice(req, res) {
   try {
     await connection.beginTransaction();
 
-    // Lock last invoice row to prevent duplicate numbers under concurrency
-    const [lastInvoiceRows] = await connection.query(`
-      SELECT invoiceId
-      FROM invoice
-      WHERE invoiceId LIKE 'INV-%'
-      ORDER BY invoice_id DESC
-      LIMIT 1
-      FOR UPDATE
-    `);
-    const invoiceId = buildNextInvoiceNumber(lastInvoiceRows[0]?.invoiceId);
+    // Lock and advance the canonical settings sequence in this invoice transaction.
+    const { invoiceId } = await reserveNextInvoiceNumber(connection, new Date(invoice.issue_date));
 
     // Insert invoice header
     const [invoiceResult] = await connection.query(
