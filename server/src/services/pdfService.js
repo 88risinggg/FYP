@@ -6,8 +6,26 @@
  * Includes Stripe QR code, PayNow QR code, and payment link for unpaid invoices.
  */
 
-const htmlPdf = require("html-pdf-node");
+const puppeteer = require("puppeteer-core");
 const { generateQRCode } = require("./qrCodeService");
+
+/**
+ * Get the Puppeteer browser executable path.
+ * Uses PUPPETEER_EXECUTABLE_PATH env var or common default locations.
+ */
+function getExecutablePath() {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  // Common Chrome/Chromium paths
+  if (process.platform === "win32") {
+    return "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+  }
+  if (process.platform === "darwin") {
+    return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+  }
+  return "/usr/bin/google-chrome";
+}
 
 /**
  * Generate a PDF buffer from an invoice object.
@@ -33,15 +51,24 @@ async function generateInvoicePDF(invoice, options = {}) {
     qrCodeDataUri
   });
 
-  const file = { content: html };
-  const pdfOptions = {
-    format: "A4",
-    margin: { top: "15mm", right: "15mm", bottom: "15mm", left: "15mm" },
-    printBackground: true
-  };
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath: getExecutablePath(),
+    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  });
 
-  const pdfBuffer = await htmlPdf.generatePdf(file, pdfOptions);
-  return pdfBuffer;
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      margin: { top: "15mm", right: "15mm", bottom: "15mm", left: "15mm" },
+      printBackground: true
+    });
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await browser.close();
+  }
 }
 
 /**

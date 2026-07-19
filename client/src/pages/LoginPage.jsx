@@ -16,7 +16,7 @@ import {
   Wallet,
   X
 } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "../services/motion.js";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { login } from "../services/authService.js";
@@ -59,18 +59,16 @@ export default function LoginPage() {
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
 
-  // Handle OAuth callback redirects (Singpass, Google)
+  // Handle OAuth callback redirects (Google)
   useEffect(() => {
-    const singpassToken = searchParams.get("singpass_token");
     const googleToken = searchParams.get("google_token");
     const userParam = searchParams.get("user");
     const oauthError = searchParams.get("error");
 
-    if ((singpassToken || googleToken) && userParam) {
+    if (googleToken && userParam) {
       try {
-        const token = singpassToken || googleToken;
         const user = JSON.parse(decodeURIComponent(userParam));
-        saveSession(token, user, true);
+        saveSession(googleToken, user, true);
         startHealthCheck();
         navigate("/module-selection", { replace: true });
       } catch (e) {
@@ -80,31 +78,11 @@ export default function LoginPage() {
       const errorMessages = {
         invalid_state: "Login session expired. Please try again.",
         google_denied: "Google login was cancelled.",
-        google_failed: "Google authentication failed. Please try again.",
-        singpass_failed: "Singpass authentication failed. Please try again."
+        google_failed: "Google authentication failed. Please try again."
       };
       setError(errorMessages[oauthError] || "Authentication failed. Please try again.");
     }
   }, [searchParams, navigate]);
-
-  async function handleSingpassLogin() {
-    setError("");
-    setIsLoading(true);
-    try {
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-      const response = await fetch(`${API_BASE}/api/auth/singpass/login`);
-      const data = await response.json();
-      if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
-      } else {
-        setError("Failed to initiate Singpass login.");
-      }
-    } catch (err) {
-      setError("Singpass service unavailable. Please try again later.");
-    } finally {
-      setIsLoading(false);
-    }
-  }
 
   async function handleGoogleLogin() {
     setError("");
@@ -695,26 +673,6 @@ export default function LoginPage() {
                   <span className="text-xs text-[#6f5b55]">or</span>
                   <div className="h-px flex-1 bg-white/800" />
                 </div>
-
-                <motion.button
-                  type="button"
-                  onClick={handleSingpassLogin}
-                  disabled={isLoading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#F4333D]/30 bg-[#F4333D]/10 px-4 py-3 text-sm font-semibold text-[#251E1F] transition hover:bg-[#F4333D]/20 disabled:cursor-not-allowed disabled:opacity-50"
-                  whileHover={!isLoading && !shouldReduceMotion ? { scale: 1.02 } : undefined}
-                  whileTap={!isLoading && !shouldReduceMotion ? { scale: 0.98 } : undefined}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect width="24" height="24" rx="4" fill="#F4333D"/>
-                    <path d="M7 8.5C7 7.67 7.67 7 8.5 7H11V10H8.5C7.67 10 7 9.33 7 8.5Z" fill="white"/>
-                    <path d="M13 7H15.5C16.33 7 17 7.67 17 8.5C17 9.33 16.33 10 15.5 10H13V7Z" fill="white"/>
-                    <path d="M7 12C7 11.17 7.67 10.5 8.5 10.5H11V13.5H8.5C7.67 13.5 7 12.83 7 12Z" fill="white"/>
-                    <path d="M13 10.5H15.5C16.33 10.5 17 11.17 17 12C17 12.83 16.33 13.5 15.5 13.5H13V10.5Z" fill="white"/>
-                    <path d="M7 15.5C7 14.67 7.67 14 8.5 14H11V17H8.5C7.67 17 7 16.33 7 15.5Z" fill="white"/>
-                    <path d="M13 14H15.5C16.33 14 17 14.67 17 15.5C17 16.33 16.33 17 15.5 17H13V14Z" fill="white"/>
-                  </svg>
-                  Log in with Singpass
-                </motion.button>
 
                 <motion.button
                   type="button"

@@ -26,7 +26,6 @@ import HRPublicHolidays from "./HRPublicHolidays.jsx";
 import HRReportsPage from "./HRReportsPage.jsx";
 import ClaimManagementPage from "./ClaimManagementPage.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
-import * as XLSX from "xlsx";
 
 const pageTitle = "Automated Payroll System – HR Payroll Upload & Payslip Generation";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -858,33 +857,30 @@ function StaffRecordsView() {
     currentPage * PAGE_SIZE
   );
 
-  function exportStaffCSV() {
-    const headers = [
-      "Employee Code", "Name", "Email", "Phone",
-      "Department", "Hire Date", "Base Salary",
-      "Status", "Race", "Religion", "Bank", "Account No"
-    ];
+  async function exportStaffCSV() {
+    try {
+      const session = getStoredSession();
+      const token = session?.token;
+      const response = await fetch(`${API_BASE_URL}/api/hr/staff/export/excel`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-    const rows = filteredStaff.map(s => [
-      s.employee_code || "",
-      s.name || "",
-      s.email || "",
-      s.phone || "",
-      getDeptName(s.department_id),
-      s.hire_date ? new Date(s.hire_date).toLocaleDateString("en-SG") : "",
-      s.base_salary || "",
-      s.status === 1 || s.status === '1' ? "Active" : "Inactive",
-      s.race || "",
-      s.religion || "",
-      s.bank || "",
-      s.account_no || ""
-    ]);
+      if (!response.ok) {
+        throw new Error("Export failed");
+      }
 
-    const wsData = [headers, ...rows];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Staff Records");
-    XLSX.writeFile(wb, `staff_records_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `staff_records_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Staff export failed:", err);
+    }
   }
 
   const registerRowRef = (key) => (node) => {

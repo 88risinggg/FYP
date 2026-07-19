@@ -218,6 +218,49 @@ async function exportFinancialReport(req, res) {
       FROM invoice
     `);
 
+    // Monthly revenue for chart
+    const [monthlyRows] = await pool.query(`
+      SELECT
+        DATE_FORMAT(issue_date, '%Y-%m') AS month,
+        COALESCE(SUM(total_amount), 0) AS revenue
+      FROM invoice
+      WHERE issue_date IS NOT NULL
+      GROUP BY DATE_FORMAT(issue_date, '%Y-%m')
+      ORDER BY month ASC
+      LIMIT 12
+    `);
+
+    // Aging receivables
+    const [agingRows] = await pool.query(`
+      SELECT
+        CASE
+          WHEN DATEDIFF(CURDATE(), due_date) <= 0 THEN 'Current'
+          WHEN DATEDIFF(CURDATE(), due_date) BETWEEN 1 AND 30 THEN '1-30 Days'
+          WHEN DATEDIFF(CURDATE(), due_date) BETWEEN 31 AND 60 THEN '31-60 Days'
+          ELSE '60+ Days'
+        END AS bucket,
+        COUNT(*) AS count,
+        COALESCE(SUM(total_amount), 0) AS total
+      FROM invoice WHERE status != 'Paid'
+      GROUP BY bucket
+      ORDER BY FIELD(bucket, 'Current', '1-30 Days', '31-60 Days', '60+ Days')
+    `);
+
+    // Status distribution
+    const [statusRows] = await pool.query(`
+      SELECT status, COUNT(*) AS count, COALESCE(SUM(total_amount), 0) AS total
+      FROM invoice GROUP BY status
+    `);
+
+    // Top customers
+    const [customerRows] = await pool.query(`
+      SELECT c.name, COALESCE(SUM(i.total_amount), 0) AS total
+      FROM customer c
+      LEFT JOIN invoice i ON i.customer_id = c.customer_id
+      GROUP BY c.customer_id, c.name
+      ORDER BY total DESC LIMIT 8
+    `);
+
     const s = summary[0] || {};
 
     res.json({
@@ -234,6 +277,22 @@ async function exportFinancialReport(req, res) {
         paidCount: Number(s.paid_count || 0),
         overdueCount: Number(s.overdue_count || 0)
       },
+      monthlyRevenue: monthlyRows.map((row) => ({
+        month: row.month,
+        revenue: toCurrency(row.revenue)
+      })),
+      agingReceivables: agingRows.map((row) => ({
+        bucket: row.bucket,
+        total: toCurrency(row.total)
+      })),
+      statusDistribution: statusRows.map((row) => ({
+        status: row.status,
+        total: toCurrency(row.total)
+      })),
+      topCustomers: customerRows.map((row) => ({
+        name: row.name,
+        total: toCurrency(row.total)
+      })),
       invoices: invoices.map((inv) => ({
         invoiceId: inv.invoiceId,
         customer: inv.customer_name,

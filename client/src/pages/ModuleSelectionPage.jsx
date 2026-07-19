@@ -1,4 +1,4 @@
-import { motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "../services/motion.js";
 import {
   ArrowRight,
   BadgeCheck,

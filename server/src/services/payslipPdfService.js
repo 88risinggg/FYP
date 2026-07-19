@@ -5,7 +5,23 @@
  * Uses html-pdf-node to render HTML to a PDF buffer.
  */
 
-const htmlPdf = require("html-pdf-node");
+const puppeteer = require("puppeteer-core");
+
+/**
+ * Get the Puppeteer browser executable path.
+ */
+function getExecutablePath() {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  if (process.platform === "win32") {
+    return "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+  }
+  if (process.platform === "darwin") {
+    return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+  }
+  return "/usr/bin/google-chrome";
+}
 
 /**
  * Generate a payslip PDF buffer from payslip data.
@@ -15,14 +31,25 @@ const htmlPdf = require("html-pdf-node");
  */
 async function generatePayslipPDF(payslip) {
   const html = buildPayslipHtml(payslip);
-  const file = { content: html };
-  const options = {
-    format: "A4",
-    margin: { top: "12mm", right: "12mm", bottom: "12mm", left: "12mm" },
-    printBackground: true
-  };
 
-  return await htmlPdf.generatePdf(file, options);
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath: getExecutablePath(),
+    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      margin: { top: "12mm", right: "12mm", bottom: "12mm", left: "12mm" },
+      printBackground: true
+    });
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await browser.close();
+  }
 }
 
 /**

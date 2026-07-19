@@ -1,10 +1,8 @@
-const cron = require("node-cron");
-
 const { pool } = require("../config/db");
 const { sendInvoiceEmail } = require("../services/invoiceDeliveryService");
 const { writeAuditLog, STATUS_AUDIT_PREFIX } = require("../controllers/invoiceController");
 
-const DEFAULT_CRON_EXPRESSION = process.env.INVOICE_SCHEDULER_CRON || "* * * * *";
+const DEFAULT_INTERVAL_MS = Number(process.env.INVOICE_SCHEDULER_INTERVAL_MS || 60000); // default 1 minute
 const DEFAULT_BATCH_SIZE = Number(process.env.INVOICE_SCHEDULER_BATCH_SIZE || 25);
 
 async function loadDueScheduledInvoices(limit = DEFAULT_BATCH_SIZE) {
@@ -155,12 +153,10 @@ function startInvoiceScheduler() {
     return null;
   }
 
-  const task = cron.schedule(DEFAULT_CRON_EXPRESSION, runInvoiceSchedulerOnce, {
-    timezone: process.env.INVOICE_SCHEDULER_TIMEZONE || "Asia/Singapore"
-  });
+  setInterval(runInvoiceSchedulerOnce, DEFAULT_INTERVAL_MS);
 
-  console.log(`Invoice scheduler running with cron expression "${DEFAULT_CRON_EXPRESSION}".`);
-  return task;
+  console.log(`Invoice scheduler running every ${DEFAULT_INTERVAL_MS / 1000}s.`);
+  return true;
 }
 
 module.exports = {

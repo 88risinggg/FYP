@@ -1,5 +1,3 @@
-const cron = require("node-cron");
-
 const {
   createReminderLog,
   findDueInvoicesForRule,
@@ -8,6 +6,9 @@ const {
 const { sendReminderEmail } = require("./emailService");
 
 let schedulerStarted = false;
+
+// Run every 60 seconds
+const SCHEDULER_INTERVAL_MS = 60 * 1000;
 
 function getTimeInTimezone(timezone) {
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -120,7 +121,7 @@ async function startReminderScheduler() {
   }
 
   schedulerStarted = true;
-  cron.schedule("* * * * *", async () => {
+  setInterval(async () => {
     try {
       const rules = await listReminderSettings();
       for (const rule of rules) {
@@ -131,7 +132,7 @@ async function startReminderScheduler() {
         console.error("Reminder scheduler skipped:", error.message);
       }
     }
-  });
+  }, SCHEDULER_INTERVAL_MS);
 
   return true;
 }

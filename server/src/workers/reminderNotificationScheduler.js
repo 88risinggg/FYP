@@ -1,7 +1,7 @@
 /**
  * Reminder Notification Scheduler
  *
- * Runs daily at 09:00 SGT to process automatic invoice payment reminders.
+ * Runs at regular intervals to process automatic invoice payment reminders.
  * Also runs once on server startup (with 10s delay).
  *
  * Schedule:
@@ -13,12 +13,14 @@
  * Reminders stop immediately once an invoice is paid.
  */
 
-const cron = require("node-cron");
 const { processAutomaticReminders } = require("../services/invoiceReminderService");
+
+// Run every 6 hours (covers morning and afternoon checks)
+const REMINDER_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Start the automatic reminder scheduler.
- * Runs daily at 09:00 Singapore time.
+ * Runs every 6 hours and once on startup.
  */
 function startReminderNotificationScheduler() {
   // Run on startup after a delay
@@ -33,29 +35,17 @@ function startReminderNotificationScheduler() {
     }
   }, 10000); // 10 second delay
 
-  // Schedule daily at 09:00 SGT
-  cron.schedule("0 9 * * *", async () => {
+  // Schedule every 6 hours
+  setInterval(async () => {
     try {
       const result = await processAutomaticReminders();
-      console.log(`[REMINDER SCHEDULER] Daily run: sent ${result.sent}, skipped ${result.skipped}.`);
+      console.log(`[REMINDER SCHEDULER] Periodic run: sent ${result.sent}, skipped ${result.skipped}.`);
     } catch (error) {
-      console.error("[REMINDER SCHEDULER] Daily run failed:", error.message);
+      console.error("[REMINDER SCHEDULER] Periodic run failed:", error.message);
     }
-  }, { timezone: "Asia/Singapore" });
+  }, REMINDER_INTERVAL_MS);
 
-  // Also run at 14:00 SGT for afternoon follow-ups (overdue only)
-  cron.schedule("0 14 * * *", async () => {
-    try {
-      const result = await processAutomaticReminders();
-      if (result.sent > 0) {
-        console.log(`[REMINDER SCHEDULER] Afternoon run: sent ${result.sent}.`);
-      }
-    } catch (error) {
-      console.error("[REMINDER SCHEDULER] Afternoon run failed:", error.message);
-    }
-  }, { timezone: "Asia/Singapore" });
-
-  console.log("[REMINDER SCHEDULER] Started. Running daily at 09:00 and 14:00 SGT.");
+  console.log("[REMINDER SCHEDULER] Started. Running every 6 hours.");
 }
 
 module.exports = { startReminderNotificationScheduler };

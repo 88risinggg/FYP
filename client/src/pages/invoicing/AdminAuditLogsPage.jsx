@@ -12,7 +12,7 @@ import {
   UserCog
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { motion } from "../../services/motion.js";
 
 import {
   exportAuditLogs,

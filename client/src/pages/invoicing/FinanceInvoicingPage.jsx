@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import * as XLSX from "xlsx";
 import {
   AlertCircle,
   Banknote,
@@ -2155,18 +2154,23 @@ async function parseSpreadsheetFile(file) {
   const fileName = file.name.toLowerCase();
 
   if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
-    const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
-    const firstSheetName = workbook.SheetNames[0];
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+    const token = localStorage.getItem("authToken");
 
-    if (!firstSheetName) {
-      return [];
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(`${API_BASE}/api/bulk-invoices/parse-excel`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to parse Excel file on server.");
     }
 
-    return XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], {
-      defval: "",
-      raw: false
-    });
+    return await response.json();
   }
 
   throw new Error(excelFileTypeError);
@@ -3025,40 +3029,110 @@ function ReportsView() {
           y = addMetricRow(doc, "Avg Commission Rate", `${data.summary.avgCommissionRate || 0}%`, y);
           y += 8;
 
-          // ─── Charts ───
-          // Capture all chart containers from the page
-          const chartContainers = document.querySelectorAll('[data-pdf-report-chart]');
-          if (chartContainers.length > 0) {
-            y = addSectionHeader(doc, "Charts & Analytics", y);
+          // ─── Charts (all 4 rendered as inline SVG for Puppeteer) ───
+          // Helper to build a bar chart SVG
+          function buildBarChartSvg(items, labelKey, valueKey) {
+            const maxVal = Math.max(...items.map(d => Number(d[valueKey] || 0)), 1);
+            const barH = 24;
+            const gap = 6;
+            const svgH = items.length * (barH + gap) + 10;
+            const labelW = 90;
+            const barAreaW = 380;
+            const bars = items.map((item, i) => {
+              const val = Number(item[valueKey] || 0);
+              const pct = Math.max((val / maxVal) * 100, 4);
+              const yPos = i * (barH + gap) + 5;
+              return `
+                <text x="0" y="${yPos + 16}" font-size="11" fill="#7b6660">${(item[labelKey] || "").substring(0, 14)}</text>
+                <rect x="${labelW}" y="${yPos + 2}" width="${(pct / 100) * barAreaW}" height="${barH - 4}" rx="4" fill="url(#barGrad)" />
+                <text x="${labelW + barAreaW + 10}" y="${yPos + 16}" font-size="11" fill="#251E1F" font-weight="600">$${Number(val).toLocaleString()}</text>
+              `;
+            }).join("");
+            return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 ${svgH}" style="width:100%;height:100%;">
+              <defs><linearGradient id="barGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#F38978"/><stop offset="100%" stop-color="#e77463"/></linearGradient></defs>
+              ${bars}
+            </svg>`;
+          }
+
+          // 1. Revenue Over Time (line chart)
+          const revenueData = data.monthlyRevenue || [];
+          if (revenueData.length > 0) {
+            y = addSectionHeader(doc, "Revenue Over Time", y);
             y += 4;
+            const chartWidth = 600;
+            const chartHeight = 200;
+            const maxVal = Math.max(...revenueData.map(d => Number(d.revenue || 0)), 1);
+            const svgPoints = revenueData.map((item, i) => {
+              const x = revenueData.length === 1 ? chartWidth / 2 : 40 + (i / (revenueData.length - 1)) * (chartWidth - 80);
+              const vy = chartHeight - (Number(item.revenue || 0) / maxVal) * (chartHeight - 40) - 25;
+              return { x, y: vy, month: item.month, revenue: item.revenue };
+            });
+            const polylinePoints = svgPoints.map(p => `${p.x},${p.y}`).join(" ");
+            const circles = svgPoints.map(p => `<circle cx="${p.x}" cy="${p.y}" r="5" fill="#e77463" />`).join("");
+            const labels = svgPoints.map(p => `<text x="${p.x}" y="${chartHeight - 5}" text-anchor="middle" fill="#7b6660" font-size="10">${p.month || ""}</text>`).join("");
+            const valueLabels = svgPoints.map(p => `<text x="${p.x}" y="${p.y - 10}" text-anchor="middle" fill="#251E1F" font-size="9" font-weight="600">$${Number(p.revenue || 0).toLocaleString()}</text>`).join("");
+            const lineChartSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${chartWidth} ${chartHeight}" style="width:100%;height:100%;">
+              <rect width="${chartWidth}" height="${chartHeight}" fill="white" rx="8" />
+              <polyline fill="none" stroke="#F38978" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="${polylinePoints}" />
+              ${circles}${labels}${valueLabels}
+            </svg>`;
+            doc.pages[doc.currentPage].push(
+              `<div style="position:absolute;left:${PAGE_MARGIN}mm;top:${y}mm;width:${CONTENT_WIDTH_A4}mm;height:65mm;border:1px solid #f0d2ca;border-radius:8px;overflow:hidden;background:white;">${lineChartSvg}</div>`
+            );
+            y += 70;
+          }
 
-            for (const container of chartContainers) {
-              const chartTitle = container.getAttribute('data-pdf-chart-title') || '';
-              const canvas = await captureElement(container, { scale: 2, backgroundColor: "#ffffff" });
+          // 2. Aging Receivables (bar chart)
+          const agingData = data.agingReceivables || [];
+          if (agingData.length > 0) {
+            y = addSectionHeader(doc, "Aging Receivables", y);
+            y += 4;
+            const agingSvg = buildBarChartSvg(agingData, "bucket", "total");
+            const agingH = Math.max(agingData.length * 7 + 5, 35);
+            doc.pages[doc.currentPage].push(
+              `<div style="position:absolute;left:${PAGE_MARGIN}mm;top:${y}mm;width:${CONTENT_WIDTH_A4}mm;height:${agingH}mm;border:1px solid #f0d2ca;border-radius:8px;overflow:hidden;background:white;padding:3mm;">${agingSvg}</div>`
+            );
+            y += agingH + 6;
+          }
 
-              // Check page break
-              const imgRatio = canvas.width / canvas.height;
-              const imgWidth = CONTENT_WIDTH_A4;
-              const imgHeight = imgWidth / imgRatio;
+          // Page break if needed
+          if (y > 220) {
+            addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+            doc.addPage();
+            pageCtx.pageNum++;
+            y = PAGE_MARGIN + 5;
+          }
 
-              if (y + imgHeight + 12 > 270) {
-                addPageFooter(doc, pageCtx.pageNum, null, timestamp);
-                doc.addPage();
-                pageCtx.pageNum++;
-                y = PAGE_MARGIN + 5;
-              }
+          // 3. Invoice Status Distribution (bar chart)
+          const statusData = data.statusDistribution || [];
+          if (statusData.length > 0) {
+            y = addSectionHeader(doc, "Invoice Status Distribution", y);
+            y += 4;
+            const statusSvg = buildBarChartSvg(statusData, "status", "total");
+            const statusH = Math.max(statusData.length * 7 + 5, 35);
+            doc.pages[doc.currentPage].push(
+              `<div style="position:absolute;left:${PAGE_MARGIN}mm;top:${y}mm;width:${CONTENT_WIDTH_A4}mm;height:${statusH}mm;border:1px solid #f0d2ca;border-radius:8px;overflow:hidden;background:white;padding:3mm;">${statusSvg}</div>`
+            );
+            y += statusH + 6;
+          }
 
-              if (chartTitle) {
-                doc.setFontSize(10);
-                doc.setFont("helvetica", "bold");
-                doc.setTextColor(...DARK_COLOR);
-                doc.text(chartTitle, PAGE_MARGIN, y);
-                y += 5;
-              }
-
-              y = addChartImage(doc, canvas, y, CONTENT_WIDTH_A4, 90, pageCtx);
-              y += 4;
+          // 4. Top Customer Revenue (bar chart)
+          const topCustData = data.topCustomers || [];
+          if (topCustData.length > 0) {
+            if (y > 200) {
+              addPageFooter(doc, pageCtx.pageNum, null, timestamp);
+              doc.addPage();
+              pageCtx.pageNum++;
+              y = PAGE_MARGIN + 5;
             }
+            y = addSectionHeader(doc, "Top Customer Revenue", y);
+            y += 4;
+            const custSvg = buildBarChartSvg(topCustData, "name", "total");
+            const custH = Math.max(topCustData.length * 7 + 5, 40);
+            doc.pages[doc.currentPage].push(
+              `<div style="position:absolute;left:${PAGE_MARGIN}mm;top:${y}mm;width:${CONTENT_WIDTH_A4}mm;height:${custH}mm;border:1px solid #f0d2ca;border-radius:8px;overflow:hidden;background:white;padding:3mm;">${custSvg}</div>`
+            );
+            y += custH + 6;
           }
 
           addPageFooter(doc, pageCtx.pageNum, null, timestamp);

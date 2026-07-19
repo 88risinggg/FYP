@@ -1,5 +1,4 @@
 const cors = require("cors");
-const compression = require("compression");
 const express = require("express");
 const path = require("path");
 require("dotenv").config();
@@ -27,7 +26,6 @@ const adminUserRoutes = require("./routes/adminUserRoutes");
 const adminRoleRoutes = require("./routes/adminRoleRoutes");
 const adminReminderRoutes = require("./routes/adminReminderRoutes");
 const adminAuditLogRoutes = require("./routes/adminAuditLogRoutes");
-const singpassRoutes = require("./routes/singpassRoutes");
 const googleAuthRoutes = require("./routes/googleAuthRoutes");
 const otpAuthRoutes = require("./routes/otpAuthRoutes");
 const publicRoutes = require("./routes/publicRoutes");
@@ -47,7 +45,6 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 app.use(cors({ origin: allowedOrigins }));
-app.use(compression());
 
 // Stripe webhook needs raw body for signature verification
 app.use("/api/payments/stripe/webhook", express.raw({ type: "application/json" }));
@@ -97,7 +94,6 @@ app.use("/api/admin/users", adminUserRoutes);
 app.use("/api/admin/roles", adminRoleRoutes);
 app.use("/api/admin/invoicing", adminReminderRoutes);
 app.use("/api/admin/invoicing/audit-logs", adminAuditLogRoutes);
-app.use("/api/auth/singpass", singpassRoutes);
 app.use("/api/auth/google", googleAuthRoutes);
 app.use("/api/auth/otp", otpAuthRoutes);
 

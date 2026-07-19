@@ -2174,4 +2174,75 @@ router.get("/audit-log", authenticateToken, allowRoles("HR", "Admin"), async (re
   }
 });
 
+// --- Staff Records Excel Export (server-side using ExcelJS) ---
+router.get("/staff/export/excel", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+  try {
+    const ExcelJS = require("exceljs");
+    const [rows] = await pool.query(
+      'SELECT employee_id, name, email, phone, department_id, hire_date, base_salary, status, race, religion, bank, account_no FROM staff LIMIT 5000'
+    );
+
+    // Look up department names
+    let departments = [];
+    try {
+      const [deptRows] = await pool.query("SELECT department_id, name FROM department");
+      departments = deptRows;
+    } catch (_e) { /* ignore if table doesn't exist */ }
+
+    function getDeptName(id) {
+      const dept = departments.find(d => d.department_id === id);
+      return dept ? dept.name : (id || "");
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Staff Records");
+
+    worksheet.columns = [
+      { header: "Employee ID", key: "employee_id", width: 15 },
+      { header: "Name", key: "name", width: 25 },
+      { header: "Email", key: "email", width: 30 },
+      { header: "Phone", key: "phone", width: 15 },
+      { header: "Department", key: "department", width: 20 },
+      { header: "Hire Date", key: "hire_date", width: 15 },
+      { header: "Base Salary", key: "base_salary", width: 15 },
+      { header: "Status", key: "status", width: 12 },
+      { header: "Race", key: "race", width: 15 },
+      { header: "Religion", key: "religion", width: 15 },
+      { header: "Bank", key: "bank", width: 20 },
+      { header: "Account No", key: "account_no", width: 20 }
+    ];
+
+    for (const row of rows) {
+      worksheet.addRow({
+        employee_id: row.employee_id || "",
+        name: row.name || "",
+        email: row.email || "",
+        phone: row.phone || "",
+        department: getDeptName(row.department_id),
+        hire_date: row.hire_date ? new Date(row.hire_date).toLocaleDateString("en-SG") : "",
+        base_salary: row.base_salary || "",
+        status: row.status === 1 || row.status === "1" ? "Active" : "Inactive",
+        race: row.race || "",
+        religion: row.religion || "",
+        bank: row.bank || "",
+        account_no: row.account_no || ""
+      });
+    }
+
+    // Style header row
+    worksheet.getRow(1).font = { bold: true };
+
+    const fileName = `staff_records_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error("[HR Export Excel]", err.message);
+    res.status(500).json({ message: "Failed to export staff records", error: err.message });
+  }
+});
+
 module.exports = router;
+
