@@ -192,10 +192,20 @@ async function sendReminderForInvoice(invoice, reminderType) {
 async function logReminder(invoice, reminderType, status, errorMessage) {
   try {
     await pool.query(
-      `INSERT INTO audit_logs (module, activity_type, action_description, affected_record, status, created_at, new_value)
-       VALUES ('Invoice', 'invoice_reminder', ?, ?, ?, NOW(), ?)`,
-      [`reminder:${reminderType}`, String(invoice.invoice_id), status,
-        JSON.stringify({ reminderType, customerEmail: invoice.customer_email, errorMessage })]
+      `INSERT INTO audit_logs (
+         module, activity_type, action_description, affected_record, status, created_at, new_value,
+         invoice_id, reminder_type, delivery_status, customer_email
+       ) VALUES ('Invoice', 'invoice_reminder', ?, ?, ?, NOW(), ?, ?, ?, ?, ?)`,
+      [
+        `reminder:${reminderType}`,
+        String(invoice.invoice_id),
+        status === "Sent" ? "Success" : "Failed",
+        JSON.stringify({ reminderType, customerEmail: invoice.customer_email, errorMessage }),
+        invoice.invoice_id,
+        reminderType,
+        status,
+        invoice.customer_email || null
+      ]
     );
   } catch (e) {
     // Table may not exist yet — will be created by migration
