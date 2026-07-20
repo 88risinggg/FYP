@@ -316,78 +316,74 @@ function StripePaymentSection({ invoice, settings, paymentUrl, qrCodeUrl }) {
   const secondary = settings.secondaryColor || "#ff5a52";
 
   const isPaid = ["Paid", "Cancelled", "Refunded"].includes(invoice.status || "");
-  // Don't show on paid invoices. If no URL yet, show a placeholder message.
   if (isPaid) return null;
 
   const hasUrl = Boolean(paymentUrl && paymentUrl.startsWith("http"));
 
   return (
-    <section style={{ breakInside: "avoid", borderBottom: "0.3mm solid #d8dce3", padding: "4mm 0" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "13mm 1fr", alignItems: "flex-start" }}>
-        {/* Card icon */}
-        <div style={{
-          width: "10mm", height: "10mm", display: "flex", alignItems: "center",
-          justifyContent: "center", borderRadius: "50%", background: secondary,
-          color: "white", flexShrink: 0, marginTop: "0.5mm"
-        }}>
+    <section style={{ breakInside: "avoid", borderBottom: "0.3mm solid #d8dce3", padding: "5mm 0" }}>
+      {/* Header row */}
+      <div style={{ display: "grid", gridTemplateColumns: "13mm 1fr", alignItems: "center", marginBottom: "3mm" }}>
+        <div style={{ width: "10mm", height: "10mm", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: secondary, color: "white" }}>
           <svg viewBox="0 0 24 24" width="5mm" height="5mm" fill="none" stroke="currentColor" strokeWidth="1.8">
             <rect x="1" y="4" width="22" height="16" rx="2" />
             <path d="M1 10h22" />
           </svg>
         </div>
+        <p style={{ margin: 0, fontSize: "7pt", fontWeight: 700, color: primary }}>
+          Pay Online — Card, Apple Pay, Google Pay or PayNow
+        </p>
+      </div>
 
-        <div style={{ display: "flex", alignItems: "flex-start", gap: "4mm" }}>
-          <div style={{ flex: 1 }}>
-            <p style={{ margin: "0 0 1mm", fontSize: "7pt", fontWeight: 700, color: primary }}>
-              Pay Online — Card, Apple Pay, Google Pay or PayNow
+      {hasUrl ? (
+        /* Content row: link + QR side by side */
+        <div style={{ display: "grid", gridTemplateColumns: qrCodeUrl ? "1fr 28mm" : "1fr", gap: "4mm", paddingLeft: "13mm" }}>
+          <div>
+            <p style={{ margin: "0 0 2mm", fontSize: "6.5pt", color: "#555" }}>
+              Click the link or scan the QR code to pay securely via Stripe:
             </p>
-            {hasUrl ? (
-              <>
-                <p style={{ margin: "0 0 2.5mm", fontSize: "6.5pt", color: "#555" }}>
-                  Scan the QR code or click the button below to pay securely.
-                </p>
-                <a
-                  href={paymentUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: "inline-block",
-                    padding: "2mm 5mm",
-                    background: secondary,
-                    color: "white",
-                    borderRadius: "1.5mm",
-                    fontSize: "7pt",
-                    fontWeight: 700,
-                    textDecoration: "none",
-                    marginBottom: "2mm",
-                  }}
-                >
-                  Pay Now →
-                </a>
-                <p style={{ margin: "1mm 0 0", fontSize: "5.5pt", color: "#888", wordBreak: "break-all", lineHeight: 1.4 }}>
-                  {paymentUrl}
-                </p>
-              </>
-            ) : (
-              <p style={{ margin: "0", fontSize: "6.5pt", color: "#888" }}>
-                Send this invoice to generate a payment link.
-              </p>
-            )}
+            {/* Big visible link box */}
+            <div style={{ border: "0.5mm solid " + secondary, borderRadius: "1.5mm", padding: "2mm 3mm", marginBottom: "2mm", background: "#fff8f5" }}>
+              <a
+                href={paymentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: "6.5pt", color: secondary, fontWeight: 700, wordBreak: "break-all", textDecoration: "underline" }}
+              >
+                {paymentUrl}
+              </a>
+            </div>
+            {/* Pay Now button */}
+            <a
+              href={paymentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-block",
+                padding: "2.5mm 6mm",
+                background: secondary,
+                color: "white",
+                borderRadius: "1.5mm",
+                fontSize: "7pt",
+                fontWeight: 700,
+                textDecoration: "none",
+              }}
+            >
+              Pay Now →
+            </a>
           </div>
-
-          {/* Stripe QR code — only when URL exists */}
-          {hasUrl && qrCodeUrl && (
-            <div style={{ textAlign: "center", flexShrink: 0 }}>
-              <img
-                src={qrCodeUrl}
-                alt="Scan to pay"
-                style={{ width: "22mm", height: "22mm", objectFit: "contain", display: "block", border: "0.3mm solid #e0e3e8" }}
-              />
+          {qrCodeUrl && (
+            <div style={{ textAlign: "center" }}>
+              <img src={qrCodeUrl} alt="Scan to pay" style={{ width: "26mm", height: "26mm", objectFit: "contain", display: "block", border: "0.3mm solid #e0e3e8" }} />
               <p style={{ margin: "1mm 0 0", fontSize: "5.5pt", color: "#777", textAlign: "center" }}>Scan to pay</p>
             </div>
           )}
         </div>
-      </div>
+      ) : (
+        <p style={{ paddingLeft: "13mm", margin: 0, fontSize: "6.5pt", color: "#999" }}>
+          Payment link will be generated when this invoice is sent.
+        </p>
+      )}
     </section>
   );
 }
@@ -526,7 +522,7 @@ export default function InvoiceTemplate({ invoice, settings, options = {} }) {
       <HeroSection invoice={invoice} settings={mergedSettings} />
       <ItemsTable invoice={invoice} settings={mergedSettings} />
       <SummarySection invoice={invoice} settings={mergedSettings} />
-      <StripePaymentSection invoice={invoice} settings={mergedSettings} paymentUrl={options.paymentUrl} qrCodeUrl={options.stripeQrCodeUrl || options.qrCodeUrl} />
+      <StripePaymentSection invoice={invoice} settings={mergedSettings} paymentUrl={options.paymentUrl} qrCodeUrl={options.stripeQrCodeUrl} />
       <PaymentSection settings={mergedSettings} qrCodeUrl={options.qrCodeUrl} />
       <SignatureSection settings={mergedSettings} signatureUrl={options.signatureUrl} stampUrl={options.stampUrl} />
       <FooterSection invoice={invoice} settings={mergedSettings} />
