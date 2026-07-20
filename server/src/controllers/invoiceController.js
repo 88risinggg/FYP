@@ -634,7 +634,7 @@ async function sendInvoice(req, res) {
     }
 
     // Send invoice via email service with PDF attachment
-    await sendInvoiceEmail(invoice, {
+    const delivery = await sendInvoiceEmail(invoice, {
       pdfBuffer,
       paymentUrl,
       qrCodeDataUri
@@ -646,7 +646,9 @@ async function sendInvoice(req, res) {
       [invoiceId]
     );
     await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}Sent`, "invoice", invoiceId, req.user?.userId);
-    await writeAuditLog(connection, "invoice_sent", "invoice", invoiceId, req.user?.userId);
+    await writeAuditLog(connection, "invoice_sent", "invoice", invoiceId, req.user?.userId, {
+      newValue: JSON.stringify({ ...delivery, emailType: "Invoice Issued", triggerSource: "Finance" })
+    });
 
     await connection.commit();
 
@@ -664,7 +666,7 @@ async function sendInvoice(req, res) {
   } catch (error) {
     await connection.rollback();
     await writeAuditLog(connection, "invoice_email_failed", "invoice", invoiceId, req.user?.userId, {
-      newValue: JSON.stringify({ message: error.message })
+      newValue: JSON.stringify({ emailType: "Invoice Issued", message: error.message, errorCode: error.code, triggerSource: "Finance" })
     });
     res.status(500).json({
       message: "Failed to send invoice.",

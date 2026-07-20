@@ -104,6 +104,8 @@ async function sendInvoiceEmail(invoice, options = {}) {
     return {
       provider: "console",
       deliveredAt: new Date().toISOString(),
+      recipientEmail: hydratedInvoice.customer_email,
+      subject: renderTemplate(settings.emailSubjectTemplate, templateValues(hydratedInvoice, settings, options)),
       message: "SMTP not configured. Email logged to console."
     };
   }
@@ -142,7 +144,13 @@ async function sendInvoiceEmail(invoice, options = {}) {
     attachments
   });
 
-  return { provider: "smtp", messageId: info.messageId, deliveredAt: new Date().toISOString() };
+  return {
+    provider: "smtp",
+    messageId: info.messageId,
+    deliveredAt: new Date().toISOString(),
+    recipientEmail: hydratedInvoice.customer_email,
+    subject: renderTemplate(settings.emailSubjectTemplate, values)
+  };
 }
 
 async function sendInvoiceSettingsTestEmail(recipient) {
@@ -175,16 +183,53 @@ async function sendPaymentReceiptEmail(invoice, transactionId) {
     <p>Transaction ID: <strong>${escapeHtml(transactionId)}</strong></p>
   </div>`;
 
-  if (!transporter) return { provider: "console", deliveredAt: new Date().toISOString() };
+  const subject = `Payment Receipt - Invoice ${invoice.invoiceId}`;
+  if (!transporter) {
+    const result = { provider: "console", deliveredAt: new Date().toISOString(), recipientEmail: invoice.customer_email, subject };
+    await logPaymentReceiptDelivery(invoice, transactionId, "Sent", result);
+    return result;
+  }
   const smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER;
-  const info = await transporter.sendMail({
-    from: settings.senderName ? `"${String(settings.senderName).replaceAll('"', "")}" <${smtpFrom}>` : smtpFrom,
-    replyTo: settings.replyToEmail || settings.financeEmail || undefined,
-    to: invoice.customer_email,
-    subject: `Payment Receipt - Invoice ${invoice.invoiceId}`,
-    html
-  });
-  return { provider: "smtp", messageId: info.messageId, deliveredAt: new Date().toISOString() };
+  try {
+    const info = await transporter.sendMail({
+      from: settings.senderName ? `"${String(settings.senderName).replaceAll('"', "")}" <${smtpFrom}>` : smtpFrom,
+      replyTo: settings.replyToEmail || settings.financeEmail || undefined,
+      to: invoice.customer_email,
+      subject,
+      html
+    });
+    const result = { provider: "smtp", messageId: info.messageId, deliveredAt: new Date().toISOString(), recipientEmail: invoice.customer_email, subject };
+    await logPaymentReceiptDelivery(invoice, transactionId, "Sent", result);
+    return result;
+  } catch (error) {
+    await logPaymentReceiptDelivery(invoice, transactionId, "Failed", { subject, errorMessage: error.message, errorCode: error.code });
+    throw error;
+  }
+}
+
+async function logPaymentReceiptDelivery(invoice, transactionId, deliveryStatus, metadata) {
+  try {
+    const { pool } = require("../config/db");
+    const [invoices] = await pool.query("SELECT invoice_id FROM invoice WHERE invoiceId = ? LIMIT 1", [invoice.invoiceId]);
+    const invoiceId = invoices[0]?.invoice_id;
+    await pool.query(
+      `INSERT INTO audit_logs (
+         module, activity_type, action_description, affected_record, status, created_at, new_value,
+         invoice_id, delivery_status, customer_email
+       ) VALUES ('Invoice', 'email_delivery', ?, ?, ?, NOW(), ?, ?, ?, ?)`,
+      [
+        deliveryStatus === "Sent" ? "payment_receipt_sent" : "payment_receipt_email_failed",
+        invoiceId ? String(invoiceId) : null,
+        deliveryStatus === "Sent" ? "Success" : "Failed",
+        JSON.stringify({ ...metadata, emailType: "Payment Receipt", transactionId, triggerSource: "System" }),
+        invoiceId || null,
+        deliveryStatus,
+        invoice.customer_email || null
+      ]
+    );
+  } catch (error) {
+    console.error("[EMAIL LOG] Unable to record payment receipt delivery:", error.message);
+  }
 }
 
 module.exports = {

@@ -57,7 +57,7 @@ async function sendScheduledInvoice(invoice) {
       return false;
     }
 
-    await sendInvoiceEmail(invoice);
+    const delivery = await sendInvoiceEmail(invoice);
 
     await connection.query(
       "UPDATE invoice SET status = 'Sent' WHERE invoice_id = ?",
@@ -75,13 +75,22 @@ async function sendScheduledInvoice(invoice) {
       "scheduled_invoice_sent",
       "invoice",
       invoice.invoice_id,
-      null
+      null,
+      { newValue: JSON.stringify({ ...delivery, emailType: "Invoice Issued", scheduledAt: invoice.scheduled_at, triggerSource: "System" }) }
     );
 
     await connection.commit();
     return true;
   } catch (error) {
     await connection.rollback();
+    await writeAuditLog(
+      connection,
+      "invoice_email_failed",
+      "invoice",
+      invoice.invoice_id,
+      null,
+      { newValue: JSON.stringify({ emailType: "Invoice Issued", message: error.message, errorCode: error.code, scheduledAt: invoice.scheduled_at, triggerSource: "System" }) }
+    );
     throw error;
   } finally {
     connection.release();
