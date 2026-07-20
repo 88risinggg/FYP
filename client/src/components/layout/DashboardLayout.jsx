@@ -92,6 +92,7 @@ export default function DashboardLayout({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [fetchedNotifications, setFetchedNotifications] = useState(null);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const classes = {
     page: "relative min-h-screen overflow-hidden bg-[#fff8f5] text-[#251E1F]",
     grid: "pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(243,137,120,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(243,137,120,0.08)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20",
@@ -129,6 +130,25 @@ export default function DashboardLayout({
     : displayNotifications.filter((notification) => !(
         notification.is_read === 1 || notification.is_read === true || notification.read
       )).length;
+
+  useEffect(() => {
+    if (!mobileSidebarOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setMobileSidebarOpen(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [mobileSidebarOpen]);
 
   // Admin, HR and payroll Finance pages use the shared notification API.
   // Pages with their own polling service can continue supplying notification props.
@@ -257,12 +277,27 @@ export default function DashboardLayout({
   return (
     <div className={classes.page}>
       <div className={classes.grid} />
-      <Sidebar sections={sidebarSections} title={sidebarTitle} theme={theme} />
+      {mobileSidebarOpen ? (
+        <button
+          type="button"
+          aria-label="Close sidebar"
+          className="fixed inset-0 z-20 bg-[#251E1F]/35 backdrop-blur-[2px] lg:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      ) : null}
+      <Sidebar
+        sections={sidebarSections}
+        title={sidebarTitle}
+        theme={theme}
+        mobileOpen={mobileSidebarOpen}
+        onClose={() => setMobileSidebarOpen(false)}
+      />
 
       <div className="relative z-10 lg:pl-64">
         <header className={classes.header}>
           <button
             type="button"
+            onClick={() => setMobileSidebarOpen(true)}
             className={classes.iconButton}
             aria-label="Open menu"
           >

@@ -73,12 +73,17 @@ const invoicingSidebarSections = [
       {
         label: "Invoice Settings",
         icon: Settings,
-        path: "/dashboard/invoicing/admin/invoice-settings"
-      },
-      {
-        label: "Template Preview",
-        icon: FileBarChart,
-        path: "/dashboard/invoicing/admin/template-preview"
+        path: "/dashboard/invoicing/admin/invoice-settings",
+        children: [
+          {
+            label: "Settings",
+            path: "/dashboard/invoicing/admin/invoice-settings"
+          },
+          {
+            label: "Template Preview",
+            path: "/dashboard/invoicing/admin/template-preview"
+          }
+        ]
       },
       {
         label: "Vaniday Mapping",
@@ -131,11 +136,8 @@ const routeHeadings = {
   "/dashboard/invoicing/admin/invoice-settings": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/general": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/numbering": "Invoice Settings",
-  "/dashboard/invoicing/admin/invoice-settings/template": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/email": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/payments": "Invoice Settings",
-  "/dashboard/invoicing/admin/invoice-settings/bulk-upload": "Invoice Settings",
-  "/dashboard/invoicing/admin/invoice-settings/automation": "Invoice Settings",
   "/dashboard/invoicing/admin/reminder-settings": "Reminder Settings",
   "/dashboard/invoicing/admin/template-preview": "Template Preview",
   "/dashboard/invoicing/admin/vaniday-mapping": "Vaniday Data Mapping",
@@ -240,7 +242,7 @@ export default function AdminInvoicingDashboard() {
           <h2 className="text-2xl font-semibold text-gray-900 mb-4">Vaniday Data Mapping</h2>
           <p className="text-sm text-gray-500 mb-6">Configure how Vaniday CSV columns map to invoice system fields. Finance users will use these mappings during import.</p>
           <div className="bg-white border rounded-xl p-6">
-            <p className="text-sm text-gray-600">Vaniday field mapping is configured in Invoice Settings → Automation tab.</p>
+            <p className="text-sm text-gray-600">Vaniday field mapping is configured here for Finance imports.</p>
           </div>
         </section>
       ) : isAuditLogs ? (

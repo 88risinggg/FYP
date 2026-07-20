@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { ChevronDown, ClipboardList, X } from "lucide-react";
 
+function isPathActive(pathname, item) {
+  if (!item?.path) return false;
+  if (item.end) return pathname === item.path;
+  return pathname === item.path || pathname.startsWith(`${item.path}/`);
+}
+
 export default function Sidebar({
   sections,
   title = "Automated Invoicing & Payroll System",
@@ -15,10 +21,13 @@ export default function Sidebar({
     aside: "fixed inset-y-0 left-0 z-30 w-64 border-r border-[#f2d5cc] bg-gradient-to-b from-[#fff8f5] via-[#fff3ee] to-[#FDD9CD]/80 shadow-2xl shadow-[#f2b5a9]/20 backdrop-blur-2xl transition-transform duration-300 lg:flex lg:flex-col",
     headerBorder: "border-[#f2d5cc]",
     logo: "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F38978]/15 text-[#F38978] ring-1 ring-[#F38978]/25 shadow-lg shadow-[#F38978]/15",
-    sectionLabel: "mb-3 px-2 text-[11px] font-semibold uppercase tracking-wide text-[#b06b5f]",
+    sectionLabel: "mb-3 px-2 text-[11px] font-bold uppercase tracking-wide text-[#b06b5f]",
+    itemBase: "flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[#F38978]/45",
     activeItem: "bg-[#FDD9CD] text-[#F38978] shadow-lg shadow-[#F38978]/10",
+    expandedItem: "bg-[#FDD9CD]/55 text-[#6f4f47]",
     inactiveItem: "text-[#6f4f47] hover:bg-[#FDD9CD]/45 hover:text-[#F38978] hover:shadow-lg hover:shadow-[#F38978]/10",
-    activeChild: "bg-white/70 text-[#F38978]",
+    childBase: "flex min-h-9 w-full items-center rounded-lg px-3 py-2 text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-[#F38978]/35",
+    activeChild: "bg-white/80 text-[#F38978] shadow-sm",
     inactiveChild: "text-[#6f4f47] hover:bg-white/60 hover:text-[#F38978]"
   };
 
@@ -27,7 +36,7 @@ export default function Sidebar({
 
     sections.forEach((section) => {
       section.items.forEach((item) => {
-        if (item.children?.some((child) => location.pathname === child.path)) {
+        if (item.children?.some((child) => isPathActive(location.pathname, child))) {
           activeGroups[item.label] = true;
         }
       });
@@ -59,7 +68,7 @@ export default function Sidebar({
         ) : null}
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-4 py-5">
+      <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pr-5">
         {sections.map((section, index) => (
           <div key={section.label || `section-${index}`} className="mb-7">
             <p className={classes.sectionLabel}>
@@ -69,29 +78,34 @@ export default function Sidebar({
               {section.items.map((item) => {
                 const Icon = item.icon;
                 const hasChildren = Boolean(item.children?.length);
-                const isChildActive = hasChildren && item.children.some((child) => location.pathname === child.path);
+                const isItemActive = isPathActive(location.pathname, item);
+                const isChildActive = hasChildren && item.children.some((child) => isPathActive(location.pathname, child));
 
                 if (hasChildren) {
                   const isOpen = openItems[item.label] || isChildActive;
+                  const parentClasses = isChildActive
+                    ? classes.expandedItem
+                    : isItemActive
+                      ? classes.activeItem
+                      : classes.inactiveItem;
 
                   return (
                     <div key={item.label}>
                       <button
                         type="button"
+                        aria-expanded={isOpen}
                         onClick={() => setOpenItems((current) => ({
                           ...current,
-                          [item.label]: !isOpen
+                          [item.label]: isChildActive ? true : !isOpen
                         }))}
-                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-                          isChildActive || location.pathname === item.path ? classes.activeItem : classes.inactiveItem
-                        }`}
+                        className={`${classes.itemBase} ${parentClasses}`}
                       >
-                        <Icon size={17} />
+                        <Icon size={17} className="shrink-0" />
                         <span className="min-w-0 flex-1 text-left">{item.label}</span>
-                        <ChevronDown size={15} className={isOpen ? "rotate-180 transition" : "transition"} />
+                        <ChevronDown size={15} className={`shrink-0 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`} />
                       </button>
 
-                      {isOpen ? (
+                      <div className={`overflow-hidden transition-[max-height,opacity] duration-150 ${isOpen ? "max-h-64 opacity-100" : "max-h-0 opacity-0"}`}>
                         <div className="mt-1 space-y-1 pl-8">
                           {item.children.map((child) => (
                             <NavLink
@@ -100,16 +114,16 @@ export default function Sidebar({
                               end={child.end}
                               onClick={onClose}
                               className={({ isActive }) =>
-                                `flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium transition ${
+                                `${classes.childBase} ${
                                   isActive ? classes.activeChild : classes.inactiveChild
                                 }`
                               }
                             >
-                              {child.label}
+                              <span className="min-w-0 truncate">{child.label}</span>
                             </NavLink>
                           ))}
                         </div>
-                      ) : null}
+                      </div>
                     </div>
                   );
                 }
@@ -121,13 +135,13 @@ export default function Sidebar({
                     end={item.end}
                     onClick={onClose}
                     className={({ isActive }) =>
-                      `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                      `${classes.itemBase} ${
                         isActive ? classes.activeItem : classes.inactiveItem
                       }`
                     }
                   >
-                    <Icon size={17} />
-                    {item.label}
+                    <Icon size={17} className="shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
                   </NavLink>
                 );
               })}
