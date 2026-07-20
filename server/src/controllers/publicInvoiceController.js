@@ -87,18 +87,38 @@ async function viewInvoice(req, res) {
       return res.status(403).json({ message: "This invoice is not available for viewing." });
     }
 
-    // Fetch line items
-    const [items] = await pool.query(
-      "SELECT description, quantity, unit_price, amount FROM invoice_item WHERE invoice_invoice_id = ?",
-      [invoice.invoice_id]
-    );
+    // Fetch line items — try invoice_item table first, fall back to items_json
+    let items = [];
+    try {
+      const [itemRows] = await pool.query(
+        "SELECT description, quantity, unit_price, amount FROM invoice_item WHERE invoice_invoice_id = ?",
+        [invoice.invoice_id]
+      );
+      items = itemRows;
+    } catch {
+      // invoice_item table doesn't exist — fall through to items_json
+    }
+
+    if (items.length === 0) {
+      try {
+        const [jsonRows] = await pool.query(
+          "SELECT items_json FROM invoice WHERE invoice_id = ?",
+          [invoice.invoice_id]
+        );
+        if (jsonRows[0]?.items_json) {
+          const parsed = typeof jsonRows[0].items_json === "string"
+            ? JSON.parse(jsonRows[0].items_json)
+            : jsonRows[0].items_json;
+          items = Array.isArray(parsed) ? parsed : [];
+        }
+      } catch { /* non-critical */ }
+    }
+
     invoice.items = items;
 
     const isPayable = !["Paid", "Cancelled", "Refunded"].includes(invoice.status);
 
-    // Generate a real Stripe Checkout URL if:
-    // - Invoice is payable AND
-    // - No payment_url stored, OR stored URL is a placeholder/expired
+    // Only generate a new Stripe session if payment_url is missing or a stale placeholder
     const isPlaceholderUrl = invoice.payment_url && (
       invoice.payment_url.includes("cs_test_sent_") ||
       invoice.payment_url.includes("cs_test_viewed_") ||
@@ -106,7 +126,12 @@ async function viewInvoice(req, res) {
       invoice.payment_url.includes("cs_test_paid_")
     );
 
-    if (isPayable && (!invoice.payment_url || isPlaceholderUrl)) {
+    // Has a real Stripe URL already — skip generation entirely
+    const hasRealUrl = invoice.payment_url &&
+      !isPlaceholderUrl &&
+      invoice.payment_url.startsWith("https://checkout.stripe.com");
+
+    if (isPayable && !hasRealUrl) {
       try {
         const { createCheckoutSession } = require("../services/stripeService");
         const stripeResult = await createCheckoutSession({
@@ -117,25 +142,28 @@ async function viewInvoice(req, res) {
         });
         invoice.payment_url = stripeResult.paymentUrl;
 
-        // Persist it so subsequent views don't regenerate
+        // Generate QR from new payment URL and persist both
+        const newQr = await generateQRCode(invoice.payment_url).catch(() => null);
         try {
           await pool.query(
-            "UPDATE invoice SET payment_url = ?, stripe_session_id = ? WHERE invoice_id = ?",
-            [stripeResult.paymentUrl, stripeResult.sessionId, invoice.invoice_id]
+            "UPDATE invoice SET payment_url = ?, stripe_session_id = ?, qr_code_url = ? WHERE invoice_id = ?",
+            [stripeResult.paymentUrl, stripeResult.sessionId, newQr, invoice.invoice_id]
           );
+          invoice.qr_code_url = newQr;
         } catch { /* non-critical if columns missing */ }
       } catch (stripeErr) {
         console.error("[PUBLIC VIEW] Stripe session generation failed:", stripeErr.message);
       }
     }
 
-    // Generate Stripe QR code from payment_url
-    let qrCodeDataUri = null;
-    if (isPayable && invoice.payment_url) {
-      try {
-        qrCodeDataUri = await generateQRCode(invoice.payment_url);
-      } catch (qrErr) {
-        console.error("[PUBLIC VIEW] QR code generation failed:", qrErr.message);
+    // Use stored QR code — only regenerate if missing (not on every view)
+    let qrCodeDataUri = invoice.qr_code_url || null;
+    if (isPayable && invoice.payment_url && !qrCodeDataUri) {
+      qrCodeDataUri = await generateQRCode(invoice.payment_url).catch(() => null);
+      // Persist for next time
+      if (qrCodeDataUri) {
+        pool.query("UPDATE invoice SET qr_code_url = ? WHERE invoice_id = ?",
+          [qrCodeDataUri, invoice.invoice_id]).catch(() => {});
       }
     }
 

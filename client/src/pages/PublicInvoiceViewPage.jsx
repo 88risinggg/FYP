@@ -113,7 +113,7 @@ export default function PublicInvoiceViewPage() {
           style={{
             boxShadow: "0 4px 25px rgba(0,0,0,0.1)",
             borderRadius: "4px",
-            overflow: "hidden",
+            overflow: "visible",
             marginBottom: "2rem",
           }}
         >
@@ -125,9 +125,11 @@ export default function PublicInvoiceViewPage() {
             settings={settings || {}}
             options={{
               logoUrl: settings?.companyLogoUrl || settings?.branding?.companyLogoUrl || "",
-              qrCodeUrl: invoice.qr_code || "",
+              qrCodeUrl: "",
+              stripeQrCodeUrl: invoice.qr_code || invoice.qr_code_url || "",
+              paymentUrl: invoice.payment_url ? String(invoice.payment_url) : "",
               signatureUrl: settings?.signatureUrl || "",
-              stampUrl: settings?.companyStampUrl || "",
+              stampUrl: settings?.companyStampUrl || settings?.branding?.companyStampUrl || "",
             }}
           />
         </div>

@@ -11,6 +11,26 @@
  * - STRIPE_WEBHOOK_SECRET (for webhook signature verification)
  */
 
+// In-memory throttle: prevent creating multiple sessions for the same invoice
+// within a short window (avoids Stripe rate-limit errors during rapid reloads)
+const SESSION_CACHE = new Map(); // invoiceId -> { paymentUrl, sessionId, expiresAt }
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function getCachedSession(invoiceId) {
+  const entry = SESSION_CACHE.get(String(invoiceId));
+  if (entry && entry.expiresAt > Date.now()) return entry;
+  SESSION_CACHE.delete(String(invoiceId));
+  return null;
+}
+
+function setCachedSession(invoiceId, paymentUrl, sessionId) {
+  SESSION_CACHE.set(String(invoiceId), {
+    paymentUrl,
+    sessionId,
+    expiresAt: Date.now() + CACHE_TTL_MS
+  });
+}
+
 /**
  * Create a Stripe Checkout Session for an invoice.
  * Supports multiple payment methods: Card, Apple Pay, Google Pay, etc.
@@ -20,25 +40,28 @@
  */
 async function createCheckoutSession(invoice) {
   const amount = Math.round(Number(invoice.total_amount) * 100); // cents
+  const cacheKey = invoice.invoiceId || String(invoice.invoice_id);
+
+  // Return cached session if still valid (avoids rate limit on rapid reloads)
+  const cached = getCachedSession(cacheKey);
+  if (cached) {
+    console.log(`[STRIPE] Reusing cached session for ${cacheKey}`);
+    return { provider: "stripe", paymentUrl: cached.paymentUrl, sessionId: cached.sessionId };
+  }
 
   if (!process.env.STRIPE_SECRET_KEY) {
     // Mock mode — return a test URL
     const mockUrl = `https://checkout.stripe.com/test/${Buffer.from(`${invoice.invoiceId}:${invoice.invoice_id}`).toString("base64url")}`;
     console.log(`[STRIPE] (Demo) Checkout for ${invoice.invoiceId}: ${mockUrl}`);
-    return {
-      provider: "mock",
-      paymentUrl: mockUrl,
-      sessionId: `cs_test_${Date.now()}`,
-      note: "STRIPE_SECRET_KEY not configured. Using mock URL."
-    };
+    const mockSession = { provider: "mock", paymentUrl: mockUrl, sessionId: `cs_test_${Date.now()}` };
+    setCachedSession(cacheKey, mockSession.paymentUrl, mockSession.sessionId);
+    return mockSession;
   }
 
   // Real Stripe
   const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
   const session = await stripe.checkout.sessions.create({
-    // Allow multiple payment methods: card (includes Apple Pay, Google Pay),
-    // and any other Stripe-supported methods available in the merchant's region
     payment_method_types: ["card", "paynow"],
     line_items: [{
       price_data: {
@@ -59,16 +82,13 @@ async function createCheckoutSession(invoice) {
       invoice_id: String(invoice.invoice_id),
       invoiceId: invoice.invoiceId
     },
-    expires_at: Math.floor(Date.now() / 1000) + 23 * 60 * 60 // 23 hours (Stripe requires < 24h from creation)
+    expires_at: Math.floor(Date.now() / 1000) + 23 * 60 * 60
   });
 
   console.log(`[STRIPE] Checkout session created for ${invoice.invoiceId}: ${session.id}`);
+  setCachedSession(cacheKey, session.url, session.id);
 
-  return {
-    provider: "stripe",
-    paymentUrl: session.url,
-    sessionId: session.id
-  };
+  return { provider: "stripe", paymentUrl: session.url, sessionId: session.id };
 }
 
 /**

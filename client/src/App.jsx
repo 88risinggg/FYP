@@ -4,6 +4,8 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import LoginPage from "./pages/LoginPage.jsx";
 import ModuleSelectionPage from "./pages/ModuleSelectionPage.jsx";
 import PublicInvoiceViewPage from "./pages/PublicInvoiceViewPage.jsx";
+import PaymentSuccessPage from "./pages/PaymentSuccessPage.jsx";
+import PaymentCancelledPage from "./pages/PaymentCancelledPage.jsx";
 import AdminInvoicingDashboard from "./pages/invoicing/AdminInvoicingDashboard.jsx";
 import FinanceInvoicingPage from "./pages/invoicing/FinanceInvoicingPage.jsx";
 import AdminPayrollPage from "./pages/payroll/AdminPayrollPage.jsx";
@@ -150,6 +152,8 @@ export default function App() {
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/invoice/view/:invoiceId" element={<PublicInvoiceViewPage />} />
+      <Route path="/payment/success" element={<PaymentSuccessPage />} />
+      <Route path="/payment/cancelled" element={<PaymentCancelledPage />} />
       <Route
         path="/module-selection"
         element={

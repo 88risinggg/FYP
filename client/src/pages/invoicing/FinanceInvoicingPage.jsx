@@ -388,8 +388,44 @@ function LoadingPanel({ label }) {
 }
 
 function InvoiceDetailsModal({ invoice, onClose }) {
+  const [stripeUrl, setStripeUrl] = useState(invoice?.payment_url || null);
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [stripeError, setStripeError] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  // Sync stripeUrl if invoice prop changes (e.g. after modal re-open)
+  useEffect(() => {
+    setStripeUrl(invoice?.payment_url || null);
+    setStripeError("");
+    setCopied(false);
+  }, [invoice?.invoice_id, invoice?.payment_url]);
+
   if (!invoice) {
     return null;
+  }
+
+  const isPaid = ["Paid", "Cancelled", "Refunded"].includes(invoice.status);
+  const isPendingReview = invoice.status === "Pending Review" || invoice.is_pending_review;
+
+  async function handleGenerateStripeLink() {
+    setIsGeneratingLink(true);
+    setStripeError("");
+    try {
+      const result = await createStripePaymentLink(invoice.invoice_id);
+      setStripeUrl(result.paymentUrl);
+    } catch (err) {
+      setStripeError(err.message || "Failed to generate payment link.");
+    } finally {
+      setIsGeneratingLink(false);
+    }
+  }
+
+  function handleCopyLink() {
+    if (!stripeUrl) return;
+    navigator.clipboard.writeText(stripeUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   }
 
   return (
@@ -472,7 +508,7 @@ function InvoiceDetailsModal({ invoice, onClose }) {
 
         {/* Payment Info - Compact Summary (only shown if there's payment activity) */}
         {(invoice.payment_status || invoice.transaction_id || invoice.payment_date) ? (
-          <div className="mx-5 mb-5 rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+          <div className="mx-5 mb-4 rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-[#F38978] mb-2 flex items-center gap-2">
               <CreditCard size={13} />
               Payment Information
@@ -513,6 +549,86 @@ function InvoiceDetailsModal({ invoice, onClose }) {
             </div>
           </div>
         ) : null}
+
+        {/* Stripe Payment Section — only for unpaid invoices */}
+        {!isPaid && !isPendingReview && (
+          <div className="mx-5 mb-5 rounded-xl border border-[#f0d2ca] bg-white p-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-[#F38978] mb-3 flex items-center gap-2">
+              <CreditCard size={13} />
+              Online Payment
+            </h3>
+
+            {stripeError && (
+              <div className="mb-3 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700">
+                {stripeError}
+              </div>
+            )}
+
+            {stripeUrl ? (
+              <div className="space-y-3">
+                {/* Payment link display + copy */}
+                <div className="flex items-center gap-2 rounded-lg border border-[#f0d2ca] bg-[#FDD9CD]/10 px-3 py-2">
+                  <LinkIcon size={13} className="shrink-0 text-[#7b6660]" />
+                  <p className="flex-1 truncate text-xs font-mono text-[#7b6660]">{stripeUrl}</p>
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-[#7b6660] hover:bg-[#FDD9CD]/40 hover:text-[#251E1F]"
+                    aria-label="Copy payment link"
+                  >
+                    {copied ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+
+                {/* Open in Stripe Checkout */}
+                <a
+                  href={stripeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#061e4b] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0a2d6b]"
+                >
+                  <CreditCard size={15} />
+                  Pay Now with Card / PayNow — {formatCurrency(invoice.total_amount)}
+                </a>
+
+                {/* Regenerate link */}
+                <button
+                  type="button"
+                  onClick={handleGenerateStripeLink}
+                  disabled={isGeneratingLink}
+                  className="w-full rounded-xl border border-[#f0d2ca] px-4 py-2.5 text-xs font-medium text-[#7b6660] transition hover:bg-[#FDD9CD]/30 hover:text-[#251E1F] disabled:opacity-50"
+                >
+                  {isGeneratingLink ? "Generating..." : "Regenerate Payment Link"}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-[#7b6660]">
+                  Generate a secure Stripe checkout link for this invoice. The customer can pay by credit / debit card or PayNow.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleGenerateStripeLink}
+                  disabled={isGeneratingLink}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#061e4b] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0a2d6b] disabled:opacity-60"
+                >
+                  {isGeneratingLink ? (
+                    <><Loader2 size={15} className="animate-spin" /> Generating Link...</>
+                  ) : (
+                    <><CreditCard size={15} /> Generate Stripe Payment Link</>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Paid confirmation banner */}
+        {isPaid && (
+          <div className="mx-5 mb-5 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-center">
+            <p className="text-sm font-semibold text-emerald-700">✅ This invoice has been paid.</p>
+          </div>
+        )}
       </div>
     </div>
   );
