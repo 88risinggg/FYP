@@ -148,39 +148,49 @@ export default function PublicInvoiceViewPage() {
           )}
 
           {invoice.status === "Paid" ? (
+            /* ── PAID ── */
             <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-center">
               <p className="text-sm font-semibold text-emerald-700">
                 ✅ This invoice has been paid{invoice.paid_date ? ` on ${formatDate(invoice.paid_date)}` : ""}. Thank you!
               </p>
             </div>
-          ) : invoice.status === "Pending Review" || invoice.is_pending_review ? (
-            <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 text-center">
-              <p className="text-sm font-semibold text-amber-700">
-                ⏳ Your payment is being reviewed. You will be notified once it is confirmed.
+
+          ) : invoice.payment_url ? (
+            /* ── STRIPE PAYMENT AVAILABLE ── show Pay Now button only, no manual form */
+            <div className="space-y-4">
+              <a
+                href={invoice.payment_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full rounded-xl bg-[#061e4b] px-6 py-4 text-center text-sm font-semibold text-white transition hover:bg-[#0a2d6b]"
+              >
+                Pay Now with Card / PayNow — {formatCurrency(invoice.total_amount)}
+              </a>
+              <p className="text-center text-xs text-[#7b6660]">
+                Payment is due by <strong className="text-[#251E1F]">{formatDate(invoice.due_date)}</strong>.
+                Powered by Stripe — secure card, Apple Pay, Google Pay & PayNow.
               </p>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Online Payment Button (Stripe) */}
-              {invoice.payment_url && (
-                <a
-                  href={invoice.payment_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full rounded-xl bg-[#061e4b] px-6 py-4 text-center text-sm font-semibold text-white transition hover:bg-[#0a2d6b]"
-                >
-                  Pay Online with Card / PayNow — {formatCurrency(invoice.total_amount)}
-                </a>
-              )}
 
-              {/* Manual Payment Option */}
+          ) : invoice.status === "Pending Review" || invoice.is_pending_review ? (
+            /* ── MANUAL PROOF PENDING REVIEW ── */
+            <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 text-center">
+              <p className="text-sm font-semibold text-amber-700">
+                ⏳ Your payment proof is being reviewed. You will be notified once it is confirmed.
+              </p>
+            </div>
+
+          ) : (
+            /* ── NO STRIPE URL: MANUAL BANK TRANSFER / PAYNOW ONLY ── */
+            <div className="space-y-4">
               <div className="rounded-xl border border-[#f0d2ca] bg-white p-4">
-                <p className="text-sm text-[#7b6660]">
-                  Already paid via Bank Transfer or PayNow?
+                <p className="text-sm font-semibold text-[#251E1F] mb-1">Pay via Bank Transfer or PayNow</p>
+                <p className="text-sm text-[#7b6660] mb-3">
+                  Transfer the payment using the bank details on the invoice, then submit your proof below.
                 </p>
                 <button
                   onClick={() => setShowPaymentForm(!showPaymentForm)}
-                  className="mt-2 rounded-lg bg-[#F38978] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#e07868]"
+                  className="rounded-lg bg-[#F38978] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#e07868]"
                 >
                   {showPaymentForm ? "Cancel" : "Submit Payment Proof"}
                 </button>

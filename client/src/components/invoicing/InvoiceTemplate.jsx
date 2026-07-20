@@ -315,6 +315,7 @@ function StripePaymentSection({ invoice, settings, paymentUrl, qrCodeUrl }) {
   const primary = settings.primaryColor || "#061e4b";
   const secondary = settings.secondaryColor || "#ff5a52";
 
+  // Only hide for completed/cancelled — Pending Review can still pay via Stripe
   const isPaid = ["Paid", "Cancelled", "Refunded"].includes(invoice.status || "");
   if (isPaid) return null;
 
