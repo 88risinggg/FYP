@@ -2428,10 +2428,8 @@ function PaymentsView() {
   const [error, setError] = useState("");
   const [paymentLink, setPaymentLink] = useState("");
 
-  // Use demo data as fallback when the database is empty
-  const displayWorkspace = workspace.outstandingInvoices.length === 0 && workspace.payments.length === 0 && !isLoading
-    ? DEMO_PAYMENTS_WORKSPACE
-    : workspace;
+  // Use real data only
+  const displayWorkspace = workspace;
   const outstandingTotal = displayWorkspace.outstandingInvoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
 
   async function loadPayments() {
@@ -2749,7 +2747,7 @@ function FraudDetectionView() {
   const invoices = dashboard?.invoices || [];
 
   // Use demo data as fallback when the database returns empty results
-  const displayDashboard = dashboard && dashboard.invoices && dashboard.invoices.length > 0 ? dashboard : (!isLoading ? DEMO_FRAUD_DASHBOARD : dashboard);
+  const displayDashboard = dashboard || { invoices: [], summary: {}, riskDistribution: [], trends: [] };
   const displaySummary = displayDashboard?.summary || {};
   const displayInvoices = displayDashboard?.invoices || [];
 
@@ -3378,9 +3376,9 @@ export default function FinanceInvoicingPage() {
   const [notificationBadgeCount, setNotificationBadgeCount] = useState(0);
   const stopPollingRef = useRef(null);
 
-  // Use demo data as fallback when database is empty
-  const displayInvoices = invoices.length === 0 && !isLoading ? DEMO_INVOICES : invoices;
-  const displayCustomers = customers.length === 0 && !isLoading ? DEMO_CUSTOMERS : customers;
+  // Use real data only — no demo fallback
+  const displayInvoices = invoices;
+  const displayCustomers = customers;
 
   const activeView = useMemo(() => {
     if (location.pathname.endsWith("/customers")) {
