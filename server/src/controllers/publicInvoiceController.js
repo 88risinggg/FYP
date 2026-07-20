@@ -154,8 +154,8 @@ async function viewInvoice(req, res) {
 
       try {
         await pool.query(
-          `INSERT INTO audit_logs (user_id, activity_type, action_description, affected_record, status, created_at, ip_address, device_info)
-           VALUES (NULL, 'invoice', 'invoice_status:Viewed', ?, 'Success', NOW(), ?, ?)`,
+          `INSERT INTO audit_logs (user_id, module, activity_type, action_description, affected_record, status, created_at, ip_address, device_info)
+           VALUES (NULL, 'Invoice', 'invoice', 'invoice_status:Viewed', ?, 'Success', NOW(), ?, ?)`,
           [String(invoice.invoice_id), ipAddress, deviceInfo]
         );
       } catch { /* non-critical */ }
@@ -166,9 +166,9 @@ async function viewInvoice(req, res) {
     // Record the view event in audit_logs (with view-specific columns)
     try {
       await pool.query(
-        `INSERT INTO audit_logs (user_id, activity_type, action_description, affected_record, status,
+        `INSERT INTO audit_logs (user_id, module, activity_type, action_description, affected_record, status,
            created_at, ip_address, device_info, invoice_id, view_ip_address, view_user_agent)
-         VALUES (NULL, 'invoice_view', 'Invoice viewed', ?, 'Success', NOW(), ?, ?, ?, ?, ?)`,
+         VALUES (NULL, 'Invoice', 'invoice_view', 'Invoice viewed', ?, 'Success', NOW(), ?, ?, ?, ?, ?)`,
         [String(invoice.invoice_id), ipAddress, deviceInfo, invoice.invoice_id, ipAddress, userAgent]
       );
     } catch { /* non-critical */ }

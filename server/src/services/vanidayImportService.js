@@ -678,8 +678,8 @@ async function processVanidayImport(validationResult, userId) {
       // Step 9: Audit log
       try {
         await connection.query(
-          `INSERT INTO audit_logs (user_id, activity_type, action_description, affected_record, status, created_at, previous_value, new_value)
-           VALUES (?, 'invoice', ?, ?, 'Success', NOW(), NULL, ?)`,
+          `INSERT INTO audit_logs (user_id, module, activity_type, action_description, affected_record, status, created_at, previous_value, new_value)
+           VALUES (?, 'Invoice', 'invoice', ?, ?, 'Success', NOW(), NULL, ?)`,
           [userId, `vaniday_import:${invoiceStatus}`, String(invoicePk), JSON.stringify({ orderId, shopTitle: primaryRecord.shopTitle, amount: totalAmount })]
         );
       } catch { /* audit_logs may have different schema */ }

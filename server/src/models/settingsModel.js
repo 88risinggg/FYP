@@ -369,8 +369,8 @@ async function createSettingsAuditLog(userId, data) {
   const userName = userRows[0]?.name || "Unknown";
 
   await pool.query(
-    `INSERT INTO audit_logs (user_id, user_name, activity_type, action_description, affected_record, status, ip_address, device_info, created_at)
-     VALUES (?, ?, 'settings', ?, ?, 'success', ?, ?, NOW())`,
+    `INSERT INTO audit_logs (user_id, user_name, module, activity_type, action_description, affected_record, status, ip_address, device_info, created_at)
+     VALUES (?, ?, 'Settings', 'settings', ?, ?, 'success', ?, ?, NOW())`,
     [userId, userName, data.action, data.module || null, data.ip_address || null, data.device || null]
   );
 }

@@ -113,8 +113,8 @@ async function processImport(req, res) {
     // Audit log for the batch
     try {
       await pool.query(
-        `INSERT INTO audit_logs (user_id, activity_type, action_description, affected_record, status, created_at, new_value)
-         VALUES (?, 'vaniday_import', ?, ?, 'Success', NOW(), ?)`,
+        `INSERT INTO audit_logs (user_id, module, activity_type, action_description, affected_record, status, created_at, new_value)
+         VALUES (?, 'Invoice', 'vaniday_import', ?, ?, 'Success', NOW(), ?)`,
         [
           req.user?.userId,
           `Vaniday batch import: ${result.totalCreated} invoices created`,

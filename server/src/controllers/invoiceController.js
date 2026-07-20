@@ -94,8 +94,8 @@ function toOperationalInvoiceStatus(rowStatus, auditStatus) {
 async function writeAuditLog(connection, action, entityType, entityId, userId, extra = {}) {
   try {
     await connection.query(
-      `INSERT INTO audit_logs (user_id, activity_type, action_description, affected_record, status, created_at, previous_value, new_value, ip_address, device_info)
-       VALUES (?, ?, ?, ?, 'Success', NOW(), ?, ?, ?, ?)`,
+      `INSERT INTO audit_logs (user_id, module, activity_type, action_description, affected_record, status, created_at, previous_value, new_value, ip_address, device_info)
+       VALUES (?, 'Invoice', ?, ?, ?, 'Success', NOW(), ?, ?, ?, ?)`,
       [
         userId || null,
         entityType,

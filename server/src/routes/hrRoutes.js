@@ -274,8 +274,8 @@ router.put("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res
       try {
         await pool.query(
           `INSERT INTO audit_logs
-             (action_description, activity_type, affected_record, user_id, status)
-           VALUES (?, ?, ?, ?, 'Success')`,
+             (module, action_description, activity_type, affected_record, user_id, status)
+           VALUES ('HR', ?, ?, ?, ?, 'Success')`,
           [`Updated staff record ${id}`, 'HR', String(id), req.user.userId || null]
         );
       } catch (_e) { /* ignore audit errors */ }
@@ -304,8 +304,8 @@ router.delete("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, 
       try {
         await pool.query(
           `INSERT INTO audit_logs
-             (action_description, activity_type, affected_record, user_id, status)
-           VALUES (?, ?, ?, ?, 'Success')`,
+             (module, action_description, activity_type, affected_record, user_id, status)
+           VALUES ('HR', ?, ?, ?, ?, 'Success')`,
           [`Deleted staff record ${id}`, 'HR', String(id), req.user.userId || null]
         );
       } catch (e) {}
@@ -378,8 +378,8 @@ router.post("/staff", authenticateToken, allowRoles("Admin", "HR"), (req, res) =
         try {
           await pool.query(
             `INSERT INTO audit_logs
-               (action_description, activity_type, affected_record, user_id, status)
-             VALUES (?, ?, ?, ?, 'Success')`,
+               (module, action_description, activity_type, affected_record, user_id, status)
+             VALUES ('HR', ?, ?, ?, ?, 'Success')`,
             [`Added staff record ${employee_id}`, 'HR', String(employee_id), req.user.userId || null]
           );
         } catch (e) {}
@@ -2162,8 +2162,8 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR", 
     try {
       await pool.query(
         `INSERT INTO audit_logs
-           (action_description, activity_type, affected_record, user_id, status)
-         VALUES (?, 'Payroll', ?, ?, 'Success')`,
+           (module, action_description, activity_type, affected_record, user_id, status)
+         VALUES ('Payroll', ?, 'Payroll', ?, ?, 'Success')`,
         [`Sent payslip ${req.params.id} to Finance for approval`, String(req.params.id), req.user.userId || null]
       );
     } catch(e) {}
@@ -2191,8 +2191,8 @@ router.put("/payslips/:id/send-to-staff", authenticateToken, allowRoles("HR", "A
     try {
       await pool.query(
         `INSERT INTO audit_logs
-           (action_description, activity_type, affected_record, user_id, status)
-         VALUES (?, 'Payroll', ?, ?, 'Success')`,
+           (module, action_description, activity_type, affected_record, user_id, status)
+         VALUES ('Payroll', ?, 'Payroll', ?, ?, 'Success')`,
         [`Sent payslip ${req.params.id} to staff`, String(req.params.id), req.user.userId || null]
       );
     } catch(e) {}

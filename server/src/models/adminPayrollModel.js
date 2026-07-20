@@ -98,8 +98,8 @@ async function getAdminPayrollReportData() {
 async function logAdminAction({ action, entityType, entityId, userId }) {
   await pool.execute(
     `INSERT INTO audit_logs
-      (activity_type, action_description, affected_record, user_id, status)
-     VALUES (?, ?, ?, ?, 'Success')`,
+      (module, activity_type, action_description, affected_record, user_id, status)
+     VALUES ('Payroll', ?, ?, ?, ?, 'Success')`,
     [entityType, action, entityId == null ? null : String(entityId), userId || null]
   );
 }
@@ -387,8 +387,8 @@ async function createUserAccount({ email, name, passwordHash, roleId, status, st
 
     await connection.execute(
       `INSERT INTO audit_logs
-        (activity_type, action_description, affected_record, user_id, status)
-       VALUES ('user', 'Created user account', ?, ?, 'Success')`,
+        (module, activity_type, action_description, affected_record, user_id, status)
+       VALUES ('Payroll', 'user', 'Created user account', ?, ?, 'Success')`,
       [String(userId), adminUserId || null]
     );
 

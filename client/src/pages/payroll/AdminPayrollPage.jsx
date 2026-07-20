@@ -39,6 +39,7 @@ import {
 } from "../../services/adminPayrollService.js";
 
 import { getStoredSession } from "../../services/sessionService.js";
+import PayrollAuditLogPage from "./PayrollAuditLogPage.jsx";
 
 import {
   buildSettingsByKey,
@@ -3877,7 +3878,7 @@ function AdminPayrollContent({
     );
   }
   if (pathname.endsWith("/payroll-monitor")) return <PayrollMonitorView payrollRuns={data?.payrollRuns} />;
-  if (pathname.endsWith("/audit-logs")) return <AuditLogsView auditLogs={data?.auditLogs} />;
+  if (pathname.endsWith("/audit-logs")) return <PayrollAuditLogPage />;
   if (pathname.endsWith("/reports")) return <ReportsView data={data} />;
 
   return (

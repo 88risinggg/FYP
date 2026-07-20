@@ -15,9 +15,9 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "../../services/motion.js";
 
 import {
-  exportAuditLogs,
   fetchAuditLogs,
-  fetchAuditSummary
+  fetchAuditSummary,
+  exportAuditLogs,
 } from "../../services/adminAuditLogService.js";
 
 const refreshIntervalMs = 5 * 60 * 1000;
@@ -78,8 +78,8 @@ export default function AdminAuditLogsPage() {
 
     try {
       const [logsData, summaryData] = await Promise.all([
-        fetchAuditLogs(nextFilters),
-        fetchAuditSummary()
+        fetchAuditLogs({ ...nextFilters, module: "Invoice" }),
+        fetchAuditSummary({ module: "Invoice" })
       ]);
       setLogs(logsData.logs || []);
       setUsers(logsData.users || []);
@@ -120,7 +120,7 @@ export default function AdminAuditLogsPage() {
 
   async function handleExport() {
     try {
-      const blob = await exportAuditLogs(filters);
+      const blob = await exportAuditLogs({ ...filters, module: "Invoice" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;

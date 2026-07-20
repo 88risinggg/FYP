@@ -502,8 +502,8 @@ async function addNumberingActivity(records = []) {
   // Store numbering activity in audit_logs
   for (const record of records) {
     await pool.query(
-      `INSERT INTO audit_logs (activity_type, action_description, affected_record, status, previous_value, new_value, user_name, created_at)
-       VALUES ('invoice_numbering', ?, NULL, 'success', ?, ?, ?, NOW())`,
+      `INSERT INTO audit_logs (module, activity_type, action_description, affected_record, status, previous_value, new_value, user_name, created_at)
+       VALUES ('Invoice', 'invoice_numbering', ?, NULL, 'success', ?, ?, ?, NOW())`,
       [record.action, record.oldValue ?? "", record.newValue ?? "", record.changedBy || "Admin"]
     );
   }

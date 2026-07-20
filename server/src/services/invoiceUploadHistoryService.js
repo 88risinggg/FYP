@@ -58,12 +58,12 @@ async function recordValidationAttempt({ file, validation, user }) {
 
   const [result] = await pool.execute(
     `INSERT INTO audit_logs (
-      activity_type, action_description, affected_record, status, user_id, user_name,
+      module, activity_type, action_description, affected_record, status, user_id, user_name,
       upload_file_name, upload_file_type, upload_total_rows, upload_valid_rows,
       upload_invalid_rows, upload_created_invoices, upload_error_message,
       upload_validation_errors_json, upload_completed_at, created_at
     ) VALUES (
-      'invoice_upload', ?, NULL, ?, ?, ?,
+      'Invoice', 'invoice_upload', ?, NULL, ?, ?, ?,
       ?, ?, ?, ?,
       ?, 0, ?,
       ?, ?, NOW()

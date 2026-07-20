@@ -38,10 +38,10 @@ async function logAuditEvent({
     if (await tableExists("audit_logs")) {
       await pool.execute(
         `INSERT INTO audit_logs (
-          user_id, user_name, activity_type, action_description,
+          user_id, user_name, module, activity_type, action_description,
           affected_record, status, ip_address, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
-        [userId, userName, activityType, actionDescription, affectedRecord, status, ipAddress]
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [userId, userName, activityType, activityType, actionDescription, affectedRecord, status, ipAddress]
       );
       return;
     }
