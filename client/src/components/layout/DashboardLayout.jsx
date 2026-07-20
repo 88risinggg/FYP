@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  PanelLeftOpen,
   Search,
   Settings,
   Shield,
@@ -65,6 +66,17 @@ const roleProfiles = {
   }
 };
 
+const SIDEBAR_COLLAPSED_KEY = "admin-sidebar-collapsed";
+
+function readStoredSidebarCollapsed() {
+  try {
+    const value = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    return value === "true";
+  } catch {
+    return false;
+  }
+}
+
 export default function DashboardLayout({
   children,
   pageTitle,
@@ -93,11 +105,12 @@ export default function DashboardLayout({
   const [fetchedNotifications, setFetchedNotifications] = useState(null);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readStoredSidebarCollapsed);
   const classes = {
     page: "relative min-h-screen overflow-hidden bg-[#fff8f5] text-[#251E1F]",
     grid: "pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(243,137,120,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(243,137,120,0.08)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20",
     header: "sticky top-0 z-10 flex h-20 items-center gap-4 border-b border-[#f2d5cc] bg-[#fff8f5]/85 px-4 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur-2xl sm:px-6",
-    iconButton: "flex h-10 w-10 items-center justify-center rounded-lg text-[#6f4f47] hover:bg-[#FDD9CD]/45 hover:text-[#F38978]",
+    iconButton: "flex h-10 w-10 items-center justify-center rounded-lg text-[#6f4f47] transition hover:bg-[#FDD9CD]/45 hover:text-[#F38978] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]/45",
     title: "min-w-0 flex-1 truncate text-base font-semibold text-[#251E1F] sm:text-lg",
     searchWrap: "hidden w-full max-w-sm items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 shadow-lg shadow-[#F38978]/10 backdrop-blur lg:flex",
     searchIcon: "text-[#F38978]",
@@ -130,6 +143,18 @@ export default function DashboardLayout({
     : displayNotifications.filter((notification) => !(
         notification.is_read === 1 || notification.is_read === true || notification.read
       )).length;
+
+  function toggleDesktopSidebar() {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+      } catch {
+        // Ignore storage failures; the in-memory toggle still works.
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!mobileSidebarOpen) return undefined;
@@ -291,18 +316,32 @@ export default function DashboardLayout({
         theme={theme}
         mobileOpen={mobileSidebarOpen}
         onClose={() => setMobileSidebarOpen(false)}
+        desktopCollapsed={sidebarCollapsed}
+        onToggleDesktop={toggleDesktopSidebar}
       />
 
-      <div className="relative z-10 lg:pl-64">
+      <div className={`relative z-10 transition-[padding-left] duration-200 ease-out ${sidebarCollapsed ? "lg:pl-0" : "lg:pl-64"}`}>
         <header className={classes.header}>
           <button
             type="button"
             onClick={() => setMobileSidebarOpen(true)}
-            className={classes.iconButton}
+            className={`${classes.iconButton} lg:hidden`}
             aria-label="Open menu"
           >
             <Menu size={21} />
           </button>
+          {sidebarCollapsed ? (
+            <button
+              type="button"
+              onClick={toggleDesktopSidebar}
+              className="hidden h-10 w-10 items-center justify-center rounded-lg text-[#6f4f47] transition hover:bg-[#FDD9CD]/45 hover:text-[#F38978] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]/45 lg:flex"
+              aria-label="Show sidebar"
+              aria-expanded={!sidebarCollapsed}
+              title="Show sidebar"
+            >
+              <PanelLeftOpen size={21} aria-hidden="true" />
+            </button>
+          ) : null}
 
           <h1 className={classes.title}>
             {pageTitle}

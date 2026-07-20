@@ -13,8 +13,9 @@ async function getAdminInvoicingDashboard(req, res) {
     const dashboard = await getAdminDashboardData(req.user?.userId);
     res.json(dashboard);
   } catch (error) {
+    console.error("[Admin invoicing overview] Failed to load dashboard:", error);
     res.status(500).json({
-      message: "Unable to load Admin invoicing dashboard."
+      message: "Unable to load the invoicing overview."
     });
   }
 }
