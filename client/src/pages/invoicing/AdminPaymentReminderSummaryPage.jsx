@@ -1,5 +1,4 @@
 import {
-  Banknote,
   BellRing,
   CalendarDays,
   CheckCircle2,
@@ -23,7 +22,6 @@ import { getStoredSession } from "../../services/sessionService.js";
 const basePath = "/dashboard/invoicing/admin";
 const invoiceListPath = `${basePath}/invoices`;
 const paymentListPath = `${basePath}/payments`;
-const reminderLogsPath = `${basePath}/reminder-settings`;
 const rangeOptions = [
   { value: "today", label: "Today" },
   { value: "last-7-days", label: "Last 7 Days" },
@@ -98,9 +96,9 @@ function paymentMethodClass(method) {
   return "bg-[#f2eee9] text-[#6f5b55]";
 }
 
-function Panel({ title, action, children, className = "" }) {
+function Panel({ title, action, children, className = "", id }) {
   return (
-    <section className={`rounded-xl border border-[#f0d2ca] bg-white/95 p-5 shadow-[0_10px_28px_rgba(37,30,31,0.06)] ${className}`}>
+    <section id={id} className={`rounded-xl border border-[#f0d2ca] bg-white/95 p-5 shadow-[0_10px_28px_rgba(37,30,31,0.06)] ${className}`}>
       <div className="mb-4 flex items-center justify-between gap-4">
         <h3 className="text-[15px] font-bold text-[#251E1F]">{title}</h3>
         {action}
@@ -118,29 +116,7 @@ function EmptyState({ children }) {
   );
 }
 
-function KpiCard({ title, value, note, icon: Icon, to, accent }) {
-  return (
-    <Link
-      to={to}
-      className="min-h-[142px] rounded-xl border border-[#f0d2ca] bg-white/95 p-4 shadow-[0_10px_28px_rgba(37,30,31,0.06)] transition hover:-translate-y-0.5 hover:border-[#F38978]"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <span
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
-          style={{ backgroundColor: `${accent}1f`, color: accent }}
-        >
-          <Icon size={19} />
-        </span>
-        <ChevronRight size={15} className="text-[#c4aaa2]" />
-      </div>
-      <p className="mt-4 text-[13px] font-bold leading-tight text-[#251E1F]">{title}</p>
-      <p className="mt-2 text-[1.55rem] font-bold leading-tight tracking-normal text-[#251E1F]">{value}</p>
-      <p className="mt-2 text-xs font-semibold text-[#7b6660]">{note}</p>
-    </Link>
-  );
-}
-
-function MetricRow({ label, value, icon: Icon, to, accent }) {
+function MetricRow({ label, value, icon: Icon, to, accent, formatValue = formatCount }) {
   return (
     <Link
       to={to}
@@ -153,62 +129,52 @@ function MetricRow({ label, value, icon: Icon, to, accent }) {
         <Icon size={15} />
       </span>
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#251E1F]">{label}</span>
-      <span className="text-sm font-bold text-[#251E1F]">{formatCount(value)}</span>
+      <span className="text-sm font-bold text-[#251E1F]">{formatValue(value)}</span>
       <ChevronRight size={14} className="text-[#b89a92]" />
     </Link>
   );
 }
 
-function ReminderSummaryCard({ summary }) {
-  const scheduled = Number(summary.scheduled || 0);
-  const sent = Number(summary.sent || 0);
-  const successRate = scheduled > 0 ? (sent / scheduled) * 100 : 0;
+function ReminderSummaryCard({ summary, range }) {
+  const detailPath = (category) => `${basePath}/reminder-summary/${category}?range=${range}`;
+  const hasAnyData = Number(summary.sentToday || 0) > 0 ||
+    Number(summary.scheduledToday || 0) > 0 ||
+    Number(summary.failedToday || 0) > 0 ||
+    Number(summary.overdueRequiringReminders || 0) > 0;
 
   return (
     <Panel
+      id="reminder-summary"
       title="Reminder Summary"
-      action={<Link to={reminderLogsPath} className="text-xs font-bold text-[#F38978]">View details</Link>}
     >
-      {scheduled === 0 ? (
-        <EmptyState>No reminders scheduled for this period.</EmptyState>
-      ) : null}
+      {!hasAnyData ? <EmptyState>No reminder activity requires attention today.</EmptyState> : null}
       <div className="grid gap-2 sm:grid-cols-2">
-        <MetricRow label="Scheduled" value={summary.scheduled} icon={CalendarDays} to={`${reminderLogsPath}?status=scheduled`} accent="#7FA7D8" />
-        <MetricRow label="Sent" value={summary.sent} icon={Send} to={`${reminderLogsPath}?status=sent`} accent="#F38978" />
-        <MetricRow label="Pending" value={summary.pending} icon={BellRing} to={`${reminderLogsPath}?status=pending`} accent="#D97706" />
-        <MetricRow label="Failed" value={summary.failed} icon={XCircle} to={`${reminderLogsPath}?status=failed`} accent="#F38978" />
+        <MetricRow label="Reminders Sent Today" value={summary.sentToday} icon={Send} to={detailPath("sent-today")} accent="#3F8F62" />
+        <MetricRow label="Reminders Scheduled Today" value={summary.scheduledToday} icon={CalendarDays} to={detailPath("scheduled-today")} accent="#4F8FD8" />
+        <MetricRow label="Failed Reminders" value={summary.failedToday} icon={XCircle} to={detailPath("failed-today")} accent="#C94C3A" />
+        <MetricRow label="Overdue Invoices Requiring Reminders" value={summary.overdueRequiringReminders} icon={BellRing} to={detailPath("overdue-requiring-reminders")} accent="#D97706" />
       </div>
-      <Link to={`${reminderLogsPath}?metric=success-rate`} className="mt-4 block rounded-lg bg-[#fff8f5] p-4 transition hover:bg-[#fff0eb]">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <span className="text-sm font-bold text-[#251E1F]">Success Rate</span>
-          <span className="text-sm font-bold text-[#251E1F]">{successRate.toFixed(1)}%</span>
-        </div>
-        <div className="h-2 overflow-hidden rounded-full bg-white">
-          <div className="h-full rounded-full bg-[#F38978]" style={{ width: `${Math.min(successRate, 100)}%` }} />
-        </div>
-      </Link>
+      <p className="mt-4 text-xs text-[#7b6660]">Monitoring only. Finance remains responsible for reminder follow-up and operational actions.</p>
     </Panel>
   );
 }
 
-function EmailDeliverySummaryCard({ summary }) {
-  const hasAnyData = Number(summary.emailSent || 0) > 0 ||
-    Number(summary.emailFailed || 0) > 0 ||
-    Number(summary.whatsappSent || 0) > 0;
+function EmailDeliverySummaryCard({ summary, range }) {
+  const detailPath = (category) => `${basePath}/email-delivery/${category}?range=${range}`;
 
   return (
     <Panel
-      title="Email Delivery Logs Summary"
-      action={<Link to={`${reminderLogsPath}?type=delivery`} className="text-xs font-bold text-[#F38978]">View logs</Link>}
+      id="email-delivery-summary"
+      title="Email Delivery Summary"
+      action={<Link to={detailPath("logs")} className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-xs font-bold text-[#F38978] transition hover:border-[#F38978]">View Delivery Logs</Link>}
     >
-      {!hasAnyData ? <EmptyState>No email delivery logs found.</EmptyState> : null}
-      <div className="space-y-2">
-        <MetricRow label="Email Sent" value={summary.emailSent} icon={Mail} to={`${reminderLogsPath}?channel=email&status=sent`} accent="#F38978" />
-        <MetricRow label="Email Failed" value={summary.emailFailed} icon={XCircle} to={`${reminderLogsPath}?channel=email&status=failed`} accent="#F38978" />
-        {summary.whatsappEnabled ? (
-          <MetricRow label="WhatsApp Sent" value={summary.whatsappSent} icon={Send} to={`${reminderLogsPath}?channel=whatsapp&status=sent`} accent="#35A69B" />
-        ) : null}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <MetricRow label="Successfully Delivered Today" value={summary.successfulToday} icon={CheckCircle2} to={detailPath("successful-today")} accent="#3F8F62" />
+        <MetricRow label="Failed Today" value={summary.failedToday} icon={XCircle} to={detailPath("failed-today")} accent="#C94C3A" />
+        <MetricRow label="Pending Delivery" value={summary.pendingDelivery} icon={Mail} to={detailPath("pending-delivery")} accent="#D97706" />
+        <MetricRow label="Delivery Rate" value={summary.deliveryRate} icon={ShieldCheck} to={detailPath("delivery-rate")} accent="#4F8FD8" formatValue={(value) => `${Number(value || 0).toFixed(Number(value || 0) % 1 ? 1 : 0)}%`} />
       </div>
+      <p className="mt-4 text-xs text-[#7b6660]">Monitoring only. Successful means accepted by the configured email provider; pending deliveries are excluded from the delivery rate.</p>
     </Panel>
   );
 }
@@ -355,16 +321,16 @@ export default function AdminPaymentReminderSummaryPage() {
     loadSummary(nextRange, true);
   }
 
-  const paymentCards = summary?.paymentCards || {};
   const reminderSummary = summary?.reminderSummary || {};
   const emailDeliverySummary = summary?.emailDeliverySummary || {};
   const recentPaymentUpdates = summary?.recentPaymentUpdates || [];
-  const hasAnyData = Number(paymentCards.paidTodayAmount || 0) > 0 ||
-    Number(paymentCards.outstandingAmount || 0) > 0 ||
-    Number(paymentCards.stripeUpdatesToday || 0) > 0 ||
-    Number(paymentCards.bankTransferPendingCount || 0) > 0 ||
-    Number(reminderSummary.scheduled || 0) > 0 ||
-    Number(emailDeliverySummary.emailSent || 0) > 0 ||
+  const hasAnyData = Number(reminderSummary.scheduledToday || 0) > 0 ||
+    Number(reminderSummary.sentToday || 0) > 0 ||
+    Number(reminderSummary.failedToday || 0) > 0 ||
+    Number(reminderSummary.overdueRequiringReminders || 0) > 0 ||
+    Number(emailDeliverySummary.successfulToday || 0) > 0 ||
+    Number(emailDeliverySummary.failedToday || 0) > 0 ||
+    Number(emailDeliverySummary.pendingDelivery || 0) > 0 ||
     recentPaymentUpdates.length > 0;
 
   if (loading) {
@@ -435,44 +401,9 @@ export default function AdminPaymentReminderSummaryPage() {
 
         {!hasAnyData && !error ? <EmptyState>No payment or reminder summary data found for this period.</EmptyState> : null}
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard
-            title="Paid Today"
-            value={formatCurrency(paymentCards.paidTodayAmount)}
-            note="Successful payments received"
-            icon={Banknote}
-            to={`${paymentListPath}?status=paid&date=${range}`}
-            accent="#F38978"
-          />
-          <KpiCard
-            title="Outstanding Amount"
-            value={formatCurrency(paymentCards.outstandingAmount)}
-            note="Sent, viewed, and overdue invoices"
-            icon={FileText}
-            to={`${invoiceListPath}?filter=outstanding`}
-            accent="#D97706"
-          />
-          <KpiCard
-            title="Stripe Updates Today"
-            value={formatCount(paymentCards.stripeUpdatesToday)}
-            note={Number(paymentCards.stripeUpdatesToday || 0) > 0 ? "Stripe payment updates" : "No Stripe updates today"}
-            icon={CreditCard}
-            to={`${paymentListPath}?method=stripe&date=${range}`}
-            accent="#4F8FD8"
-          />
-          <KpiCard
-            title="Bank Transfer Pending"
-            value={Number(paymentCards.bankTransferPendingAmount || 0) > 0 ? formatCurrency(paymentCards.bankTransferPendingAmount) : formatCount(paymentCards.bankTransferPendingCount)}
-            note={`${formatCount(paymentCards.bankTransferPendingCount)} waiting for verification`}
-            icon={ShieldCheck}
-            to={`${paymentListPath}?payment_method=bank_transfer&status=pending-verification`}
-            accent="#F38978"
-          />
-        </div>
-
         <div className="grid gap-4 xl:grid-cols-2">
-          <ReminderSummaryCard summary={reminderSummary} />
-          <EmailDeliverySummaryCard summary={emailDeliverySummary} />
+          <ReminderSummaryCard summary={reminderSummary} range={range} />
+          <EmailDeliverySummaryCard summary={emailDeliverySummary} range={range} />
         </div>
 
         <Panel

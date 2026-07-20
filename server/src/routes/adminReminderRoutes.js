@@ -12,6 +12,7 @@ const {
 const {
   exportInvoicePerformance,
   getAdminInvoicingDashboard,
+  getEmailDelivery,
   getInvoicePerformance,
   getPaymentReminderSummary,
   getValidationErrors,
@@ -29,6 +30,7 @@ router.get("/dashboard", getAdminInvoicingDashboard);
 router.get("/dashboard/invoice-performance", getInvoicePerformance);
 router.get("/dashboard/invoice-performance/export", exportInvoicePerformance);
 router.get("/dashboard/payment-reminder-summary", getPaymentReminderSummary);
+router.get("/dashboard/email-delivery", getEmailDelivery);
 router.get("/dashboard/validation-summary", getValidationSummary);
 router.get("/dashboard/validation-errors", getValidationErrors);
 router.get("/invoice-settings", getSettings);

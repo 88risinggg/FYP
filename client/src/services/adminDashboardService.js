@@ -41,6 +41,12 @@ export function fetchPaymentReminderSummary(range = "today") {
   });
 }
 
+export function fetchAdminEmailDelivery(filters = {}) {
+  return apiRequest(`/api/admin/invoicing/dashboard/email-delivery${toQueryString(filters)}`, {
+    headers: authHeaders()
+  });
+}
+
 export function fetchInvoiceValidationSummary() {
   return apiRequest("/api/admin/invoicing/dashboard/validation-summary", {
     headers: authHeaders()

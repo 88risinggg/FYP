@@ -18,17 +18,14 @@ const { pool } = require("../config/db");
 const { generateQRCode } = require("./qrCodeService");
 const { createNotification } = require("./invoiceNotificationService");
 const nodemailer = require("nodemailer");
+const {
+  REMINDER_SCHEDULE,
+  scheduledReminderType
+} = require("./invoiceReminderSchedule");
 
 // =====================================================
 // Configuration
 // =====================================================
-
-const REMINDER_SCHEDULE = {
-  UPCOMING_DUE: -3,    // 3 days before due date
-  DUE_TODAY: 0,        // On the due date
-  OVERDUE_3D: 3,       // 3 days after due date
-  OVERDUE_RECURRING: 7 // Every 7 days after overdue
-};
 
 // =====================================================
 // Email Transport
@@ -248,6 +245,18 @@ async function processAutomaticReminders() {
   let skipped = 0;
 
   try {
+    // When configurable reminder rules exist, reminderScheduler is the single
+    // operational owner. This fixed schedule remains a compatibility fallback
+    // for installations that do not yet have the rule tables.
+    try {
+      await pool.query("SELECT 1 FROM reminder_settings LIMIT 1");
+      return { sent: 0, skipped: 0, managedByRules: true };
+    } catch (shapeError) {
+      if (shapeError?.code !== "ER_NO_SUCH_TABLE" && shapeError?.code !== "ER_BAD_FIELD_ERROR") {
+        throw shapeError;
+      }
+    }
+
     // Find all invoices that are not paid/cancelled and have a due date
     const [invoices] = await pool.query(`
       SELECT
@@ -268,29 +277,8 @@ async function processAutomaticReminders() {
       ORDER BY i.due_date ASC
     `);
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
     for (const invoice of invoices) {
-      const dueDate = new Date(invoice.due_date);
-      dueDate.setHours(0, 0, 0, 0);
-      const daysDiff = Math.round((today - dueDate) / 86400000); // positive = overdue
-
-      let reminderType = null;
-
-      if (daysDiff === -3) {
-        // 3 days before due date
-        reminderType = "upcoming_due";
-      } else if (daysDiff === 0) {
-        // On the due date
-        reminderType = "due_today";
-      } else if (daysDiff === 3) {
-        // 3 days after due date
-        reminderType = "overdue_3d";
-      } else if (daysDiff > 3 && daysDiff % 7 === 0) {
-        // Every 7 days after becoming overdue (7, 14, 21, 28...)
-        reminderType = "overdue_recurring";
-      }
+      const reminderType = scheduledReminderType(invoice.due_date);
 
       if (!reminderType) {
         continue; // Not on a reminder day

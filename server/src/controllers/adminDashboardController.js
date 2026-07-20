@@ -3,6 +3,7 @@ const {
   getInvoicePerformanceData,
   getPaymentReminderSummaryData
 } = require("../models/adminDashboardModel");
+const { getAdminEmailDeliveryData } = require("../models/adminEmailDeliveryModel");
 const {
   getAllInvoiceValidationErrors,
   getInvoiceValidationSummary
@@ -138,6 +139,15 @@ async function getPaymentReminderSummary(req, res) {
   }
 }
 
+async function getEmailDelivery(req, res) {
+  try {
+    res.json(await getAdminEmailDeliveryData(req.query));
+  } catch (error) {
+    console.error("[Admin email delivery] Failed to load records:", error);
+    res.status(500).json({ message: "Unable to load email delivery records." });
+  }
+}
+
 async function getValidationSummary(req, res) {
   try {
     const summary = await getInvoiceValidationSummary();
@@ -163,6 +173,7 @@ async function getValidationErrors(req, res) {
 module.exports = {
   exportInvoicePerformance,
   getAdminInvoicingDashboard,
+  getEmailDelivery,
   getInvoicePerformance,
   getPaymentReminderSummary,
   getValidationErrors,

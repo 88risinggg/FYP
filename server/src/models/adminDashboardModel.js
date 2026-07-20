@@ -1,4 +1,6 @@
 const { pool } = require("../config/db");
+const { getAdminReminderMonitorData } = require("./adminReminderMonitorModel");
+const { getAdminEmailDeliveryData } = require("./adminEmailDeliveryModel");
 
 const dashboardInvoiceStatuses = ["Draft", "Sent", "Viewed", "Paid", "Overdue"];
 
@@ -991,16 +993,23 @@ function emptyPaymentReminderSummary(range, missingTables = []) {
       bankTransferPendingCount: 0
     },
     reminderSummary: {
-      scheduled: 0,
-      sent: 0,
-      pending: 0,
-      failed: 0
+      sentToday: 0,
+      scheduledToday: 0,
+      failedToday: 0,
+      overdueRequiringReminders: 0,
+      timeZone: "Asia/Singapore",
+      details: {
+        sentToday: [],
+        scheduledToday: [],
+        failedToday: [],
+        overdueRequiringReminders: []
+      }
     },
     emailDeliverySummary: {
-      emailSent: 0,
-      emailFailed: 0,
-      whatsappSent: 0,
-      whatsappEnabled: false
+      successfulToday: 0,
+      failedToday: 0,
+      pendingDelivery: 0,
+      deliveryRate: 0
     },
     recentPaymentUpdates: [],
     missingTables
@@ -1018,14 +1027,20 @@ async function getPaymentReminderSummaryData(range) {
 
   const paymentContext = await getPaymentTableContext(missingTables);
   const paymentCards = await getPaymentCards(context, paymentContext, rangeConfig, missingTables);
-  const reminderData = await getPaymentReminderSummaryLogs(rangeConfig, missingTables);
+  await getPaymentReminderSummaryLogs(rangeConfig, missingTables);
+  const reminderMonitor = await getAdminReminderMonitorData();
+  const emailDelivery = await getAdminEmailDeliveryData();
   const recentPaymentUpdates = await getRecentPaymentUpdates(context, paymentContext, missingTables);
 
   return {
     range: rangeConfig.range,
     paymentCards,
-    reminderSummary: reminderData.reminderSummary,
-    emailDeliverySummary: reminderData.emailDeliverySummary,
+    reminderSummary: {
+      ...reminderMonitor.counts,
+      timeZone: reminderMonitor.timeZone,
+      details: reminderMonitor.details
+    },
+    emailDeliverySummary: emailDelivery.summary,
     recentPaymentUpdates,
     missingTables: Array.from(missingTables)
   };

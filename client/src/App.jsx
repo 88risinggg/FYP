@@ -7,6 +7,8 @@ import PublicInvoiceViewPage from "./pages/PublicInvoiceViewPage.jsx";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage.jsx";
 import PaymentCancelledPage from "./pages/PaymentCancelledPage.jsx";
 import AdminInvoicingDashboard from "./pages/invoicing/AdminInvoicingDashboard.jsx";
+import AdminReminderCategoryPage from "./pages/invoicing/AdminReminderCategoryPage.jsx";
+import AdminEmailDeliveryPage from "./pages/invoicing/AdminEmailDeliveryPage.jsx";
 import FinanceInvoicingPage from "./pages/invoicing/FinanceInvoicingPage.jsx";
 import AdminPayrollPage from "./pages/payroll/AdminPayrollPage.jsx";
 import FinancePayrollPage from "./pages/payroll/FinancePayrollPage.jsx";
@@ -160,6 +162,22 @@ export default function App() {
           <ProtectedRoute>
             <ModuleSelectionPage />
           </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/reminder-summary/:category"
+        element={
+          <AdminInvoicingRoute>
+            <AdminReminderCategoryPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/email-delivery/:category"
+        element={
+          <AdminInvoicingRoute>
+            <AdminEmailDeliveryPage />
+          </AdminInvoicingRoute>
         }
       />
       <Route
