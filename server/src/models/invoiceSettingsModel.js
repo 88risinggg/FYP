@@ -86,7 +86,7 @@ const defaultSettings = {
   dueDays: 30,
   lateFeePercent: 0,
   gracePeriodDays: 0,
-  companyName: "",
+  companyName: "Vaniday",
   companyRegistrationNumber: "",
   companyAddress: "",
   registeredOfficeAddress: "",

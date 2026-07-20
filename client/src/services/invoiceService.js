@@ -141,17 +141,17 @@ export function parseVanidayFile(file) {
   });
 }
 
-export function validateVanidayImport(rows, dateFormat) {
+export function validateVanidayImport(rows, dateFormat, allowReimport = false) {
   return apiRequest("/api/vaniday-import/validate", {
     method: "POST",
-    body: JSON.stringify({ rows, dateFormat })
+    body: JSON.stringify({ rows, dateFormat, allowReimport })
   });
 }
 
-export function processVanidayImport(rows, dateFormat) {
+export function processVanidayImport(rows, dateFormat, allowReimport = false) {
   return apiRequest("/api/vaniday-import/process", {
     method: "POST",
-    body: JSON.stringify({ rows, dateFormat })
+    body: JSON.stringify({ rows, dateFormat, allowReimport })
   });
 }
 

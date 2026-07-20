@@ -96,7 +96,7 @@ function sendMetaWhatsApp(to, message) {
  * @returns {Object} Result with messageId or console log confirmation.
  */
 async function sendWhatsAppReminder({ to, invoiceId, customerName, amount, dueDate }) {
-  const message = `Hi ${customerName}, your invoice ${invoiceId} for SGD ${Number(amount).toFixed(2)} is due on ${dueDate}. Please arrange payment. — PayNivo`;
+  const message = `Hi ${customerName}, your invoice ${invoiceId} for SGD ${Number(amount).toFixed(2)} is due on ${dueDate}. Please arrange payment. — Vaniday`;
   return sendMetaWhatsApp(to, message);
 }
 
@@ -106,7 +106,7 @@ async function sendWhatsAppReminder({ to, invoiceId, customerName, amount, dueDa
  * @param {Object} params - { to, invoiceId, amount }
  */
 async function sendWhatsAppPaymentConfirmation({ to, invoiceId, amount }) {
-  const message = `Payment confirmed! Invoice ${invoiceId} for SGD ${Number(amount).toFixed(2)} has been received. Thank you! — PayNivo`;
+  const message = `Payment confirmed! Invoice ${invoiceId} for SGD ${Number(amount).toFixed(2)} has been received. Thank you! — Vaniday`;
   return sendMetaWhatsApp(to, message);
 }
 

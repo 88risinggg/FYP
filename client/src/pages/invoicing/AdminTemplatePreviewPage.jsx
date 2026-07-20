@@ -67,7 +67,7 @@ export default function AdminTemplatePreviewPage() {
         const data = await getInvoiceSettings();
         const s = data.settings || data;
         setSettings({
-          companyName: s.companyName || s.company_name || "PayNivo Pte Ltd",
+          companyName: s.companyName || s.company_name || "Vaniday",
           uenNumber: s.uenNumber || s.uen_number || "",
           gstRegistrationNumber: s.gstRegistrationNumber || s.gst_registration_number || "",
           companyAddress: s.companyAddress || s.company_address || "",
@@ -115,12 +115,12 @@ export default function AdminTemplatePreviewPage() {
         setLoadError(err.message);
         // Use defaults on failure
         setSettings({
-          companyName: "PayNivo Pte Ltd",
+          companyName: "Vaniday",
           uenNumber: "202312345A",
           gstRegistrationNumber: "M1-2023456-7",
           companyAddress: "1 Raffles Place, #20-01, Singapore 048616",
           companyPhone: "+65 6123 4567",
-          companyEmail: "finance@paynivo.com",
+          companyEmail: "finance@vaniday.com",
           primaryColor: "#061e4b",
           secondaryColor: "#ff5a52",
           fontFamily: "Arial, Helvetica, sans-serif",
@@ -140,7 +140,7 @@ export default function AdminTemplatePreviewPage() {
           bankDetailsDisplay: true,
           paynowDisplay: true,
           signatureDisplay: false,
-          bankAccountHolderName: "PayNivo Pte Ltd",
+          bankAccountHolderName: "Vaniday Pte Ltd",
           bankName: "DBS Bank",
           bankAccountNumber: "012-345678-9",
           bicSwift: "DBSSSGSG",

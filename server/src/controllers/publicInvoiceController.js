@@ -163,21 +163,13 @@ async function viewInvoice(req, res) {
       notifyCustomerViewed(invoice.invoiceId, invoice.customer_name).catch(() => {});
     }
 
-    // Always record the view event in invoice_view_log table
+    // Record the view event in audit_logs (with view-specific columns)
     try {
       await pool.query(
-        `INSERT INTO invoice_view_log (invoice_id, view_date, ip_address, user_agent, device_info)
-         VALUES (?, NOW(), ?, ?, ?)`,
-        [invoice.invoice_id, ipAddress, userAgent, deviceInfo]
-      );
-    } catch { /* table may not exist yet */ }
-
-    // Also write to audit_logs
-    try {
-      await pool.query(
-        `INSERT INTO audit_logs (user_id, activity_type, action_description, affected_record, status, created_at, ip_address, device_info)
-         VALUES (NULL, 'invoice', 'invoice_viewed', ?, 'Success', NOW(), ?, ?)`,
-        [String(invoice.invoice_id), ipAddress, deviceInfo]
+        `INSERT INTO audit_logs (user_id, activity_type, action_description, affected_record, status,
+           created_at, ip_address, device_info, invoice_id, view_ip_address, view_user_agent)
+         VALUES (NULL, 'invoice_view', 'Invoice viewed', ?, 'Success', NOW(), ?, ?, ?, ?, ?)`,
+        [String(invoice.invoice_id), ipAddress, deviceInfo, invoice.invoice_id, ipAddress, userAgent]
       );
     } catch { /* non-critical */ }
 

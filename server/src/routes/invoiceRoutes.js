@@ -292,48 +292,55 @@ router.post("/:id/reminder", async (req, res) => {
 
 /**
  * GET /api/invoices/:id/reminders
- * Get reminder history for a specific invoice.
+ * Get reminder history from audit_logs (invoice_reminder_log was merged into audit_logs).
  */
 router.get("/:id/reminders", async (req, res) => {
   try {
     const invoiceId = Number(req.params.id);
     const [logs] = await pool.query(
-      `SELECT reminder_type, delivery_status, customer_email, sent_at, error_message
-       FROM invoice_reminder_log
-       WHERE invoice_id = ?
-       ORDER BY sent_at DESC
+      `SELECT
+         audit_log_id AS log_id,
+         reminder_type,
+         delivery_status,
+         customer_email,
+         created_at AS sent_at,
+         action_description AS error_message
+       FROM audit_logs
+       WHERE activity_type = 'invoice_reminder'
+         AND invoice_id = ?
+       ORDER BY created_at DESC
        LIMIT 50`,
       [invoiceId]
     );
     res.json({ reminders: logs });
   } catch (error) {
-    if (error.code === "ER_NO_SUCH_TABLE") {
-      return res.json({ reminders: [] });
-    }
     res.status(500).json({ message: "Failed to fetch reminder history.", detail: error.message });
   }
 });
 
 /**
  * GET /api/invoices/:id/views
- * Get view tracking history for a specific invoice.
+ * Get view tracking history from audit_logs (invoice_view_log was merged into audit_logs).
  */
 router.get("/:id/views", async (req, res) => {
   try {
     const invoiceId = Number(req.params.id);
     const [views] = await pool.query(
-      `SELECT view_id, view_date, ip_address, user_agent, device_info
-       FROM invoice_view_log
-       WHERE invoice_id = ?
-       ORDER BY view_date DESC
+      `SELECT
+         audit_log_id AS view_id,
+         created_at AS view_date,
+         view_ip_address AS ip_address,
+         view_user_agent AS user_agent,
+         device_info
+       FROM audit_logs
+       WHERE activity_type = 'invoice_view'
+         AND invoice_id = ?
+       ORDER BY created_at DESC
        LIMIT 50`,
       [invoiceId]
     );
     res.json({ views });
   } catch (error) {
-    if (error.code === "ER_NO_SUCH_TABLE") {
-      return res.json({ views: [] });
-    }
     res.status(500).json({ message: "Failed to fetch view history.", detail: error.message });
   }
 });

@@ -106,7 +106,7 @@ function buildReminderEmailHtml(invoice, reminderType) {
   const html = `
     <div style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
       <div style="text-align: center; margin-bottom: 24px;">
-        <h1 style="color: #7B2FF7; margin: 0;">PayNivo</h1>
+        <h1 style="color: #7B2FF7; margin: 0;">Vaniday</h1>
       </div>
       <div style="border-left: 4px solid ${urgencyColor}; padding: 16px 20px; background: #f9fafb; border-radius: 0 8px 8px 0; margin-bottom: 24px;">
         <h2 style="margin: 0 0 8px; color: #1a1a2e; font-size: 18px;">${heading}</h2>
@@ -124,10 +124,10 @@ function buildReminderEmailHtml(invoice, reminderType) {
       ${qrSection}
       <p style="color: #666; font-size: 13px; line-height: 1.6; margin-top: 24px;">
         If you have already made this payment, please disregard this reminder.
-        For any queries, please contact us at ${process.env.SMTP_FROM || "finance@paynivo.com"}.
+        For any queries, please contact us at ${process.env.SMTP_FROM || "finance@vaniday.com"}.
       </p>
       <p style="color: #999; font-size: 11px; text-align: center; margin-top: 32px; border-top: 1px solid #eee; padding-top: 16px;">
-        This is an automated reminder from PayNivo Invoicing System.
+        This is an automated reminder from Vaniday Invoicing System.
       </p>
     </div>
   `;
@@ -190,15 +190,15 @@ async function sendReminderForInvoice(invoice, reminderType) {
 }
 
 /**
- * Log a reminder to the invoice_reminder_log table.
+ * Log a reminder to the canonical audit log.
  */
 async function logReminder(invoice, reminderType, status, errorMessage) {
   try {
     await pool.query(
-      `INSERT INTO invoice_reminder_log
-        (invoice_id, reminder_type, delivery_status, customer_email, sent_at, error_message)
-       VALUES (?, ?, ?, ?, NOW(), ?)`,
-      [invoice.invoice_id, reminderType, status, invoice.customer_email, errorMessage]
+      `INSERT INTO audit_logs (activity_type, action_description, affected_record, status, created_at, new_value)
+       VALUES ('invoice_reminder', ?, ?, ?, NOW(), ?)`,
+      [`reminder:${reminderType}`, String(invoice.invoice_id), status,
+        JSON.stringify({ reminderType, customerEmail: invoice.customer_email, errorMessage })]
     );
   } catch (e) {
     // Table may not exist yet — will be created by migration
@@ -217,15 +217,18 @@ async function hasRecentReminder(invoiceId, reminderType) {
     let query;
     if (reminderType === "overdue_recurring") {
       // For recurring, check if sent within last 7 days
-      query = `SELECT COUNT(*) AS cnt FROM invoice_reminder_log
-               WHERE invoice_id = ? AND reminder_type = ? AND delivery_status = 'Sent'
+      query = `SELECT COUNT(*) AS cnt FROM audit_logs
+               WHERE affected_record = ? AND activity_type = 'invoice_reminder'
+               AND action_description = ? AND status = 'Sent'
                AND sent_at > DATE_SUB(NOW(), INTERVAL 7 DAY)`;
     } else {
       // For one-time reminders, check if ever sent successfully
-      query = `SELECT COUNT(*) AS cnt FROM invoice_reminder_log
-               WHERE invoice_id = ? AND reminder_type = ? AND delivery_status = 'Sent'`;
+      query = `SELECT COUNT(*) AS cnt FROM audit_logs
+               WHERE affected_record = ? AND activity_type = 'invoice_reminder'
+               AND action_description = ? AND status = 'Sent'`;
     }
-    const [rows] = await pool.query(query, [invoiceId, reminderType]);
+    query = query.replace(/sent_at/g, "created_at");
+    const [rows] = await pool.query(query, [String(invoiceId), `reminder:${reminderType}`]);
     return rows[0].cnt > 0;
   } catch (e) {
     if (e.code === "ER_NO_SUCH_TABLE") return false;

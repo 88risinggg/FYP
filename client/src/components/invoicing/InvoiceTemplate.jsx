@@ -78,7 +78,7 @@ function Watermark({ invoice, settings }) {
 function Header({ settings, logoUrl }) {
   const primary = settings.primaryColor || "#061e4b";
   const secondary = settings.secondaryColor || "#ff5a52";
-  const brandName = settings.companyName || "COMPANY";
+  const brandName = settings.companyName || "Vaniday";
 
   return (
     <header
@@ -142,7 +142,7 @@ function HeroSection({ invoice, settings }) {
 
       {/* Right: Company card */}
       <div style={{ padding: "5mm 5.5mm", background: primary, color: "white", minWidth: 0 }}>
-        <strong style={{ display: "block", marginBottom: "1.2mm", fontSize: "7.5pt" }}>{settings.companyName}</strong>
+        <strong style={{ display: "block", marginBottom: "1.2mm", fontSize: "7.5pt" }}>{settings.companyName || "Vaniday"}</strong>
         {settings.companyRegistrationNumber && <p style={{ margin: "0.55mm 0", fontSize: "6.8pt" }}>Reg. No. {settings.companyRegistrationNumber}</p>}
         {settings.uenNumber && <p style={{ margin: "0.55mm 0", fontSize: "6.8pt" }}>UEN: {settings.uenNumber}</p>}
         {settings.gstRegistrationNumber && <p style={{ margin: "0.55mm 0", fontSize: "6.8pt" }}>GST Reg: {settings.gstRegistrationNumber}</p>}

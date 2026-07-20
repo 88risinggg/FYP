@@ -37,7 +37,7 @@ function bufferToStream(buffer) {
 /**
  * POST /api/vaniday-import/parse
  * Parses an uploaded Vaniday CSV/Excel file and returns rows as JSON.
- * Supports .csv, .xlsx, and .xls formats.
+ * Supports .csv and .xlsx formats.
  */
 router.post("/parse", allowRoles("Admin", "Finance"), upload.single("file"), async (req, res) => {
   try {
@@ -47,6 +47,9 @@ router.post("/parse", allowRoles("Admin", "Finance"), upload.single("file"), asy
 
     const workbook = new ExcelJS.Workbook();
     const ext = (req.file.originalname || "").toLowerCase();
+    if (!ext.endsWith(".csv") && !ext.endsWith(".xlsx")) {
+      return res.status(400).json({ message: "Unsupported file type. Upload a CSV or XLSX file." });
+    }
 
     if (ext.endsWith(".csv")) {
       // ExcelJS CSV uses stream-based reading, not .load()
@@ -82,6 +85,16 @@ router.post("/parse", allowRoles("Admin", "Finance"), upload.single("file"), asy
         }
       }
     });
+
+    if (headers.length === 0 || headers.some((header) => !header)) {
+      return res.status(400).json({ message: "The first row must contain a non-empty header for every imported column." });
+    }
+    if (new Set(headers.map((header) => header.toLowerCase())).size !== headers.length) {
+      return res.status(400).json({ message: "Duplicate column headers were found. Rename each column header to a unique value." });
+    }
+    if (rows.length > 10000) {
+      return res.status(400).json({ message: "Upload exceeds the 10,000-row safety limit. Split the file into smaller batches." });
+    }
 
     res.json({ rows, headers, totalRows: rows.length });
   } catch (error) {

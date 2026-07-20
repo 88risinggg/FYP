@@ -101,15 +101,15 @@ async function getFinanceDashboard(req, res) {
       fraudAlerts = fraudRows[0]?.count || 0;
     } catch { /* columns may not exist */ }
 
-    // Pending payment reviews
+    // Pending payment reviews (from payment table review_status column)
     let pendingReviews = 0;
     try {
       const [reviewRows] = await pool.query(`
-        SELECT COUNT(*) AS count FROM manual_payment_submission
-        WHERE status = 'Pending Review'
+        SELECT COUNT(*) AS count FROM payment
+        WHERE review_status = 'Pending Review'
       `);
       pendingReviews = reviewRows[0]?.count || 0;
-    } catch { /* table may not exist */ }
+    } catch { /* column may not exist */ }
 
     // Recent invoices (last 10)
     const [recentInvoices] = await pool.query(`

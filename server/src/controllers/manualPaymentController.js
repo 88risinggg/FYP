@@ -1,14 +1,14 @@
 /**
  * Manual Payment Controller
  *
- * Handles the customer manual payment submission workflow:
- * - Customer submits payment proof (amount, date, reference, screenshot)
+ * Handles the customer manual payment submission workflow.
+ * Data is now stored in the payment table (manual_payment_submission was merged into payment).
+ *
+ * - Customer submits payment proof → payment row with review_status = 'Pending Review'
  * - Invoice moves to "Pending Review" status
  * - Finance reviews and approves/rejects
- * - On approval: invoice moves to "Paid", payment record created
- * - On rejection: customer can resubmit
- *
- * Also provides Finance-facing endpoints for reviewing submissions.
+ * - On approval: invoice moves to "Paid"
+ * - On rejection: invoice reverts to Sent
  */
 
 const { pool } = require("../config/db");
@@ -38,7 +38,6 @@ async function submitManualPayment(req, res) {
   try {
     await connection.beginTransaction();
 
-    // Find the invoice
     const [invoiceRows] = await connection.query(
       `SELECT i.invoice_id, i.invoiceId, i.status, i.total_amount,
               c.name AS customer_name, c.email AS customer_email
@@ -60,24 +59,24 @@ async function submitManualPayment(req, res) {
       return res.status(400).json({ message: "This invoice has already been paid." });
     }
 
-    if (invoice.status === "Cancelled" || invoice.status === "Refunded") {
+    if (["Cancelled", "Refunded"].includes(invoice.status)) {
       await connection.rollback();
       return res.status(400).json({ message: "This invoice is no longer active." });
     }
 
-    // Handle file upload path (if multer provides a file)
     const proofFileUrl = req.file ? `/uploads/payment-proofs/${req.file.filename}` : null;
     const proofFileName = req.file ? req.file.originalname : null;
 
-    // Create submission record
+    // Insert into payment table using new review columns
     const [result] = await connection.query(
-      `INSERT INTO manual_payment_submission
-        (invoice_id, amount, payment_date, reference_number, payment_method,
-         proof_file_url, proof_file_name, customer_notes, status, submitted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending Review', NOW())`,
+      `INSERT INTO payment
+        (invoice_invoice_id, amount, status, payment_date_input, reference_number,
+         payment_method_name, proof_file_url, proof_file_name, customer_notes,
+         review_status, submitted_at, created_at)
+       VALUES (?, ?, 'Pending', ?, ?, ?, ?, ?, ?, 'Pending Review', NOW(), NOW())`,
       [
         invoice.invoice_id,
-        parsedAmount,
+        String(parsedAmount),
         payment_date,
         reference_number || null,
         payment_method || "Bank Transfer",
@@ -87,36 +86,19 @@ async function submitManualPayment(req, res) {
       ]
     );
 
-    // Update invoice status to "Pending Review"
     await connection.query(
       "UPDATE invoice SET status = 'Pending Review' WHERE invoice_id = ?",
       [invoice.invoice_id]
     );
 
-    // Audit log
-    await writeAuditLog(
-      connection,
-      "payment_submitted",
-      "invoice",
-      invoice.invoice_id,
-      null,
-      {
-        newValue: JSON.stringify({ amount: parsedAmount, reference: reference_number, method: payment_method }),
-        ipAddress: req.headers["x-forwarded-for"] || req.socket?.remoteAddress || null
-      }
-    );
-
-    await writeAuditLog(
-      connection,
-      `${STATUS_AUDIT_PREFIX}Pending Review`,
-      "invoice",
-      invoice.invoice_id,
-      null
-    );
+    await writeAuditLog(connection, "payment_submitted", "invoice", invoice.invoice_id, null, {
+      newValue: JSON.stringify({ amount: parsedAmount, reference: reference_number, method: payment_method }),
+      ipAddress: req.headers["x-forwarded-for"] || req.socket?.remoteAddress || null
+    });
+    await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}Pending Review`, "invoice", invoice.invoice_id, null);
 
     await connection.commit();
 
-    // Notify Finance (non-blocking)
     try {
       const { createNotification } = require("../services/invoiceNotificationService");
       createNotification({
@@ -134,10 +116,7 @@ async function submitManualPayment(req, res) {
     });
   } catch (error) {
     await connection.rollback();
-    res.status(500).json({
-      message: "Failed to submit payment.",
-      detail: error.message
-    });
+    res.status(500).json({ message: "Failed to submit payment.", detail: error.message });
   } finally {
     connection.release();
   }
@@ -145,66 +124,57 @@ async function submitManualPayment(req, res) {
 
 /**
  * GET /api/payments/pending-reviews
- * Finance endpoint: List all pending payment submissions.
+ * Finance: List all pending payment submissions from the payment table.
  */
 async function getPendingReviews(req, res) {
   try {
     const [rows] = await pool.query(`
       SELECT
-        mps.submission_id,
-        mps.invoice_id,
-        mps.amount,
-        mps.payment_date,
-        mps.reference_number,
-        mps.payment_method,
-        mps.proof_file_url,
-        mps.proof_file_name,
-        mps.customer_notes,
-        mps.status,
-        mps.submitted_at,
-        mps.reviewed_by,
-        mps.reviewed_at,
-        mps.review_notes,
+        p.payment_id AS submission_id,
+        p.invoice_invoice_id AS invoice_id,
+        p.amount,
+        p.payment_date_input AS payment_date,
+        p.reference_number,
+        p.payment_method_name AS payment_method,
+        p.proof_file_url,
+        p.proof_file_name,
+        p.customer_notes,
+        p.review_status AS status,
+        p.submitted_at,
+        p.reviewed_by,
+        p.reviewed_at,
+        p.review_notes,
         i.invoiceId,
         i.total_amount,
         i.due_date,
         c.name AS customer_name,
         c.email AS customer_email
-      FROM manual_payment_submission mps
-      INNER JOIN invoice i ON i.invoice_id = mps.invoice_id
+      FROM payment p
+      INNER JOIN invoice i ON i.invoice_id = p.invoice_invoice_id
       INNER JOIN customer c ON c.customer_id = i.customer_id
+      WHERE p.review_status IS NOT NULL
       ORDER BY
-        CASE mps.status WHEN 'Pending Review' THEN 0 ELSE 1 END,
-        mps.submitted_at DESC
+        CASE p.review_status WHEN 'Pending Review' THEN 0 ELSE 1 END,
+        p.submitted_at DESC
       LIMIT 100
     `);
 
     res.json({ submissions: rows });
   } catch (error) {
-    if (error.code === "ER_NO_SUCH_TABLE") {
-      return res.json({ submissions: [] });
-    }
-    res.status(500).json({
-      message: "Failed to fetch pending reviews.",
-      detail: error.message
-    });
+    res.status(500).json({ message: "Failed to fetch pending reviews.", detail: error.message });
   }
 }
 
 /**
  * POST /api/payments/review/:submissionId
  * Finance approves or rejects a manual payment submission.
- *
- * Body: { decision: "Approved"|"Rejected", notes: "" }
+ * submissionId = payment.payment_id
  */
 async function reviewPaymentSubmission(req, res) {
   const submissionId = Number(req.params.submissionId);
   const { decision, notes } = req.body;
 
-  if (!submissionId) {
-    return res.status(400).json({ message: "Submission ID is required." });
-  }
-
+  if (!submissionId) return res.status(400).json({ message: "Submission ID is required." });
   if (!["Approved", "Rejected"].includes(decision)) {
     return res.status(400).json({ message: "Decision must be 'Approved' or 'Rejected'." });
   }
@@ -214,14 +184,13 @@ async function reviewPaymentSubmission(req, res) {
   try {
     await connection.beginTransaction();
 
-    // Lock and fetch the submission
     const [subRows] = await connection.query(
-      `SELECT mps.*, i.invoiceId, i.total_amount, i.status AS invoice_status,
+      `SELECT p.*, i.invoiceId, i.total_amount, i.status AS invoice_status,
               c.name AS customer_name, c.email AS customer_email
-       FROM manual_payment_submission mps
-       INNER JOIN invoice i ON i.invoice_id = mps.invoice_id
+       FROM payment p
+       INNER JOIN invoice i ON i.invoice_id = p.invoice_invoice_id
        INNER JOIN customer c ON c.customer_id = i.customer_id
-       WHERE mps.submission_id = ? LIMIT 1 FOR UPDATE`,
+       WHERE p.payment_id = ? LIMIT 1 FOR UPDATE`,
       [submissionId]
     );
 
@@ -232,53 +201,42 @@ async function reviewPaymentSubmission(req, res) {
 
     const submission = subRows[0];
 
-    if (submission.status !== "Pending Review") {
+    if (submission.review_status !== "Pending Review") {
       await connection.rollback();
       return res.status(400).json({
-        message: `This submission has already been ${submission.status.toLowerCase()}.`
+        message: `This submission has already been ${(submission.review_status || "").toLowerCase()}.`
       });
     }
 
     const userId = req.user?.userId;
 
-    // Update submission status
+    // Update review status on payment row
     await connection.query(
-      `UPDATE manual_payment_submission
-       SET status = ?, reviewed_by = ?, reviewed_at = NOW(), review_notes = ?
-       WHERE submission_id = ?`,
+      `UPDATE payment SET review_status = ?, reviewed_by = ?, reviewed_at = NOW(), review_notes = ? WHERE payment_id = ?`,
       [decision, userId, notes || null, submissionId]
     );
 
     if (decision === "Approved") {
-      // Create payment record
       const transactionId = submission.reference_number || `MANUAL-${Date.now()}`;
+
+      // Promote payment to Completed
       await connection.query(
-        `INSERT INTO payment (payment_date, amount, status, transaction_id, invoice_invoice_id, payment_method_name)
-         VALUES (?, ?, 'Completed', ?, ?, ?)`,
-        [
-          submission.payment_date,
-          String(submission.amount),
-          transactionId,
-          submission.invoice_id,
-          submission.payment_method || "Bank Transfer"
-        ]
+        `UPDATE payment SET status = 'Completed', transaction_id = ?, payment_method_name = ? WHERE payment_id = ?`,
+        [transactionId, submission.payment_method_name || "Bank Transfer", submissionId]
       );
 
-      // Update invoice to Paid
       await connection.query(
         `UPDATE invoice SET status = 'Paid', payment_date = ?, transaction_id = ?,
-         payment_status = 'paid', payment_method = ?
-         WHERE invoice_id = ?`,
-        [submission.payment_date, transactionId, submission.payment_method, submission.invoice_id]
+         payment_status = 'paid', payment_method = ? WHERE invoice_id = ?`,
+        [submission.payment_date_input, transactionId, submission.payment_method_name, submission.invoice_invoice_id]
       );
 
-      await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}Paid`, "invoice", submission.invoice_id, userId);
-      await writeAuditLog(connection, "payment_approved", "invoice", submission.invoice_id, userId, {
+      await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}Paid`, "invoice", submission.invoice_invoice_id, userId);
+      await writeAuditLog(connection, "payment_approved", "invoice", submission.invoice_invoice_id, userId, {
         previousValue: "Pending Review",
         newValue: JSON.stringify({ amount: submission.amount, reference: transactionId })
       });
 
-      // Send receipt email (non-blocking)
       try {
         const { sendPaymentReceiptEmail } = require("../services/invoiceDeliveryService");
         sendPaymentReceiptEmail(
@@ -287,23 +245,20 @@ async function reviewPaymentSubmission(req, res) {
         ).catch(() => {});
       } catch { /* non-blocking */ }
     } else {
-      // Rejected — revert invoice to previous sendable status
       const newStatus = submission.invoice_status === "Pending Review" ? "Sent" : submission.invoice_status;
       await connection.query(
         "UPDATE invoice SET status = ? WHERE invoice_id = ? AND status = 'Pending Review'",
-        [newStatus, submission.invoice_id]
+        [newStatus, submission.invoice_invoice_id]
       );
-
-      await writeAuditLog(connection, "payment_rejected", "invoice", submission.invoice_id, userId, {
+      await writeAuditLog(connection, "payment_rejected", "invoice", submission.invoice_invoice_id, userId, {
         previousValue: "Pending Review",
         newValue: JSON.stringify({ reason: notes || "No reason provided" })
       });
-      await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}${newStatus}`, "invoice", submission.invoice_id, userId);
+      await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}${newStatus}`, "invoice", submission.invoice_invoice_id, userId);
     }
 
     await connection.commit();
 
-    // Notify
     try {
       const { createNotification } = require("../services/invoiceNotificationService");
       const msg = decision === "Approved"
@@ -313,7 +268,7 @@ async function reviewPaymentSubmission(req, res) {
         type: decision === "Approved" ? "payment_success" : "payment_failed",
         title: `Payment ${decision}`,
         message: msg,
-        invoiceId: submission.invoice_id
+        invoiceId: submission.invoice_invoice_id
       }).catch(() => {});
     } catch { /* non-blocking */ }
 
@@ -325,10 +280,7 @@ async function reviewPaymentSubmission(req, res) {
     });
   } catch (error) {
     await connection.rollback();
-    res.status(500).json({
-      message: "Failed to process review.",
-      detail: error.message
-    });
+    res.status(500).json({ message: "Failed to process review.", detail: error.message });
   } finally {
     connection.release();
   }

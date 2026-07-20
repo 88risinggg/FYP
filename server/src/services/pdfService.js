@@ -230,7 +230,7 @@ function buildWatermark(invoice, settings) {
 function buildHeader(invoice, settings, options) {
   const primary = settings.primaryColor || "#061e4b";
   const secondary = settings.secondaryColor || "#ff5a52";
-  const brandName = settings.companyName || "COMPANY";
+  const brandName = settings.companyName || "Vaniday";
   const logo = safeUrl(options.logoDataUri)
     ? `<img class="logo-image" src="${escapeHtml(options.logoDataUri)}" alt="Company logo">`
     : `<div class="wordmark">${escapeHtml(brandName)}<span style="color:${secondary}">.</span></div>`;
@@ -251,7 +251,7 @@ function buildHeroSection(invoice, settings) {
   const dateStr = formatDate(invoice.issue_date, settings.displayDateFormat);
 
   const companyCard = `<div style="padding:5mm 5.5mm;background:${primary};color:white;min-width:0;">
-    <strong style="display:block;margin-bottom:1.2mm;font-size:7.5pt;">${escapeHtml(settings.companyName)}</strong>
+    <strong style="display:block;margin-bottom:1.2mm;font-size:7.5pt;">${escapeHtml(settings.companyName || "Vaniday")}</strong>
     ${settings.companyRegistrationNumber ? `<p style="margin:.55mm 0;font-size:6.8pt;">Reg. No. ${escapeHtml(settings.companyRegistrationNumber)}</p>` : ""}
     ${settings.uenNumber ? `<p style="margin:.55mm 0;font-size:6.8pt;">UEN: ${escapeHtml(settings.uenNumber)}</p>` : ""}
     ${settings.gstRegistrationNumber ? `<p style="margin:.55mm 0;font-size:6.8pt;">GST Reg: ${escapeHtml(settings.gstRegistrationNumber)}</p>` : ""}

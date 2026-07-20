@@ -24,7 +24,7 @@ const { getInvoiceSettings, saveInvoiceSettings } = require("../models/invoiceSe
  */
 async function validateImport(req, res) {
   try {
-    const { rows, dateFormat } = req.body;
+    const { rows, dateFormat, allowReimport } = req.body;
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({
@@ -33,7 +33,7 @@ async function validateImport(req, res) {
       });
     }
 
-    const result = await validateVanidayImport(rows, { dateFormat });
+    const result = await validateVanidayImport(rows, { dateFormat, allowReimport: !!allowReimport });
 
     // Convert validGroups Map to serializable format
     const validGroupsArray = [];
@@ -59,7 +59,10 @@ async function validateImport(req, res) {
 
     res.json({
       ...result,
-      validGroups: validGroupsArray
+      validGroups: validGroupsArray,
+      // Include per-row validation detail so the UI can show exactly what failed
+      validationErrors: result.errors || [],
+      detectedHeaders: rows.length > 0 ? Object.keys(rows[0]) : []
     });
   } catch (error) {
     console.error("[VanidayImport] Validation error:", error);
@@ -76,7 +79,7 @@ async function validateImport(req, res) {
  */
 async function processImport(req, res) {
   try {
-    const { rows, dateFormat } = req.body;
+    const { rows, dateFormat, allowReimport } = req.body;
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({
@@ -86,7 +89,7 @@ async function processImport(req, res) {
     }
 
     // Re-validate to ensure data integrity
-    const validationResult = await validateVanidayImport(rows, { dateFormat });
+    const validationResult = await validateVanidayImport(rows, { dateFormat, allowReimport: !!allowReimport });
 
     if (!validationResult.success) {
       return res.status(400).json(validationResult);
