@@ -1,12 +1,12 @@
 import {
   AlertTriangle,
   Banknote,
-  BellRing,
+  CalendarDays,
   CheckCircle2,
   Clock3,
   CreditCard,
   FileText,
-  Info,
+  LogIn,
   ShieldAlert
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -17,9 +17,7 @@ import { getStoredSession } from "../../services/sessionService.js";
 
 const basePath = "/dashboard/invoicing/admin";
 const focusDestinations = {
-  "validation-errors": `${basePath}/dashboard/validation-errors`,
-  "payment-reminder-summary": `${basePath}/dashboard/payment-reminder-summary`,
-  "invoice-performance": `${basePath}/dashboard/invoice-performance`
+  "validation-errors": `${basePath}/dashboard/validation-errors`
 };
 
 const statusConfig = [
@@ -35,14 +33,6 @@ const severityStyles = {
   High: "bg-[#fff0df] text-[#9a5b12]",
   Medium: "bg-[#eaf2ff] text-[#3269a8]",
   Low: "bg-[#f2eee9] text-[#6f5b55]"
-};
-
-const focusIcons = {
-  "validation-errors": ShieldAlert,
-  "reminder-failures": BellRing,
-  "payments-to-verify": CreditCard,
-  "overdue-invoices": AlertTriangle,
-  "draft-invoices": FileText
 };
 
 const kpiGridStyles = `
@@ -68,7 +58,7 @@ const kpiGridStyles = `
     }
   }
 
-  @container (min-width: 65.25rem) {
+  @container (min-width: 58rem) {
     .admin-overview-kpi-grid {
       grid-template-columns: repeat(6, minmax(0, 1fr));
     }
@@ -112,27 +102,19 @@ function Section({ title, description, children }) {
   );
 }
 
-function KpiCard({ title, value, helper, icon: Icon, accent, available = true }) {
+function KpiCard({ title, value, icon: Icon, accent, available = true }) {
   return (
-    <article className="flex min-h-[148px] flex-col rounded-lg border border-[#f0d2ca] bg-white/95 p-4 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
-      <div className="flex items-start justify-between gap-3">
-        <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-          style={{ backgroundColor: `${accent}1f`, color: accent }}
-          aria-hidden="true"
-        >
-          <Icon size={18} />
-        </span>
-        <span title={helper} aria-label={`${title}: ${helper}`} className="text-[#9b837c]">
-          <Info size={15} />
-        </span>
-      </div>
-      <p className="mt-4 min-h-10 overflow-hidden text-sm font-bold leading-5 text-[#514440] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{title}</p>
-      <p className="mt-2 min-w-0 break-words text-xl font-bold leading-tight text-[#251E1F] 2xl:text-2xl">
+    <article className="flex min-h-[132px] flex-col rounded-lg border border-[#f0d2ca] bg-white/95 p-4 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
+      <span
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+        style={{ backgroundColor: `${accent}1f`, color: accent }}
+        aria-hidden="true"
+      >
+        <Icon size={18} />
+      </span>
+      <p className="mt-3 min-h-10 overflow-hidden text-sm font-bold leading-5 text-[#514440] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{title}</p>
+      <p className="mt-auto min-w-0 break-words pt-2 text-xl font-bold leading-tight text-[#251E1F] 2xl:text-2xl">
         {available ? value : "Unavailable"}
-      </p>
-      <p className="mt-auto pt-2 text-xs font-medium leading-4 text-[#7b6660]">
-        {available ? helper : "Data is temporarily unavailable"}
       </p>
     </article>
   );
@@ -141,16 +123,18 @@ function KpiCard({ title, value, helper, icon: Icon, accent, available = true })
 function DashboardSkeleton() {
   return (
     <div className="space-y-4" aria-label="Loading invoicing overview" aria-busy="true">
-      <div className="h-24 animate-pulse rounded-lg bg-white/70" />
+      <div className="h-28 animate-pulse rounded-lg border border-[#f0d2ca] bg-white/70" />
       <div className="admin-overview-kpi-container">
         <div className="admin-overview-kpi-grid">
         {Array.from({ length: 6 }, (_, index) => (
-          <div key={index} className="h-[148px] animate-pulse rounded-lg border border-[#f0d2ca] bg-white/80" />
+          <div key={index} className="h-[132px] animate-pulse rounded-lg border border-[#f0d2ca] bg-white/80" />
         ))}
         </div>
       </div>
-      <div className="h-52 animate-pulse rounded-lg border border-[#f0d2ca] bg-white/80" />
-      <div className="h-52 animate-pulse rounded-lg border border-[#f0d2ca] bg-white/80" />
+      <div className="grid gap-4 xl:grid-cols-5">
+        <div className="h-80 animate-pulse rounded-lg border border-[#f0d2ca] bg-white/80 xl:col-span-2" />
+        <div className="h-80 animate-pulse rounded-lg border border-[#f0d2ca] bg-white/80 xl:col-span-3" />
+      </div>
     </div>
   );
 }
@@ -160,7 +144,7 @@ function InvoiceStatusOverview({ invoiceStatus, hasInvoices }) {
     ...status,
     count: Number(invoiceStatus?.[status.key] || 0)
   }));
-  const trackedTotal = statuses.reduce((sum, status) => sum + status.count, 0);
+  const largestCount = Math.max(...statuses.map((status) => status.count), 0);
 
   if (!hasInvoices) {
     return (
@@ -171,42 +155,39 @@ function InvoiceStatusOverview({ invoiceStatus, hasInvoices }) {
   }
 
   return (
-    <div>
-      <div className="flex h-3 w-full overflow-hidden rounded-full bg-[#f2eee9]" aria-hidden="true">
-        {statuses.map((status) => (
-          <span
-            key={status.key}
-            style={{
-              backgroundColor: status.color,
-              width: trackedTotal > 0 ? `${(status.count / trackedTotal) * 100}%` : "0%"
-            }}
-          />
-        ))}
-      </div>
-      <div className="mt-5 grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-5">
-        {statuses.map((status) => (
-          <div key={status.key} className="flex min-h-10 items-center justify-between gap-3 border-b border-[#f4ded7] pb-2 lg:border-b-0 lg:pb-0">
-            <span className="flex items-center gap-2 text-sm font-semibold text-[#514440]">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: status.color }} aria-hidden="true" />
-              {status.label}
-            </span>
-            <span className="text-sm font-bold text-[#251E1F]">{formatCount(status.count)}</span>
+    <div
+      className="space-y-4"
+      role="img"
+      aria-label={`Invoice status counts: ${statuses.map((status) => `${status.label} ${status.count}`).join(", ")}`}
+    >
+      {statuses.map((status) => {
+        const width = largestCount > 0 ? (status.count / largestCount) * 100 : 0;
+
+        return (
+          <div key={status.key} className="grid grid-cols-[4.5rem_minmax(0,1fr)_3rem] items-center gap-3 sm:grid-cols-[5.5rem_minmax(0,1fr)_3.5rem]">
+            <span className="text-sm font-semibold text-[#514440]">{status.label}</span>
+            <div className="h-7 overflow-hidden rounded-md bg-[#f2eee9]" aria-hidden="true">
+              <div
+                className="h-full rounded-md transition-[width] duration-300 motion-reduce:transition-none"
+                style={{
+                  backgroundColor: status.color,
+                  width: status.count > 0 ? `max(0.5rem, ${width}%)` : "0%"
+                }}
+              />
+            </div>
+            <span className="text-right text-sm font-bold tabular-nums text-[#251E1F]">{formatCount(status.count)}</span>
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }
 
 function FocusItem({ item }) {
-  const Icon = focusIcons[item.type] || AlertTriangle;
   const destination = focusDestinations[item.destination];
 
   return (
-    <article className="flex flex-col gap-4 border-b border-[#f4ded7] py-4 first:pt-0 last:border-b-0 last:pb-0 md:flex-row md:items-center">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#fff0eb] text-[#c94c3a]" aria-hidden="true">
-        <Icon size={18} />
-      </span>
+    <article className="flex flex-col gap-3 border-b border-[#f4ded7] py-4 first:pt-0 last:border-b-0 last:pb-0 sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <h4 className="text-sm font-bold text-[#251E1F]">{item.title}</h4>
@@ -228,6 +209,37 @@ function FocusItem({ item }) {
       ) : null}
     </article>
   );
+}
+
+function formatDashboardDate(date) {
+  return {
+    weekday: new Intl.DateTimeFormat("en-SG", {
+      weekday: "long",
+      timeZone: "Asia/Singapore"
+    }).format(date),
+    date: new Intl.DateTimeFormat("en-SG", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "Asia/Singapore"
+    }).format(date)
+  };
+}
+
+function formatLastLogin(value) {
+  if (!value) return "Not available";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not available";
+
+  return new Intl.DateTimeFormat("en-SG", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Singapore"
+  }).format(date);
 }
 
 export default function AdminDashboardHomePage() {
@@ -262,22 +274,24 @@ export default function AdminDashboardHomePage() {
 
   const admin = dashboard?.admin || session?.user || {};
   const adminName = admin.name || session?.user?.name || "Admin";
+  const dashboardDate = useMemo(() => formatDashboardDate(currentDate), [currentDate]);
   const summary = dashboard?.summary || {};
   const availability = dashboard?.availability || {};
   const hasInvoices = availability.invoices !== false && Number(summary.totalInvoices || 0) > 0;
   const todayFocus = useMemo(
     () => [...(dashboard?.todayFocus || [])]
       .filter((item) => Number(item.count) > 0)
-      .sort((left, right) => Number(left.priority || 99) - Number(right.priority || 99)),
+      .sort((left, right) => Number(left.priority || 99) - Number(right.priority || 99))
+      .slice(0, 4),
     [dashboard?.todayFocus]
   );
   const kpiCards = [
-    { title: "Total Invoices", value: formatCount(summary.totalInvoices), helper: "Active invoice records", icon: FileText, accent: "#F38978", available: availability.invoices !== false },
-    { title: "Paid Revenue", value: formatCurrency(summary.paidRevenue), helper: "Confirmed payment amount", icon: Banknote, accent: "#3f8f62", available: availability.payments !== false },
-    { title: "Outstanding Amount", value: formatCurrency(summary.outstandingAmount), helper: "Current unpaid balance", icon: AlertTriangle, accent: "#d97706", available: availability.payments !== false },
-    { title: "Overdue Invoices", value: formatCount(summary.overdueInvoices), helper: "Past due with unpaid balance", icon: Clock3, accent: "#c94c3a", available: availability.invoices !== false && availability.payments !== false },
-    { title: "Payments to Verify", value: formatCount(summary.paymentsToVerify), helper: "Pending Finance verification", icon: CreditCard, accent: "#4f8fd8", available: availability.payments !== false },
-    { title: "Validation Errors", value: formatCount(summary.validationErrors), helper: "Latest invoice upload errors", icon: ShieldAlert, accent: "#a43e30", available: availability.validation !== false }
+    { title: "Total Invoices", value: formatCount(summary.totalInvoices), icon: FileText, accent: "#F38978", available: availability.invoices !== false },
+    { title: "Paid Revenue", value: formatCurrency(summary.paidRevenue), icon: Banknote, accent: "#3f8f62", available: availability.payments !== false },
+    { title: "Outstanding Amount", value: formatCurrency(summary.outstandingAmount), icon: AlertTriangle, accent: "#d97706", available: availability.payments !== false },
+    { title: "Overdue Invoices", value: formatCount(summary.overdueInvoices), icon: Clock3, accent: "#c94c3a", available: availability.invoices !== false && availability.payments !== false },
+    { title: "Payments to Verify", value: formatCount(summary.paymentsToVerify), icon: CreditCard, accent: "#4f8fd8", available: availability.payments !== false },
+    { title: "Validation Errors", value: formatCount(summary.validationErrors), icon: ShieldAlert, accent: "#a43e30", available: availability.validation !== false }
   ];
 
   return (
@@ -289,11 +303,21 @@ export default function AdminDashboardHomePage() {
       <div className="mx-auto max-w-[1500px] space-y-4">
         {loading && !dashboard ? <DashboardSkeleton /> : (
           <>
-            <header className="border-b border-[#f0d2ca] bg-white/40 pb-5">
-              <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+            <header className="rounded-lg border border-[#f0d2ca] bg-white/70 p-5 shadow-[0_10px_28px_rgba(37,30,31,0.04)]">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <h2 className="text-2xl font-bold text-[#251E1F]">{getGreeting(currentDate)}, {adminName}</h2>
                   <p className="mt-1 text-sm text-[#6f5b55]">A clear view of invoicing health and items requiring attention.</p>
+                </div>
+                <div className="flex flex-col gap-2 text-sm text-[#6f5b55] sm:flex-row sm:gap-5">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays size={16} className="text-[#b64d3b]" aria-hidden="true" />
+                    <span><span className="font-semibold text-[#514440]">{dashboardDate.weekday}</span>, {dashboardDate.date}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <LogIn size={16} className="text-[#b64d3b]" aria-hidden="true" />
+                    <span>Last login: <span className="font-semibold text-[#514440]">{formatLastLogin(admin.lastLoginAt)}</span></span>
+                  </div>
                 </div>
               </div>
             </header>
@@ -318,18 +342,23 @@ export default function AdminDashboardHomePage() {
                   </div>
                 </section>
 
-                <Section title="Invoice Status Overview" description="Current invoice counts by processing status.">
-                  <InvoiceStatusOverview invoiceStatus={dashboard.invoiceStatus} hasInvoices={hasInvoices} />
-                </Section>
-
-                <Section title="Today's Focus" description="Issues are ordered by severity so the most important work appears first.">
-                  {todayFocus.length ? todayFocus.map((item) => <FocusItem key={item.type} item={item} />) : (
-                    <div className="rounded-lg border border-dashed border-[#cde5d5] bg-[#f4fbf6] px-5 py-8 text-center">
-                      <CheckCircle2 size={24} className="mx-auto text-[#3f8f62]" aria-hidden="true" />
-                      <p className="mt-2 text-sm font-semibold text-[#356f4d]">No urgent invoicing issues require attention.</p>
-                    </div>
-                  )}
-                </Section>
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-5 xl:items-stretch">
+                  <div className="xl:col-span-2 [&>section]:h-full">
+                    <Section title="Today's Focus" description="Priority invoicing issues that need attention.">
+                      {todayFocus.length ? todayFocus.map((item) => <FocusItem key={item.type} item={item} />) : (
+                        <div className="rounded-lg border border-dashed border-[#cde5d5] bg-[#f4fbf6] px-5 py-8 text-center">
+                          <CheckCircle2 size={24} className="mx-auto text-[#3f8f62]" aria-hidden="true" />
+                          <p className="mt-2 text-sm font-semibold text-[#356f4d]">No urgent invoicing issues require attention.</p>
+                        </div>
+                      )}
+                    </Section>
+                  </div>
+                  <div className="xl:col-span-3 [&>section]:h-full">
+                    <Section title="Invoice Status Overview" description="Current invoice counts by processing status.">
+                      <InvoiceStatusOverview invoiceStatus={dashboard.invoiceStatus} hasInvoices={hasInvoices} />
+                    </Section>
+                  </div>
+                </div>
               </>
             ) : null}
           </>
