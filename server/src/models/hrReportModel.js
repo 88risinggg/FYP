@@ -270,30 +270,30 @@ async function fetchLoanReportForStaff(staffId) {
 async function fetchAdvanceReport({ status, month, year } = {}) {
   let sql = `
     SELECT
-      ar.request_id AS advance_id, ar.staff_employee_id AS employee_id,
+      c.record_id AS advance_id, c.staff_employee_id AS employee_id,
       s.name AS employee_name,
-      ar.requested_amount AS amount, ar.reason, ar.status,
-      ar.created_at AS requested_at, ar.approved_at AS processed_at
-    FROM advance_request ar
-    JOIN staff s ON s.employee_id = ar.staff_employee_id
-    WHERE 1=1
+      c.amount, c.description AS reason, c.status,
+      c.submitted_at AS requested_at, c.reviewed_at AS processed_at
+    FROM claims_and_loans c
+    JOIN staff s ON s.employee_id = c.staff_employee_id
+    WHERE c.type = 'advance_request'
   `;
   const params = [];
 
   if (status) {
-    sql += " AND ar.status = ?";
+    sql += " AND c.status = ?";
     params.push(status);
   }
   if (month) {
-    sql += " AND DATE_FORMAT(ar.created_at, '%Y-%m') = ?";
+    sql += " AND DATE_FORMAT(c.submitted_at, '%Y-%m') = ?";
     params.push(month);
   }
   if (year) {
-    sql += " AND YEAR(ar.created_at) = ?";
+    sql += " AND YEAR(c.submitted_at) = ?";
     params.push(year);
   }
 
-  sql += " ORDER BY ar.created_at DESC";
+  sql += " ORDER BY c.submitted_at DESC";
   const [rows] = await pool.query(sql, params);
   return rows;
 }
@@ -306,14 +306,14 @@ async function fetchAdvanceReport({ status, month, year } = {}) {
 async function fetchAdvanceReportForStaff(staffId) {
   const sql = `
     SELECT
-      ar.request_id AS advance_id, ar.staff_employee_id AS employee_id,
+      c.record_id AS advance_id, c.staff_employee_id AS employee_id,
       s.name AS employee_name,
-      ar.requested_amount AS amount, ar.reason, ar.status,
-      ar.created_at AS requested_at, ar.approved_at AS processed_at
-    FROM advance_request ar
-    JOIN staff s ON s.employee_id = ar.staff_employee_id
-    WHERE ar.staff_employee_id = ?
-    ORDER BY ar.created_at DESC
+      c.amount, c.description AS reason, c.status,
+      c.submitted_at AS requested_at, c.reviewed_at AS processed_at
+    FROM claims_and_loans c
+    JOIN staff s ON s.employee_id = c.staff_employee_id
+    WHERE c.type = 'advance_request' AND c.staff_employee_id = ?
+    ORDER BY c.submitted_at DESC
   `;
   const [rows] = await pool.query(sql, [staffId]);
   return rows;

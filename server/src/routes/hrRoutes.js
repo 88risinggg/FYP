@@ -1443,9 +1443,9 @@ router.get("/legacy-payslips", authenticateToken, allowRoles("Admin", "HR", "Fin
   }
 });
 
-// [HR BRANCH - Steven] Advance payment endpoints — migrated from in-memory to MySQL
-// Tables: advance_request, finance_request (created by Staff/HR branch)
-// Do not revert to in-memory arrays
+// [HR BRANCH - Steven] Advance payment endpoints — uses unified claims_and_loans table
+// Records stored with type = 'advance_request'
+// Flow: pending → hr_approved → finance_approved (single record, no separate finance_request)
 
 function makeId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8).toUpperCase()}`;
@@ -1468,21 +1468,27 @@ router.post("/advance-requests", authenticateToken, allowRoles("Staff"), async (
     const maximum = Math.floor(Number(staffRows[0].base_salary || 0) * 0.5 * 100) / 100;
     if (!maximum || amount > maximum) return res.status(400).json({ message: `Advance cannot exceed 50% of base salary ($${maximum.toFixed(2)})` });
     const [activeRows] = await pool.query(
-      "SELECT request_id FROM advance_request WHERE staff_employee_id = ? AND status IN ('pending','hr_approved') LIMIT 1",
+      "SELECT record_id FROM claims_and_loans WHERE type = 'advance_request' AND staff_employee_id = ? AND status IN ('pending','hr_approved') LIMIT 1",
       [staffEmployeeId]
     );
     if (activeRows.length) return res.status(409).json({ message: "You already have an advance awaiting approval or release" });
 
     const requestId = makeId('AR');
+    const metadata = JSON.stringify({ created_by: req.user.userId });
     await pool.query(
-      `INSERT INTO advance_request 
-        (request_id, staff_employee_id, requested_amount, reason, status, created_at, created_by, approved_by, approved_at, hr_comments)
-       VALUES (?, ?, ?, ?, 'pending', NOW(), ?, NULL, NULL, NULL)`,
-      [requestId, staffEmployeeId, amount, reason.trim(), req.user.userId]
+      `INSERT INTO claims_and_loans
+        (record_id, type, amount, description, status, staff_employee_id, request_metadata, created_by)
+       VALUES (?, 'advance_request', ?, ?, 'pending', ?, ?, ?)`,
+      [requestId, amount, reason.trim(), staffEmployeeId, metadata, req.user.userId]
     );
 
     const [rows] = await pool.query(
-      'SELECT request_id, staff_employee_id AS staff_id, requested_amount, reason, status, created_at, created_by, approved_by, approved_at, hr_comments FROM advance_request WHERE request_id = ? LIMIT 1',
+      `SELECT record_id AS request_id, staff_employee_id AS staff_id, amount AS requested_amount,
+              description AS reason, status, submitted_at AS created_at,
+              JSON_UNQUOTE(JSON_EXTRACT(request_metadata, '$.created_by')) AS created_by,
+              JSON_UNQUOTE(JSON_EXTRACT(request_metadata, '$.approved_by')) AS approved_by,
+              reviewed_at AS approved_at, reviewer_comments AS hr_comments
+       FROM claims_and_loans WHERE record_id = ? LIMIT 1`,
       [requestId]
     );
 
@@ -1496,19 +1502,31 @@ router.post("/advance-requests", authenticateToken, allowRoles("Staff"), async (
 // List advance requests (HR/Admin see all, Staff see their own)
 router.get("/advance-requests", authenticateToken, allowRoles("Admin", "HR", "Staff"), async (req, res) => {
   try {
+    const selectFields = `
+      c.record_id AS request_id, c.staff_employee_id AS staff_id, c.amount AS requested_amount,
+      c.description AS reason, c.status, c.submitted_at AS created_at,
+      JSON_UNQUOTE(JSON_EXTRACT(c.request_metadata, '$.created_by')) AS created_by,
+      JSON_UNQUOTE(JSON_EXTRACT(c.request_metadata, '$.approved_by')) AS approved_by,
+      c.reviewed_at AS approved_at, c.reviewer_comments AS hr_comments,
+      s.name AS staff_name`;
+
     if (req.user.role === 'Staff') {
       const [rows] = await pool.query(
-        `SELECT ar.request_id, ar.staff_employee_id AS staff_id, ar.requested_amount, ar.reason, ar.status, ar.created_at, ar.created_by, ar.approved_by, ar.approved_at, ar.hr_comments
-         FROM advance_request ar
-         JOIN staff s ON ar.staff_employee_id = s.employee_id
-         WHERE s.user_user_id = ?
-         ORDER BY ar.created_at DESC`,
+        `SELECT ${selectFields}
+         FROM claims_and_loans c
+         JOIN staff s ON c.staff_employee_id = s.employee_id
+         WHERE c.type = 'advance_request' AND s.user_user_id = ?
+         ORDER BY c.submitted_at DESC`,
         [req.user.userId]
       );
       return res.json(rows);
     }
     const [rows] = await pool.query(
-      'SELECT request_id, staff_employee_id AS staff_id, requested_amount, reason, status, created_at, created_by, approved_by, approved_at, hr_comments FROM advance_request ORDER BY created_at DESC'
+      `SELECT ${selectFields}
+       FROM claims_and_loans c
+       JOIN staff s ON c.staff_employee_id = s.employee_id
+       WHERE c.type = 'advance_request'
+       ORDER BY c.submitted_at DESC`
     );
     return res.json(rows);
   } catch (err) {
@@ -1516,53 +1534,50 @@ router.get("/advance-requests", authenticateToken, allowRoles("Admin", "HR", "St
   }
 });
 
-// HR approves an advance request — creates a finance queue item (transaction)
-// HR approval: only HR role may approve at HR step (Admin cannot approve here)
+// HR approves an advance request — status moves to hr_approved (no separate finance record)
 router.put("/advance-requests/:id/approve", authenticateToken, allowRoles("HR"), async (req, res) => {
-  const conn = await pool.getConnection();
   try {
-    await conn.beginTransaction();
     const id = req.params.id;
 
-    const [advRows] = await conn.query('SELECT * FROM advance_request WHERE request_id = ? LIMIT 1', [id]);
-    if (!advRows.length) { await conn.rollback(); return res.status(404).json({ message: 'Advance request not found' }); }
+    const [advRows] = await pool.query(
+      "SELECT * FROM claims_and_loans WHERE record_id = ? AND type = 'advance_request' LIMIT 1", [id]
+    );
+    if (!advRows.length) return res.status(404).json({ message: 'Advance request not found' });
     const advRow = advRows[0];
-    if (advRow.status !== 'pending') { await conn.rollback(); return res.status(400).json({ message: `Cannot approve request in status ${advRow.status}` }); }
+    if (advRow.status !== 'pending') return res.status(400).json({ message: `Cannot approve request in status ${advRow.status}` });
 
     const hrComments = req.body?.hr_comments || null;
-    await conn.query(
-      'UPDATE advance_request SET status = ?, approved_by = ?, approved_at = NOW(), hr_comments = ? WHERE request_id = ? AND status = ?',
-      ['hr_approved', req.user.userId, hrComments, id, 'pending']
-    );
+    const existingMeta = (() => {
+      try { return JSON.parse(advRow.request_metadata || '{}'); } catch { return {}; }
+    })();
+    const updatedMetadata = JSON.stringify({
+      ...existingMeta,
+      approved_by: req.user.userId
+    });
 
-    const finId = makeId('FR');
-    await conn.query(
-      `INSERT INTO finance_request 
-        (finance_request_id, advance_request_id, staff_employee_id, amount, status, created_at, created_by, processed_by, processed_at)
-       VALUES (?, ?, ?, ?, 'queued', NOW(), ?, NULL, NULL)`,
-      [finId, id, advRow.staff_employee_id, advRow.requested_amount, req.user.userId]
+    await pool.query(
+      `UPDATE claims_and_loans
+       SET status = 'hr_approved', reviewer_comments = ?, reviewed_at = NOW(), request_metadata = ?
+       WHERE record_id = ? AND type = 'advance_request' AND status = 'pending'`,
+      [hrComments, updatedMetadata, id]
     );
-
-    await conn.commit();
 
     const [updatedRows] = await pool.query(
-      'SELECT request_id, staff_employee_id AS staff_id, requested_amount, reason, status, created_at, created_by, approved_by, approved_at, hr_comments FROM advance_request WHERE request_id = ? LIMIT 1',
+      `SELECT record_id AS request_id, staff_employee_id AS staff_id, amount AS requested_amount,
+              description AS reason, status, submitted_at AS created_at,
+              JSON_UNQUOTE(JSON_EXTRACT(request_metadata, '$.created_by')) AS created_by,
+              JSON_UNQUOTE(JSON_EXTRACT(request_metadata, '$.approved_by')) AS approved_by,
+              reviewed_at AS approved_at, reviewer_comments AS hr_comments
+       FROM claims_and_loans WHERE record_id = ? LIMIT 1`,
       [id]
     );
-    const [finRows] = await pool.query(
-      'SELECT finance_request_id, advance_request_id, staff_employee_id AS staff_id, amount, status, created_at, created_by, processed_by, processed_at, payment_reference FROM finance_request WHERE finance_request_id = ? LIMIT 1',
-      [finId]
-    );
 
-    addAudit(req.user.email, `HR approved advance request ${id} and queued finance request ${finId}`, 'Payroll');
+    addAudit(req.user.email, `HR approved advance request ${id}`, 'Payroll');
     const [ownerRows] = await pool.query('SELECT user_user_id FROM staff WHERE employee_id = ? LIMIT 1', [advRow.staff_employee_id]);
     if (ownerRows[0]?.user_user_id) await createNotificationInternal(ownerRows[0].user_user_id, 'system', 'Salary advance approved by HR', 'Your request has been sent to Finance for release.');
-    res.json({ message: 'Advance request approved and queued for Finance', request: updatedRows[0], finance_request: finRows[0] });
+    res.json({ message: 'Advance request approved and queued for Finance', request: updatedRows[0] });
   } catch (err) {
-    await conn.rollback();
     res.status(500).json({ message: 'Failed to approve advance request', error: err.message });
-  } finally {
-    conn.release();
   }
 });
 
@@ -1571,18 +1586,35 @@ router.put("/advance-requests/:id/reject", authenticateToken, allowRoles("Admin"
   try {
     const id = req.params.id;
 
-    const [advRows] = await pool.query('SELECT * FROM advance_request WHERE request_id = ? LIMIT 1', [id]);
+    const [advRows] = await pool.query(
+      "SELECT * FROM claims_and_loans WHERE record_id = ? AND type = 'advance_request' LIMIT 1", [id]
+    );
     if (!advRows.length) return res.status(404).json({ message: 'Advance request not found' });
     if (advRows[0].status !== 'pending') return res.status(400).json({ message: `Cannot reject request in status ${advRows[0].status}` });
 
     const hrComments = req.body?.hr_comments || null;
+    const existingMeta = (() => {
+      try { return JSON.parse(advRows[0].request_metadata || '{}'); } catch { return {}; }
+    })();
+    const updatedMetadata = JSON.stringify({
+      ...existingMeta,
+      approved_by: req.user.userId
+    });
+
     await pool.query(
-      'UPDATE advance_request SET status = ?, approved_by = ?, approved_at = NOW(), hr_comments = ? WHERE request_id = ? AND status = ?',
-      ['hr_rejected', req.user.userId, hrComments, id, 'pending']
+      `UPDATE claims_and_loans
+       SET status = 'hr_rejected', reviewer_comments = ?, reviewed_at = NOW(), request_metadata = ?
+       WHERE record_id = ? AND type = 'advance_request' AND status = 'pending'`,
+      [hrComments, updatedMetadata, id]
     );
 
     const [updatedRows] = await pool.query(
-      'SELECT request_id, staff_employee_id AS staff_id, requested_amount, reason, status, created_at, created_by, approved_by, approved_at, hr_comments FROM advance_request WHERE request_id = ? LIMIT 1',
+      `SELECT record_id AS request_id, staff_employee_id AS staff_id, amount AS requested_amount,
+              description AS reason, status, submitted_at AS created_at,
+              JSON_UNQUOTE(JSON_EXTRACT(request_metadata, '$.created_by')) AS created_by,
+              JSON_UNQUOTE(JSON_EXTRACT(request_metadata, '$.approved_by')) AS approved_by,
+              reviewed_at AS approved_at, reviewer_comments AS hr_comments
+       FROM claims_and_loans WHERE record_id = ? LIMIT 1`,
       [id]
     );
 
@@ -1595,16 +1627,21 @@ router.put("/advance-requests/:id/reject", authenticateToken, allowRoles("Admin"
   }
 });
 
-// Finance: list queued finance requests
+// Finance: list queued advance requests awaiting finance processing
 router.get('/finance-requests', authenticateToken, allowRoles('Finance'), async (_req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT fr.finance_request_id, fr.advance_request_id, fr.staff_employee_id AS staff_id,
-        s.name AS staff_name, fr.amount, ar.reason, fr.status, fr.created_at, fr.created_by,
-        fr.processed_by, fr.processed_at, fr.payment_reference FROM finance_request fr
-        JOIN staff s ON s.employee_id = fr.staff_employee_id
-        JOIN advance_request ar ON ar.request_id = fr.advance_request_id
-        ORDER BY fr.created_at DESC`
+      `SELECT c.record_id AS finance_request_id, c.record_id AS advance_request_id,
+              c.staff_employee_id AS staff_id, s.name AS staff_name,
+              c.amount, c.description AS reason, c.status,
+              c.submitted_at AS created_at,
+              JSON_UNQUOTE(JSON_EXTRACT(c.request_metadata, '$.created_by')) AS created_by,
+              JSON_UNQUOTE(JSON_EXTRACT(c.request_metadata, '$.processed_by')) AS processed_by,
+              c.finance_processed_at AS processed_at, c.payment_reference
+       FROM claims_and_loans c
+       JOIN staff s ON s.employee_id = c.staff_employee_id
+       WHERE c.type = 'advance_request' AND c.status = 'hr_approved'
+       ORDER BY c.reviewed_at DESC`
     );
     return res.json(rows);
   } catch (err) {
@@ -1612,50 +1649,49 @@ router.get('/finance-requests', authenticateToken, allowRoles('Finance'), async 
   }
 });
 
-// Finance: approve/process a finance request (transaction — only Finance role allowed)
+// Finance: approve/process an advance request (only Finance role allowed)
 router.put('/finance-requests/:id/approve', authenticateToken, allowRoles('Finance'), async (req, res) => {
-  const conn = await pool.getConnection();
   try {
-    await conn.beginTransaction();
     const id = req.params.id;
     const paymentReference = String(req.body?.payment_reference || '').trim();
-    if (!paymentReference) { await conn.rollback(); return res.status(400).json({ message: 'Payment reference is required' }); }
+    if (!paymentReference) return res.status(400).json({ message: 'Payment reference is required' });
 
-    const [finRows] = await conn.query('SELECT * FROM finance_request WHERE finance_request_id = ? LIMIT 1', [id]);
-    if (!finRows.length) { await conn.rollback(); return res.status(404).json({ message: 'Finance request not found' }); }
-    const finRow = finRows[0];
-    if (finRow.status !== 'queued') { await conn.rollback(); return res.status(400).json({ message: `Cannot process request in status ${finRow.status}` }); }
+    const [advRows] = await pool.query(
+      "SELECT * FROM claims_and_loans WHERE record_id = ? AND type = 'advance_request' LIMIT 1", [id]
+    );
+    if (!advRows.length) return res.status(404).json({ message: 'Advance request not found' });
+    const advRow = advRows[0];
+    if (advRow.status !== 'hr_approved') return res.status(400).json({ message: `Cannot process request in status ${advRow.status}` });
 
-    await conn.query(
-      'UPDATE finance_request SET status = ?, processed_by = ?, processed_at = NOW(), payment_reference = ? WHERE finance_request_id = ? AND status = ?',
-      ['processed', req.user.userId, paymentReference, id, 'queued']
+    const updatedMetadata = JSON.stringify({
+      ...(() => { try { return JSON.parse(advRow.request_metadata || '{}'); } catch { return {}; } })(),
+      processed_by: req.user.userId
+    });
+
+    await pool.query(
+      `UPDATE claims_and_loans
+       SET status = 'finance_approved', finance_processed_at = NOW(), payment_reference = ?, request_metadata = ?
+       WHERE record_id = ? AND type = 'advance_request' AND status = 'hr_approved'`,
+      [paymentReference, updatedMetadata, id]
     );
 
-    await conn.query(
-      'UPDATE advance_request SET status = ? WHERE request_id = ?',
-      ['finance_approved', finRow.advance_request_id]
-    );
-
-    await conn.commit();
-
-    const [updatedFin] = await pool.query(
-      'SELECT finance_request_id, advance_request_id, staff_employee_id AS staff_id, amount, status, created_at, created_by, processed_by, processed_at FROM finance_request WHERE finance_request_id = ? LIMIT 1',
+    const [updatedRows] = await pool.query(
+      `SELECT record_id AS request_id, staff_employee_id AS staff_id, amount AS requested_amount,
+              description AS reason, status, submitted_at AS created_at,
+              JSON_UNQUOTE(JSON_EXTRACT(request_metadata, '$.created_by')) AS created_by,
+              JSON_UNQUOTE(JSON_EXTRACT(request_metadata, '$.approved_by')) AS approved_by,
+              reviewed_at AS approved_at, reviewer_comments AS hr_comments,
+              finance_processed_at, payment_reference
+       FROM claims_and_loans WHERE record_id = ? LIMIT 1`,
       [id]
     );
-    const [updatedAdv] = await pool.query(
-      'SELECT request_id, staff_employee_id AS staff_id, requested_amount, reason, status, created_at, created_by, approved_by, approved_at, hr_comments FROM advance_request WHERE request_id = ? LIMIT 1',
-      [finRow.advance_request_id]
-    );
 
-    addAudit(req.user.email, `Finance processed request ${id} for advance ${finRow.advance_request_id}`, 'Payroll');
-    const [ownerRows] = await pool.query('SELECT user_user_id FROM staff WHERE employee_id = ? LIMIT 1', [finRow.staff_employee_id]);
+    addAudit(req.user.email, `Finance processed advance request ${id}`, 'Payroll');
+    const [ownerRows] = await pool.query('SELECT user_user_id FROM staff WHERE employee_id = ? LIMIT 1', [advRow.staff_employee_id]);
     if (ownerRows[0]?.user_user_id) await createNotificationInternal(ownerRows[0].user_user_id, 'system', 'Salary advance released', `Finance released your approved salary advance. Reference: ${paymentReference}`);
-    return res.json({ message: 'Finance request processed', finance_request: updatedFin[0], advance_request: updatedAdv[0] || null });
+    return res.json({ message: 'Finance request processed', advance_request: updatedRows[0] });
   } catch (err) {
-    await conn.rollback();
     return res.status(500).json({ message: 'Failed to process finance request', error: err.message });
-  } finally {
-    conn.release();
   }
 });
 
