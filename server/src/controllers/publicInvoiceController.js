@@ -126,7 +126,12 @@ async function viewInvoice(req, res) {
       invoice.payment_url.includes("cs_test_paid_")
     );
 
-    if (isPayable && (!invoice.payment_url || isPlaceholderUrl)) {
+    // Has a real Stripe URL already — skip generation entirely
+    const hasRealUrl = invoice.payment_url &&
+      !isPlaceholderUrl &&
+      invoice.payment_url.startsWith("https://checkout.stripe.com");
+
+    if (isPayable && !hasRealUrl) {
       try {
         const { createCheckoutSession } = require("../services/stripeService");
         const stripeResult = await createCheckoutSession({
