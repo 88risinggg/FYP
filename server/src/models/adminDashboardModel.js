@@ -113,11 +113,14 @@ function getRangeConfig(range, options = {}) {
   if (normalized === "custom") {
     startDate = isIsoDate(options.startDate) ? options.startDate : null;
     const customEndDate = isIsoDate(options.endDate) ? options.endDate : endDate;
+    const customDays = startDate
+      ? Math.max(0, Math.ceil((new Date(customEndDate) - new Date(startDate)) / 86400000))
+      : 0;
     return {
       range: normalized,
       startDate,
       endDate: customEndDate,
-      period: "day"
+      period: customDays > 730 ? "month" : customDays > 90 ? "week" : "day"
     };
   }
 
@@ -952,7 +955,7 @@ async function getPaymentReminderSummaryData(range) {
   };
 }
 
-function emptyInvoicePerformance(range, missingTables = []) {
+function emptyInvoicePerformance(range) {
   const statuses = dashboardInvoiceStatuses.map((status) => ({
     status,
     count: 0,
@@ -966,6 +969,7 @@ function emptyInvoicePerformance(range, missingTables = []) {
       statuses
     },
     invoiceActivityTrend: [],
+    activityGrouping: "day",
     revenueTrend: [],
     paidVsOverdue: {
       paidCount: 0,
@@ -981,8 +985,7 @@ function emptyInvoicePerformance(range, missingTables = []) {
     },
     recentStatusChangeSummary: [],
     recentStatusChanges: [],
-    missingTables,
-    notes: []
+    pagination: { page: 1, pageSize: 10, total: 0, totalPages: 1 }
   };
 }
 
@@ -1063,7 +1066,8 @@ async function getInvoiceStatusPerformance(context, rangeConfig, missingTables) 
 function periodSql(dateExpression, period) {
   if (period === "hour") {
     return {
-      label: `DATE_FORMAT(${dateExpression}, '%l %p')`,
+      label: `DATE_FORMAT(MIN(${dateExpression}), '%l %p')`,
+      key: `DATE_FORMAT(MIN(${dateExpression}), '%Y-%m-%dT%H:00:00')`,
       group: `DATE_FORMAT(${dateExpression}, '%Y-%m-%d %H')`,
       order: `MIN(${dateExpression})`,
       date: `MIN(${dateExpression})`,
@@ -1073,7 +1077,8 @@ function periodSql(dateExpression, period) {
 
   if (period === "week") {
     return {
-      label: `CONCAT('Week ', DATE_FORMAT(${dateExpression}, '%v %x'))`,
+      label: `CONCAT('Week ', DATE_FORMAT(MIN(${dateExpression}), '%v %x'))`,
+      key: `DATE_FORMAT(DATE_SUB(DATE(MIN(${dateExpression})), INTERVAL WEEKDAY(MIN(${dateExpression})) DAY), '%Y-%m-%d')`,
       group: `YEARWEEK(${dateExpression}, 3)`,
       order: `MIN(${dateExpression})`,
       date: `MIN(${dateExpression})`,
@@ -1083,7 +1088,8 @@ function periodSql(dateExpression, period) {
 
   if (period === "month") {
     return {
-      label: `DATE_FORMAT(${dateExpression}, '%b %Y')`,
+      label: `DATE_FORMAT(MIN(${dateExpression}), '%b %Y')`,
+      key: `DATE_FORMAT(MIN(${dateExpression}), '%Y-%m-01')`,
       group: `DATE_FORMAT(${dateExpression}, '%Y-%m')`,
       order: `MIN(${dateExpression})`,
       date: `MIN(${dateExpression})`,
@@ -1092,7 +1098,8 @@ function periodSql(dateExpression, period) {
   }
 
   return {
-    label: `DATE_FORMAT(${dateExpression}, '%b %e')`,
+    label: `DATE_FORMAT(MIN(${dateExpression}), '%b %e')`,
+    key: `DATE_FORMAT(MIN(${dateExpression}), '%Y-%m-%d')`,
     group: `DATE(${dateExpression})`,
     order: `MIN(${dateExpression})`,
     date: `MIN(${dateExpression})`,
@@ -1180,7 +1187,106 @@ async function getRevenueTrend(context, rangeConfig, missingTables) {
   return getInvoiceRevenueTrend(context, rangeConfig, missingTables);
 }
 
-async function getInvoiceActivityTrend(context, rangeConfig, missingTables) {
+async function getPaymentActivityTrend(rangeConfig, missingTables) {
+  const paymentContext = await getPaymentTableContext(missingTables);
+  if (!paymentContext?.dateExpr || !paymentContext?.amountExpr) return null;
+
+  const period = periodSql(paymentContext.dateExpr, rangeConfig.period);
+  const params = [];
+  const dateFilter = rangeWhere(paymentContext.dateExpr, rangeConfig, params);
+  const where = [
+    successfulPaymentSql(paymentContext.statusExpr),
+    dateFilter
+  ].filter(Boolean);
+  const paidCountExpr = paymentContext.invoiceIdExpr
+    ? `COUNT(DISTINCT ${paymentContext.invoiceIdExpr})`
+    : "COUNT(*)";
+  const result = await safeQuery(
+    `SELECT
+      ${period.label} AS period,
+      ${period.key} AS bucketKey,
+      ${paidCountExpr} AS paidCount,
+      SUM(${paymentContext.amountExpr}) AS paidAmount
+     FROM ${quoteIdentifier(paymentContext.table)} AS ${paymentContext.alias}
+     ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+     GROUP BY ${period.group}
+     ORDER BY ${period.order} ASC
+     LIMIT 2000`,
+    params,
+    []
+  );
+
+  if (result.missing) {
+    missingTables.add(paymentContext.table);
+    return null;
+  }
+
+  return result.rows.map((row) => ({
+    period: row.period,
+    bucketKey: row.bucketKey,
+    paidCount: Number(row.paidCount || 0),
+    paidAmount: Number(row.paidAmount || 0)
+  }));
+}
+
+async function getStatusActivityTrend(rangeConfig) {
+  const candidates = [
+    "invoice_status_history",
+    "invoice_status_histories",
+    "invoice_status_logs",
+    "invoice_status_log",
+    "invoice_activity"
+  ];
+
+  for (const table of candidates) {
+    const columns = await getTableColumns(table);
+    if (!columns) continue;
+
+    const invoiceIdColumn = pickColumn(columns, ["invoice_id", "invoiceId"]);
+    const toStatusColumn = pickColumn(columns, ["to_status", "new_status", "status"]);
+    const changedAtColumn = pickColumn(columns, ["changed_at", "created_at", "updated_at", "createdAt"]);
+    if (!invoiceIdColumn || !toStatusColumn || !changedAtColumn) continue;
+
+    const alias = "activity_status";
+    const dateExpr = columnExpression(alias, changedAtColumn);
+    const statusExpr = columnExpression(alias, toStatusColumn);
+    const invoiceIdExpr = columnExpression(alias, invoiceIdColumn);
+    const period = periodSql(dateExpr, rangeConfig.period);
+    const params = [];
+    const dateFilter = rangeWhere(dateExpr, rangeConfig, params);
+    const where = [
+      `LOWER(${statusExpr}) IN ('sent', 'paid')`,
+      dateFilter
+    ].filter(Boolean);
+    const result = await safeQuery(
+      `SELECT
+        ${period.label} AS period,
+        ${period.key} AS bucketKey,
+        COUNT(DISTINCT CASE WHEN LOWER(${statusExpr}) = 'sent' THEN ${invoiceIdExpr} END) AS sentCount,
+        COUNT(DISTINCT CASE WHEN LOWER(${statusExpr}) = 'paid' THEN ${invoiceIdExpr} END) AS paidCount
+       FROM ${quoteIdentifier(table)} AS ${alias}
+       WHERE ${where.join(" AND ")}
+       GROUP BY ${period.group}
+       ORDER BY ${period.order} ASC
+       LIMIT 2000`,
+      params,
+      []
+    );
+
+    if (!result.missing) {
+      return result.rows.map((row) => ({
+        period: row.period,
+        bucketKey: row.bucketKey,
+        sentCount: Number(row.sentCount || 0),
+        paidCount: Number(row.paidCount || 0)
+      }));
+    }
+  }
+
+  return null;
+}
+
+async function getInvoiceActivityTrend(context, rangeConfig, missingTables, includeActivityDetails = false) {
   const params = [];
   const dateFilter = rangeWhere("performanceDate", rangeConfig, params);
   const period = periodSql("performanceDate", rangeConfig.period);
@@ -1191,10 +1297,16 @@ async function getInvoiceActivityTrend(context, rangeConfig, missingTables) {
   const result = await safeQuery(
     `SELECT
       ${period.label} AS period,
+      ${period.key} AS bucketKey,
       ${period.date} AS fullDate,
       ${period.time} AS time,
       COUNT(*) AS invoiceCount,
-      SUM(CASE WHEN LOWER(normalizedStatus) = 'paid' THEN totalAmount ELSE 0 END) AS revenue
+      COUNT(*) AS createdCount,
+      SUM(LOWER(normalizedStatus) IN ('sent', 'viewed', 'paid', 'overdue')) AS sentCount,
+      SUM(LOWER(normalizedStatus) = 'paid') AS paidCount,
+      SUM(totalAmount) AS invoicedAmount,
+      SUM(CASE WHEN LOWER(normalizedStatus) = 'paid' THEN totalAmount ELSE 0 END) AS paidAmount,
+      SUM(CASE WHEN LOWER(normalizedStatus) = 'overdue' THEN outstandingAmount ELSE 0 END) AS overdueAmount
      FROM (${invoicePerformanceSubquery(context)}) AS performance_invoice
      WHERE ${where.join(" AND ")}
      GROUP BY ${period.group}
@@ -1205,13 +1317,83 @@ async function getInvoiceActivityTrend(context, rangeConfig, missingTables) {
 
   if (result.missing) missingTables.add("invoice");
 
-  return result.rows.map((row) => ({
+  const invoicePoints = result.rows.map((row) => ({
     period: row.period,
+    bucketKey: row.bucketKey,
     fullDate: row.fullDate,
     time: row.time || null,
     invoiceCount: Number(row.invoiceCount || 0),
-    revenue: Number(row.revenue || 0)
+    revenue: Number(row.paidAmount || 0),
+    createdCount: Number(row.createdCount || 0),
+    sentCount: Number(row.sentCount || 0),
+    paidCount: Number(row.paidCount || 0),
+    invoicedAmount: Number(row.invoicedAmount || 0),
+    paidAmount: Number(row.paidAmount || 0),
+    overdueAmount: Number(row.overdueAmount || 0)
   }));
+
+  if (!includeActivityDetails) return invoicePoints;
+
+  const [statusPoints, paymentPoints] = await Promise.all([
+    getStatusActivityTrend(rangeConfig),
+    getPaymentActivityTrend(rangeConfig, missingTables)
+  ]);
+  const byBucket = new Map(invoicePoints.map((point) => [point.bucketKey, point]));
+
+  if (statusPoints) {
+    invoicePoints.forEach((point) => {
+      point.sentCount = 0;
+      if (!paymentPoints) point.paidCount = 0;
+    });
+  }
+  if (paymentPoints) {
+    invoicePoints.forEach((point) => {
+      point.paidCount = 0;
+      point.paidAmount = 0;
+      point.revenue = 0;
+    });
+  }
+
+  function pointFor(bucketKey, periodLabel) {
+    if (!byBucket.has(bucketKey)) {
+      byBucket.set(bucketKey, {
+        period: periodLabel,
+        bucketKey,
+        fullDate: bucketKey,
+        time: rangeConfig.period === "hour" ? periodLabel : null,
+        invoiceCount: 0,
+        revenue: 0,
+        createdCount: 0,
+        sentCount: 0,
+        paidCount: 0,
+        invoicedAmount: 0,
+        paidAmount: 0,
+        overdueAmount: 0
+      });
+    }
+    return byBucket.get(bucketKey);
+  }
+
+  if (statusPoints) {
+    statusPoints.forEach((statusPoint) => {
+      const point = pointFor(statusPoint.bucketKey, statusPoint.period);
+      point.sentCount = statusPoint.sentCount;
+      if (!paymentPoints) point.paidCount = statusPoint.paidCount;
+    });
+  }
+
+  if (paymentPoints) {
+    paymentPoints.forEach((paymentPoint) => {
+      const point = pointFor(paymentPoint.bucketKey, paymentPoint.period);
+      point.paidCount = paymentPoint.paidCount;
+      point.paidAmount = paymentPoint.paidAmount;
+      point.revenue = paymentPoint.paidAmount;
+    });
+  }
+
+  return Array.from(byBucket.values())
+    .sort((left, right) => String(left.bucketKey).localeCompare(String(right.bucketKey)))
+    .slice(-2000);
 }
 
 async function getPaidVsOverdue(context, rangeConfig, missingTables) {
@@ -1357,7 +1539,7 @@ async function getInvoiceLookup(context, invoiceIds) {
   }, {});
 }
 
-async function getStatusHistoryChanges(context, rangeConfig, missingTables) {
+async function getStatusHistoryChanges(context, rangeConfig, missingTables, options = {}) {
   const candidates = [
     "invoice_status_history",
     "invoice_status_histories",
@@ -1390,12 +1572,25 @@ async function getStatusHistoryChanges(context, rangeConfig, missingTables) {
     const changedAtExpr = columnExpression(historyAlias, changedAtColumn);
     const params = [];
     const dateFilter = rangeWhere("changedOn", rangeConfig, params);
+    const selectedStatus = normalizeInvoiceStatus(options.status);
+    const search = String(options.search || "").trim().slice(0, 100);
+    const page = Math.max(1, Math.min(100000, Number.parseInt(options.page, 10) || 1));
+    const pageSize = Math.max(5, Math.min(50, Number.parseInt(options.pageSize, 10) || 10));
     const where = [
       "LOWER(fromStatus) IN ('draft', 'sent', 'viewed', 'paid', 'overdue')",
       "LOWER(toStatus) IN ('draft', 'sent', 'viewed', 'paid', 'overdue')",
       "LOWER(fromStatus) <> LOWER(toStatus)",
       dateFilter
     ].filter(Boolean);
+    if (selectedStatus) {
+      where.push("LOWER(toStatus) = ?");
+      params.push(selectedStatus.toLowerCase());
+    }
+    if (search) {
+      where.push("(LOWER(invoiceNo) LIKE ? OR LOWER(customerName) LIKE ?)");
+      const searchParam = `%${search.toLowerCase()}%`;
+      params.push(searchParam, searchParam);
+    }
     const changedByExpr = coalesceExpression(
       [
         canJoinUser ? columnExpression("history_user", userNameColumn) : null,
@@ -1423,13 +1618,21 @@ async function getStatusHistoryChanges(context, rangeConfig, missingTables) {
        ${context.joinCustomerSql}
        ${userJoin}`;
 
+    const countResult = await safeQuery(
+      `SELECT COUNT(*) AS total
+       FROM (${baseQuery}) AS status_change
+       WHERE ${where.join(" AND ")}`,
+      params,
+      [{ total: 0 }]
+    );
+    const detailParams = [...params, pageSize, (page - 1) * pageSize];
     const detailResult = await safeQuery(
       `SELECT *
        FROM (${baseQuery}) AS status_change
        WHERE ${where.join(" AND ")}
        ORDER BY changedOn DESC, id DESC
-       LIMIT 10`,
-      params,
+       LIMIT ? OFFSET ?`,
+      detailParams,
       []
     );
 
@@ -1483,16 +1686,23 @@ async function getStatusHistoryChanges(context, rangeConfig, missingTables) {
       })
       .filter(Boolean);
 
+    const total = Number(countResult.rows[0]?.total || 0);
     return {
       recentStatusChangeSummary,
-      recentStatusChanges
+      recentStatusChanges,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize))
+      }
     };
   }
 
   return null;
 }
 
-async function getAuditStatusChanges(context, rangeConfig, missingTables, notes) {
+async function getAuditStatusChanges(context, rangeConfig, missingTables, notes, options = {}) {
   const auditColumns = await getTableColumns("audit_logs");
   const legacyAuditColumns = auditColumns ? null : await getTableColumns("audit_log");
   const table = auditColumns ? "audit_logs" : legacyAuditColumns ? "audit_log" : null;
@@ -1594,11 +1804,24 @@ async function getAuditStatusChanges(context, rangeConfig, missingTables, notes)
     return items;
   }, {});
 
+  const selectedStatus = normalizeInvoiceStatus(options.status);
+  const search = String(options.search || "").trim().toLowerCase().slice(0, 100);
+  const page = Math.max(1, Math.min(100000, Number.parseInt(options.page, 10) || 1));
+  const pageSize = Math.max(5, Math.min(50, Number.parseInt(options.pageSize, 10) || 10));
+  const filteredRows = parsedRows.filter((row) => {
+    if (selectedStatus && row.toStatus !== selectedStatus) return false;
+    if (!search) return true;
+    const invoice = invoiceLookup[String(row.invoiceId)] || {};
+    return String(invoice.invoiceNo || row.affectedRecord || "").toLowerCase().includes(search)
+      || String(invoice.customerName || "").toLowerCase().includes(search);
+  });
+  const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
+
   return {
     recentStatusChangeSummary: Object.values(summaryMap)
       .sort((first, second) => second.count - first.count)
       .slice(0, 6),
-    recentStatusChanges: parsedRows.slice(0, 10).map((row) => {
+    recentStatusChanges: pageRows.map((row) => {
       const invoice = invoiceLookup[String(row.invoiceId)] || {};
 
       return {
@@ -1612,15 +1835,21 @@ async function getAuditStatusChanges(context, rangeConfig, missingTables, notes)
         amount: Number(invoice.amount || 0),
         changedBy: row.changedBy
       };
-    })
+    }),
+    pagination: {
+      page,
+      pageSize,
+      total: filteredRows.length,
+      totalPages: Math.max(1, Math.ceil(filteredRows.length / pageSize))
+    }
   };
 }
 
-async function getStatusChanges(context, rangeConfig, missingTables, notes) {
-  const historyChanges = await getStatusHistoryChanges(context, rangeConfig, missingTables);
+async function getStatusChanges(context, rangeConfig, missingTables, notes, options = {}) {
+  const historyChanges = await getStatusHistoryChanges(context, rangeConfig, missingTables, options);
   if (historyChanges) return historyChanges;
 
-  return getAuditStatusChanges(context, rangeConfig, missingTables, notes);
+  return getAuditStatusChanges(context, rangeConfig, missingTables, notes, options);
 }
 
 async function getInvoicePerformanceData(range, options = {}) {
@@ -1630,42 +1859,48 @@ async function getInvoicePerformanceData(range, options = {}) {
   const context = await getInvoicePerformanceContext(missingTables);
 
   if (!context) {
-    const empty = emptyInvoicePerformance(rangeConfig.range, Array.from(missingTables));
-    return {
-      ...empty,
-      notes
-    };
+    return emptyInvoicePerformance(rangeConfig.range);
   }
 
-  const invoiceStatus = await getInvoiceStatusPerformance(context, rangeConfig, missingTables);
-  const invoiceActivityTrend = await getInvoiceActivityTrend(context, rangeConfig, missingTables);
-  const revenueTrend = invoiceActivityTrend.map((item) => ({
+  const allowedSections = new Set(["all", "status", "activity", "paid-vs-overdue", "status-changes"]);
+  const requestedSection = String(options.section || "all").toLowerCase();
+  const section = allowedSections.has(requestedSection) ? requestedSection : "all";
+  const wants = (name) => section === "all" || section === name;
+  const invoiceStatus = wants("status")
+    ? await getInvoiceStatusPerformance(context, rangeConfig, missingTables)
+    : undefined;
+  const includeActivityDetails = String(options.activityDetails || "").toLowerCase() === "true";
+  const invoiceActivityTrend = wants("activity")
+    ? await getInvoiceActivityTrend(context, rangeConfig, missingTables, includeActivityDetails)
+    : undefined;
+  const revenueTrend = invoiceActivityTrend?.map((item) => ({
     period: item.period,
     fullDate: item.fullDate,
     time: item.time,
     revenue: item.revenue,
     invoiceCount: item.invoiceCount
   }));
-  const paidVsOverdue = await getPaidVsOverdue(context, rangeConfig, missingTables);
-  const documentGeneration = await getDocumentGeneration(
-    rangeConfig,
-    invoiceStatus.total,
-    missingTables,
-    notes
-  );
-  const statusChanges = await getStatusChanges(context, rangeConfig, missingTables, notes);
+  const paidVsOverdue = wants("paid-vs-overdue")
+    ? await getPaidVsOverdue(context, rangeConfig, missingTables)
+    : undefined;
+  const documentGeneration = String(options.includeDocuments || "").toLowerCase() === "true"
+    ? await getDocumentGeneration(rangeConfig, invoiceStatus?.total || 0, missingTables, notes)
+    : undefined;
+  const statusChanges = wants("status-changes")
+    ? await getStatusChanges(context, rangeConfig, missingTables, notes, options)
+    : undefined;
 
   return {
     range: rangeConfig.range,
+    activityGrouping: rangeConfig.period,
     invoiceStatus,
     invoiceActivityTrend,
     revenueTrend,
     paidVsOverdue,
     documentGeneration,
-    recentStatusChangeSummary: statusChanges.recentStatusChangeSummary,
-    recentStatusChanges: statusChanges.recentStatusChanges,
-    missingTables: Array.from(missingTables),
-    notes
+    recentStatusChangeSummary: statusChanges?.recentStatusChangeSummary,
+    recentStatusChanges: statusChanges?.recentStatusChanges,
+    pagination: statusChanges?.pagination
   };
 }
 

@@ -98,6 +98,7 @@ async function getInvoicePerformance(req, res) {
     const performance = await getInvoicePerformanceData(req.query.range, req.query);
     res.json(performance);
   } catch (error) {
+    console.error("[Admin invoice performance] Failed to load data:", error);
     res.status(500).json({
       message: "Unable to load invoice performance data."
     });
@@ -106,7 +107,10 @@ async function getInvoicePerformance(req, res) {
 
 async function exportInvoicePerformance(req, res) {
   try {
-    const performance = await getInvoicePerformanceData(req.query.range, req.query);
+    const performance = await getInvoicePerformanceData(req.query.range, {
+      ...req.query,
+      includeDocuments: true
+    });
     const csv = invoicePerformanceCsv(performance);
     const fileRange = performance.range || "last-30-days";
 

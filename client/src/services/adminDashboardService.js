@@ -28,9 +28,10 @@ export function fetchAdminInvoicingDashboard() {
   });
 }
 
-export function fetchInvoicePerformance(range = "last-30-days", filters = {}) {
+export function fetchInvoicePerformance(range = "last-30-days", filters = {}, requestOptions = {}) {
   return apiRequest(`/api/admin/invoicing/dashboard/invoice-performance${toQueryString({ range, ...filters })}`, {
-    headers: authHeaders()
+    ...requestOptions,
+    headers: { ...authHeaders(), ...requestOptions.headers }
   });
 }
 
