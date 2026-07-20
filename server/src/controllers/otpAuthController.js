@@ -162,14 +162,14 @@ async function verifyOtp(req, res) {
 
 /**
  * Find existing user by email or create a new one.
+ * Uses the role_name column directly on the user table (no separate role table).
  */
 async function findOrCreateOtpUser(email) {
   // Check if user exists
   const [existing] = await pool.query(
-    `SELECT u.user_id, u.name, u.email, u.status, r.role_name AS role
-     FROM user u
-     JOIN role r ON r.role_id = u.role_id
-     WHERE u.email = ?
+    `SELECT user_id, name, email, status, role_name AS role
+     FROM user
+     WHERE email = ?
      LIMIT 1`,
     [email]
   );
@@ -179,14 +179,12 @@ async function findOrCreateOtpUser(email) {
   }
 
   // Create new user with Staff role
-  const [staffRole] = await pool.query("SELECT role_id FROM role WHERE role_name = 'Staff' LIMIT 1");
-  const roleId = staffRole[0]?.role_id || 4;
   const displayName = email.split("@")[0];
 
   const [result] = await pool.query(
-    `INSERT INTO user (name, email, password, role_id, status)
-     VALUES (?, ?, ?, ?, 1)`,
-    [displayName, email, "", roleId]
+    `INSERT INTO user (name, email, password, role_name, status, created_at)
+     VALUES (?, ?, '', 'Staff', 1, NOW())`,
+    [displayName, email]
   );
 
   return {
