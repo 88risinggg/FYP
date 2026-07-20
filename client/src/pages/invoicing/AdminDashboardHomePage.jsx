@@ -1,7 +1,6 @@
 import {
   AlertTriangle,
   Banknote,
-  BarChart3,
   BellRing,
   CalendarDays,
   CheckCircle2,
@@ -14,11 +13,8 @@ import {
   FileText,
   MoreHorizontal,
   Pencil,
-  Plus,
   RefreshCw,
   Send,
-  Settings,
-  UserPlus,
   XCircle
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -169,19 +165,6 @@ function FocusRow({ icon: Icon, label, count, to, accent }) {
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#251E1F]">{label}</span>
       <span className="text-sm font-bold text-[#251E1F]">{formatCount(count)}</span>
       <ChevronRight size={15} className="text-[#b89a92]" />
-    </Link>
-  );
-}
-
-function QuickAction({ icon: Icon, label, to }) {
-  return (
-    <Link
-      to={to}
-      className="flex min-h-[58px] items-center gap-3 rounded-lg border border-[#ead3cc] bg-[#fff8f5] px-3 py-3 text-sm font-bold text-[#251E1F] transition hover:border-[#F38978] hover:bg-white hover:text-[#F38978]"
-    >
-      <Icon size={17} className="shrink-0" />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      <ChevronRight size={15} />
     </Link>
   );
 }
@@ -500,7 +483,7 @@ export default function AdminDashboardHomePage() {
           ))}
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[0.9fr_1.55fr_0.85fr]">
+        <div className="grid gap-4 xl:grid-cols-[0.9fr_1.55fr]">
           <Panel title="Today's Focus">
             <div className="space-y-2">
               <FocusRow icon={AlertTriangle} label="Overdue Invoices" count={todayFocus.overdueInvoices} to={`${invoiceListPath}?status=overdue`} accent="#F38978" />
@@ -518,16 +501,6 @@ export default function AdminDashboardHomePage() {
             <UpcomingDueInvoicesTable invoices={upcomingDueInvoices} />
           </Panel>
 
-          <Panel title="Quick Actions" className="xl:row-span-2">
-            <div className="space-y-3">
-              <QuickAction icon={Plus} label="Create Invoice" to={`${invoiceListPath}/create`} />
-              <QuickAction icon={Send} label="Send Reminder" to={`${basePath}/reminder-settings`} />
-              <QuickAction icon={UserPlus} label="New Customer" to={`${basePath}/customers/create`} />
-              <QuickAction icon={CreditCard} label="Record Payment" to={`${basePath}/payments/record`} />
-              <QuickAction icon={BarChart3} label="Generate Report" to={`${basePath}/reports`} />
-              <QuickAction icon={Settings} label="Reminder Settings" to={`${basePath}/reminder-settings`} />
-            </div>
-          </Panel>
           <Panel
             title="Recent Invoices"
             className="xl:col-span-2"
