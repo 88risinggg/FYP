@@ -371,6 +371,46 @@ function buildSummarySection(invoice, settings) {
 }
 
 // =====================================================
+// Stripe Payment Section (PDF)
+// =====================================================
+
+function buildStripeSection(invoice, settings, options) {
+  const primary = settings.primaryColor || "#061e4b";
+  const secondary = settings.secondaryColor || "#ff5a52";
+  const paymentUrl = options.paymentUrl || "";
+  const qrCode = safeUrl(options.qrCodeDataUri);
+
+  const isPaid = ["Paid", "Cancelled", "Refunded"].includes(invoice.status || "");
+  if (isPaid || !paymentUrl) return "";
+
+  const qrHtml = qrCode
+    ? `<div style="text-align:center;flex-shrink:0;">
+        <img src="${escapeHtml(qrCode)}" alt="Scan to pay" style="width:26mm;height:26mm;object-fit:contain;border:.3mm solid #e0e3e8;">
+        <p style="margin:1mm 0 0;font-size:5.5pt;color:#777;text-align:center;">Scan to pay</p>
+      </div>`
+    : "";
+
+  return `<section style="break-inside:avoid;border-bottom:.3mm solid #d8dce3;padding:5mm 0;">
+    <div style="display:grid;grid-template-columns:13mm 1fr;align-items:center;margin-bottom:3mm;">
+      <div style="width:10mm;height:10mm;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${secondary};color:white;">
+        <svg viewBox="0 0 24 24" width="5mm" height="5mm" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>
+      </div>
+      <p style="margin:0;font-size:7pt;font-weight:700;color:${primary};">Pay Online — Card, Apple Pay, Google Pay or PayNow</p>
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:4mm;padding-left:13mm;">
+      <div style="flex:1;">
+        <p style="margin:0 0 2mm;font-size:6.5pt;color:#555;">Click the link or scan the QR code to pay securely via Stripe:</p>
+        <div style="border:.5mm solid ${secondary};border-radius:1.5mm;padding:2mm 3mm;margin-bottom:2mm;background:#fff8f5;">
+          <a href="${escapeHtml(paymentUrl)}" style="font-size:6.5pt;color:${secondary};font-weight:700;word-break:break-all;text-decoration:underline;">${escapeHtml(paymentUrl)}</a>
+        </div>
+        <a href="${escapeHtml(paymentUrl)}" style="display:inline-block;padding:2.5mm 6mm;background:${secondary};color:white;border-radius:1.5mm;font-size:7pt;font-weight:700;text-decoration:none;">Pay Now &#8594;</a>
+      </div>
+      ${qrHtml}
+    </div>
+  </section>`;
+}
+
+// =====================================================
 // Payment Section (Bank, PayNow, QR)
 // =====================================================
 
@@ -495,6 +535,7 @@ function buildInvoiceHtml(invoice, settings = defaultSettings, options = {}) {
   const hero = buildHeroSection(invoice, settings);
   const itemsTable = buildItemsTable(invoice, settings);
   const summary = buildSummarySection(invoice, settings);
+  const stripe = buildStripeSection(invoice, settings, options);
   const payment = buildPaymentSection(invoice, settings, options);
   const signature = buildSignatureSection(settings, options);
   const footer = buildFooterSection(invoice, settings);
@@ -518,6 +559,7 @@ function buildInvoiceHtml(invoice, settings = defaultSettings, options = {}) {
     ${hero}
     ${itemsTable}
     ${summary}
+    ${stripe}
     ${payment}
     ${signature}
     ${footer}

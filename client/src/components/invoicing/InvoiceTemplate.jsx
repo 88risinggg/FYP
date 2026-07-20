@@ -321,7 +321,7 @@ function StripePaymentSection({ invoice, settings, paymentUrl, qrCodeUrl }) {
   const hasUrl = Boolean(paymentUrl && paymentUrl.startsWith("http"));
 
   return (
-    <section style={{ breakInside: "avoid", borderBottom: "0.3mm solid #d8dce3", padding: "5mm 0" }}>
+    <section style={{ breakInside: "avoid", borderBottom: "0.3mm solid #d8dce3", padding: "5mm 0", background: "#fff8f5" }}>
       {/* Header row */}
       <div style={{ display: "grid", gridTemplateColumns: "13mm 1fr", alignItems: "center", marginBottom: "3mm" }}>
         <div style={{ width: "10mm", height: "10mm", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: secondary, color: "white" }}>
@@ -522,7 +522,7 @@ export default function InvoiceTemplate({ invoice, settings, options = {} }) {
       <HeroSection invoice={invoice} settings={mergedSettings} />
       <ItemsTable invoice={invoice} settings={mergedSettings} />
       <SummarySection invoice={invoice} settings={mergedSettings} />
-      <StripePaymentSection invoice={invoice} settings={mergedSettings} paymentUrl={options.paymentUrl} qrCodeUrl={options.stripeQrCodeUrl} />
+      <StripePaymentSection invoice={invoice} settings={mergedSettings} paymentUrl={options.paymentUrl || "https://checkout.stripe.com/test"} qrCodeUrl={options.stripeQrCodeUrl} />
       <PaymentSection settings={mergedSettings} qrCodeUrl={options.qrCodeUrl} />
       <SignatureSection settings={mergedSettings} signatureUrl={options.signatureUrl} stampUrl={options.stampUrl} />
       <FooterSection invoice={invoice} settings={mergedSettings} />
@@ -530,5 +530,6 @@ export default function InvoiceTemplate({ invoice, settings, options = {} }) {
   );
 }
 
-// Export utilities for reuse
+// Export utilities for reuse // v020646
 export { formatDate, formatMoney };
+
