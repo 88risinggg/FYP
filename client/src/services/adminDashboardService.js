@@ -47,6 +47,12 @@ export function fetchAdminEmailDelivery(filters = {}) {
   });
 }
 
+export function fetchAdminPaymentUpdates(filters = {}) {
+  return apiRequest(`/api/admin/invoicing/dashboard/payment-updates${toQueryString(filters)}`, {
+    headers: authHeaders()
+  });
+}
+
 export function fetchInvoiceValidationSummary() {
   return apiRequest("/api/admin/invoicing/dashboard/validation-summary", {
     headers: authHeaders()

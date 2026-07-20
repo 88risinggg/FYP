@@ -683,7 +683,7 @@ async function getPaymentTableContext(missingTables) {
   const idColumn = pickColumn(columns, ["payment_id", "id"]);
   const amountColumn = pickColumn(columns, ["amount", "payment_amount", "paid_amount", "total_amount"]);
   const statusColumn = pickColumn(columns, ["status", "payment_status", "verification_status"]);
-  const methodColumn = pickColumn(columns, ["payment_method", "method", "payment_type", "source"]);
+  const methodColumn = pickColumn(columns, ["payment_method", "payment_method_name", "method", "payment_type", "source"]);
   const referenceColumn = pickColumn(columns, ["reference", "reference_no", "payment_reference", "transaction_id", "stripe_payment_intent_id"]);
   const invoiceIdColumn = pickColumn(columns, ["invoice_invoice_id", "invoice_id", "invoiceId"]);
   const customerIdColumn = pickColumn(columns, ["customer_id", "customerId"]);
@@ -903,8 +903,12 @@ async function getPaymentReminderSummaryLogs(rangeConfig, missingTables) {
   };
 }
 
-async function getRecentPaymentUpdates(context, paymentContext, missingTables) {
-  if (!paymentContext) return [];
+async function getRecentPaymentUpdates(context, paymentContext, missingTables, options = {}) {
+  if (!paymentContext) {
+    return options.paginated
+      ? { records: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 } }
+      : [];
+  }
 
   const userColumns = await getTableColumns("user");
   const userIdColumn = pickColumn(userColumns, ["user_id", "id"]);
@@ -944,6 +948,51 @@ async function getRecentPaymentUpdates(context, paymentContext, missingTables) {
       : ""
   ].filter(Boolean).join("\n");
 
+  const page = Math.max(1, Number.parseInt(options.page, 10) || 1);
+  const pageSize = options.paginated
+    ? Math.max(5, Math.min(100, Number.parseInt(options.pageSize, 10) || 20))
+    : 10;
+  const offset = options.paginated ? (page - 1) * pageSize : 0;
+  const params = [];
+  const filters = [];
+  const status = String(options.status || "").trim();
+  const method = String(options.method || "").trim();
+  const keyword = String(options.keyword || "").trim().slice(0, 100);
+  if (status && paymentContext.statusExpr) {
+    filters.push(`LOWER(${paymentContext.statusExpr}) = LOWER(?)`);
+    params.push(status);
+  }
+  if (method && paymentContext.methodExpr) {
+    filters.push(`LOWER(${paymentContext.methodExpr}) LIKE LOWER(?)`);
+    params.push(`%${method}%`);
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(options.dateFrom || "") && dateExpr) {
+    filters.push(`${dateExpr} >= ?`);
+    params.push(`${options.dateFrom} 00:00:00`);
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(options.dateTo || "") && dateExpr) {
+    filters.push(`${dateExpr} < DATE_ADD(?, INTERVAL 1 DAY)`);
+    params.push(`${options.dateTo} 00:00:00`);
+  }
+  if (keyword) {
+    filters.push(`(${paymentContext.referenceExpr} LIKE ? OR ${invoiceNoExpr} LIKE ? OR ${customerNameExpr} LIKE ?)`);
+    params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+  }
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  let total = 0;
+  if (options.paginated) {
+    const countResult = await safeQuery(
+      `SELECT COUNT(*) AS total
+       FROM ${quoteIdentifier(paymentContext.table)} AS ${paymentContext.alias}
+       ${joins}
+       ${where}`,
+      params,
+      [{ total: 0 }]
+    );
+    total = Number(countResult.rows[0]?.total || 0);
+  }
+
   const result = await safeQuery(
     `SELECT
       ${paymentContext.idExpr || paymentContext.referenceExpr} AS id,
@@ -959,15 +1008,16 @@ async function getRecentPaymentUpdates(context, paymentContext, missingTables) {
       ${updatedByExpr} AS updatedBy
      FROM ${quoteIdentifier(paymentContext.table)} AS ${paymentContext.alias}
      ${joins}
+     ${where}
      ORDER BY ${dateExpr || paymentContext.idExpr || paymentContext.referenceExpr} DESC
-     LIMIT 10`,
-    [],
+     LIMIT ${pageSize} OFFSET ${offset}`,
+    params,
     []
   );
 
   if (result.missing) missingTables.add(paymentContext.table);
 
-  return result.rows.map((row) => ({
+  const records = result.rows.map((row) => ({
     id: row.id,
     date: row.date,
     reference: row.reference,
@@ -980,6 +1030,24 @@ async function getRecentPaymentUpdates(context, paymentContext, missingTables) {
     amount: Number(row.amount || 0),
     updatedBy: row.updatedBy || "System"
   }));
+
+  return options.paginated
+    ? {
+      records,
+      pagination: { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) }
+    }
+    : records;
+}
+
+async function getAdminPaymentUpdatesData(options = {}) {
+  const missingTables = new Set();
+  const context = await getInvoicePerformanceContext(missingTables);
+  if (!context) {
+    return { records: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 }, missingTables: Array.from(missingTables) };
+  }
+  const paymentContext = await getPaymentTableContext(missingTables);
+  const result = await getRecentPaymentUpdates(context, paymentContext, missingTables, { ...options, paginated: true });
+  return { ...result, missingTables: Array.from(missingTables) };
 }
 
 function emptyPaymentReminderSummary(range, missingTables = []) {
@@ -2169,6 +2237,7 @@ async function getAdminDashboardData(userId) {
 
 module.exports = {
   getAdminDashboardData,
+  getAdminPaymentUpdatesData,
   getInvoicePerformanceData,
   getPaymentReminderSummaryData
 };

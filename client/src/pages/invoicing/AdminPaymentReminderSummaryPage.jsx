@@ -407,8 +407,9 @@ export default function AdminPaymentReminderSummaryPage() {
         </div>
 
         <Panel
+          id="recent-payment-updates"
           title="Recent Payment Updates"
-          action={<Link to={paymentListPath} className="text-xs font-bold text-[#F38978]">View all</Link>}
+          action={<Link to={`${basePath}/payment-updates?range=${range}`} className="text-xs font-bold text-[#F38978]">View All</Link>}
         >
           <RecentPaymentUpdatesTable payments={recentPaymentUpdates} />
         </Panel>

@@ -9,6 +9,7 @@ import PaymentCancelledPage from "./pages/PaymentCancelledPage.jsx";
 import AdminInvoicingDashboard from "./pages/invoicing/AdminInvoicingDashboard.jsx";
 import AdminReminderCategoryPage from "./pages/invoicing/AdminReminderCategoryPage.jsx";
 import AdminEmailDeliveryPage from "./pages/invoicing/AdminEmailDeliveryPage.jsx";
+import AdminPaymentUpdatesPage from "./pages/invoicing/AdminPaymentUpdatesPage.jsx";
 import FinanceInvoicingPage from "./pages/invoicing/FinanceInvoicingPage.jsx";
 import AdminPayrollPage from "./pages/payroll/AdminPayrollPage.jsx";
 import FinancePayrollPage from "./pages/payroll/FinancePayrollPage.jsx";
@@ -177,6 +178,14 @@ export default function App() {
         element={
           <AdminInvoicingRoute>
             <AdminEmailDeliveryPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/payment-updates"
+        element={
+          <AdminInvoicingRoute>
+            <AdminPaymentUpdatesPage />
           </AdminInvoicingRoute>
         }
       />

@@ -1,5 +1,6 @@
 const {
   getAdminDashboardData,
+  getAdminPaymentUpdatesData,
   getInvoicePerformanceData,
   getPaymentReminderSummaryData
 } = require("../models/adminDashboardModel");
@@ -148,6 +149,15 @@ async function getEmailDelivery(req, res) {
   }
 }
 
+async function getPaymentUpdates(req, res) {
+  try {
+    res.json(await getAdminPaymentUpdatesData(req.query));
+  } catch (error) {
+    console.error("[Admin payment updates] Failed to load history:", error);
+    res.status(500).json({ message: "Unable to load payment update history." });
+  }
+}
+
 async function getValidationSummary(req, res) {
   try {
     const summary = await getInvoiceValidationSummary();
@@ -176,6 +186,7 @@ module.exports = {
   getEmailDelivery,
   getInvoicePerformance,
   getPaymentReminderSummary,
+  getPaymentUpdates,
   getValidationErrors,
   getValidationSummary
 };

@@ -15,6 +15,7 @@ const {
   getEmailDelivery,
   getInvoicePerformance,
   getPaymentReminderSummary,
+  getPaymentUpdates,
   getValidationErrors,
   getValidationSummary
 } = require("../controllers/adminDashboardController");
@@ -31,6 +32,7 @@ router.get("/dashboard/invoice-performance", getInvoicePerformance);
 router.get("/dashboard/invoice-performance/export", exportInvoicePerformance);
 router.get("/dashboard/payment-reminder-summary", getPaymentReminderSummary);
 router.get("/dashboard/email-delivery", getEmailDelivery);
+router.get("/dashboard/payment-updates", getPaymentUpdates);
 router.get("/dashboard/validation-summary", getValidationSummary);
 router.get("/dashboard/validation-errors", getValidationErrors);
 router.get("/invoice-settings", getSettings);
