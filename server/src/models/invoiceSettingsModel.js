@@ -90,6 +90,57 @@ const defaultSettings = {
   emailBodyTemplate: "Dear {{customer_name}},\n\nYour invoice {{invoice_number}} for {{amount_due}} is due on {{due_date}}.\n\nThank you,\n{{company_name}}",
   attachPdfInvoice: true,
   footerNote: "Thank you for your business.",
+  // Template identity
+  templateName: "Default Template",
+  templateDescription: "",
+  // Company extended details
+  uenNumber: "",
+  gstRegistrationNumber: "",
+  companyPhone: "",
+  companyEmail: "",
+  companyWebsite: "",
+  // Theme & styling
+  primaryColor: "#061e4b",
+  secondaryColor: "#ff5a52",
+  fontFamily: "Arial, Helvetica, sans-serif",
+  fontSizeBase: 12,
+  invoiceBorderStyle: "modern",
+  headerStyle: "default",
+  footerStyle: "default",
+  itemTableStyle: "striped",
+  // Currency & formatting
+  currencySymbol: "S$",
+  currencyFormat: "symbol_before",
+  displayDateFormat: "DD MMM YYYY",
+  displayTimeFormat: "HH:mm",
+  decimalPrecision: 2,
+  // Invoice number extended
+  runningNumber: 1,
+  resetNumberYearly: true,
+  invoiceDateSource: "issue_date",
+  // Tax
+  taxEnabled: true,
+  taxName: "GST",
+  taxPercentage: 9,
+  taxInclusive: false,
+  // Defaults
+  defaultDiscount: 0,
+  defaultNotes: "",
+  termsAndConditions: "",
+  // Display toggles
+  qrCodeDisplay: true,
+  bankDetailsDisplay: true,
+  paynowDisplay: true,
+  signatureDisplay: false,
+  watermarkEnabled: true,
+  statusBadgeStyle: "ribbon",
+  companyStampUrl: "",
+  signatureUrl: "",
+  // PDF options
+  pdfPageSize: "A4",
+  pdfOrientation: "portrait",
+  // Vaniday field mapping
+  vanidayFieldMapping: null,
   general: {
     defaultCurrency: "SGD",
     defaultLanguage: "en",
@@ -263,6 +314,16 @@ function calculateDueDate(settings, issueDate = new Date()) {
 }
 
 function mapSettings(row) {
+  // Parse Vaniday field mapping JSON
+  let vanidayFieldMapping = defaultSettings.vanidayFieldMapping;
+  try {
+    if (row.vaniday_field_mapping) {
+      vanidayFieldMapping = typeof row.vaniday_field_mapping === "string"
+        ? JSON.parse(row.vaniday_field_mapping)
+        : row.vaniday_field_mapping;
+    }
+  } catch { /* keep default */ }
+
   const flatSettings = {
     settingId: row.setting_id,
     invoicePrefix: row.invoice_prefix || defaultSettings.invoicePrefix,
@@ -300,6 +361,57 @@ function mapSettings(row) {
     emailBodyTemplate: row.email_body_template || defaultSettings.emailBodyTemplate,
     attachPdfInvoice: boolValue(row.attach_pdf_invoice, defaultSettings.attachPdfInvoice),
     footerNote: row.footer_note || defaultSettings.footerNote,
+    // Template identity
+    templateName: row.template_name || defaultSettings.templateName,
+    templateDescription: row.template_description || defaultSettings.templateDescription,
+    // Company extended
+    uenNumber: row.uen_number || defaultSettings.uenNumber,
+    gstRegistrationNumber: row.gst_registration_number || defaultSettings.gstRegistrationNumber,
+    companyPhone: row.company_phone || defaultSettings.companyPhone,
+    companyEmail: row.company_email || defaultSettings.companyEmail,
+    companyWebsite: row.company_website || defaultSettings.companyWebsite,
+    // Theme & styling
+    primaryColor: row.primary_color || defaultSettings.primaryColor,
+    secondaryColor: row.secondary_color || defaultSettings.secondaryColor,
+    fontFamily: row.font_family || defaultSettings.fontFamily,
+    fontSizeBase: numberValue(row.font_size_base, defaultSettings.fontSizeBase),
+    invoiceBorderStyle: row.invoice_border_style || defaultSettings.invoiceBorderStyle,
+    headerStyle: row.header_style || defaultSettings.headerStyle,
+    footerStyle: row.footer_style || defaultSettings.footerStyle,
+    itemTableStyle: row.item_table_style || defaultSettings.itemTableStyle,
+    // Currency & formatting
+    currencySymbol: row.currency_symbol || defaultSettings.currencySymbol,
+    currencyFormat: row.currency_format || defaultSettings.currencyFormat,
+    displayDateFormat: row.display_date_format || defaultSettings.displayDateFormat,
+    displayTimeFormat: row.display_time_format || defaultSettings.displayTimeFormat,
+    decimalPrecision: numberValue(row.decimal_precision, defaultSettings.decimalPrecision),
+    // Invoice number extended
+    runningNumber: numberValue(row.running_number, defaultSettings.runningNumber),
+    resetNumberYearly: boolValue(row.reset_number_yearly, defaultSettings.resetNumberYearly),
+    invoiceDateSource: row.invoice_date_source || defaultSettings.invoiceDateSource,
+    // Tax
+    taxEnabled: boolValue(row.tax_enabled, defaultSettings.taxEnabled),
+    taxName: row.tax_name || defaultSettings.taxName,
+    taxPercentage: numberValue(row.tax_percentage, defaultSettings.taxPercentage),
+    taxInclusive: boolValue(row.tax_inclusive, defaultSettings.taxInclusive),
+    // Defaults
+    defaultDiscount: numberValue(row.default_discount, defaultSettings.defaultDiscount),
+    defaultNotes: row.default_notes || defaultSettings.defaultNotes,
+    termsAndConditions: row.terms_and_conditions || defaultSettings.termsAndConditions,
+    // Display toggles
+    qrCodeDisplay: boolValue(row.qr_code_display, defaultSettings.qrCodeDisplay),
+    bankDetailsDisplay: boolValue(row.bank_details_display, defaultSettings.bankDetailsDisplay),
+    paynowDisplay: boolValue(row.paynow_display, defaultSettings.paynowDisplay),
+    signatureDisplay: boolValue(row.signature_display, defaultSettings.signatureDisplay),
+    watermarkEnabled: boolValue(row.watermark_enabled, defaultSettings.watermarkEnabled),
+    statusBadgeStyle: row.status_badge_style || defaultSettings.statusBadgeStyle,
+    companyStampUrl: row.company_stamp_url || defaultSettings.companyStampUrl,
+    signatureUrl: row.signature_url || defaultSettings.signatureUrl,
+    // PDF options
+    pdfPageSize: row.pdf_page_size || defaultSettings.pdfPageSize,
+    pdfOrientation: row.pdf_orientation || defaultSettings.pdfOrientation,
+    // Vaniday field mapping
+    vanidayFieldMapping,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -388,10 +500,10 @@ function toDbRow(settings) {
     whatsapp_notifications_enabled: general.whatsappNotificationsEnabled ? 1 : 0,
     pdf_export_enabled: exportSettings.pdfExportEnabled ? 1 : 0,
     excel_export_enabled: exportSettings.excelExportEnabled ? 1 : 0,
-    pdf_paper_size: "A4",
+    pdf_paper_size: settings.pdfPageSize || defaultSettings.pdfPageSize,
     excel_format: exportSettings.excelFormat || defaultSettings.export.excelFormat,
     company_logo_url: branding.companyLogoUrl || "",
-    brand_color: defaultSettings.branding.brandColor,
+    brand_color: branding.brandColor || defaultSettings.branding.brandColor,
     show_company_details_on_invoice: 1,
     yearly_reset_enabled: sequenceRules.yearlyReset ? 1 : 0,
     manual_override_enabled: sequenceRules.allowManualOverride ? 1 : 0,
@@ -416,7 +528,48 @@ function toDbRow(settings) {
     email_subject_template: settings.emailSubjectTemplate || defaultSettings.emailSubjectTemplate,
     email_body_template: settings.emailBodyTemplate || defaultSettings.emailBodyTemplate,
     attach_pdf_invoice: settings.attachPdfInvoice === false ? 0 : 1,
-    footer_note: settings.footerNote || defaultSettings.footerNote
+    footer_note: settings.footerNote || defaultSettings.footerNote,
+    // New template fields
+    template_name: settings.templateName || defaultSettings.templateName,
+    template_description: settings.templateDescription || defaultSettings.templateDescription,
+    uen_number: settings.uenNumber || defaultSettings.uenNumber,
+    gst_registration_number: settings.gstRegistrationNumber || defaultSettings.gstRegistrationNumber,
+    company_phone: settings.companyPhone || defaultSettings.companyPhone,
+    company_email: settings.companyEmail || defaultSettings.companyEmail,
+    company_website: settings.companyWebsite || defaultSettings.companyWebsite,
+    primary_color: settings.primaryColor || defaultSettings.primaryColor,
+    secondary_color: settings.secondaryColor || defaultSettings.secondaryColor,
+    font_family: settings.fontFamily || defaultSettings.fontFamily,
+    font_size_base: numberValue(settings.fontSizeBase, defaultSettings.fontSizeBase),
+    invoice_border_style: settings.invoiceBorderStyle || defaultSettings.invoiceBorderStyle,
+    header_style: settings.headerStyle || defaultSettings.headerStyle,
+    footer_style: settings.footerStyle || defaultSettings.footerStyle,
+    item_table_style: settings.itemTableStyle || defaultSettings.itemTableStyle,
+    currency_symbol: settings.currencySymbol || defaultSettings.currencySymbol,
+    currency_format: settings.currencyFormat || defaultSettings.currencyFormat,
+    display_date_format: settings.displayDateFormat || defaultSettings.displayDateFormat,
+    display_time_format: settings.displayTimeFormat || defaultSettings.displayTimeFormat,
+    decimal_precision: numberValue(settings.decimalPrecision, defaultSettings.decimalPrecision),
+    running_number: numberValue(settings.runningNumber, defaultSettings.runningNumber),
+    reset_number_yearly: settings.resetNumberYearly === false ? 0 : 1,
+    invoice_date_source: settings.invoiceDateSource || defaultSettings.invoiceDateSource,
+    tax_enabled: settings.taxEnabled === false ? 0 : 1,
+    tax_name: settings.taxName || defaultSettings.taxName,
+    tax_percentage: numberValue(settings.taxPercentage, defaultSettings.taxPercentage),
+    tax_inclusive: settings.taxInclusive ? 1 : 0,
+    default_discount: numberValue(settings.defaultDiscount, defaultSettings.defaultDiscount),
+    default_notes: settings.defaultNotes || defaultSettings.defaultNotes,
+    terms_and_conditions: settings.termsAndConditions || defaultSettings.termsAndConditions,
+    qr_code_display: settings.qrCodeDisplay === false ? 0 : 1,
+    bank_details_display: settings.bankDetailsDisplay === false ? 0 : 1,
+    paynow_display: settings.paynowDisplay === false ? 0 : 1,
+    signature_display: settings.signatureDisplay ? 1 : 0,
+    watermark_enabled: settings.watermarkEnabled === false ? 0 : 1,
+    status_badge_style: settings.statusBadgeStyle || defaultSettings.statusBadgeStyle,
+    company_stamp_url: settings.companyStampUrl || defaultSettings.companyStampUrl,
+    signature_url: settings.signatureUrl || defaultSettings.signatureUrl,
+    pdf_orientation: settings.pdfOrientation || defaultSettings.pdfOrientation,
+    vaniday_field_mapping: settings.vanidayFieldMapping ? JSON.stringify(settings.vanidayFieldMapping) : null
   };
 }
 

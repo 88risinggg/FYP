@@ -82,19 +82,30 @@ function toOperationalInvoiceStatus(rowStatus, auditStatus) {
 /**
  * Insert a record into the audit_log table.
  * Used to track all invoice operations for compliance and debugging.
+ * Now includes previous_value, new_value, ip_address, and device_info.
  *
  * @param {Object} connection - MySQL connection (from pool.getConnection).
  * @param {string} action - The action performed (e.g. "invoice_created", "invoice_status:Sent").
  * @param {string} entityType - The entity type (e.g. "invoice", "payment").
  * @param {number|null} entityId - The primary key of the affected entity.
  * @param {number|null} userId - The user who performed the action.
+ * @param {Object} [extra] - Additional audit data { previousValue, newValue, ipAddress, deviceInfo }.
  */
-async function writeAuditLog(connection, action, entityType, entityId, userId) {
+async function writeAuditLog(connection, action, entityType, entityId, userId, extra = {}) {
   try {
     await connection.query(
-      `INSERT INTO audit_logs (user_id, activity_type, action_description, affected_record, status, created_at)
-       VALUES (?, ?, ?, ?, 'Success', NOW())`,
-      [userId || null, entityType, action, entityId ? String(entityId) : null]
+      `INSERT INTO audit_logs (user_id, activity_type, action_description, affected_record, status, created_at, previous_value, new_value, ip_address, device_info)
+       VALUES (?, ?, ?, ?, 'Success', NOW(), ?, ?, ?, ?)`,
+      [
+        userId || null,
+        entityType,
+        action,
+        entityId ? String(entityId) : null,
+        extra.previousValue || null,
+        extra.newValue || null,
+        extra.ipAddress || null,
+        extra.deviceInfo || null
+      ]
     );
   } catch {
     // Non-critical — don't block the operation if audit logging fails
@@ -542,15 +553,38 @@ async function sendInvoice(req, res) {
     );
     invoice.items = items;
 
-    // Create Stripe Checkout Session
+    // If no items from invoice_item, try items_json
+    if (!invoice.items || invoice.items.length === 0) {
+      try {
+        const [jsonRows] = await connection.query(
+          "SELECT items_json FROM invoice WHERE invoice_id = ?",
+          [invoiceId]
+        );
+        if (jsonRows[0]?.items_json) {
+          const parsed = typeof jsonRows[0].items_json === "string"
+            ? JSON.parse(jsonRows[0].items_json)
+            : jsonRows[0].items_json;
+          invoice.items = Array.isArray(parsed) ? parsed : [];
+        }
+      } catch { /* non-critical */ }
+    }
+
+    // Load Admin settings to determine which payment methods to enable
+    const { getInvoiceSettings, defaultSettings: invoiceDefaults } = require("../models/invoiceSettingsModel");
+    const adminSettings = (await getInvoiceSettings()) || invoiceDefaults;
+
+    // Create Stripe Checkout Session (only if online payments enabled)
     const { createCheckoutSession } = require("../services/stripeService");
     const stripeResult = await createCheckoutSession(invoice);
     const paymentUrl = stripeResult.paymentUrl;
     const sessionId = stripeResult.sessionId;
 
-    // Generate QR Code
+    // Generate QR Code (only if Admin has enabled QR display)
     const { generateQRCode } = require("../services/qrCodeService");
-    const qrCodeDataUri = await generateQRCode(paymentUrl);
+    let qrCodeDataUri = null;
+    if (adminSettings.qrCodeDisplay !== false) {
+      qrCodeDataUri = await generateQRCode(paymentUrl);
+    }
 
     // Store payment URL and QR code in invoice record
     try {

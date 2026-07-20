@@ -22,6 +22,7 @@ import AdminUserManagementPage from "./AdminUserManagementPage.jsx";
 import AdminUserProfilePage from "./AdminUserProfilePage.jsx";
 import AdminValidationSummaryPage from "./AdminValidationSummaryPage.jsx";
 import AdminValidationErrorsPage from "./AdminValidationErrorsPage.jsx";
+import AdminTemplatePreviewPage from "./AdminTemplatePreviewPage.jsx";
 
 const pageTitle = "Automated Invoicing System - Admin Dashboard";
 
@@ -75,6 +76,16 @@ const invoicingSidebarSections = [
         path: "/dashboard/invoicing/admin/invoice-settings"
       },
       {
+        label: "Template Preview",
+        icon: FileBarChart,
+        path: "/dashboard/invoicing/admin/template-preview"
+      },
+      {
+        label: "Vaniday Mapping",
+        icon: Settings,
+        path: "/dashboard/invoicing/admin/vaniday-mapping"
+      },
+      {
         label: "Reminder Settings",
         icon: Bell,
         path: "/dashboard/invoicing/admin/reminder-settings"
@@ -126,6 +137,8 @@ const routeHeadings = {
   "/dashboard/invoicing/admin/invoice-settings/bulk-upload": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/automation": "Invoice Settings",
   "/dashboard/invoicing/admin/reminder-settings": "Reminder Settings",
+  "/dashboard/invoicing/admin/template-preview": "Template Preview",
+  "/dashboard/invoicing/admin/vaniday-mapping": "Vaniday Data Mapping",
   "/dashboard/invoicing/admin/audit-logs": "Audit Logs",
   "/dashboard/invoicing/admin/reports": "Reports"
 };
@@ -160,6 +173,8 @@ export default function AdminInvoicingDashboard() {
   );
   const isInvoiceSettings = Boolean(invoiceSettingsMatch);
   const isReminderSettings = normalizedPath === "/dashboard/invoicing/admin/reminder-settings";
+  const isTemplatePreview = normalizedPath === "/dashboard/invoicing/admin/template-preview";
+  const isVanidayMapping = normalizedPath === "/dashboard/invoicing/admin/vaniday-mapping";
   const isAuditLogs = normalizedPath === "/dashboard/invoicing/admin/audit-logs";
   const isInvoicePerformance = normalizedPath === "/dashboard/invoicing/admin/dashboard/invoice-performance";
   const isPaymentReminderSummary = normalizedPath === "/dashboard/invoicing/admin/dashboard/payment-reminder-summary";
@@ -218,6 +233,16 @@ export default function AdminInvoicingDashboard() {
         <AdminInvoiceSettingsPage activeTab={invoiceSettingsMatch?.[1] || "general"} />
       ) : isReminderSettings ? (
         <AdminReminderSettingsPage />
+      ) : isTemplatePreview ? (
+        <AdminTemplatePreviewPage />
+      ) : isVanidayMapping ? (
+        <section className="p-6">
+          <h2 className="text-2xl font-semibold text-gray-900 mb-4">Vaniday Data Mapping</h2>
+          <p className="text-sm text-gray-500 mb-6">Configure how Vaniday CSV columns map to invoice system fields. Finance users will use these mappings during import.</p>
+          <div className="bg-white border rounded-xl p-6">
+            <p className="text-sm text-gray-600">Vaniday field mapping is configured in Invoice Settings → Automation tab.</p>
+          </div>
+        </section>
       ) : isAuditLogs ? (
         <AdminAuditLogsPage />
       ) : (

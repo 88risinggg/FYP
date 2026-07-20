@@ -74,6 +74,7 @@ import {
   DARK_COLOR,
   GRAY_COLOR
 } from "../../services/pdfExportService.js";
+import VanidayImportPage from "./VanidayImportPage.jsx";
 
 const financeSidebarSections = [
   {
@@ -103,7 +104,7 @@ const financeSidebarSections = [
       {
         label: "Bulk Upload",
         icon: Upload,
-        path: "/dashboard/invoicing/finance/bulk-upload"
+        path: "/dashboard/invoicing/finance/vaniday-import"
       },
       {
         label: "Payments",
@@ -3471,8 +3472,8 @@ export default function FinanceInvoicingPage() {
       return "invoices";
     }
 
-    if (location.pathname.endsWith("/bulk-upload")) {
-      return "bulk-upload";
+    if (location.pathname.endsWith("/vaniday-import") || location.pathname.endsWith("/bulk-upload")) {
+      return "vaniday-import";
     }
 
     if (location.pathname.endsWith("/payments")) {
@@ -3600,8 +3601,8 @@ export default function FinanceInvoicingPage() {
       );
     }
 
-    if (activeView === "bulk-upload") {
-      return <BulkUploadView onProcessed={loadWorkspaceData} />;
+    if (activeView === "vaniday-import") {
+      return <VanidayImportPage />;
     }
 
     if (activeView === "payments") {

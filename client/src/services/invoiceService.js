@@ -122,3 +122,54 @@ export function sendInvoiceReminder(invoiceId) {
 export function fetchReminderHistory(invoiceId) {
   return apiRequest(`/api/invoices/${invoiceId}/reminders`);
 }
+
+// =====================================================
+// Vaniday Import Services
+// =====================================================
+
+export function parseVanidayFile(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiRequest("/api/vaniday-import/parse", {
+    method: "POST",
+    body: formData,
+    headers: { "Content-Type": undefined } // Let browser set multipart boundary
+  });
+}
+
+export function validateVanidayImport(rows, dateFormat) {
+  return apiRequest("/api/vaniday-import/validate", {
+    method: "POST",
+    body: JSON.stringify({ rows, dateFormat })
+  });
+}
+
+export function processVanidayImport(rows, dateFormat) {
+  return apiRequest("/api/vaniday-import/process", {
+    method: "POST",
+    body: JSON.stringify({ rows, dateFormat })
+  });
+}
+
+export function fetchVanidayMapping() {
+  return apiRequest("/api/vaniday-import/mapping");
+}
+
+export function updateVanidayMapping(mapping) {
+  return apiRequest("/api/vaniday-import/mapping", {
+    method: "PUT",
+    body: JSON.stringify({ mapping })
+  });
+}
+
+// =====================================================
+// Invoice Template Preview (Admin)
+// =====================================================
+
+export function fetchTemplatePreview(settings, previewStatus) {
+  return apiRequest("/api/admin/invoicing/invoice-settings/template-preview", {
+    method: "POST",
+    body: JSON.stringify({ settings, previewStatus }),
+    rawResponse: true
+  });
+}
