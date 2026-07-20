@@ -56,8 +56,9 @@ export default function AdminInvoiceListPage() {
     const term = query.trim().toLowerCase();
     return invoices.filter((invoice) => {
       if (status && String(invoice.status || "").toLowerCase() !== status.toLowerCase()) return false;
-      const issue = invoice.issue_date ? new Date(invoice.issue_date) : null;
-      if (start && (!issue || issue < start || issue > end)) return false;
+      const performanceDateValue = invoice.sent_at || invoice.created_at || invoice.issue_date;
+      const performanceDate = performanceDateValue ? new Date(performanceDateValue) : null;
+      if (start && (!performanceDate || performanceDate < start || performanceDate > end)) return false;
       return !term || [invoice.invoiceId, invoice.customer_name, invoice.customer_email].some((value) => String(value || "").toLowerCase().includes(term));
     });
   }, [invoices, params, query, range, status]);

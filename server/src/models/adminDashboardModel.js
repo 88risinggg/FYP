@@ -94,7 +94,14 @@ function isIsoDate(value) {
 }
 
 function dateOnly(date) {
-  return date.toISOString().slice(0, 10);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Singapore",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const value = (type) => parts.find((part) => part.type === type)?.value;
+  return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
 function addDays(date, days) {
@@ -263,12 +270,21 @@ function buildInvoiceContext(invoiceColumns, customerColumns) {
     outstandingAmountExpr,
     dueDateExpr,
     issueDateExpr,
+    createdAtExpr,
     updatedAtExpr,
     sortExpr,
     statusExpr,
     normalizedStatusExpr,
     deletedColumn,
     invoiceNoColumn,
+    validInvoiceFilters: [
+      invoiceNoColumn ? `${columnExpression("invoice", invoiceNoColumn)} <> '__SETTINGS__'` : "",
+      deletedColumn
+        ? (String(deletedColumn).toLowerCase().includes("_at")
+          ? `${columnExpression("invoice", deletedColumn)} IS NULL`
+          : `COALESCE(${columnExpression("invoice", deletedColumn)}, 0) = 0`)
+        : ""
+    ].filter(Boolean),
     customerNameExpr: canJoinCustomer ? columnExpression("customer", customerNameColumn) : "NULL",
     joinCustomerSql: canJoinCustomer
       ? `LEFT JOIN customer ON invoice.${quoteIdentifier(customerIdColumn)} = customer.${quoteIdentifier(customerTableIdColumn)}`
@@ -1006,9 +1022,26 @@ async function getInvoicePerformanceContext(missingTables) {
     return null;
   }
 
+  const auditColumns = await getTableColumns("audit_logs");
+  const affectedRecordColumn = pickColumn(auditColumns, ["affected_record", "entity_id"]);
+  const actionColumn = pickColumn(auditColumns, ["action_description", "action"]);
+  const auditCreatedAtColumn = pickColumn(auditColumns, ["created_at", "createdAt"]);
+  const sentAtExpr = affectedRecordColumn && actionColumn && auditCreatedAtColumn
+    ? `(SELECT MIN(invoice_sent_log.${quoteIdentifier(auditCreatedAtColumn)})
+        FROM audit_logs AS invoice_sent_log
+        WHERE CAST(invoice_sent_log.${quoteIdentifier(affectedRecordColumn)} AS UNSIGNED) = ${context.idExpr}
+          AND invoice_sent_log.${quoteIdentifier(actionColumn)} IN ('invoice_sent', 'scheduled_invoice_sent'))`
+    : null;
+
   return {
     ...context,
-    performanceDateExpr: context.issueDateExpr || context.updatedAtExpr || context.sortExpr
+    sentAtExpr,
+    // Imported issue dates can be historical. Report ranges should describe
+    // when the invoice entered this workflow, preferring its actual send date.
+    performanceDateExpr: coalesceExpression(
+      [sentAtExpr, context.createdAtExpr, context.issueDateExpr, context.updatedAtExpr, context.sortExpr],
+      "NULL"
+    )
   };
 }
 
@@ -1021,9 +1054,11 @@ function invoicePerformanceSubquery(context) {
       ${context.totalAmountExpr} AS totalAmount,
       ${context.outstandingAmountExpr} AS outstandingAmount,
       ${context.dueDateExpr || "NULL"} AS dueDate,
+      ${context.sentAtExpr || "NULL"} AS sentAt,
       ${context.performanceDateExpr || "NULL"} AS performanceDate
     FROM invoice
-    ${context.joinCustomerSql}`;
+    ${context.joinCustomerSql}
+    ${context.validInvoiceFilters?.length ? `WHERE ${context.validInvoiceFilters.join(" AND ")}` : ""}`;
 }
 
 async function getInvoiceStatusPerformance(context, rangeConfig, missingTables) {

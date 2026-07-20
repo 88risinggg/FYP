@@ -244,6 +244,7 @@ async function getInvoices(req, res) {
     const invoiceIds = rows.map((row) => row.invoice_id);
     let itemsByInvoiceId = {};
     let statusByInvoiceId = {};
+    let sentAtByInvoiceId = {};
 
     if (invoiceIds.length > 0) {
       // Try loading items - attempt invoice_item table first, then items_json column
@@ -308,6 +309,23 @@ async function getInvoices(req, res) {
       } catch {
         // audit_logs schema may differ — skip status resolution, use row.status directly
       }
+
+      try {
+        const [sentRows] = await pool.query(
+          `SELECT CAST(affected_record AS UNSIGNED) AS invoice_id, MIN(created_at) AS sent_at
+           FROM audit_logs
+           WHERE action_description IN ('invoice_sent', 'scheduled_invoice_sent')
+             AND CAST(affected_record AS UNSIGNED) IN (?)
+           GROUP BY CAST(affected_record AS UNSIGNED)`,
+          [invoiceIds]
+        );
+        sentAtByInvoiceId = sentRows.reduce((items, sentRow) => {
+          items[Number(sentRow.invoice_id)] = sentRow.sent_at;
+          return items;
+        }, {});
+      } catch {
+        // Older audit schemas may not expose invoice send events.
+      }
     }
 
     // Map results with resolved status and attached items
@@ -327,7 +345,8 @@ async function getInvoices(req, res) {
           payment_status: payment.payment_status || null,
           payment_method: payment.payment_method || null,
           payment_date: payment.payment_date || null,
-          transaction_id: payment.transaction_id || null
+          transaction_id: payment.transaction_id || null,
+          sent_at: sentAtByInvoiceId[row.invoice_id] || row.created_at || null
         };
       })
     });
