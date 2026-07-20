@@ -5,10 +5,12 @@ const {
   getInvoices,
   getNextInvoiceNumber,
   scheduleInvoices,
-  sendInvoice
+  sendInvoice,
+  voidInvoice
 } = require("../controllers/invoiceController");
 const { exportInvoicesExcel } = require("../controllers/exportController");
 const { authenticateToken } = require("../middleware/authMiddleware");
+const { allowRoles } = require("../middleware/rolesMiddleware");
 const { generateInvoicePDF } = require("../services/pdfService");
 const { sendWhatsAppReminder } = require("../services/whatsappService");
 const { sendManualReminder } = require("../services/invoiceReminderService");
@@ -25,6 +27,7 @@ router.get("/export/excel", exportInvoicesExcel);
 router.post("/", createInvoice);
 router.post("/schedule", scheduleInvoices);
 router.post("/:id/send", sendInvoice);
+router.patch("/:id/void", allowRoles("Admin", "Finance"), voidInvoice);
 
 /**
  * GET /api/invoices/:id/pdf

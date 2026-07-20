@@ -689,6 +689,7 @@ async function processVanidayImport(validationResult, userId) {
         invoiceId,
         orderId,
         customerName: primaryRecord.customerName,
+        customerEmail: primaryRecord.customerEmail,
         shopTitle: primaryRecord.shopTitle,
         totalAmount,
         status: invoiceStatus,
@@ -697,6 +698,23 @@ async function processVanidayImport(validationResult, userId) {
     }
 
     await connection.commit();
+
+    // Completed Vaniday payments are official paid invoices. Send the customer
+    // a payment confirmation after the database transaction is safely committed.
+    const paidInvoices = createdInvoices.filter((invoice) => invoice.status === "Paid" && invoice.customerEmail);
+    if (paidInvoices.length > 0) {
+      try {
+        const { sendPaymentReceiptEmail } = require("./invoiceDeliveryService");
+        await Promise.allSettled(paidInvoices.map((invoice) => sendPaymentReceiptEmail(
+          {
+            invoiceId: invoice.invoiceId,
+            total_amount: invoice.totalAmount,
+            customer_email: invoice.customerEmail
+          },
+          `VANIDAY-${invoice.orderId}`
+        )));
+      } catch { /* invoice creation remains committed if notification setup is unavailable */ }
+    }
 
     return {
       success: true,

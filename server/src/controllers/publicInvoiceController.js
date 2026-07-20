@@ -82,8 +82,8 @@ async function viewInvoice(req, res) {
 
     const invoice = rows[0];
 
-    // Block access to Draft or Cancelled invoices
-    if (invoice.status === "Draft" || invoice.status === "Cancelled") {
+    // Draft and inactive audit records are not customer-facing invoices.
+    if (["Draft", "Void", "Cancelled", "Refunded"].includes(invoice.status)) {
       return res.status(403).json({ message: "This invoice is not available for viewing." });
     }
 

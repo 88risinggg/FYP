@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Ban,
   Banknote,
   CalendarDays,
   CheckCircle2,
@@ -58,9 +59,9 @@ const kpiGridStyles = `
     }
   }
 
-  @container (min-width: 58rem) {
+  @container (min-width: 68rem) {
     .admin-overview-kpi-grid {
-      grid-template-columns: repeat(6, minmax(0, 1fr));
+      grid-template-columns: repeat(7, minmax(0, 1fr));
     }
   }
 `;
@@ -126,7 +127,7 @@ function DashboardSkeleton() {
       <div className="h-28 animate-pulse rounded-lg border border-[#f0d2ca] bg-white/70" />
       <div className="admin-overview-kpi-container">
         <div className="admin-overview-kpi-grid">
-        {Array.from({ length: 6 }, (_, index) => (
+        {Array.from({ length: 7 }, (_, index) => (
           <div key={index} className="h-[132px] animate-pulse rounded-lg border border-[#f0d2ca] bg-white/80" />
         ))}
         </div>
@@ -281,8 +282,7 @@ export default function AdminDashboardHomePage() {
   const todayFocus = useMemo(
     () => [...(dashboard?.todayFocus || [])]
       .filter((item) => Number(item.count) > 0)
-      .sort((left, right) => Number(left.priority || 99) - Number(right.priority || 99))
-      .slice(0, 4),
+      .sort((left, right) => Number(left.priority || 99) - Number(right.priority || 99)),
     [dashboard?.todayFocus]
   );
   const kpiCards = [
@@ -291,7 +291,8 @@ export default function AdminDashboardHomePage() {
     { title: "Outstanding Amount", value: formatCurrency(summary.outstandingAmount), icon: AlertTriangle, accent: "#d97706", available: availability.payments !== false },
     { title: "Overdue Invoices", value: formatCount(summary.overdueInvoices), icon: Clock3, accent: "#c94c3a", available: availability.invoices !== false && availability.payments !== false },
     { title: "Payments to Verify", value: formatCount(summary.paymentsToVerify), icon: CreditCard, accent: "#4f8fd8", available: availability.payments !== false },
-    { title: "Validation Errors", value: formatCount(summary.validationErrors), icon: ShieldAlert, accent: "#a43e30", available: availability.validation !== false }
+    { title: "Validation Errors", value: formatCount(summary.validationErrors), icon: ShieldAlert, accent: "#a43e30", available: availability.validation !== false },
+    { title: "Void Invoices", value: formatCount(summary.voidInvoices), icon: Ban, accent: "#6f5b55", available: availability.invoices !== false }
   ];
 
   return (
@@ -344,7 +345,7 @@ export default function AdminDashboardHomePage() {
 
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-5 xl:items-stretch">
                   <div className="xl:col-span-2 [&>section]:h-full">
-                    <Section title="Today's Focus" description="Priority invoicing issues that need attention.">
+                    <Section title="Today's Focus" description="Priority invoicing issues that need attention today.">
                       {todayFocus.length ? todayFocus.map((item) => <FocusItem key={item.type} item={item} />) : (
                         <div className="rounded-lg border border-dashed border-[#cde5d5] bg-[#f4fbf6] px-5 py-8 text-center">
                           <CheckCircle2 size={24} className="mx-auto text-[#3f8f62]" aria-hidden="true" />

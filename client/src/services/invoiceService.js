@@ -29,6 +29,13 @@ export function sendInvoice(invoiceId) {
   });
 }
 
+export function voidInvoice(invoiceId, reason) {
+  return apiRequest(`/api/invoices/${invoiceId}/void`, {
+    method: "PATCH",
+    body: JSON.stringify({ reason })
+  });
+}
+
 export function scheduleBulkInvoices(invoiceIds, scheduledAt) {
   return apiRequest("/api/invoices/schedule", {
     method: "POST",

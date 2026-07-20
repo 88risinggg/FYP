@@ -298,7 +298,7 @@ export default function AdminInvoicePerformancePage() {
   const navigate = useNavigate();
   const statusState = usePerformanceSection("status", "all-time");
   const activityState = usePerformanceSection("activity", "last-30-days");
-  const paidState = usePerformanceSection("paid-vs-overdue", "all-time");
+  const overdueState = usePerformanceSection("paid-vs-overdue", "all-time");
   const changesState = usePerformanceSection("status-changes", "all-time");
 
   const invoiceTarget = useCallback((status, sourceState) => {
@@ -310,8 +310,7 @@ export default function AdminInvoicePerformancePage() {
     return `${invoiceListPath}?${params}`;
   }, []);
   const activityPoints = activityState.data?.invoiceActivityTrend || [];
-  const paid = paidState.data?.paidVsOverdue || { paidAmount: 0, overdueAmount: 0 };
-  const maxAmount = Math.max(1, Number(paid.paidAmount || 0), Number(paid.overdueAmount || 0));
+  const overdueSummary = overdueState.data?.paidVsOverdue || { overdueAmount: 0 };
   const recentChanges = (changesState.data?.recentStatusChanges || []).slice(0, 5);
   const detailsParams = useMemo(() => {
     const params = new URLSearchParams({ range: activityState.range, mode: "count" });
@@ -345,16 +344,12 @@ export default function AdminInvoicePerformancePage() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[38fr_62fr]">
-        <Card title="Paid vs Overdue" controls={<RangeControl state={paidState} label="Paid vs Overdue" />}>
-          <SectionState state={paidState} emptyMessage="No paid or overdue amounts found for this range.">
-            <div className="space-y-6">
-              {[["Paid Amount", paid.paidAmount, "#55A978", "paid"], ["Overdue Amount", paid.overdueAmount, "#F38978", "overdue"]].map(([label, amount, color, status]) => (
-                <button key={label} type="button" onClick={() => navigate(invoiceTarget(status, paidState))} className="block w-full rounded-xl p-2 text-left transition hover:bg-[#fff8f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]">
-                  <div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold">{label}</span><strong>{formatCurrency(amount)}</strong></div>
-                  <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-[#f5e8e3]"><div className="h-full rounded-full" style={{ width: `${Number(amount || 0) / maxAmount * 100}%`, background: color }} /></div>
-                </button>
-              ))}
-            </div>
+        <Card title="Overdue Amount" controls={<RangeControl state={overdueState} label="Overdue Amount" />}>
+          <SectionState state={overdueState} emptyMessage="No overdue amounts found for this range.">
+            <button type="button" onClick={() => navigate(invoiceTarget("overdue", overdueState))} className="block w-full rounded-xl p-2 text-left transition hover:bg-[#fff8f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]">
+              <div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold">Outstanding overdue invoices</span><strong>{formatCurrency(overdueSummary.overdueAmount)}</strong></div>
+              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-[#f5e8e3]"><div className="h-full w-full rounded-full bg-[#F38978]" /></div>
+            </button>
           </SectionState>
         </Card>
 

@@ -193,6 +193,7 @@ function mapOverviewCounts(row = {}) {
     viewed: Number(row.viewed || 0),
     paid: Number(row.paid || 0),
     overdue: Number(row.overdue || 0),
+    void: Number(row.void || 0),
     paidRevenue: Number(row.paidRevenue || 0),
     outstandingAmount: Number(row.outstandingAmount || 0),
     overdueOutstandingAmount: Number(row.overdueOutstandingAmount || 0)
@@ -389,6 +390,8 @@ async function getPaymentsToVerifyCount(missingTables) {
   const columns = await getTableColumns(paymentTable);
   const statusColumn = pickColumn(columns, ["review_status", "verification_status", "payment_status", "status"]);
   const submittedColumn = pickColumn(columns, ["submitted_at", "created_at", "payment_date", "payment_date_input"]);
+  const amountColumn = pickColumn(columns, ["amount", "payment_amount", "paid_amount", "total_amount"]);
+  const invoiceIdColumn = pickColumn(columns, ["invoice_invoice_id", "invoice_id", "invoiceId"]);
 
   if (!statusColumn) {
     return { count: 0, oldestPendingDays: null, available: false };
@@ -396,18 +399,32 @@ async function getPaymentsToVerifyCount(missingTables) {
 
   const statusExpr = columnExpression(paymentTable, statusColumn);
   const submittedExpr = columnExpression(paymentTable, submittedColumn);
+  const mismatchExpr = amountColumn && invoiceIdColumn
+    ? `SUM(ABS(COALESCE(${columnExpression(paymentTable, amountColumn)}, 0) - GREATEST(COALESCE(invoice.total_amount, 0) - COALESCE((
+         SELECT SUM(confirmed.amount)
+         FROM ${quoteIdentifier(paymentTable)} AS confirmed
+         WHERE confirmed.${quoteIdentifier(invoiceIdColumn)} = ${columnExpression(paymentTable, invoiceIdColumn)}
+           AND LOWER(confirmed.status) IN ('paid', 'completed', 'success', 'successful', 'verified')
+       ), 0), 0)) > 0.009)`
+    : "0";
+  const joins = invoiceIdColumn
+    ? `LEFT JOIN invoice ON invoice.invoice_id = ${columnExpression(paymentTable, invoiceIdColumn)}`
+    : "";
   const result = await safeQuery(
     `SELECT COUNT(*) AS count,
+       ${mismatchExpr} AS mismatchCount,
        ${submittedExpr ? `DATEDIFF(CURDATE(), DATE(MIN(${submittedExpr})))` : "NULL"} AS oldestPendingDays
      FROM ${quoteIdentifier(paymentTable)} AS ${quoteIdentifier(paymentTable)}
+     ${joins}
      WHERE LOWER(${statusExpr}) IN ('pending', 'pending review', 'pending verification', 'pending-verification', 'requires verification', 'unverified')`,
     [],
-    [{ count: 0, oldestPendingDays: null }]
+    [{ count: 0, mismatchCount: 0, oldestPendingDays: null }]
   );
 
   if (result.missing) missingTables.add(paymentTable);
   return {
     count: Number(result.rows[0]?.count || 0),
+    mismatchCount: Number(result.rows[0]?.mismatchCount || 0),
     oldestPendingDays: result.rows[0]?.oldestPendingDays === null
       ? null
       : Number(result.rows[0]?.oldestPendingDays || 0),
@@ -416,6 +433,32 @@ async function getPaymentsToVerifyCount(missingTables) {
 }
 
 async function getValidationErrorsCount(missingTables) {
+  // Each re-validation supersedes the previous result for the same file. This
+  // makes the card represent issues that still require action, not all errors
+  // ever discovered in upload history.
+  const uploadAuditColumns = await getTableColumns("audit_logs");
+  const uploadActivityColumn = pickColumn(uploadAuditColumns, ["activity_type"]);
+  const uploadFileColumn = pickColumn(uploadAuditColumns, ["upload_file_name"]);
+  const uploadInvalidColumn = pickColumn(uploadAuditColumns, ["upload_invalid_rows"]);
+  const uploadIdColumn = pickColumn(uploadAuditColumns, ["audit_log_id", "id"]);
+  if (uploadActivityColumn && uploadFileColumn && uploadInvalidColumn && uploadIdColumn) {
+    const result = await safeQuery(
+      `SELECT COALESCE(SUM(COALESCE(latest_upload.${quoteIdentifier(uploadInvalidColumn)}, 0)), 0) AS count
+       FROM audit_logs AS latest_upload
+       INNER JOIN (
+         SELECT ${quoteIdentifier(uploadFileColumn)} AS fileName,
+                MAX(${quoteIdentifier(uploadIdColumn)}) AS latestId
+         FROM audit_logs
+         WHERE LOWER(${quoteIdentifier(uploadActivityColumn)}) = 'invoice_upload'
+         GROUP BY ${quoteIdentifier(uploadFileColumn)}
+       ) AS latest_by_file
+         ON latest_by_file.latestId = latest_upload.${quoteIdentifier(uploadIdColumn)}`,
+      [],
+      [{ count: 0 }]
+    );
+    return { count: Number(result.rows[0]?.count || 0), available: !result.missing };
+  }
+
   const candidateTables = ["invoice_upload_validation_errors", "bulk_upload_validation_errors", "validation_errors"];
 
   for (const table of candidateTables) {
@@ -530,11 +573,11 @@ async function getInvoiceOverview(missingTables) {
         GROUP BY ${paymentContext.invoiceIdExpr}
       ) AS confirmed_payment ON confirmed_payment.invoiceId = ${idExpr}`
     : "";
-  const remainingBalanceExpr = balanceExpr
-    ? `GREATEST(COALESCE(${balanceExpr}, ${totalAmountExpr} - ${confirmedPaymentExpr}), 0)`
-    : `GREATEST(${totalAmountExpr} - ${confirmedPaymentExpr}, 0)`;
+  // Payment records are the source of truth. This keeps partial payments from
+  // disappearing when an optional/stale balance column exists on invoice.
+  const remainingBalanceExpr = `GREATEST(${totalAmountExpr} - ${confirmedPaymentExpr}, 0)`;
   const validInvoiceFilters = [
-    `LOWER(COALESCE(${statusExpr}, '')) NOT IN ('void', 'cancelled', 'canceled')`
+    `LOWER(COALESCE(${statusExpr}, '')) NOT IN ('void', 'cancelled', 'canceled', 'refunded')`
   ];
 
   if (invoiceNoColumn) {
@@ -548,16 +591,19 @@ async function getInvoiceOverview(missingTables) {
   }
 
   const dueDateSelect = dueDateExpr || "NULL";
-  const normalizedStatusExpr = dueDateExpr
-    ? `CASE
+  const normalizedStatusExpr = `CASE
         WHEN dueDate IS NOT NULL
           AND dueDate < CURDATE()
           AND remainingBalance > 0
-          AND LOWER(rawStatus) NOT IN ('draft', 'scheduled', 'paid', 'void', 'cancelled', 'canceled', 'refunded')
+          AND LOWER(rawStatus) NOT IN ('draft', 'generated', 'scheduled', 'paid')
         THEN 'Overdue'
-        ELSE rawStatus
-      END`
-    : "rawStatus";
+        WHEN LOWER(rawStatus) IN ('draft', 'generated', 'scheduled') THEN 'Draft'
+        WHEN LOWER(rawStatus) IN ('sent', 'unpaid') THEN 'Sent'
+        WHEN LOWER(rawStatus) IN ('viewed', 'pending review', 'partially_paid', 'partially paid', 'partial', 'failed_payment') THEN 'Viewed'
+        WHEN LOWER(rawStatus) = 'paid' THEN 'Paid'
+        WHEN LOWER(rawStatus) = 'overdue' THEN 'Overdue'
+        ELSE 'Sent'
+      END`;
 
   const summaryResult = await safeQuery(
     `SELECT
@@ -567,10 +613,8 @@ async function getInvoiceOverview(missingTables) {
       SUM(LOWER(normalizedStatus) = 'viewed') AS viewed,
       SUM(LOWER(normalizedStatus) = 'paid') AS paid,
       SUM(LOWER(normalizedStatus) = 'overdue') AS overdue,
-      SUM(CASE WHEN LOWER(rawStatus) <> 'refunded' THEN confirmedPaid ELSE 0 END) AS paidRevenue,
-      SUM(CASE
-        WHEN LOWER(normalizedStatus) IN ('sent', 'viewed', 'overdue', 'pending review', 'partially paid', 'partial', 'failed_payment')
-        THEN remainingBalance ELSE 0 END) AS outstandingAmount,
+      SUM(confirmedPaid) AS paidRevenue,
+      SUM(CASE WHEN LOWER(normalizedStatus) <> 'paid' THEN remainingBalance ELSE 0 END) AS outstandingAmount,
       SUM(CASE WHEN LOWER(normalizedStatus) = 'overdue' THEN remainingBalance ELSE 0 END) AS overdueOutstandingAmount
      FROM (
       SELECT
@@ -595,8 +639,24 @@ async function getInvoiceOverview(missingTables) {
 
   if (summaryResult.missing) missingTables.add("invoice");
 
+  const voidFilters = [`LOWER(COALESCE(${statusExpr}, '')) = 'void'`];
+  if (invoiceNoColumn) voidFilters.push(`${columnExpression("invoice", invoiceNoColumn)} <> '__SETTINGS__'`);
+  if (deletedColumn) {
+    const deletedExpr = columnExpression("invoice", deletedColumn);
+    voidFilters.push(String(deletedColumn).toLowerCase().includes("_at")
+      ? `${deletedExpr} IS NULL`
+      : `COALESCE(${deletedExpr}, 0) = 0`);
+  }
+  const voidResult = await safeQuery(
+    `SELECT COUNT(*) AS count FROM invoice WHERE ${voidFilters.join(" AND ")}`,
+    [],
+    [{ count: 0 }]
+  );
+  const counts = mapOverviewCounts(summaryResult.rows[0]);
+  counts.void = Number(voidResult.rows[0]?.count || 0);
+
   return {
-    counts: mapOverviewCounts(summaryResult.rows[0]),
+    counts,
     invoiceAvailable: !summaryResult.missing,
     paymentAvailable: canUsePayments
   };
@@ -1043,6 +1103,41 @@ async function getInvoicePerformanceContext(missingTables) {
       "NULL"
     )
   };
+}
+
+async function getFailedInvoiceEmailCount(missingTables) {
+  const columns = await getTableColumns("audit_logs");
+  const actionColumn = pickColumn(columns, ["action_description", "action"]);
+  if (!actionColumn) {
+    missingTables.add("invoice email audit");
+    return { count: 0, available: false };
+  }
+  const result = await safeQuery(
+    `SELECT COUNT(*) AS count FROM audit_logs
+     WHERE LOWER(${columnExpression("audit_logs", actionColumn)}) = 'invoice_email_failed'`,
+    [],
+    [{ count: 0 }]
+  );
+  return { count: Number(result.rows[0]?.count || 0), available: !result.missing };
+}
+
+async function getRemindersDueTodayCount(missingTables) {
+  const invoiceColumns = await getTableColumns("invoice");
+  if (!invoiceColumns) {
+    missingTables.add("invoice");
+    return { count: 0, available: false };
+  }
+  const dueDateColumn = pickColumn(invoiceColumns, ["due_date", "dueDate"]);
+  const statusColumn = pickColumn(invoiceColumns, ["status", "invoice_status"]);
+  if (!dueDateColumn || !statusColumn) return { count: 0, available: false };
+  const result = await safeQuery(
+    `SELECT COUNT(*) AS count FROM invoice
+     WHERE DATE(${quoteIdentifier(dueDateColumn)}) = CURDATE()
+       AND LOWER(${quoteIdentifier(statusColumn)}) NOT IN ('draft', 'scheduled', 'paid', 'void', 'cancelled', 'canceled', 'refunded')`,
+    [],
+    [{ count: 0 }]
+  );
+  return { count: Number(result.rows[0]?.count || 0), available: !result.missing };
 }
 
 function invoicePerformanceSubquery(context) {
@@ -1944,6 +2039,8 @@ async function getAdminDashboardData(userId) {
   const admin = await getAdminProfile(userId, missingTables);
   const invoiceOverview = await getInvoiceOverview(missingTables);
   const reminderFailures = await getReminderFailedCount(missingTables);
+  const failedInvoiceEmails = await getFailedInvoiceEmailCount(missingTables);
+  const remindersDueToday = await getRemindersDueTodayCount(missingTables);
   const paymentsToVerify = await getPaymentsToVerifyCount(missingTables);
   const validationErrors = await getValidationErrorsCount(missingTables);
   const counts = invoiceOverview.counts;
@@ -1952,7 +2049,7 @@ async function getAdminDashboardData(userId) {
       type: "validation-errors",
       title: "Validation Errors",
       count: validationErrors.count,
-      description: `${validationErrors.count} issue${validationErrors.count === 1 ? "" : "s"} from the latest invoice import require review.`,
+      description: `${validationErrors.count} unresolved invoice upload issue${validationErrors.count === 1 ? "" : "s"} require review.`,
       severity: "Critical",
       priority: 1,
       destination: "validation-errors"
@@ -1977,6 +2074,15 @@ async function getAdminDashboardData(userId) {
       priority: 3,
       destination: "payment-reminder-summary"
     },
+    paymentsToVerify.mismatchCount > 0 && {
+      type: "payment-mismatch",
+      title: "Payment Mismatch",
+      count: paymentsToVerify.mismatchCount,
+      description: `${paymentsToVerify.mismatchCount} pending payment${paymentsToVerify.mismatchCount === 1 ? " does" : "s do"} not match the remaining invoice balance.`,
+      severity: "High",
+      priority: 3.5,
+      destination: "payment-reminder-summary"
+    },
     counts.overdue > 0 && {
       type: "overdue-invoices",
       title: "Overdue Invoices",
@@ -1995,6 +2101,24 @@ async function getAdminDashboardData(userId) {
       severity: "Low",
       priority: 5,
       destination: "invoice-performance"
+    },
+    failedInvoiceEmails.count > 0 && {
+      type: "failed-email-deliveries",
+      title: "Failed Email Deliveries",
+      count: failedInvoiceEmails.count,
+      description: `${failedInvoiceEmails.count} invoice email${failedInvoiceEmails.count === 1 ? "" : "s"} failed to send.`,
+      severity: "High",
+      priority: 6,
+      destination: "invoice-performance"
+    },
+    remindersDueToday.count > 0 && {
+      type: "reminders-due-today",
+      title: "Reminders Due Today",
+      count: remindersDueToday.count,
+      description: `${remindersDueToday.count} unpaid invoice${remindersDueToday.count === 1 ? " has" : "s have"} a payment reminder due today.`,
+      severity: "Low",
+      priority: 7,
+      destination: "payment-reminder-summary"
     }
   ].filter(Boolean).sort((left, right) => left.priority - right.priority);
 
@@ -2006,14 +2130,16 @@ async function getAdminDashboardData(userId) {
       outstandingAmount: counts.outstandingAmount,
       overdueInvoices: counts.overdue,
       paymentsToVerify: paymentsToVerify.count,
-      validationErrors: validationErrors.count
+      validationErrors: validationErrors.count,
+      voidInvoices: counts.void
     },
     invoiceStatus: {
       draft: counts.draft,
       sent: counts.sent,
       viewed: counts.viewed,
       paid: counts.paid,
-      overdue: counts.overdue
+      overdue: counts.overdue,
+      void: counts.void
     },
     todayFocus,
     availability: {

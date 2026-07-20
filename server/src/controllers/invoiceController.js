@@ -17,7 +17,7 @@ const {
 } = require("../models/invoiceSettingsModel");
 
 /** Set of valid invoice statuses used throughout the application. */
-const VALID_STATUSES = new Set(["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdue", "Pending Review"]);
+const VALID_STATUSES = new Set(["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdue", "Pending Review", "Void", "Cancelled", "Refunded"]);
 
 /** Prefix used in audit_log entries for status change tracking. */
 const STATUS_AUDIT_PREFIX = "invoice_status:";
@@ -568,9 +568,9 @@ async function sendInvoice(req, res) {
       return res.status(404).json({ message: "Invoice not found." });
     }
 
-    if (invoice.status === "Paid") {
+    if (["Paid", "Void", "Cancelled", "Refunded"].includes(invoice.status)) {
       await connection.rollback();
-      return res.status(400).json({ message: "Paid invoices cannot be sent again." });
+      return res.status(400).json({ message: `${invoice.status} invoices cannot be sent.` });
     }
 
     // Fetch line items for PDF
@@ -663,10 +663,62 @@ async function sendInvoice(req, res) {
     });
   } catch (error) {
     await connection.rollback();
+    await writeAuditLog(connection, "invoice_email_failed", "invoice", invoiceId, req.user?.userId, {
+      newValue: JSON.stringify({ message: error.message })
+    });
     res.status(500).json({
       message: "Failed to send invoice.",
       detail: error.message
     });
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * PATCH /api/invoices/:id/void
+ * Retains an officially-created invoice for audit while removing it from active totals.
+ */
+async function voidInvoice(req, res) {
+  const invoiceId = Number(req.params.id);
+  const reason = String(req.body?.reason || "").trim();
+  if (!invoiceId) return res.status(400).json({ message: "Invalid invoice id." });
+  if (!reason) return res.status(400).json({ message: "A void reason is required." });
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query(
+      "SELECT status, invoiceId FROM invoice WHERE invoice_id = ? LIMIT 1 FOR UPDATE",
+      [invoiceId]
+    );
+    if (!rows.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Invoice not found." });
+    }
+    if (rows[0].status === "Void") {
+      await connection.rollback();
+      return res.status(400).json({ message: "Invoice is already void." });
+    }
+
+    await connection.query(
+      `UPDATE invoice
+       SET status = 'Void', void_reason = ?, voided_by = ?, voided_at = NOW()
+       WHERE invoice_id = ?`,
+      [reason, req.user?.userId || null, invoiceId]
+    );
+    await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}Void`, "invoice", invoiceId, req.user?.userId, {
+      previousValue: rows[0].status,
+      newValue: JSON.stringify({ status: "Void", reason })
+    });
+    await writeAuditLog(connection, "invoice_voided", "invoice", invoiceId, req.user?.userId, {
+      newValue: JSON.stringify({ reason })
+    });
+    await connection.commit();
+    res.json({ message: "Invoice voided and retained for audit.", invoice_id: invoiceId, status: "Void" });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ message: "Failed to void invoice.", detail: error.message });
   } finally {
     connection.release();
   }
@@ -790,6 +842,7 @@ module.exports = {
   getNextInvoiceNumber,
   scheduleInvoices,
   sendInvoice,
+  voidInvoice,
   toCurrencyNumber,
   STATUS_AUDIT_PREFIX,
   toDatabaseInvoiceStatus,

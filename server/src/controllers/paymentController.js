@@ -6,6 +6,7 @@
  */
 
 const { pool } = require("../config/db");
+const { settleInvoiceFromConfirmedPayments } = require("../services/invoicePaymentSettlementService");
 
 function toCurrencyNumber(value) {
   const n = Number(value);
@@ -17,10 +18,13 @@ function toCurrencyNumber(value) {
  */
 async function ensureInvoiceCanBePaid(connection, invoiceId) {
   const [rows] = await connection.query(
-    "SELECT risk_level, review_status FROM invoice WHERE invoice_id = ? LIMIT 1",
+    "SELECT risk_level, review_status, status FROM invoice WHERE invoice_id = ? LIMIT 1",
     [invoiceId]
   );
   const invoice = rows[0];
+  if (!invoice || ["Paid", "Void", "Cancelled", "Refunded"].includes(invoice.status)) {
+    return { allowed: false, message: "This invoice is not available for payment." };
+  }
   if (invoice?.risk_level === "High" && invoice.review_status !== "Approved") {
     return { allowed: false, message: "High-risk invoices require manual fraud review before payment processing." };
   }
@@ -37,7 +41,7 @@ async function getPaymentsWorkspace(req, res) {
              i.status AS database_status, c.name AS customer_name, c.email AS customer_email
       FROM invoice i
       INNER JOIN customer c ON c.customer_id = i.customer_id
-      WHERE i.status NOT IN ('Paid', 'Cancelled', 'Refunded')
+      WHERE i.status NOT IN ('Paid', 'Void', 'Cancelled', 'Refunded')
       ORDER BY i.due_date ASC, i.invoice_id DESC
     `);
 
@@ -92,10 +96,19 @@ async function recordManualPayment(req, res) {
       [String(amount), transactionId, invoiceId]
     );
 
-    await connection.query("UPDATE invoice SET status = 'Paid', payment_date = NOW(), transaction_id = ? WHERE invoice_id = ?", [transactionId, invoiceId]);
+    const settlement = await settleInvoiceFromConfirmedPayments(connection, invoiceId, "Sent");
+    await connection.query(
+      "UPDATE invoice SET payment_date = NOW(), transaction_id = ? WHERE invoice_id = ?",
+      [transactionId, invoiceId]
+    );
     await connection.commit();
 
-    res.status(201).json({ message: "Manual payment recorded." });
+    res.status(201).json({
+      message: settlement.status === "Paid" ? "Manual payment recorded. Invoice paid in full." : "Partial payment recorded.",
+      invoice_status: settlement.status,
+      amount_paid: settlement.confirmedPaid,
+      outstanding_amount: settlement.outstandingAmount
+    });
   } catch (error) {
     await connection.rollback();
     res.status(500).json({ message: "Failed to record manual payment.", detail: error.message });

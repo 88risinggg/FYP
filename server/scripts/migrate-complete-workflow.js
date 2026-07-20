@@ -52,7 +52,7 @@ async function run() {
     try {
       await connection.query(`
         ALTER TABLE invoice MODIFY COLUMN status
-        ENUM('Draft', 'Scheduled', 'Sent', 'Viewed', 'Paid', 'Overdue', 'Cancelled', 'Refunded', 'Failed_Payment', 'Pending Review')
+        ENUM('Draft', 'Generated', 'Scheduled', 'Sent', 'Viewed', 'Unpaid', 'Partially_Paid', 'Paid', 'Overdue', 'Pending Review', 'Cancelled', 'Void', 'Refunded', 'Failed_Payment')
         DEFAULT 'Draft'
       `);
       console.log("  ✓ Status ENUM updated with 'Pending Review'\n");
@@ -76,6 +76,10 @@ async function run() {
     await addColumnSafe(connection, "invoice", "fraud_indicators_json", "JSON NULL");
     await addColumnSafe(connection, "invoice", "vendor_name", "VARCHAR(255) NULL");
     await addColumnSafe(connection, "invoice", "assessed_at", "DATETIME NULL");
+    await addColumnSafe(connection, "invoice", "void_reason", "VARCHAR(500) NULL");
+    await addColumnSafe(connection, "invoice", "voided_by", "INT NULL");
+    await addColumnSafe(connection, "invoice", "voided_at", "DATETIME NULL");
+    await addColumnSafe(connection, "invoice", "deleted_at", "DATETIME NULL");
     // A unique source-order key makes duplicate prevention durable across
     // concurrent imports.  Existing installations with historical duplicates
     // retain the non-unique lookup index and report the migration issue.

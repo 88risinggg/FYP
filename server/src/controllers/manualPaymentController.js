@@ -13,6 +13,7 @@
 
 const { pool } = require("../config/db");
 const { writeAuditLog, STATUS_AUDIT_PREFIX } = require("./invoiceController");
+const { settleInvoiceFromConfirmedPayments } = require("../services/invoicePaymentSettlementService");
 
 /**
  * POST /api/public/invoice/:invoiceId/submit-payment
@@ -59,7 +60,7 @@ async function submitManualPayment(req, res) {
       return res.status(400).json({ message: "This invoice has already been paid." });
     }
 
-    if (["Cancelled", "Refunded"].includes(invoice.status)) {
+    if (["Void", "Cancelled", "Refunded"].includes(invoice.status)) {
       await connection.rollback();
       return res.status(400).json({ message: "This invoice is no longer active." });
     }
@@ -201,6 +202,11 @@ async function reviewPaymentSubmission(req, res) {
 
     const submission = subRows[0];
 
+    if (["Void", "Cancelled", "Refunded"].includes(submission.invoice_status)) {
+      await connection.rollback();
+      return res.status(400).json({ message: "This invoice is no longer active." });
+    }
+
     if (submission.review_status !== "Pending Review") {
       await connection.rollback();
       return res.status(400).json({
@@ -209,6 +215,7 @@ async function reviewPaymentSubmission(req, res) {
     }
 
     const userId = req.user?.userId;
+    let resultingInvoiceStatus = submission.invoice_status;
 
     // Update review status on payment row
     await connection.query(
@@ -225,16 +232,26 @@ async function reviewPaymentSubmission(req, res) {
         [transactionId, submission.payment_method_name || "Bank Transfer", submissionId]
       );
 
+      const settlement = await settleInvoiceFromConfirmedPayments(
+        connection,
+        submission.invoice_invoice_id,
+        "Sent"
+      );
+      resultingInvoiceStatus = settlement.status;
       await connection.query(
-        `UPDATE invoice SET status = 'Paid', payment_date = ?, transaction_id = ?,
-         payment_status = 'paid', payment_method = ? WHERE invoice_id = ?`,
+        `UPDATE invoice SET payment_date = ?, transaction_id = ?, payment_method = ? WHERE invoice_id = ?`,
         [submission.payment_date_input, transactionId, submission.payment_method_name, submission.invoice_invoice_id]
       );
 
-      await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}Paid`, "invoice", submission.invoice_invoice_id, userId);
+      await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}${settlement.status}`, "invoice", submission.invoice_invoice_id, userId);
       await writeAuditLog(connection, "payment_approved", "invoice", submission.invoice_invoice_id, userId, {
         previousValue: "Pending Review",
-        newValue: JSON.stringify({ amount: submission.amount, reference: transactionId })
+        newValue: JSON.stringify({
+          amount: submission.amount,
+          reference: transactionId,
+          status: settlement.status,
+          outstandingAmount: settlement.outstandingAmount
+        })
       });
 
       try {
@@ -245,11 +262,13 @@ async function reviewPaymentSubmission(req, res) {
         ).catch(() => {});
       } catch { /* non-blocking */ }
     } else {
-      const newStatus = submission.invoice_status === "Pending Review" ? "Sent" : submission.invoice_status;
-      await connection.query(
-        "UPDATE invoice SET status = ? WHERE invoice_id = ? AND status = 'Pending Review'",
-        [newStatus, submission.invoice_invoice_id]
+      const settlement = await settleInvoiceFromConfirmedPayments(
+        connection,
+        submission.invoice_invoice_id,
+        "Sent"
       );
+      const newStatus = settlement.status;
+      resultingInvoiceStatus = newStatus;
       await writeAuditLog(connection, "payment_rejected", "invoice", submission.invoice_invoice_id, userId, {
         previousValue: "Pending Review",
         newValue: JSON.stringify({ reason: notes || "No reason provided" })
@@ -262,7 +281,7 @@ async function reviewPaymentSubmission(req, res) {
     try {
       const { createNotification } = require("../services/invoiceNotificationService");
       const msg = decision === "Approved"
-        ? `Payment for ${submission.invoiceId} approved. Invoice marked as Paid.`
+        ? `Payment for ${submission.invoiceId} approved. The invoice balance has been updated.`
         : `Payment for ${submission.invoiceId} rejected. Customer may resubmit.`;
       createNotification({
         type: decision === "Approved" ? "payment_success" : "payment_failed",
@@ -276,7 +295,7 @@ async function reviewPaymentSubmission(req, res) {
       message: `Payment submission ${decision.toLowerCase()}.`,
       submission_id: submissionId,
       decision,
-      invoice_status: decision === "Approved" ? "Paid" : "Sent"
+      invoice_status: resultingInvoiceStatus
     });
   } catch (error) {
     await connection.rollback();
