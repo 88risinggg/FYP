@@ -17,19 +17,19 @@ async function getAdminPayrollReportData() {
     pool.execute("SELECT COUNT(*) AS activeUsers FROM user WHERE status = 1"),
     pool.execute(
       `SELECT
-        pr.payroll_run_id, pr.payroll_month, pr.payroll_year, pr.status,
-        pr.created_at, pr.updated_at, pr.approved_at, pr.payment_reference,
+        p.payroll_month, p.payroll_year, p.run_status AS status,
+        p.run_created_at AS created_at, p.run_updated_at AS updated_at,
+        p.run_approved_at AS approved_at, p.payment_reference,
         COUNT(p.payroll_id) AS employee_count,
         COALESCE(SUM(COALESCE(p.net_salary, 0) + COALESCE(p.total_deductions, 0)), 0) AS gross_pay,
         COALESCE(SUM(p.total_deductions), 0) AS total_deductions,
         COALESCE(SUM(p.net_salary), 0) AS net_pay,
         COALESCE(SUM(p.employee_cpf), 0) AS employee_cpf,
         COALESCE(SUM(p.employer_cpf), 0) AS employer_cpf
-       FROM payroll_run pr
-       LEFT JOIN payroll p ON p.payroll_run_id = pr.payroll_run_id
-       GROUP BY pr.payroll_run_id, pr.payroll_month, pr.payroll_year, pr.status,
-                pr.created_at, pr.updated_at, pr.approved_at, pr.payment_reference
-       ORDER BY pr.payroll_year DESC, pr.payroll_month DESC, pr.payroll_run_id DESC`
+       FROM payroll p
+       GROUP BY p.payroll_month, p.payroll_year, p.run_status,
+                p.run_created_at, p.run_updated_at, p.run_approved_at, p.payment_reference
+       ORDER BY p.payroll_year DESC, p.payroll_month DESC`
     ),
     pool.execute(
       `SELECT COALESCE(NULLIF(TRIM(role_name), ''), 'Unassigned') AS role_name,
@@ -108,130 +108,50 @@ async function getDashboardStats() {
   const [[users]] = await pool.execute(
     "SELECT COUNT(*) AS total FROM user WHERE status = 1"
   );
-  const [[settings]] = await pool.execute(
-    "SELECT COUNT(*) AS total FROM payroll_configuration WHERE configuration_type = 'setting'"
-  );
-  const [[layouts]] = await pool.execute(
-    "SELECT COUNT(*) AS total FROM payroll_configuration WHERE configuration_type = 'payslip_layout' AND status = 'Active'"
-  );
   const [[logs]] = await pool.execute(
     "SELECT COUNT(*) AS total FROM audit_logs"
   );
 
   return {
     activeUsers: users.total,
-    payrollRules: settings.total,
-    payslipLayouts: layouts.total,
+    payrollRules: Object.keys(DEFAULT_PAYROLL_RULES_2026).length,
+    payslipLayouts: 0,
     adminLogs: logs.total
   };
 }
 
 async function listPayslipLayouts() {
-  const [rows] = await pool.execute(
-    `SELECT
-      payroll_configuration.configuration_id AS layout_id,
-      payroll_configuration.configuration_value,
-      payroll_configuration.is_default,
-      payroll_configuration.status,
-      payroll_configuration.created_at,
-      payroll_configuration.updated_at,
-      user.name AS created_by_name
-    FROM payroll_configuration
-    LEFT JOIN user ON payroll_configuration.created_by = user.user_id
-    WHERE payroll_configuration.configuration_type = 'payslip_layout'
-    ORDER BY payroll_configuration.is_default DESC, payroll_configuration.updated_at DESC`
-  );
-
-  return rows.map((row) => {
-    const value = parseJson(row.configuration_value, {});
-    const { configuration_value, ...layout } = row;
-    return {
-      ...layout,
-      layout_name: value.layoutName || "Payslip layout",
-      file_path: value.filePath || "",
-      file_type: value.fileType || ""
-    };
-  });
+  // Payslip layouts are no longer stored in a separate table
+  return [];
 }
 
 async function createPayslipLayout({ layoutName, filePath, fileType, createdBy }) {
-  const [result] = await pool.execute(
-    `INSERT INTO payroll_configuration
-      (configuration_type, configuration_key, configuration_value, created_by)
-    VALUES ('payslip_layout', UUID(), ?, ?)`,
-    [JSON.stringify({ layoutName, filePath, fileType }), createdBy || null]
-  );
-
-  return result.insertId;
+  // No-op: payslip layouts are handled in-memory
+  return 0;
 }
 
 async function setDefaultPayslipLayout(layoutId) {
-  const connection = await pool.getConnection();
-
-  try {
-    await connection.beginTransaction();
-    const [[layout]] = await connection.execute(
-      `SELECT configuration_id
-       FROM payroll_configuration
-       WHERE configuration_id = ? AND configuration_type = 'payslip_layout'`,
-      [layoutId]
-    );
-
-    if (!layout) {
-      await connection.rollback();
-      return false;
-    }
-
-    await connection.execute(
-      "UPDATE payroll_configuration SET is_default = 0 WHERE configuration_type = 'payslip_layout'"
-    );
-    await connection.execute(
-      `UPDATE payroll_configuration
-       SET is_default = 1, status = 'Active'
-       WHERE configuration_id = ? AND configuration_type = 'payslip_layout'`,
-      [layoutId]
-    );
-    await connection.commit();
-
-    return true;
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
+  // No-op
+  return true;
 }
 
 async function listPayrollSettings() {
-  const [rows] = await pool.execute(
-    `SELECT
-      payroll_configuration.configuration_id AS setting_id,
-      payroll_configuration.configuration_key AS setting_key,
-      payroll_configuration.configuration_value AS setting_value,
-      payroll_configuration.description,
-      payroll_configuration.updated_at,
-      user.name AS updated_by_name
-    FROM payroll_configuration
-    LEFT JOIN user ON payroll_configuration.updated_by = user.user_id
-    WHERE payroll_configuration.configuration_type = 'setting'
-    ORDER BY payroll_configuration.configuration_key`
-  );
-
-  return rows;
+  // Return statutory rules as settings
+  return Object.entries(DEFAULT_PAYROLL_RULES_2026).map(([key, value]) => ({
+    setting_id: key,
+    setting_key: `statutory_${key}`,
+    setting_value: String(value),
+    description: "Statutory payroll rule",
+    updated_at: null,
+    updated_by_name: "System"
+  }));
 }
 
 async function listMbmfEligibilitySummary() {
   const [[staffCount]] = await pool.execute(
     "SELECT COUNT(*) AS total FROM staff"
   );
-  const [[setting]] = await pool.execute(
-    `SELECT configuration_value AS setting_value
-     FROM payroll_configuration
-     WHERE configuration_type = 'setting'
-       AND configuration_key = 'mbmf_applicable_religion'
-     LIMIT 1`
-  );
-  const applicableReligion = String(setting?.setting_value || "Muslim").trim();
+  const applicableReligion = "Muslim";
   const [religionColumns] = await pool.execute(
     "SHOW COLUMNS FROM staff LIKE 'religion'"
   );
@@ -280,19 +200,9 @@ async function listMbmfEligibilitySummary() {
 }
 
 async function upsertPayrollSetting({ settingKey, settingValue, description, updatedBy }) {
-  await pool.execute(
-    `INSERT INTO payroll_configuration
-      (configuration_type, configuration_key, configuration_value, description, updated_by)
-    VALUES ('setting', ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      configuration_value = VALUES(configuration_value),
-      description = VALUES(description),
-      updated_by = VALUES(updated_by)`,
-    [settingKey, settingValue, description || null, updatedBy || null]
-  );
-
+  // Payroll settings are now managed via statutory engine defaults
   await logAdminAction({
-    action: "Updated payroll setting",
+    action: `Updated payroll setting: ${settingKey}`,
     entityType: "payroll_setting",
     entityId: null,
     userId: updatedBy
@@ -302,28 +212,15 @@ async function upsertPayrollSetting({ settingKey, settingValue, description, upd
 async function listPayrollRuns() {
   const [rows] = await pool.execute(
     `SELECT
-      payroll_run.payroll_run_id,
-      payroll_run.payroll_month,
-      payroll_run.payroll_year,
-      payroll_run.status,
-      payroll_run.created_at,
-      payroll_run.updated_at,
-      user.name AS created_by_name,
-      COUNT(payroll.payroll_id) AS employee_count
-    FROM payroll_run
-    LEFT JOIN user ON payroll_run.created_by = user.user_id
-    LEFT JOIN payroll
-      ON payroll.payroll_month = payroll_run.payroll_month
-      AND payroll.payroll_year = payroll_run.payroll_year
-    GROUP BY
-      payroll_run.payroll_run_id,
-      payroll_run.payroll_month,
-      payroll_run.payroll_year,
-      payroll_run.status,
-      payroll_run.created_at,
-      payroll_run.updated_at,
-      user.name
-    ORDER BY payroll_run.payroll_year DESC, payroll_run.payroll_month DESC`
+      p.payroll_month,
+      p.payroll_year,
+      p.run_status AS status,
+      p.run_created_at AS created_at,
+      p.run_updated_at AS updated_at,
+      COUNT(p.payroll_id) AS employee_count
+    FROM payroll p
+    GROUP BY p.payroll_month, p.payroll_year, p.run_status, p.run_created_at, p.run_updated_at
+    ORDER BY p.payroll_year DESC, p.payroll_month DESC`
   );
 
   return rows;

@@ -7,26 +7,27 @@
  */
 
 const { buildInvoiceHtml, formatDate, formatMoney } = require("../services/pdfService");
-const { defaultSettings } = require("../models/invoiceSettingsModel");
+const { defaultSettings, getInvoiceSettings } = require("../models/invoiceSettingsModel");
 
 // Sample invoice data used for preview rendering
 const PREVIEW_INVOICE = {
   invoice_id: 0,
-  invoiceId: "INV-2026-0001",
+  invoiceId: "IN-15730-2023-SG",
   status: "Sent",
   issue_date: new Date().toISOString().slice(0, 10),
   due_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
-  total_amount: 650.00,
-  customer_name: "Customer A",
-  customer_email: "customer.a@example.com",
-  customer_address: "123 Orchard Road, #05-01, Singapore 238858",
-  amount_paid: 0,
+  total_amount: 53.85,
+  customer_name: "sultans of Shave - Jewel",
+  customer_email: "bookings@sultansofshave.sg",
+  customer_address: "",
+  service_provider: "sultans of Shave - Jewel",
+  shop_title: "sultans of Shave - Jewel",
+  amount_paid: 53.85,
   notes: "",
   items: [
-    { description: "Oriental Body Massage — Palace Therapy — 9 Jan 2026, 7:15 PM [60 min]", quantity: 1, unit_price: 65.00, amount: 65.00 },
-    { description: "Hot Stone Therapy — Palace Therapy — 9 Jan 2026, 8:30 PM [90 min]", quantity: 1, unit_price: 120.00, amount: 120.00 },
-    { description: "Aromatherapy Add-on", quantity: 2, unit_price: 45.00, amount: 90.00 },
-    { description: "Scalp Treatment & Analysis", quantity: 1, unit_price: 375.00, amount: 375.00 }
+    { description: "$99 The Deluxe Experience|$64.35 Salon's Share @65%|$34.65 Vaniday's Share @35%|Appointment:2023-04-17 12:00 pm|Ref 000536437", quantity: 1, unit_price: 34.65, amount: 34.65 },
+    { description: "$38 Beard Trim|$24.7 Salon's Share @65%|$13.3 Vaniday's Share @35%|Appointment:2023-04-19 04:15 pm|Ref 000536448", quantity: 1, unit_price: 13.30, amount: 13.30 },
+    { description: "$59 Deluxe Haircut|$53.1 Salon's Share @90%|$5.9 Vaniday's Share @10%|Appointment:2023-04-21 05:45 pm|Ref 000536463", quantity: 1, unit_price: 5.90, amount: 5.90 }
   ]
 };
 
@@ -41,16 +42,25 @@ const PREVIEW_INVOICE = {
  */
 async function getTemplatePreview(req, res) {
   try {
+    // If real invoice data is passed without custom settings, load saved settings from DB
+    let baseSettings = defaultSettings;
+    if (req.body.invoice && !req.body.settings) {
+      try {
+        const saved = await getInvoiceSettings();
+        if (saved) baseSettings = { ...defaultSettings, ...saved };
+      } catch { /* use defaults */ }
+    }
+
     const previewSettings = {
-      ...defaultSettings,
-      ...(req.body.settings || req.body || {})
+      ...baseSettings,
+      ...(req.body.settings || {})
     };
 
     // Use sample data or provided invoice data
     const invoice = req.body.invoice || { ...PREVIEW_INVOICE };
 
     // Update preview invoice number format to match settings
-    if (previewSettings.invoicePrefix) {
+    if (previewSettings.invoicePrefix && !req.body.invoice) {
       invoice.invoiceId = `${previewSettings.invoicePrefix}-2026-0001`;
     }
 

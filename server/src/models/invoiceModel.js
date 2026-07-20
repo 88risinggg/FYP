@@ -29,6 +29,7 @@ async function findAllInvoices() {
       c.address AS customer_address
     FROM invoice i
     INNER JOIN customer c ON c.customer_id = i.customer_id
+    WHERE i.invoiceId <> '__SETTINGS__'
     ORDER BY i.created_at DESC, i.invoice_id DESC
   `);
   return rows;

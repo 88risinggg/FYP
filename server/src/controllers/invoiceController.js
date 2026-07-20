@@ -17,7 +17,7 @@ const {
 } = require("../models/invoiceSettingsModel");
 
 /** Set of valid invoice statuses used throughout the application. */
-const VALID_STATUSES = new Set(["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdue"]);
+const VALID_STATUSES = new Set(["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdue", "Pending Review"]);
 
 /** Prefix used in audit_log entries for status change tracking. */
 const STATUS_AUDIT_PREFIX = "invoice_status:";
@@ -222,6 +222,7 @@ async function getInvoices(req, res) {
         c.address AS customer_address
       FROM invoice i
       INNER JOIN customer c ON c.customer_id = i.customer_id
+      WHERE i.invoiceId <> '__SETTINGS__'
       ORDER BY i.created_at DESC, i.invoice_id DESC
     `);
 
@@ -257,26 +258,33 @@ async function getInvoices(req, res) {
           return acc;
         }, {});
       } catch {
-        // invoice_item table doesn't exist, try items_json column on invoice table
+        // invoice_item table doesn't exist — skip
+      }
+
+      // For invoices without items from invoice_item, try items_json column
+      const missingItemIds = invoiceIds.filter(id => !itemsByInvoiceId[id] || itemsByInvoiceId[id].length === 0);
+      if (missingItemIds.length > 0) {
         try {
           const [itemRows] = await pool.query(
             "SELECT invoice_id, items_json FROM invoice WHERE invoice_id IN (?) AND items_json IS NOT NULL",
-            [invoiceIds]
+            [missingItemIds]
           );
           itemRows.forEach((row) => {
             try {
               const items = typeof row.items_json === "string" ? JSON.parse(row.items_json) : (row.items_json || []);
-              itemsByInvoiceId[row.invoice_id] = items.map((item, idx) => ({
-                item_id: idx + 1,
-                description: item.description,
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                amount: item.amount,
-                invoice_invoice_id: row.invoice_id
-              }));
+              if (items.length > 0) {
+                itemsByInvoiceId[row.invoice_id] = items.map((item, idx) => ({
+                  item_id: idx + 1,
+                  description: item.description,
+                  quantity: item.quantity,
+                  unit_price: item.unit_price,
+                  amount: item.amount,
+                  invoice_invoice_id: row.invoice_id
+                }));
+              }
             } catch { itemsByInvoiceId[row.invoice_id] = []; }
           });
-        } catch { /* no items available from either source */ }
+        } catch { /* items_json column may not exist */ }
       }
 
       // Resolve the latest operational status from audit_logs (note: table is audit_logs not audit_log)

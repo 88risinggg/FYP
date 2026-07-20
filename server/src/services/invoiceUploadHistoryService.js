@@ -1,3 +1,10 @@
+/**
+ * Invoice Upload History Service
+ *
+ * Upload records are now stored in audit_logs table (activity_type = 'invoice_upload').
+ * Validation errors are stored as JSON in upload_validation_errors_json column.
+ */
+
 const { pool } = require("../config/db");
 
 function fileNameFromMetadata(file = {}) {
@@ -22,86 +29,62 @@ function validationErrorRows(validation = {}) {
   (validation.rows || []).forEach((row) => {
     (row.errors || []).forEach((message) => {
       errors.push({
-        rowNumber: Number(row.row_number) || null,
-        invoiceNumber: row.invoice_number || null,
-        fieldName: inferFieldName(message),
-        message
+        source_row_number: Number(row.row_number) || null,
+        invoice_number: row.invoice_number || null,
+        field_name: inferFieldName(message),
+        error_message: message
       });
     });
   });
 
   if (validation.message && errors.length === 0) {
     errors.push({
-      rowNumber: null,
-      invoiceNumber: null,
-      fieldName: inferFieldName(validation.message),
-      message: validation.message
+      source_row_number: null,
+      invoice_number: null,
+      field_name: inferFieldName(validation.message),
+      error_message: validation.message
     });
   }
 
   return errors;
 }
 
-async function replaceValidationErrors(connection, uploadId, validation) {
-  await connection.execute(
-    "DELETE FROM invoice_upload_validation_errors WHERE upload_id = ?",
-    [uploadId]
-  );
-
-  const errors = validationErrorRows(validation);
-  if (!errors.length) return;
-
-  await connection.query(
-    `INSERT INTO invoice_upload_validation_errors
-      (upload_id, source_row_number, invoice_number, field_name, error_message)
-     VALUES ?`,
-    [errors.map((error) => [
-      uploadId,
-      error.rowNumber,
-      error.invoiceNumber,
-      error.fieldName,
-      String(error.message)
-    ])]
-  );
-}
-
 async function recordValidationAttempt({ file, validation, user }) {
-  const connection = await pool.getConnection();
+  const totalRows = Array.isArray(validation.rows) && validation.rows.length
+    ? validation.rows.length
+    : Number(validation.invalidCount || validation.validCount || 0);
+  const isFailed = Boolean(validation.message) || Number(validation.validCount || 0) === 0;
+  const errors = validationErrorRows(validation);
 
-  try {
-    await connection.beginTransaction();
-    const totalRows = Array.isArray(validation.rows) && validation.rows.length
-      ? validation.rows.length
-      : Number(validation.invalidCount || validation.validCount || 0);
-    const isFailed = Boolean(validation.message) || Number(validation.validCount || 0) === 0;
-    const [result] = await connection.execute(
-      `INSERT INTO invoice_upload_history
-        (file_name, file_type, status, total_rows, valid_rows, invalid_rows,
-         error_message, uploaded_by, uploader_email, completed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        fileNameFromMetadata(file),
-        String(file?.type || "").slice(0, 150) || null,
-        isFailed ? "Failed" : "Validated",
-        totalRows,
-        Number(validation.validCount || 0),
-        Number(validation.invalidCount || 0),
-        validation.message || null,
-        user?.userId || null,
-        user?.email || null,
-        isFailed ? new Date() : null
-      ]
-    );
+  const [result] = await pool.execute(
+    `INSERT INTO audit_logs (
+      activity_type, action_description, affected_record, status, user_id, user_name,
+      upload_file_name, upload_file_type, upload_total_rows, upload_valid_rows,
+      upload_invalid_rows, upload_created_invoices, upload_error_message,
+      upload_validation_errors_json, upload_completed_at, created_at
+    ) VALUES (
+      'invoice_upload', ?, NULL, ?, ?, ?,
+      ?, ?, ?, ?,
+      ?, 0, ?,
+      ?, ?, NOW()
+    )`,
+    [
+      `Upload: ${fileNameFromMetadata(file)} (${isFailed ? "Failed" : "Validated"})`,
+      isFailed ? "failed" : "pending",
+      user?.userId || null,
+      user?.email || "System",
+      fileNameFromMetadata(file),
+      String(file?.type || "").slice(0, 150) || null,
+      totalRows,
+      Number(validation.validCount || 0),
+      Number(validation.invalidCount || 0),
+      validation.message || null,
+      errors.length > 0 ? JSON.stringify(errors) : null,
+      isFailed ? new Date() : null
+    ]
+  );
 
-    await replaceValidationErrors(connection, result.insertId, validation);
-    await connection.commit();
-    return result.insertId;
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
+  return result.insertId;
 }
 
 async function updateUploadOutcome(connection, {
@@ -113,11 +96,14 @@ async function updateUploadOutcome(connection, {
 }) {
   if (!uploadId) return false;
 
+  const dbStatus = status === "Successful" ? "success" : status === "Failed" ? "failed" : "pending";
+
   const [result] = await connection.execute(
-    `UPDATE invoice_upload_history
-     SET status = ?, created_invoices = ?, error_message = ?, completed_at = NOW()
-     WHERE upload_id = ? AND (uploaded_by = ? OR uploaded_by IS NULL)`,
-    [status, createdInvoices, errorMessage, uploadId, userId || null]
+    `UPDATE audit_logs
+     SET status = ?, upload_created_invoices = ?, upload_error_message = ?, upload_completed_at = NOW(),
+         action_description = CONCAT('Upload: ', upload_file_name, ' (', ?, ')')
+     WHERE audit_log_id = ? AND activity_type = 'invoice_upload'`,
+    [dbStatus, createdInvoices, errorMessage, status, uploadId]
   );
   return result.affectedRows > 0;
 }

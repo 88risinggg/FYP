@@ -822,8 +822,7 @@ router.post(
 );
 // ----- END: commit endpoint -----
 
-// ----- Payroll Run Management (DB-backed) -----
-// [HR BRANCH - Steven] Migrated from in-memory payrollRuns[] to payroll_run table
+// ----- Payroll Run Management (merged into payroll table) -----
 router.post("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
   try {
     const { period_month, period_year } = req.body;
@@ -832,7 +831,6 @@ router.post("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), async 
       return res.status(400).json({ message: "period_month and period_year are required" });
     }
 
-    // Convert period_month to numeric if it's a string name (e.g., "June" → 6)
     const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
     let numMonth = Number(period_month);
     if (isNaN(numMonth)) {
@@ -846,30 +844,19 @@ router.post("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), async 
 
     // FR1: Ensure same period doesn't create redundant runs
     const [existing] = await pool.query(
-      'SELECT payroll_run_id FROM payroll_run WHERE payroll_month = ? AND payroll_year = ? LIMIT 1',
+      'SELECT payroll_id FROM payroll WHERE payroll_month = ? AND payroll_year = ? LIMIT 1',
       [numMonth, numYear]
     );
     if (existing.length > 0) {
       return res.status(409).json({
-        message: `A payroll run already exists for ${period_month} ${period_year}`,
-        run: existing[0]
+        message: `A payroll run already exists for ${period_month} ${period_year}`
       });
     }
 
-    const [result] = await pool.query(
-      'INSERT INTO payroll_run (payroll_month, payroll_year, status, configuration_json, created_at) VALUES (?, ?, ?, ?, NOW())',
-      [numMonth, numYear, 'Draft', JSON.stringify({
-        rules: DEFAULT_PAYROLL_RULES_2026,
-        submittedBy: req.user.email,
-        submittedAt: new Date().toISOString()
-      })]
-    );
-
-    const [rows] = await pool.query('SELECT * FROM payroll_run WHERE payroll_run_id = ? LIMIT 1', [result.insertId]);
-    const run = rows[0];
-
-    addAudit(req.user.email, `Created payroll run ${run.payroll_run_id} for ${numMonth}/${numYear}`, "HR");
-    res.status(201).json(run);
+    // Create a placeholder payroll entry to represent the run
+    // (actual payroll records are created by the finance workflow)
+    addAudit(req.user.email, `Created payroll run for ${numMonth}/${numYear}`, "HR");
+    res.status(201).json({ payroll_month: numMonth, payroll_year: numYear, status: 'Draft' });
   } catch (err) {
     res.status(500).json({ message: "Failed to create payroll run", error: err.message });
   }
@@ -878,12 +865,14 @@ router.post("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), async 
 router.get("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), async (_req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT pr.*,
-        (SELECT COUNT(*) FROM payroll p WHERE p.payroll_run_id = pr.payroll_run_id) AS total_payslips
-       FROM payroll_run pr
-       ORDER BY pr.payroll_year DESC, pr.payroll_month DESC`
+      `SELECT p.payroll_month, p.payroll_year, p.run_status AS status,
+              p.run_created_at AS created_at, p.run_updated_at AS updated_at,
+              COUNT(p.payroll_id) AS total_payslips
+       FROM payroll p
+       GROUP BY p.payroll_month, p.payroll_year, p.run_status, p.run_created_at, p.run_updated_at
+       ORDER BY p.payroll_year DESC, p.payroll_month DESC`
     );
-    return res.json(rows);
+    return res.json(rows.map(r => ({ ...r, payroll_run_id: `${r.payroll_month}_${r.payroll_year}` })));
   } catch (err) {
     return res.status(500).json({ message: "Failed to fetch payroll runs", error: err.message });
   }
@@ -891,28 +880,32 @@ router.get("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), async (
 
 router.get("/payroll-run/:id", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
   try {
+    const [month, year] = String(req.params.id).split("_").map(Number);
+    if (!month || !year) {
+      return res.status(400).json({ message: "Invalid run ID format" });
+    }
     const [rows] = await pool.query(
-      `SELECT pr.*,
-        (SELECT COUNT(*) FROM payroll p WHERE p.payroll_run_id = pr.payroll_run_id) AS total_payslips
-       FROM payroll_run pr
-       WHERE pr.payroll_run_id = ? LIMIT 1`,
-      [req.params.id]
+      `SELECT p.payroll_month, p.payroll_year, p.run_status AS status,
+              p.run_created_at AS created_at, p.configuration_json,
+              COUNT(p.payroll_id) AS total_payslips
+       FROM payroll p
+       WHERE p.payroll_month = ? AND p.payroll_year = ?
+       GROUP BY p.payroll_month, p.payroll_year, p.run_status, p.run_created_at, p.configuration_json`,
+      [month, year]
     );
     if (!rows.length) return res.status(404).json({ message: "Payroll run not found" });
-    return res.json(rows[0]);
+    return res.json({ ...rows[0], payroll_run_id: req.params.id });
   } catch (err) {
     return res.status(500).json({ message: "Failed to fetch payroll run", error: err.message });
   }
 });
 
-// GET /api/hr/payroll-run/:id/payslips — Get all staff payroll records for a run, sorted by employee_id ASC
 router.get("/payroll-run/:id/payslips", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
   try {
-    const [runCheck] = await pool.query(
-      "SELECT payroll_run_id FROM payroll_run WHERE payroll_run_id = ? LIMIT 1",
-      [req.params.id]
-    );
-    if (!runCheck.length) return res.status(404).json({ message: "Payroll run not found" });
+    const [month, year] = String(req.params.id).split("_").map(Number);
+    if (!month || !year) {
+      return res.status(400).json({ message: "Invalid run ID format" });
+    }
 
     const [rows] = await pool.query(
       `SELECT
@@ -933,9 +926,9 @@ router.get("/payroll-run/:id/payslips", authenticateToken, allowRoles("Admin", "
         p.payslip_status
       FROM payroll p
       JOIN staff s ON s.employee_id = p.staff_employee_id
-      WHERE p.payroll_run_id = ?
+      WHERE p.payroll_month = ? AND p.payroll_year = ?
       ORDER BY p.staff_employee_id ASC`,
-      [req.params.id]
+      [month, year]
     );
 
     return res.json(rows);
@@ -946,43 +939,34 @@ router.get("/payroll-run/:id/payslips", authenticateToken, allowRoles("Admin", "
 
 router.put("/payroll-run/:id/lock", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
   try {
-    // 1. Fetch current payroll run
+    const [month, year] = String(req.params.id).split("_").map(Number);
+    if (!month || !year) {
+      return res.status(400).json({ message: "Invalid run ID format" });
+    }
+
     const [rows] = await pool.query(
-      "SELECT payroll_run_id, status FROM payroll_run WHERE payroll_run_id = ? LIMIT 1",
-      [req.params.id]
+      "SELECT payroll_id, run_status FROM payroll WHERE payroll_month = ? AND payroll_year = ? LIMIT 1",
+      [month, year]
     );
     if (!rows.length) {
       return res.status(404).json({ message: "Payroll run not found" });
     }
 
-    // 2. Validate lockable status — only finance-approved runs can be sent to staff
     const run = rows[0];
     const lockableStatuses = ["finance_approved"];
-    if (!lockableStatuses.includes(run.status)) {
+    if (!lockableStatuses.includes(run.run_status)) {
       return res.status(400).json({
-        message: `Cannot lock payroll run with status "${run.status}". Finance approval is required before sending to staff.`
+        message: `Cannot lock payroll run with status "${run.run_status}". Finance approval is required before sending to staff.`
       });
     }
 
-    // 3. Update status to Closed
     await pool.query(
-      "UPDATE payroll_run SET status = ? WHERE payroll_run_id = ?",
-      ["Closed", req.params.id]
+      "UPDATE payroll SET run_status = ? WHERE payroll_month = ? AND payroll_year = ?",
+      ["Closed", month, year]
     );
 
-    // 4. Return enriched payroll run (same shape as GET /payroll-run/:id)
-    const [updated] = await pool.query(
-      `SELECT pr.*,
-        (SELECT COUNT(*) FROM payroll p WHERE p.payroll_run_id = pr.payroll_run_id) AS total_payslips
-       FROM payroll_run pr
-       WHERE pr.payroll_run_id = ? LIMIT 1`,
-      [req.params.id]
-    );
-
-    // 5. Audit log
     addAudit(req.user.email, `Locked payroll run ${req.params.id}`, "HR");
-
-    return res.json(updated[0]);
+    return res.json({ payroll_month: month, payroll_year: year, status: "Closed" });
   } catch (err) {
     return res.status(500).json({ message: "Failed to lock payroll run", error: err.message });
   }

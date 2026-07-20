@@ -2,6 +2,7 @@
  * Settings Model
  *
  * Database queries for all settings-related operations.
+ * After 1:1 merge, all per-user settings are stored directly in the `user` table.
  * Covers profile, security, notifications, invoice/payroll/company settings,
  * connected accounts, login sessions, and audit logs.
  */
@@ -12,38 +13,52 @@ const { pool } = require("../config/db");
 
 async function getProfile(userId) {
   const [rows] = await pool.query(
-    `SELECT u.user_id, u.name, u.email, u.status, u.created_at,
-            r.role_name,
-            up.display_name, up.mobile, up.job_title, up.department,
-            up.preferred_language, up.timezone, up.date_format, up.currency,
-            up.profile_picture, up.employee_id, up.company_name
-     FROM user u
-     JOIN role r ON u.role_id = r.role_id
-     LEFT JOIN user_profile up ON up.user_id = u.user_id
-     WHERE u.user_id = ?`,
+    `SELECT user_id, name, email, status, created_at, role_name,
+            display_name, mobile, job_title, department,
+            preferred_language, timezone, date_format, currency,
+            profile_picture, profile_employee_id AS employee_id,
+            profile_company_name AS company_name
+     FROM user
+     WHERE user_id = ?`,
     [userId]
   );
   return rows[0] || null;
 }
 
 async function upsertProfile(userId, data) {
-  const fields = [
-    "display_name", "mobile", "job_title", "department",
-    "preferred_language", "timezone", "date_format", "currency",
-    "profile_picture"
-  ];
-  const values = fields.map((f) => data[f] ?? null);
+  const fields = [];
+  const values = [];
 
-  await pool.query(
-    `INSERT INTO user_profile (user_id, ${fields.join(", ")})
-     VALUES (?, ${fields.map(() => "?").join(", ")})
-     ON DUPLICATE KEY UPDATE ${fields.map((f) => `${f} = VALUES(${f})`).join(", ")}`,
-    [userId, ...values]
-  );
+  const mapping = {
+    display_name: data.display_name,
+    mobile: data.mobile,
+    job_title: data.job_title,
+    department: data.department,
+    preferred_language: data.preferred_language,
+    timezone: data.timezone,
+    date_format: data.date_format,
+    currency: data.currency,
+    profile_picture: data.profile_picture
+  };
 
-  // Update name in user table if provided
+  for (const [col, val] of Object.entries(mapping)) {
+    if (val !== undefined) {
+      fields.push(`${col} = ?`);
+      values.push(val);
+    }
+  }
+
   if (data.name) {
-    await pool.query("UPDATE user SET name = ? WHERE user_id = ?", [data.name, userId]);
+    fields.push("name = ?");
+    values.push(data.name);
+  }
+
+  if (fields.length > 0) {
+    values.push(userId);
+    await pool.query(
+      `UPDATE user SET ${fields.join(", ")} WHERE user_id = ?`,
+      values
+    );
   }
 }
 
@@ -68,7 +83,7 @@ async function updatePassword(userId, hashedPassword) {
 
 async function get2FASettings(userId) {
   const [rows] = await pool.query(
-    "SELECT * FROM security_settings WHERE user_id = ?",
+    "SELECT two_fa_enabled, two_fa_method, recovery_codes FROM user WHERE user_id = ?",
     [userId]
   );
   return rows[0] || null;
@@ -76,58 +91,66 @@ async function get2FASettings(userId) {
 
 async function upsert2FASettings(userId, data) {
   await pool.query(
-    `INSERT INTO security_settings (user_id, two_fa_enabled, two_fa_method, recovery_codes)
-     VALUES (?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE two_fa_enabled = VALUES(two_fa_enabled),
-       two_fa_method = VALUES(two_fa_method), recovery_codes = VALUES(recovery_codes)`,
-    [userId, data.two_fa_enabled ? 1 : 0, data.two_fa_method || null, data.recovery_codes || null]
+    `UPDATE user SET two_fa_enabled = ?, two_fa_method = ?, recovery_codes = ? WHERE user_id = ?`,
+    [data.two_fa_enabled ? 1 : 0, data.two_fa_method || null, data.recovery_codes || null, userId]
   );
 }
 
-// ─── Connected Accounts ─────────────────────────────────────────────────────
+// ─── Connected Accounts (stored as JSON on user table) ──────────────────────
 
 async function getConnectedAccounts(userId) {
   const [rows] = await pool.query(
-    "SELECT * FROM connected_account WHERE user_id = ? ORDER BY provider ASC",
+    "SELECT connected_accounts_json FROM user WHERE user_id = ?",
     [userId]
   );
-  return rows;
+  if (!rows[0] || !rows[0].connected_accounts_json) return [];
+  let accounts = rows[0].connected_accounts_json;
+  if (typeof accounts === "string") {
+    try { accounts = JSON.parse(accounts); } catch { return []; }
+  }
+  return Array.isArray(accounts) ? accounts : [];
 }
 
 async function upsertConnectedAccount(userId, provider, data) {
-  await pool.query(
-    `INSERT INTO connected_account (user_id, provider, account_email, status, connected_at, last_sync)
-     VALUES (?, ?, ?, ?, NOW(), NOW())
-     ON DUPLICATE KEY UPDATE account_email = VALUES(account_email),
-       status = VALUES(status), last_sync = NOW()`,
-    [userId, provider, data.account_email || null, data.status || "connected"]
-  );
+  const accounts = await getConnectedAccounts(userId);
+  const idx = accounts.findIndex((a) => a.provider === provider);
+  const entry = {
+    provider,
+    account_email: data.account_email || null,
+    status: data.status || "connected",
+    connected_at: new Date().toISOString(),
+    last_sync: new Date().toISOString()
+  };
+  if (idx >= 0) {
+    accounts[idx] = { ...accounts[idx], ...entry };
+  } else {
+    accounts.push(entry);
+  }
+  await pool.query("UPDATE user SET connected_accounts_json = ? WHERE user_id = ?", [JSON.stringify(accounts), userId]);
 }
 
 async function disconnectAccount(userId, provider) {
-  await pool.query(
-    "DELETE FROM connected_account WHERE user_id = ? AND provider = ?",
-    [userId, provider]
-  );
+  const accounts = await getConnectedAccounts(userId);
+  const filtered = accounts.filter((a) => a.provider !== provider);
+  await pool.query("UPDATE user SET connected_accounts_json = ? WHERE user_id = ?", [JSON.stringify(filtered), userId]);
 }
 
 // ─── Notification Settings ──────────────────────────────────────────────────
 
 async function getNotificationSettings(userId) {
   const [rows] = await pool.query(
-    "SELECT * FROM notification_settings WHERE user_id = ?",
+    "SELECT notification_preferences AS preferences FROM user WHERE user_id = ?",
     [userId]
   );
-  return rows[0] || null;
+  if (!rows[0]) return null;
+  return { preferences: rows[0].preferences };
 }
 
 async function upsertNotificationSettings(userId, data) {
   const json = JSON.stringify(data);
   await pool.query(
-    `INSERT INTO notification_settings (user_id, preferences)
-     VALUES (?, ?)
-     ON DUPLICATE KEY UPDATE preferences = VALUES(preferences)`,
-    [userId, json]
+    "UPDATE user SET notification_preferences = ? WHERE user_id = ?",
+    [json, userId]
   );
 }
 
@@ -178,18 +201,15 @@ async function upsertInvoiceSettings(userId, data) {
 
 async function getPayrollSettings(userId) {
   const [rows] = await pool.query(
-    `SELECT configuration_value
-     FROM payroll_configuration
-     WHERE configuration_type = 'user_preferences' AND configuration_key = ?
-     LIMIT 1`,
-    [String(userId)]
+    "SELECT payroll_config_json FROM user WHERE user_id = ?",
+    [userId]
   );
-  if (!rows[0]) return null;
-  try {
-    return JSON.parse(rows[0].configuration_value);
-  } catch {
-    return null;
+  if (!rows[0] || !rows[0].payroll_config_json) return null;
+  let config = rows[0].payroll_config_json;
+  if (typeof config === "string") {
+    try { return JSON.parse(config); } catch { return null; }
   }
+  return config;
 }
 
 async function upsertPayrollSettings(userId, data) {
@@ -201,13 +221,8 @@ async function upsertPayrollSettings(userId, data) {
   const settings = Object.fromEntries(fields.map((field) => [field, data[field] ?? null]));
 
   await pool.query(
-    `INSERT INTO payroll_configuration
-       (configuration_type, configuration_key, configuration_value, updated_by)
-     VALUES ('user_preferences', ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       configuration_value = VALUES(configuration_value),
-       updated_by = VALUES(updated_by)`,
-    [String(userId), JSON.stringify(settings), userId]
+    "UPDATE user SET payroll_config_json = ? WHERE user_id = ?",
+    [JSON.stringify(settings), userId]
   );
 }
 
@@ -215,90 +230,130 @@ async function upsertPayrollSettings(userId, data) {
 
 async function getCompanySettings(userId) {
   const [rows] = await pool.query(
-    "SELECT * FROM company_settings WHERE user_id = ?",
+    `SELECT setting_company_name AS company_name, company_logo, registration_number,
+            gst_number, company_address AS address, company_phone AS phone,
+            company_email AS email, company_website AS website,
+            setting_default_currency AS default_currency, financial_year, fiscal_start_date
+     FROM user WHERE user_id = ?`,
     [userId]
   );
   return rows[0] || null;
 }
 
 async function upsertCompanySettings(userId, data) {
-  const fields = [
-    "company_logo", "company_name", "registration_number", "gst_number",
-    "address", "phone", "email", "website", "default_currency",
-    "financial_year", "fiscal_start_date"
-  ];
-  const values = fields.map((f) => data[f] ?? null);
+  const fields = [];
+  const values = [];
 
-  await pool.query(
-    `INSERT INTO company_settings (user_id, ${fields.join(", ")})
-     VALUES (?, ${fields.map(() => "?").join(", ")})
-     ON DUPLICATE KEY UPDATE ${fields.map((f) => `${f} = VALUES(${f})`).join(", ")}`,
-    [userId, ...values]
-  );
+  const mapping = {
+    company_logo: data.company_logo,
+    setting_company_name: data.company_name,
+    registration_number: data.registration_number,
+    gst_number: data.gst_number,
+    company_address: data.address,
+    company_phone: data.phone,
+    company_email: data.email,
+    company_website: data.website,
+    setting_default_currency: data.default_currency,
+    financial_year: data.financial_year,
+    fiscal_start_date: data.fiscal_start_date
+  };
+
+  for (const [col, val] of Object.entries(mapping)) {
+    if (val !== undefined) {
+      fields.push(`${col} = ?`);
+      values.push(val);
+    }
+  }
+
+  if (fields.length > 0) {
+    values.push(userId);
+    await pool.query(
+      `UPDATE user SET ${fields.join(", ")} WHERE user_id = ?`,
+      values
+    );
+  }
 }
 
 // ─── Login Sessions ─────────────────────────────────────────────────────────
 
+// ─── Login Sessions (stored as JSON on user table) ──────────────────────────
+
 async function getLoginSessions(userId) {
   const [rows] = await pool.query(
-    "SELECT * FROM login_session WHERE user_id = ? ORDER BY login_time DESC",
+    "SELECT login_sessions_json FROM user WHERE user_id = ?",
     [userId]
   );
-  return rows;
+  if (!rows[0] || !rows[0].login_sessions_json) return [];
+  let sessions = rows[0].login_sessions_json;
+  if (typeof sessions === "string") {
+    try { sessions = JSON.parse(sessions); } catch { return []; }
+  }
+  return Array.isArray(sessions) ? sessions.sort((a, b) => new Date(b.login_time) - new Date(a.login_time)) : [];
 }
 
 async function createLoginSession(userId, data) {
-  await pool.query(
-    `INSERT INTO login_session (user_id, device, browser, os, ip_address, location, login_time, is_current)
-     VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)`,
-    [userId, data.device, data.browser, data.os, data.ip_address, data.location, data.is_current ? 1 : 0]
-  );
+  const sessions = await getLoginSessions(userId);
+  const newSession = {
+    session_id: Date.now(),
+    device: data.device,
+    browser: data.browser,
+    os: data.os,
+    ip_address: data.ip_address,
+    location: data.location,
+    login_time: new Date().toISOString(),
+    is_current: data.is_current ? 1 : 0
+  };
+  sessions.unshift(newSession);
+  // Keep last 20 sessions max
+  const trimmed = sessions.slice(0, 20);
+  await pool.query("UPDATE user SET login_sessions_json = ? WHERE user_id = ?", [JSON.stringify(trimmed), userId]);
 }
 
 async function deleteSession(sessionId, userId) {
-  await pool.query(
-    "DELETE FROM login_session WHERE session_id = ? AND user_id = ?",
-    [sessionId, userId]
-  );
+  const sessions = await getLoginSessions(userId);
+  const filtered = sessions.filter((s) => String(s.session_id) !== String(sessionId));
+  await pool.query("UPDATE user SET login_sessions_json = ? WHERE user_id = ?", [JSON.stringify(filtered), userId]);
 }
 
 async function deleteOtherSessions(userId, currentSessionId) {
-  await pool.query(
-    "DELETE FROM login_session WHERE user_id = ? AND session_id != ?",
-    [userId, currentSessionId]
-  );
+  const sessions = await getLoginSessions(userId);
+  const filtered = sessions.filter((s) => String(s.session_id) === String(currentSessionId));
+  await pool.query("UPDATE user SET login_sessions_json = ? WHERE user_id = ?", [JSON.stringify(filtered), userId]);
 }
 
 async function deleteAllSessions(userId) {
-  await pool.query("DELETE FROM login_session WHERE user_id = ?", [userId]);
+  await pool.query("UPDATE user SET login_sessions_json = '[]' WHERE user_id = ?", [userId]);
 }
 
 // ─── Audit Logs (Settings-specific) ─────────────────────────────────────────
 
+// ─── Audit Logs (stored in audit_logs table) ────────────────────────────────
+
 async function getSettingsAuditLogs(userId, { page = 1, limit = 20, search = "", module = "" }) {
   const offset = (page - 1) * limit;
-  let where = "WHERE al.user_id = ?";
+  let where = "WHERE al.user_id = ? AND al.activity_type = 'settings'";
   const params = [userId];
 
   if (search) {
-    where += " AND (al.action LIKE ? OR al.module LIKE ?)";
+    where += " AND (al.action_description LIKE ? OR al.activity_type LIKE ?)";
     params.push(`%${search}%`, `%${search}%`);
   }
   if (module) {
-    where += " AND al.module = ?";
+    where += " AND al.affected_record = ?";
     params.push(module);
   }
 
   const [countRows] = await pool.query(
-    `SELECT COUNT(*) AS total FROM settings_audit_log al ${where}`,
+    `SELECT COUNT(*) AS total FROM audit_logs al ${where}`,
     params
   );
   const total = countRows[0].total;
 
   const [rows] = await pool.query(
-    `SELECT al.*, u.name AS user_name
-     FROM settings_audit_log al
-     LEFT JOIN user u ON u.user_id = al.user_id
+    `SELECT al.audit_log_id AS id, al.user_id, al.action_description AS action,
+            al.activity_type AS module, al.ip_address, al.device_info AS device,
+            al.created_at, al.user_name
+     FROM audit_logs al
      ${where}
      ORDER BY al.created_at DESC
      LIMIT ? OFFSET ?`,
@@ -309,10 +364,14 @@ async function getSettingsAuditLogs(userId, { page = 1, limit = 20, search = "",
 }
 
 async function createSettingsAuditLog(userId, data) {
+  // Get user name for the log
+  const [userRows] = await pool.query("SELECT name FROM user WHERE user_id = ?", [userId]);
+  const userName = userRows[0]?.name || "Unknown";
+
   await pool.query(
-    `INSERT INTO settings_audit_log (user_id, action, module, ip_address, device, created_at)
-     VALUES (?, ?, ?, ?, ?, NOW())`,
-    [userId, data.action, data.module, data.ip_address || null, data.device || null]
+    `INSERT INTO audit_logs (user_id, user_name, activity_type, action_description, affected_record, status, ip_address, device_info, created_at)
+     VALUES (?, ?, 'settings', ?, ?, 'success', ?, ?, NOW())`,
+    [userId, userName, data.action, data.module || null, data.ip_address || null, data.device || null]
   );
 }
 
@@ -320,7 +379,8 @@ async function createSettingsAuditLog(userId, data) {
 
 async function getAppearanceSettings(userId) {
   const [rows] = await pool.query(
-    "SELECT * FROM appearance_settings WHERE user_id = ?",
+    `SELECT theme, accent_color, compact_mode, font_size, ui_language AS language
+     FROM user WHERE user_id = ?`,
     [userId]
   );
   return rows[0] || null;
@@ -328,11 +388,16 @@ async function getAppearanceSettings(userId) {
 
 async function upsertAppearanceSettings(userId, data) {
   await pool.query(
-    `INSERT INTO appearance_settings (user_id, theme, accent_color, compact_mode, font_size, language)
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE theme = VALUES(theme), accent_color = VALUES(accent_color),
-       compact_mode = VALUES(compact_mode), font_size = VALUES(font_size), language = VALUES(language)`,
-    [userId, data.theme || "system", data.accent_color || "#7B2FF7", data.compact_mode ? 1 : 0, data.font_size || "medium", data.language || "en"]
+    `UPDATE user SET theme = ?, accent_color = ?, compact_mode = ?, font_size = ?, ui_language = ?
+     WHERE user_id = ?`,
+    [
+      data.theme || "system",
+      data.accent_color || "#7B2FF7",
+      data.compact_mode ? 1 : 0,
+      data.font_size || "medium",
+      data.language || "en",
+      userId
+    ]
   );
 }
 
@@ -340,7 +405,7 @@ async function upsertAppearanceSettings(userId, data) {
 
 async function getApiSettings(userId) {
   const [rows] = await pool.query(
-    "SELECT * FROM api_settings WHERE user_id = ?",
+    "SELECT api_key, webhook_url, webhook_secret, webhooks_enabled FROM user WHERE user_id = ?",
     [userId]
   );
   return rows[0] || null;
@@ -348,11 +413,9 @@ async function getApiSettings(userId) {
 
 async function upsertApiSettings(userId, data) {
   await pool.query(
-    `INSERT INTO api_settings (user_id, api_key, webhook_url, webhook_secret, webhooks_enabled)
-     VALUES (?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE api_key = VALUES(api_key), webhook_url = VALUES(webhook_url),
-       webhook_secret = VALUES(webhook_secret), webhooks_enabled = VALUES(webhooks_enabled)`,
-    [userId, data.api_key, data.webhook_url || null, data.webhook_secret || null, data.webhooks_enabled ? 1 : 0]
+    `UPDATE user SET api_key = ?, webhook_url = ?, webhook_secret = ?, webhooks_enabled = ?
+     WHERE user_id = ?`,
+    [data.api_key, data.webhook_url || null, data.webhook_secret || null, data.webhooks_enabled ? 1 : 0, userId]
   );
 }
 

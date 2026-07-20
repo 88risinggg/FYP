@@ -6,6 +6,10 @@ const {
   recordManualPayment,
   stripeWebhook
 } = require("../controllers/paymentController");
+const {
+  getPendingReviews,
+  reviewPaymentSubmission
+} = require("../controllers/manualPaymentController");
 const { addAudit } = require("../services/audit");
 const {
   setupModernTreasuryRecipients,
@@ -108,11 +112,13 @@ router.post("/stripe/webhook", stripeWebhook);
 router.use(authenticateToken);
 router.get("/", getPaymentsWorkspace);
 router.get("/history/:invoiceId", getPaymentHistory);
+router.get("/pending-reviews", getPendingReviews);
 router.get("/stripe-config", (req, res) => {
   res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null });
 });
 router.post("/manual", recordManualPayment);
 router.post("/stripe-link", createStripePaymentLink);
+router.post("/review/:submissionId", allowRoles("Admin", "Finance"), reviewPaymentSubmission);
 router.post("/modern-treasury-recipients", allowRoles("Admin", "Finance"), setupModernTreasuryRecipientAccounts);
 router.post("/modern-treasury-transfer", allowRoles("Admin", "Finance"), submitModernTreasuryTransfer);
 router.post("/demo-bank-transfer", allowRoles("Admin", "Finance"), submitModernTreasuryTransfer);

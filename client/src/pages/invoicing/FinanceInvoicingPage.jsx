@@ -240,144 +240,63 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+
 function openPrintableInvoice(invoice) {
-  const lineItems = (invoice.items || []).map((item) => `
-    <tr>
-      <td>${escapeHtml(item.description)}</td>
-      <td>${escapeHtml(item.quantity)}</td>
-      <td>${escapeHtml(formatCurrency(item.unit_price))}</td>
-      <td>${escapeHtml(formatCurrency(item.amount))}</td>
-    </tr>
-  `).join("");
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+  const token = localStorage.getItem("authToken");
 
-  const isPayable = !["Paid", "Cancelled", "Refunded"].includes(invoice.status);
-
-  // Generate a fresh Stripe payment link if current one is a placeholder or missing
-  async function getPaymentData() {
-    if (!isPayable) return { url: null };
-
-    const currentUrl = invoice.payment_url || "";
-    const isPlaceholder = currentUrl.includes("cs_test_sent_") ||
-      currentUrl.includes("cs_test_viewed_") ||
-      currentUrl.includes("cs_test_overdue_") ||
-      currentUrl.includes("cs_test_paid_") ||
-      !currentUrl;
-
-    if (isPlaceholder) {
-      try {
-        const response = await createStripePaymentLink(invoice.invoice_id);
-        return { url: response.paymentUrl };
-      } catch {
-        return { url: currentUrl || null };
-      }
-    }
-
-    return { url: currentUrl };
-  }
-
-  getPaymentData().then(({ url: paymentUrl }) => {
-    // Build QR code using inline canvas script (rendered in the print window)
-    const qrLibUrl = "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js";
-
-    const paymentSection = (isPayable && paymentUrl) ? `
-      <div style="margin-top: 32px; padding: 24px; background: #fff3ee; border-radius: 12px; text-align: center; border: 1px solid #ead3cc;">
-        <h3 style="margin: 0 0 4px; font-size: 16px; color: #1a1a2e;">Pay This Invoice Online</h3>
-        <p style="margin: 0 0 16px; font-size: 12px; color: #666;">Secure payment powered by Stripe</p>
-        <a href="${escapeHtml(paymentUrl)}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #F38978; color: white; padding: 14px 36px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px; cursor: pointer;">
-          Pay Now â€” ${escapeHtml(formatCurrency(invoice.total_amount))}
-        </a>
-        <p style="margin: 12px 0 0; font-size: 10px; color: #888;">Click the button above or copy this link into your browser:</p>
-        <p style="margin: 4px 0 0; font-size: 11px; word-break: break-all;"><a href="${escapeHtml(paymentUrl)}" target="_blank" style="color: #F38978; text-decoration: underline;">${escapeHtml(paymentUrl)}</a></p>
-        <div style="margin-top: 20px; padding-top: 16px; border-top: 1px dashed #ddd;">
-          <p style="font-size: 12px; color: #666; margin: 0 0 12px;">Scan QR code to pay:</p>
-          <div id="stripe-qr" style="display: inline-block; background: white; padding: 8px; border-radius: 8px; border: 1px solid #e5e7eb;"></div>
-          <p style="font-size: 10px; color: #666; margin: 6px 0 0;">Scan with any QR reader to open Stripe Checkout</p>
-        </div>
-      </div>
-    ` : "";
-
-    const paidBanner = (invoice.status === "Paid") ? `
-      <div style="margin-top: 32px; padding: 16px; background: #ecfdf5; border-radius: 12px; text-align: center; border: 1px solid #a7f3d0;">
-        <p style="margin: 0; font-size: 14px; font-weight: 600; color: #065f46;">âœ… This invoice has been paid. Thank you!</p>
-      </div>
-    ` : "";
-
-    const printWindow = window.open("", "_blank");
-
-    if (!printWindow) {
-      return;
-    }
-
-    printWindow.document.write(`
-      <!doctype html>
-      <html>
-        <head>
-          <title>${escapeHtml(invoice.invoiceId)} invoice</title>
-          <script src="${qrLibUrl}"><\/script>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; color: #111827; margin: 40px; }
-            header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #F38978; padding-bottom: 20px; }
-            h1 { margin: 0 0 4px; font-size: 28px; color: #F38978; }
-            .brand { font-size: 32px; font-weight: 900; color: #F38978; margin: 0; }
-            .muted { color: #6b7280; }
-            table { width: 100%; border-collapse: collapse; margin-top: 28px; }
-            th, td { border-bottom: 1px solid #e5e7eb; padding: 10px; text-align: left; }
-            th { background: #1a1a2e; color: white; font-size: 12px; text-transform: uppercase; }
-            .total { margin-top: 24px; text-align: right; font-size: 20px; font-weight: 900; }
-            .footer { margin-top: 40px; text-align: center; color: #999; font-size: 11px; border-top: 1px solid #eee; padding-top: 16px; }
-            @media print { .no-print { display: none; } body { margin: 24px; } }
-          </style>
-        </head>
-        <body>
-          <button class="no-print" onclick="window.print()" style="margin-bottom: 16px; padding: 8px 16px; cursor: pointer;">Save as PDF</button>
-          <header>
-            <div>
-              <p class="brand">PayNivo</p>
-              <h1>Invoice ${escapeHtml(invoice.invoiceId)}</h1>
-              <div class="muted">Status: ${escapeHtml(invoice.status)}</div>
-            </div>
-            <div style="text-align: right;">
-              <strong>${escapeHtml(invoice.customer_name)}</strong><br />
-              <span class="muted">${escapeHtml(invoice.customer_email)}</span><br />
-              <span class="muted">${escapeHtml(invoice.customer_address || "")}</span>
-            </div>
-          </header>
-          <p>Issue date: ${escapeHtml(formatDate(invoice.issue_date))}</p>
-          <p>Due date: ${escapeHtml(formatDate(invoice.due_date))}</p>
-          <table>
-            <thead>
-              <tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Amount</th></tr>
-            </thead>
-            <tbody>${lineItems}</tbody>
-          </table>
-          <div class="total">Total: SGD ${escapeHtml(formatCurrency(invoice.total_amount))}</div>
-          ${paymentSection}
-          ${paidBanner}
-          <div class="footer">Generated by PayNivo â€¢ Automated Invoicing & Payroll System</div>
-          <script>
-            function renderQR(elementId, data, size) {
-              if (!data || !document.getElementById(elementId)) return;
-              try {
-                var qr = qrcode(0, 'M');
-                qr.addData(data);
-                qr.make();
-                document.getElementById(elementId).innerHTML = qr.createSvgTag({ cellSize: size || 3, margin: 0 });
-              } catch(e) { console.error('QR error:', e); }
-            }
-
-            window.onload = function() {
-              ${isPayable && paymentUrl ? `
-              renderQR('stripe-qr', '${escapeHtml(paymentUrl)}', 3);
-              ` : ""}
-              // Auto-print after short delay for QR rendering
-              setTimeout(function() { window.print(); }, 500);
-            };
-          <\/script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-  });
+  // Download the actual PDF from the server
+  fetch(`${API_BASE}/api/invoices/${invoice.invoice_id}/pdf`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+    .then((res) => {
+      if (!res.ok) throw new Error("Failed to generate PDF");
+      return res.blob();
+    })
+    .then((blob) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${invoice.invoiceId || "invoice"}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    })
+    .catch((err) => {
+      console.error("[Invoice PDF Download]", err.message);
+      // Fallback: open printable HTML view if PDF generation fails (e.g., Puppeteer not available)
+      fetch(`${API_BASE}/api/invoices/${invoice.invoice_id}/html`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to generate invoice view");
+          return res.text();
+        })
+        .then((html) => {
+          const printWindow = window.open("", "_blank");
+          if (!printWindow) {
+            alert("Please allow popups for this site to view the invoice.");
+            return;
+          }
+          const printableHtml = html.replace(
+            "</body>",
+            `<style>@media print { .no-print { display: none !important; } }</style>
+             <div class="no-print" style="position:fixed;top:12px;right:12px;z-index:9999;">
+               <button onclick="window.print()" style="padding:10px 20px;background:#061e4b;color:white;border:none;border-radius:6px;font-weight:bold;cursor:pointer;font-size:14px;">
+                 Save as PDF / Print
+               </button>
+             </div>
+             </body>`
+          );
+          printWindow.document.write(printableHtml);
+          printWindow.document.close();
+        })
+        .catch((htmlErr) => {
+          console.error("[Invoice HTML Fallback]", htmlErr.message);
+          alert("Unable to generate invoice. Please try again.");
+        });
+    });
 }
 
 function downloadReceipt(invoice) {
@@ -1217,7 +1136,7 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
       title: "Track & Monitor",
       icon: Eye,
       completed: statusCounts.Sent > 0 || statusCounts.Paid > 0,
-      details: ["Status tracking (Draftâ†’Paid)", "Overdue detection", "Fraud risk assessment"]
+      details: ["Status tracking (DraftÃ¢â€ â€™Paid)", "Overdue detection", "Fraud risk assessment"]
     },
     {
       key: "payment",
@@ -1453,7 +1372,7 @@ function AdminInvoiceConfigPanel({ settings, reminderRules }) {
         <div className="flex items-center gap-2 text-xs text-[#7b6660]">
           <Lock size={14} className="text-[#F38978]" />
           <span>Admin controlled</span>
-          <span className="text-[#7b6660]/50">â€¢</span>
+          <span className="text-[#7b6660]/50">Ã¢â‚¬Â¢</span>
           <span>Last updated: {formattedUpdate}</span>
         </div>
       </div>
@@ -1563,15 +1482,15 @@ function InvoiceCompliancePanel({ invoices, fraudSummary }) {
   const fraudActive = Boolean(fraudSummary && fraudSummary.assessedCount > 0);
 
   const checks = [
-    { label: "No duplicate invoice numbers", status: noDuplicateNumbers, detail: noDuplicateNumbers ? "All invoice IDs are unique" : "Duplicate invoice numbers detected â€” potential fraud", severity: "Critical" },
-    { label: "Purchase Order exists for all invoices", status: allHavePO, detail: allHavePO ? "All invoices have a PO reference" : "Some invoices missing PO â€” requires verification", severity: "High" },
+    { label: "No duplicate invoice numbers", status: noDuplicateNumbers, detail: noDuplicateNumbers ? "All invoice IDs are unique" : "Duplicate invoice numbers detected Ã¢â‚¬â€ potential fraud", severity: "Critical" },
+    { label: "Purchase Order exists for all invoices", status: allHavePO, detail: allHavePO ? "All invoices have a PO reference" : "Some invoices missing PO Ã¢â‚¬â€ requires verification", severity: "High" },
     { label: "Vendor approved & KYC complete", status: !fraudSummary?.flaggedCount, detail: fraudSummary?.flaggedCount ? `${fraudSummary.flaggedCount} invoice(s) flagged for vendor issues` : "All vendors verified", severity: "High" },
     { label: "Invoice amounts within approval limits", status: noHighRisk, detail: noHighRisk ? "No unusually high amounts detected" : `${fraudSummary?.highCount} high-risk amount(s) flagged`, severity: "High" },
     { label: "Bank accounts verified (no recent changes)", status: noMediumRisk && noHighRisk, detail: (noMediumRisk && noHighRisk) ? "No bank account anomalies" : "Bank account changes detected in flagged invoices", severity: "High" },
     { label: "No high-risk country vendors", status: noHighRisk, detail: noHighRisk ? "All vendors from approved jurisdictions" : `${fraudSummary?.highCount} invoice(s) from high-risk sources`, severity: "Critical" },
     { label: "Sanctions & AML screening passed", status: fraudActive && noHighRisk, detail: fraudActive ? "All assessed invoices cleared" : "Fraud detection service not active", severity: "Critical" },
     { label: "Approval workflow completed", status: allHaveCustomer, detail: allHaveCustomer ? "All invoices have assigned approvers" : "Some invoices lack proper approval chain", severity: "High" },
-    { label: "Three-way match (PO, Invoice, Receipt)", status: allHavePO && noDuplicateNumbers, detail: (allHavePO && noDuplicateNumbers) ? "Matching verified for all invoices" : "Mismatch detected â€” review required", severity: "High" },
+    { label: "Three-way match (PO, Invoice, Receipt)", status: allHavePO && noDuplicateNumbers, detail: (allHavePO && noDuplicateNumbers) ? "Matching verified for all invoices" : "Mismatch detected Ã¢â‚¬â€ review required", severity: "High" },
     { label: "No overdue invoices pending action", status: noStaleOverdue, detail: noStaleOverdue ? "All invoices within payment terms" : `${overdueInvoices.length} overdue invoice(s) require follow-up`, severity: "Medium" },
     { label: "Fraud detection engine active", status: fraudActive, detail: fraudActive ? `${fraudSummary?.assessedCount || 0} invoice(s) scanned` : "Fraud detection not responding", severity: "Critical" },
     { label: "No invoice splitting detected", status: noMediumRisk, detail: noMediumRisk ? "No split invoice patterns found" : "Potential invoice splitting detected", severity: "High" },
@@ -1741,7 +1660,7 @@ function InvoiceCompliancePanel({ invoices, fraudSummary }) {
             className="flex items-center gap-2 rounded-lg border border-[#F38978]/30 bg-[#F38978]/10 px-3 py-1.5 text-xs font-medium text-[#F38978] transition hover:bg-[#F38978]/20 disabled:opacity-50"
           >
             {reportSending ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-            {reportSent ? "Report Sent âœ“" : "Export Fraud Report"}
+            {reportSent ? "Report Sent Ã¢Å“â€œ" : "Export Fraud Report"}
           </button>
           <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${passed === checks.length ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-rose-400/25 bg-rose-400/10 text-rose-700"}`}>
             {passed}/{checks.length} passed
@@ -1934,8 +1853,8 @@ function InvoiceAuditTrailPanel({ entries }) {
                   <p className="text-xs text-[#7b6660]">{formatDateTime(entry.created_at || entry.timestamp)}</p>
                 </div>
                 <p className="mt-1 text-xs text-[#7b6660]">
-                  {entry.user_name || entry.userName || "System"} â€¢ {entry.activity_type || entry.activityType || "Invoice"}
-                  {entry.affected_record ? ` â€¢ ${entry.affected_record}` : ""}
+                  {entry.user_name || entry.userName || "System"} Ã¢â‚¬Â¢ {entry.activity_type || entry.activityType || "Invoice"}
+                  {entry.affected_record ? ` Ã¢â‚¬Â¢ ${entry.affected_record}` : ""}
                 </p>
               </div>
             </div>
@@ -2317,7 +2236,7 @@ function BulkUploadView({ onProcessed }) {
           });
           setMessage((prev) => `${prev} ${flaggedRows.length} invalid rows flagged for fraud review.`);
         } catch {
-          // Non-fatal â€” invoices were still sent
+          // Non-fatal Ã¢â‚¬â€ invoices were still sent
           setMessage((prev) => `${prev} (Warning: failed to flag invalid rows for fraud review)`);
         }
       }
@@ -2640,7 +2559,7 @@ function PaymentsView() {
                       <p className="text-sm font-bold text-[#251E1F]">{payment.invoiceId || "Unlinked"}</p>
                       <span className="text-xs font-semibold text-emerald-700">{payment.status}</span>
                     </div>
-                    <p className="mt-1 text-xs text-[#7b6660]">{payment.customer_name || "-"} Â· {payment.payment_method || "Manual"}</p>
+                    <p className="mt-1 text-xs text-[#7b6660]">{payment.customer_name || "-"} Ã‚Â· {payment.payment_method || "Manual"}</p>
                     <p className="mt-2 text-sm font-bold text-[#251E1F]">{formatCurrency(payment.amount)}</p>
                   </div>
                 ))}
@@ -3007,7 +2926,7 @@ function ReportsView() {
           const timestamp = new Date().toLocaleString("en-SG");
           const pageCtx = { pageNum: 1, timestamp };
 
-          // ─── Cover Page ───
+          // â”€â”€â”€ Cover Page â”€â”€â”€
           addCoverPage(doc, {
             title: "PayNivo Report",
             subtitle: "Financial Performance & Invoice Analytics",
@@ -3016,7 +2935,7 @@ function ReportsView() {
           });
           addPageFooter(doc, pageCtx.pageNum, null, timestamp);
 
-          // ─── Page 2: Dashboard Summary ───
+          // â”€â”€â”€ Page 2: Dashboard Summary â”€â”€â”€
           doc.addPage();
           pageCtx.pageNum++;
           let y = PAGE_MARGIN + 5;
@@ -3034,7 +2953,7 @@ function ReportsView() {
           y = addMetricRow(doc, "Avg Commission Rate", `${data.summary.avgCommissionRate || 0}%`, y);
           y += 8;
 
-          // ─── Charts (all 4 rendered as inline SVG for Puppeteer) ───
+          // â”€â”€â”€ Charts (all 4 rendered as inline SVG for Puppeteer) â”€â”€â”€
           // Helper to build a bar chart SVG
           function buildBarChartSvg(items, labelKey, valueKey) {
             const maxVal = Math.max(...items.map(d => Number(d[valueKey] || 0)), 1);
@@ -3142,7 +3061,7 @@ function ReportsView() {
 
           addPageFooter(doc, pageCtx.pageNum, null, timestamp);
 
-          // ─── Invoice Details Pages ───
+          // â”€â”€â”€ Invoice Details Pages â”€â”€â”€
           if (data.invoices && data.invoices.length > 0) {
             doc.addPage();
             pageCtx.pageNum++;
@@ -3328,7 +3247,7 @@ function ReportsView() {
             {/* Income Statement - Vaniday Model */}
             <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-5">
               <h3 className="text-sm font-bold uppercase tracking-wide text-[#F38978]">Income Statement</h3>
-              <p className="mt-1 text-xs text-[#7b6660]">Gross Revenue = Inflow − Salon Payouts</p>
+              <p className="mt-1 text-xs text-[#7b6660]">Gross Revenue = Inflow âˆ’ Salon Payouts</p>
               <div className="mt-4 space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-[#7b6660]">Total Inflow</span>
@@ -3336,7 +3255,7 @@ function ReportsView() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-[#7b6660]">Salon Payouts</span>
-                  <span className="font-bold text-amber-700">−{formatCurrency(fs.incomeStatement.salonPayouts)}</span>
+                  <span className="font-bold text-amber-700">âˆ’{formatCurrency(fs.incomeStatement.salonPayouts)}</span>
                 </div>
                 <div className="border-t border-[#f0d2ca] pt-3 flex justify-between text-sm">
                   <span className="font-bold text-[#251E1F]">Gross Revenue (Commission)</span>
@@ -3368,7 +3287,7 @@ function ReportsView() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-[#7b6660]">Salon Payouts Out</span>
-                  <span className="font-bold text-amber-700">−{formatCurrency(fs.cashFlow.salonPayouts)}</span>
+                  <span className="font-bold text-amber-700">âˆ’{formatCurrency(fs.cashFlow.salonPayouts)}</span>
                 </div>
                 <div className="border-t border-[#f0d2ca] pt-3 flex justify-between text-sm">
                   <span className="font-bold text-[#251E1F]">Net Platform Cash</span>
@@ -3576,6 +3495,11 @@ export default function FinanceInvoicingPage() {
     await loadWorkspaceData();
   }
 
+  async function handleVanidayImportComplete() {
+    // Refresh invoice data after a successful Vaniday import
+    await loadWorkspaceData();
+  }
+
   function renderActiveView() {
     if (activeView === "dashboard") {
       return (
@@ -3602,7 +3526,7 @@ export default function FinanceInvoicingPage() {
     }
 
     if (activeView === "vaniday-import") {
-      return <VanidayImportPage />;
+      return <VanidayImportPage onImportComplete={handleVanidayImportComplete} />;
     }
 
     if (activeView === "payments") {

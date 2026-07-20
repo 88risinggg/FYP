@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Upload, CheckCircle2, AlertCircle, FileText, Loader2,
   ArrowRight, Download, X, Eye
@@ -11,7 +12,8 @@ import {
 
 const STEPS = ["Upload", "Validate", "Review", "Import"];
 
-export default function VanidayImportPage() {
+export default function VanidayImportPage({ onImportComplete }) {
+  const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [file, setFile] = useState(null);
   const [rows, setRows] = useState([]);
@@ -64,6 +66,8 @@ export default function VanidayImportPage() {
       const result = await processVanidayImport(rows, "DD/MM/YYYY");
       setImportResult(result);
       setStep(3);
+      // Notify parent to refresh invoice list
+      if (onImportComplete) onImportComplete(result);
     } catch (err) {
       setError(err.message || "Import failed");
     } finally {
@@ -363,6 +367,13 @@ export default function VanidayImportPage() {
 
           <button onClick={handleReset} className="px-6 py-2.5 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700">
             Import Another File
+          </button>
+          <button
+            onClick={() => navigate("/dashboard/invoicing/finance/invoices")}
+            className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 ml-3"
+          >
+            <Eye className="w-4 h-4 inline mr-2" />
+            View Generated Invoices
           </button>
         </div>
       )}

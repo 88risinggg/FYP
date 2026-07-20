@@ -123,6 +123,10 @@ export function fetchReminderHistory(invoiceId) {
   return apiRequest(`/api/invoices/${invoiceId}/reminders`);
 }
 
+export function fetchViewHistory(invoiceId) {
+  return apiRequest(`/api/invoices/${invoiceId}/views`);
+}
+
 // =====================================================
 // Vaniday Import Services
 // =====================================================
@@ -172,4 +176,47 @@ export function fetchTemplatePreview(settings, previewStatus) {
     body: JSON.stringify({ settings, previewStatus }),
     rawResponse: true
   });
+}
+
+// =====================================================
+// Manual Payment Review (Finance)
+// =====================================================
+
+export function fetchPendingPaymentReviews() {
+  return apiRequest("/api/payments/pending-reviews");
+}
+
+export function reviewPaymentSubmission(submissionId, decision, notes = "") {
+  return apiRequest(`/api/payments/review/${submissionId}`, {
+    method: "POST",
+    body: JSON.stringify({ decision, notes })
+  });
+}
+
+// =====================================================
+// Public Invoice Payment Submission (Customer)
+// =====================================================
+
+export function submitCustomerPayment(invoiceId, payload, proofFile) {
+  const formData = new FormData();
+  formData.append("amount", payload.amount);
+  formData.append("payment_date", payload.payment_date);
+  if (payload.reference_number) formData.append("reference_number", payload.reference_number);
+  if (payload.payment_method) formData.append("payment_method", payload.payment_method);
+  if (payload.notes) formData.append("notes", payload.notes);
+  if (proofFile) formData.append("proof", proofFile);
+
+  return apiRequest(`/api/public/invoice/${invoiceId}/submit-payment`, {
+    method: "POST",
+    body: formData,
+    headers: { "Content-Type": undefined }
+  });
+}
+
+// =====================================================
+// Finance Dashboard
+// =====================================================
+
+export function fetchFinanceDashboard() {
+  return apiRequest("/api/finance/dashboard");
 }

@@ -1,126 +1,238 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Eye, Palette, Type, FileText, ToggleLeft, ToggleRight, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Eye, Palette, RefreshCw, ToggleLeft, ToggleRight, AlertCircle
+} from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+import InvoiceTemplate from "../../components/invoicing/InvoiceTemplate.jsx";
+import { getInvoiceSettings } from "../../services/adminInvoiceSettingsService.js";
+
+// =====================================================
+// Sample Invoice Data for Preview
+// =====================================================
+
+const SAMPLE_INVOICE = {
+  invoice_id: 0,
+  invoiceId: "INV-2026-000001",
+  status: "Sent",
+  issue_date: new Date().toISOString().slice(0, 10),
+  due_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+  customer_name: "John Tan",
+  customer_email: "john@email.com",
+  customer_address: "123 Orchard Road, #04-01, Singapore 238858",
+  service_provider: "Premium Hair Studio",
+  shop_title: "Premium Hair Studio",
+  total_amount: 54.50,
+  amount_paid: 0,
+  notes: "",
+  items: [
+    { description: "Haircut - Men's Premium Cut", quantity: 1, unit_price: 50.00, amount: 50.00 },
+    { description: "Hair Wash & Conditioning Treatment", quantity: 1, unit_price: 4.50, amount: 4.50 },
+  ],
+};
+
+// =====================================================
+// Zoom Levels
+// =====================================================
+
+const ZOOM_LEVELS = [
+  { label: "50%", value: 0.5 },
+  { label: "75%", value: 0.75 },
+  { label: "100%", value: 1 },
+  { label: "125%", value: 1.25 },
+  { label: "Fit", value: "fit" },
+];
 
 /**
  * Admin Template Preview Page
  *
- * Provides a live preview of the invoice PDF template.
- * Admin can change colors, fonts, display toggles and immediately
- * see the result in an iframe without saving.
+ * Provides a live WYSIWYG preview of the invoice template.
+ * Uses the shared InvoiceTemplate component — the same one used for
+ * PDF generation, invoice detail, and customer-facing views.
+ *
+ * Settings changes reflect instantly without saving.
  */
 export default function AdminTemplatePreviewPage() {
-  const [settings, setSettings] = useState({
-    companyName: "PayNivo Pte Ltd",
-    uenNumber: "202312345A",
-    gstRegistrationNumber: "M1-2023456-7",
-    companyAddress: "1 Raffles Place, #20-01, Singapore 048616",
-    companyPhone: "+65 6123 4567",
-    companyEmail: "finance@paynivo.com",
-    companyWebsite: "www.paynivo.com",
-    primaryColor: "#061e4b",
-    secondaryColor: "#ff5a52",
-    fontFamily: "Arial, Helvetica, sans-serif",
-    fontSizeBase: 12,
-    invoicePrefix: "INV",
-    currencySymbol: "S$",
-    currencyFormat: "symbol_before",
-    displayDateFormat: "DD MMM YYYY",
-    decimalPrecision: 2,
-    taxEnabled: true,
-    taxName: "GST",
-    taxPercentage: 9,
-    taxInclusive: false,
-    watermarkEnabled: true,
-    qrCodeDisplay: true,
-    bankDetailsDisplay: true,
-    paynowDisplay: true,
-    signatureDisplay: false,
-    bankAccountHolderName: "PayNivo Pte Ltd",
-    bankName: "DBS Bank",
-    bankAccountNumber: "012-345678-9",
-    bicSwift: "DBSSSGSG",
-    paynowIdentifier: "202312345A",
-    paymentReferenceInstruction: "Please include your invoice number as the payment reference.",
-    paymentTerms: "Net 30",
-    invoiceBorderStyle: "modern",
-    itemTableStyle: "striped",
-    footerNote: "Thank you for your business.",
-    computerGeneratedStatement: "This is a computer-generated invoice. No signature is required.",
-    termsAndConditions: "",
-    defaultNotes: ""
-  });
+  const [settings, setSettings] = useState(null);
+  const [loadError, setLoadError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [previewStatus, setPreviewStatus] = useState("Sent");
-  const [previewHtml, setPreviewHtml] = useState("");
-  const [loading, setLoading] = useState(false);
-  const iframeRef = useRef(null);
-  const debounceRef = useRef(null);
+  const [zoom, setZoom] = useState("fit");
+  const previewContainerRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(800);
 
-  const fetchPreview = useCallback(async () => {
-    setLoading(true);
-    try {
-      const token = JSON.parse(localStorage.getItem("session") || "{}").token;
-      const res = await fetch(`${API_BASE}/api/admin/invoicing/invoice-settings/template-preview`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ settings, previewStatus })
-      });
-      if (res.ok) {
-        const html = await res.text();
-        setPreviewHtml(html);
+  // Load settings from server
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const data = await getInvoiceSettings();
+        const s = data.settings || data;
+        setSettings({
+          companyName: s.companyName || s.company_name || "PayNivo Pte Ltd",
+          uenNumber: s.uenNumber || s.uen_number || "",
+          gstRegistrationNumber: s.gstRegistrationNumber || s.gst_registration_number || "",
+          companyAddress: s.companyAddress || s.company_address || "",
+          companyPhone: s.companyPhone || s.company_phone || "",
+          companyEmail: s.companyEmail || s.company_email || s.financeEmail || "",
+          companyRegistrationNumber: s.companyRegistrationNumber || s.company_registration_number || "",
+          companyWebsite: s.companyWebsite || "",
+          primaryColor: s.primaryColor || s.primary_color || "#061e4b",
+          secondaryColor: s.secondaryColor || s.secondary_color || "#ff5a52",
+          fontFamily: s.fontFamily || s.font_family || "Arial, Helvetica, sans-serif",
+          fontSizeBase: s.fontSizeBase || s.font_size_base || 12,
+          invoicePrefix: s.invoicePrefix || s.invoice_prefix || "INV",
+          currencySymbol: s.currencySymbol || s.currency_symbol || "S$",
+          currencyFormat: s.currencyFormat || s.currency_format || "symbol_before",
+          displayDateFormat: s.displayDateFormat || s.display_date_format || "DD MMM YYYY",
+          decimalPrecision: s.decimalPrecision ?? s.decimal_precision ?? 2,
+          defaultCurrency: s.general?.defaultCurrency || s.defaultCurrency || "SGD",
+          taxEnabled: s.taxEnabled ?? s.tax_enabled ?? true,
+          taxName: s.taxName || s.tax_name || "GST",
+          taxPercentage: s.taxPercentage ?? s.tax_percentage ?? 9,
+          taxInclusive: s.taxInclusive ?? s.tax_inclusive ?? false,
+          watermarkEnabled: s.watermarkEnabled ?? s.watermark_enabled ?? true,
+          qrCodeDisplay: s.qrCodeDisplay ?? s.qr_code_display ?? true,
+          bankDetailsDisplay: s.bankDetailsDisplay ?? s.bank_details_display ?? true,
+          paynowDisplay: s.paynowDisplay ?? s.paynow_display ?? true,
+          signatureDisplay: s.signatureDisplay ?? s.signature_display ?? false,
+          bankAccountHolderName: s.bankAccountHolderName || s.bank_account_holder_name || "",
+          bankName: s.bankName || s.bank_name || "",
+          bankAccountNumber: s.bankAccountNumber || s.bank_account_number || "",
+          bicSwift: s.bicSwift || s.bic_swift || "",
+          paynowIdentifier: s.paynowIdentifier || s.paynow_identifier || "",
+          paymentReferenceInstruction: s.paymentReferenceInstruction || s.payment_reference_instruction || "",
+          paymentTerms: s.paymentTerms || s.payment_terms || "Net 30",
+          invoiceBorderStyle: s.invoiceBorderStyle || s.invoice_border_style || "modern",
+          itemTableStyle: s.itemTableStyle || s.item_table_style || "striped",
+          footerNote: s.footerNote || s.footer_note || "",
+          computerGeneratedStatement: s.computerGeneratedStatement || s.computer_generated_statement || "",
+          registeredOfficeAddress: s.registeredOfficeAddress || s.registered_office_address || "",
+          financeEmail: s.financeEmail || s.finance_email || "",
+          termsAndConditions: s.termsAndConditions || "",
+          defaultNotes: s.defaultNotes || "",
+          companyLogoUrl: s.branding?.companyLogoUrl || s.companyLogoUrl || s.company_logo_url || "",
+        });
+      } catch (err) {
+        setLoadError(err.message);
+        // Use defaults on failure
+        setSettings({
+          companyName: "PayNivo Pte Ltd",
+          uenNumber: "202312345A",
+          gstRegistrationNumber: "M1-2023456-7",
+          companyAddress: "1 Raffles Place, #20-01, Singapore 048616",
+          companyPhone: "+65 6123 4567",
+          companyEmail: "finance@paynivo.com",
+          primaryColor: "#061e4b",
+          secondaryColor: "#ff5a52",
+          fontFamily: "Arial, Helvetica, sans-serif",
+          fontSizeBase: 12,
+          invoicePrefix: "INV",
+          currencySymbol: "S$",
+          currencyFormat: "symbol_before",
+          displayDateFormat: "DD MMM YYYY",
+          decimalPrecision: 2,
+          defaultCurrency: "SGD",
+          taxEnabled: true,
+          taxName: "GST",
+          taxPercentage: 9,
+          taxInclusive: false,
+          watermarkEnabled: true,
+          qrCodeDisplay: true,
+          bankDetailsDisplay: true,
+          paynowDisplay: true,
+          signatureDisplay: false,
+          bankAccountHolderName: "PayNivo Pte Ltd",
+          bankName: "DBS Bank",
+          bankAccountNumber: "012-345678-9",
+          bicSwift: "DBSSSGSG",
+          paynowIdentifier: "202312345A",
+          paymentReferenceInstruction: "Please include your invoice number as the payment reference.",
+          paymentTerms: "Net 30",
+          invoiceBorderStyle: "modern",
+          itemTableStyle: "striped",
+          computerGeneratedStatement: "This is a computer-generated invoice. No signature is required.",
+          registeredOfficeAddress: "",
+          financeEmail: "",
+          companyLogoUrl: "",
+          companyRegistrationNumber: "",
+        });
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Preview fetch failed:", err);
-    } finally {
-      setLoading(false);
     }
-  }, [settings, previewStatus]);
+    loadSettings();
+  }, []);
 
-  // Auto-refresh preview with debounce
+  // Measure container width for "Fit" zoom
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(fetchPreview, 600);
-    return () => clearTimeout(debounceRef.current);
-  }, [fetchPreview]);
+    if (!previewContainerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(previewContainerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
-  // Write HTML to iframe
-  useEffect(() => {
-    if (iframeRef.current && previewHtml) {
-      const doc = iframeRef.current.contentDocument;
-      doc.open();
-      doc.write(previewHtml);
-      doc.close();
-    }
-  }, [previewHtml]);
+  // Build preview invoice with current status
+  const previewInvoice = {
+    ...SAMPLE_INVOICE,
+    status: previewStatus,
+    invoiceId: `${settings?.invoicePrefix || "INV"}-2026-000001`,
+    amount_paid: previewStatus === "Paid" ? SAMPLE_INVOICE.total_amount : 0,
+  };
+
+  // Compute scale based on zoom setting
+  const A4_WIDTH_PX = 793; // 210mm at 96 DPI
+  const computedScale = zoom === "fit"
+    ? Math.min((containerWidth - 48) / A4_WIDTH_PX, 1)
+    : zoom;
 
   function updateSetting(key, value) {
-    setSettings(prev => ({ ...prev, [key]: value }));
+    setSettings((prev) => ({ ...prev, [key]: value }));
   }
 
   function toggleSetting(key) {
-    setSettings(prev => ({ ...prev, [key]: !prev[key] }));
+    setSettings((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-[calc(100vh-64px)] items-center justify-center">
+        <RefreshCw className="h-6 w-6 animate-spin text-purple-600" />
+        <span className="ml-2 text-sm text-gray-600">Loading settings...</span>
+      </div>
+    );
   }
 
   return (
     <div className="flex h-[calc(100vh-64px)] overflow-hidden">
       {/* Left Panel — Settings Controls */}
-      <div className="w-[380px] border-r bg-white overflow-y-auto p-4 space-y-5">
-        <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-          <Palette className="w-5 h-5 text-purple-600" />
+      <div className="w-[380px] shrink-0 overflow-y-auto border-r bg-white p-4 space-y-5">
+        <h2 className="flex items-center gap-2 text-lg font-bold text-gray-900">
+          <Palette className="h-5 w-5 text-purple-600" />
           Template Configuration
         </h2>
-        <p className="text-xs text-gray-500">Changes reflect instantly in the preview. Settings are NOT saved until you click Save in Invoice Settings.</p>
+        <p className="text-xs text-gray-500">
+          Changes reflect instantly in the preview. Settings are NOT saved until you click Save in Invoice Settings.
+        </p>
+
+        {loadError && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>Could not load saved settings. Using defaults.</span>
+          </div>
+        )}
 
         {/* Status Preview Selector */}
         <div>
-          <label className="text-xs font-medium text-gray-600 block mb-1">Preview Status</label>
+          <label className="mb-1 block text-xs font-medium text-gray-600">Preview Status</label>
           <select
             value={previewStatus}
-            onChange={e => setPreviewStatus(e.target.value)}
-            className="w-full border rounded px-2 py-1.5 text-sm"
+            onChange={(e) => setPreviewStatus(e.target.value)}
+            className="w-full rounded border px-2 py-1.5 text-sm"
           >
-            {["Draft", "Sent", "Viewed", "Paid", "Overdue"].map(s => (
+            {["Draft", "Sent", "Viewed", "Paid", "Overdue"].map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
@@ -128,25 +240,25 @@ export default function AdminTemplatePreviewPage() {
 
         {/* Colors */}
         <fieldset className="space-y-2">
-          <legend className="text-xs font-bold text-gray-700 uppercase tracking-wide">Colors</legend>
+          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Colors</legend>
           <div className="flex gap-3">
             <div className="flex-1">
               <label className="text-xs text-gray-500">Primary</label>
-              <input type="color" value={settings.primaryColor} onChange={e => updateSetting("primaryColor", e.target.value)} className="w-full h-8 rounded cursor-pointer" />
+              <input type="color" value={settings.primaryColor} onChange={(e) => updateSetting("primaryColor", e.target.value)} className="h-8 w-full cursor-pointer rounded" />
             </div>
             <div className="flex-1">
               <label className="text-xs text-gray-500">Secondary</label>
-              <input type="color" value={settings.secondaryColor} onChange={e => updateSetting("secondaryColor", e.target.value)} className="w-full h-8 rounded cursor-pointer" />
+              <input type="color" value={settings.secondaryColor} onChange={(e) => updateSetting("secondaryColor", e.target.value)} className="h-8 w-full cursor-pointer rounded" />
             </div>
           </div>
         </fieldset>
 
         {/* Typography */}
         <fieldset className="space-y-2">
-          <legend className="text-xs font-bold text-gray-700 uppercase tracking-wide">Typography</legend>
+          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Typography</legend>
           <div>
             <label className="text-xs text-gray-500">Font Family</label>
-            <select value={settings.fontFamily} onChange={e => updateSetting("fontFamily", e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm">
+            <select value={settings.fontFamily} onChange={(e) => updateSetting("fontFamily", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm">
               <option value="Arial, Helvetica, sans-serif">Arial</option>
               <option value="'Times New Roman', serif">Times New Roman</option>
               <option value="'Georgia', serif">Georgia</option>
@@ -157,65 +269,90 @@ export default function AdminTemplatePreviewPage() {
           </div>
           <div>
             <label className="text-xs text-gray-500">Base Font Size: {settings.fontSizeBase}pt</label>
-            <input type="range" min="8" max="16" value={settings.fontSizeBase} onChange={e => updateSetting("fontSizeBase", Number(e.target.value))} className="w-full" />
+            <input type="range" min="8" max="16" value={settings.fontSizeBase} onChange={(e) => updateSetting("fontSizeBase", Number(e.target.value))} className="w-full" />
           </div>
         </fieldset>
 
-        {/* Company */}
+        {/* Company Info */}
         <fieldset className="space-y-2">
-          <legend className="text-xs font-bold text-gray-700 uppercase tracking-wide">Company Info</legend>
-          <input placeholder="Company Name" value={settings.companyName} onChange={e => updateSetting("companyName", e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm" />
-          <input placeholder="UEN Number" value={settings.uenNumber} onChange={e => updateSetting("uenNumber", e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm" />
-          <input placeholder="GST Registration" value={settings.gstRegistrationNumber} onChange={e => updateSetting("gstRegistrationNumber", e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm" />
-          <input placeholder="Address" value={settings.companyAddress} onChange={e => updateSetting("companyAddress", e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm" />
+          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Company Info</legend>
+          <input placeholder="Company Name" value={settings.companyName} onChange={(e) => updateSetting("companyName", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
+          <input placeholder="UEN Number" value={settings.uenNumber} onChange={(e) => updateSetting("uenNumber", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
+          <input placeholder="GST Registration" value={settings.gstRegistrationNumber} onChange={(e) => updateSetting("gstRegistrationNumber", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
+          <input placeholder="Address" value={settings.companyAddress} onChange={(e) => updateSetting("companyAddress", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
           <div className="flex gap-2">
-            <input placeholder="Phone" value={settings.companyPhone} onChange={e => updateSetting("companyPhone", e.target.value)} className="flex-1 border rounded px-2 py-1.5 text-sm" />
-            <input placeholder="Email" value={settings.companyEmail} onChange={e => updateSetting("companyEmail", e.target.value)} className="flex-1 border rounded px-2 py-1.5 text-sm" />
+            <input placeholder="Phone" value={settings.companyPhone} onChange={(e) => updateSetting("companyPhone", e.target.value)} className="flex-1 rounded border px-2 py-1.5 text-sm" />
+            <input placeholder="Email" value={settings.companyEmail} onChange={(e) => updateSetting("companyEmail", e.target.value)} className="flex-1 rounded border px-2 py-1.5 text-sm" />
+          </div>
+        </fieldset>
+
+        {/* Invoice Settings */}
+        <fieldset className="space-y-2">
+          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Invoice</legend>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="text-xs text-gray-500">Prefix</label>
+              <input value={settings.invoicePrefix} onChange={(e) => updateSetting("invoicePrefix", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-gray-500">Currency</label>
+              <input value={settings.currencySymbol} onChange={(e) => updateSetting("currencySymbol", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
+            </div>
           </div>
         </fieldset>
 
         {/* Tax */}
         <fieldset className="space-y-2">
-          <legend className="text-xs font-bold text-gray-700 uppercase tracking-wide">Tax</legend>
+          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Tax</legend>
           <div className="flex items-center gap-2">
-            <button onClick={() => toggleSetting("taxEnabled")} className="text-purple-600">
-              {settings.taxEnabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5 text-gray-400" />}
+            <button type="button" onClick={() => toggleSetting("taxEnabled")} className="text-purple-600">
+              {settings.taxEnabled ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5 text-gray-400" />}
             </button>
             <span className="text-sm">{settings.taxEnabled ? "Tax Enabled" : "Tax Disabled"}</span>
           </div>
           {settings.taxEnabled && (
             <div className="flex gap-2">
-              <input placeholder="Tax Name" value={settings.taxName} onChange={e => updateSetting("taxName", e.target.value)} className="flex-1 border rounded px-2 py-1.5 text-sm" />
-              <input type="number" placeholder="%" value={settings.taxPercentage} onChange={e => updateSetting("taxPercentage", Number(e.target.value))} className="w-20 border rounded px-2 py-1.5 text-sm" />
+              <input placeholder="Tax Name" value={settings.taxName} onChange={(e) => updateSetting("taxName", e.target.value)} className="flex-1 rounded border px-2 py-1.5 text-sm" />
+              <input type="number" placeholder="%" value={settings.taxPercentage} onChange={(e) => updateSetting("taxPercentage", Number(e.target.value))} className="w-20 rounded border px-2 py-1.5 text-sm" />
             </div>
           )}
         </fieldset>
 
         {/* Display Toggles */}
         <fieldset className="space-y-2">
-          <legend className="text-xs font-bold text-gray-700 uppercase tracking-wide">Display</legend>
+          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Display</legend>
           {[
             ["watermarkEnabled", "Watermark"],
             ["qrCodeDisplay", "QR Code"],
             ["bankDetailsDisplay", "Bank Details"],
             ["paynowDisplay", "PayNow"],
-            ["signatureDisplay", "Signature"]
+            ["signatureDisplay", "Signature"],
           ].map(([key, label]) => (
             <div key={key} className="flex items-center justify-between">
               <span className="text-sm text-gray-700">{label}</span>
-              <button onClick={() => toggleSetting(key)} className="text-purple-600">
-                {settings[key] ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5 text-gray-400" />}
+              <button type="button" onClick={() => toggleSetting(key)} className="text-purple-600">
+                {settings[key] ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5 text-gray-400" />}
               </button>
             </div>
           ))}
         </fieldset>
 
+        {/* Payment Details */}
+        <fieldset className="space-y-2">
+          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Payment Details</legend>
+          <input placeholder="Bank Account Holder" value={settings.bankAccountHolderName} onChange={(e) => updateSetting("bankAccountHolderName", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
+          <input placeholder="Bank Name" value={settings.bankName} onChange={(e) => updateSetting("bankName", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
+          <input placeholder="Account Number" value={settings.bankAccountNumber} onChange={(e) => updateSetting("bankAccountNumber", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
+          <input placeholder="BIC/SWIFT" value={settings.bicSwift} onChange={(e) => updateSetting("bicSwift", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
+          <input placeholder="PayNow Identifier" value={settings.paynowIdentifier} onChange={(e) => updateSetting("paynowIdentifier", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
+        </fieldset>
+
         {/* Layout */}
         <fieldset className="space-y-2">
-          <legend className="text-xs font-bold text-gray-700 uppercase tracking-wide">Layout</legend>
+          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Layout</legend>
           <div>
             <label className="text-xs text-gray-500">Border Style</label>
-            <select value={settings.invoiceBorderStyle} onChange={e => updateSetting("invoiceBorderStyle", e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm">
+            <select value={settings.invoiceBorderStyle} onChange={(e) => updateSetting("invoiceBorderStyle", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm">
               <option value="modern">Modern</option>
               <option value="classic">Classic</option>
               <option value="minimal">Minimal</option>
@@ -223,7 +360,7 @@ export default function AdminTemplatePreviewPage() {
           </div>
           <div>
             <label className="text-xs text-gray-500">Table Style</label>
-            <select value={settings.itemTableStyle} onChange={e => updateSetting("itemTableStyle", e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm">
+            <select value={settings.itemTableStyle} onChange={(e) => updateSetting("itemTableStyle", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm">
               <option value="striped">Striped</option>
               <option value="bordered">Bordered</option>
               <option value="clean">Clean</option>
@@ -231,25 +368,80 @@ export default function AdminTemplatePreviewPage() {
           </div>
         </fieldset>
 
-        <button onClick={fetchPreview} className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 flex items-center justify-center gap-2">
-          <RefreshCw className="w-4 h-4" /> Refresh Preview
-        </button>
+        {/* Footer */}
+        <fieldset className="space-y-2">
+          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Footer</legend>
+          <div>
+            <label className="text-xs text-gray-500">Payment Reference Instruction</label>
+            <textarea
+              rows={2}
+              value={settings.paymentReferenceInstruction}
+              onChange={(e) => updateSetting("paymentReferenceInstruction", e.target.value)}
+              className="w-full rounded border px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Computer Generated Statement</label>
+            <textarea
+              rows={2}
+              value={settings.computerGeneratedStatement}
+              onChange={(e) => updateSetting("computerGeneratedStatement", e.target.value)}
+              className="w-full rounded border px-2 py-1.5 text-sm"
+            />
+          </div>
+        </fieldset>
       </div>
 
       {/* Right Panel — Live Preview */}
-      <div className="flex-1 bg-gray-100 p-6 overflow-auto flex items-start justify-center">
-        <div className="relative bg-white shadow-xl rounded-lg overflow-hidden" style={{ width: "210mm", minHeight: "297mm" }}>
-          {loading && (
-            <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-10">
-              <RefreshCw className="w-6 h-6 animate-spin text-purple-600" />
-            </div>
-          )}
-          <iframe
-            ref={iframeRef}
-            title="Invoice Preview"
-            className="w-full border-0"
-            style={{ height: "297mm", transform: "scale(0.85)", transformOrigin: "top left", width: "118%" }}
-          />
+      <div className="flex flex-1 flex-col overflow-hidden bg-gray-100">
+        {/* Zoom Controls */}
+        <div className="flex items-center gap-2 border-b bg-white px-4 py-2">
+          <Eye className="h-4 w-4 text-gray-500" />
+          <span className="text-xs font-medium text-gray-600">Preview</span>
+          <div className="ml-auto flex items-center gap-1">
+            {ZOOM_LEVELS.map((level) => (
+              <button
+                key={level.label}
+                type="button"
+                onClick={() => setZoom(level.value)}
+                className={`rounded px-2 py-1 text-xs font-medium transition ${
+                  zoom === level.value
+                    ? "bg-purple-100 text-purple-700"
+                    : "text-gray-500 hover:bg-gray-100"
+                }`}
+              >
+                {level.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* A4 Preview Area */}
+        <div
+          ref={previewContainerRef}
+          className="flex-1 overflow-auto p-6"
+          style={{ display: "flex", justifyContent: "center", alignItems: "flex-start" }}
+        >
+          <div
+            style={{
+              transform: `scale(${computedScale})`,
+              transformOrigin: "top center",
+              boxShadow: "0 4px 25px rgba(0,0,0,0.12), 0 1px 5px rgba(0,0,0,0.08)",
+              borderRadius: "4px",
+              overflow: "hidden",
+            }}
+          >
+            <InvoiceTemplate
+              invoice={previewInvoice}
+              settings={settings}
+              options={{
+                logoUrl: settings.companyLogoUrl || "",
+                qrCodeUrl: settings.qrCodeDisplay ? "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI3MCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMCIgeT0iNzAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0MCIgeT0iNDAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzMCIgeT0iMTAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI1MCIgeT0iMzAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48L3N2Zz4=" : "",
+                signatureUrl: "",
+                stampUrl: "",
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>

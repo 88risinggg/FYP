@@ -20,7 +20,21 @@ const { generateQRCode } = require("./qrCodeService");
 
 function getExecutablePath() {
   if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
-  if (process.platform === "win32") return "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+  if (process.platform === "win32") {
+    const fs = require("fs");
+    const paths = [
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+      `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${process.env.PROGRAMFILES}\\Google\\Chrome\\Application\\chrome.exe`,
+      "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+      "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
+    ];
+    for (const p of paths) {
+      if (p && fs.existsSync(p)) return p;
+    }
+    return paths[0]; // fallback to default
+  }
   if (process.platform === "darwin") return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
   return "/usr/bin/google-chrome";
 }
@@ -120,12 +134,24 @@ async function hydrateInvoice(invoice) {
         "SELECT description, quantity, unit_price, amount FROM invoice_item WHERE invoice_invoice_id = ? ORDER BY item_id",
         [invoice.invoice_id]
       );
-      hydrated.items = items;
+      if (items.length > 0) {
+        hydrated.items = items;
+      }
     } catch {
-      const parsed = typeof hydrated.items_json === "string"
-        ? JSON.parse(hydrated.items_json || "[]")
-        : hydrated.items_json;
-      hydrated.items = Array.isArray(parsed) ? parsed : [];
+      // invoice_item table may not exist — continue to items_json fallback
+    }
+
+    // Fall back to items_json if no items found from invoice_item
+    if (!Array.isArray(hydrated.items) || hydrated.items.length === 0) {
+      try {
+        const jsonSource = hydrated.items_json;
+        const parsed = typeof jsonSource === "string"
+          ? JSON.parse(jsonSource || "[]")
+          : jsonSource;
+        hydrated.items = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        hydrated.items = [];
+      }
     }
   }
 
@@ -209,7 +235,7 @@ function buildHeader(invoice, settings, options) {
     ? `<img class="logo-image" src="${escapeHtml(options.logoDataUri)}" alt="Company logo">`
     : `<div class="wordmark">${escapeHtml(brandName)}<span style="color:${secondary}">.</span></div>`;
 
-  return `<header class="logo-row">
+  return `<header style="display:flex;align-items:flex-start;height:20mm;border-bottom:.35mm solid #7f8ba2;padding-bottom:3mm;">
     <div style="width:2.1mm;height:16.5mm;margin-right:7mm;background:${secondary};flex-shrink:0;"></div>
     ${logo}
   </header>`;
@@ -224,8 +250,9 @@ function buildHeroSection(invoice, settings) {
   const secondary = settings.secondaryColor || "#ff5a52";
   const dateStr = formatDate(invoice.issue_date, settings.displayDateFormat);
 
-  const companyCard = `<div class="company-card" style="padding:5mm 5.5mm;background:${primary};color:white;min-width:0;">
+  const companyCard = `<div style="padding:5mm 5.5mm;background:${primary};color:white;min-width:0;">
     <strong style="display:block;margin-bottom:1.2mm;font-size:7.5pt;">${escapeHtml(settings.companyName)}</strong>
+    ${settings.companyRegistrationNumber ? `<p style="margin:.55mm 0;font-size:6.8pt;">Reg. No. ${escapeHtml(settings.companyRegistrationNumber)}</p>` : ""}
     ${settings.uenNumber ? `<p style="margin:.55mm 0;font-size:6.8pt;">UEN: ${escapeHtml(settings.uenNumber)}</p>` : ""}
     ${settings.gstRegistrationNumber ? `<p style="margin:.55mm 0;font-size:6.8pt;">GST Reg: ${escapeHtml(settings.gstRegistrationNumber)}</p>` : ""}
     <p style="margin:.55mm 0;font-size:6.8pt;">${escapeHtml(settings.companyAddress)}</p>
@@ -233,11 +260,12 @@ function buildHeroSection(invoice, settings) {
     ${settings.companyEmail ? `<p style="margin:.55mm 0;font-size:6.8pt;">${escapeHtml(settings.companyEmail)}</p>` : ""}
   </div>`;
 
-  return `<section class="hero" style="display:grid;grid-template-columns:44.5% 26% 29.5%;height:49mm;border-bottom:.3mm solid #c7ced8;">
+  return `<section style="display:grid;grid-template-columns:44.5% 26% 29.5%;min-height:49mm;border-bottom:.3mm solid #c7ced8;">
     <div style="padding:10.5mm 5mm 5mm 0;">
       <h1 style="margin:0;font-size:27pt;line-height:1;letter-spacing:1.2px;color:${primary};">INVOICE</h1>
       <div style="width:12mm;height:1.1mm;margin:3.8mm 0 5mm;background:${secondary};"></div>
       <p style="margin:0;font-size:8pt;line-height:1.4;font-weight:700;color:#263653;">${escapeHtml(invoice.customer_name || "")}</p>
+      ${invoice.service_provider || invoice.shop_title ? `<p style="margin:1mm 0 0;font-size:7pt;color:#555;">Service Provider: ${escapeHtml(invoice.service_provider || invoice.shop_title || "")}</p>` : ""}
       ${invoice.customer_email ? `<p style="margin:2mm 0 0;font-size:7pt;color:#555;">${escapeHtml(invoice.customer_email)}</p>` : ""}
       ${invoice.customer_address ? `<p style="margin:1mm 0 0;font-size:7pt;color:#555;">${escapeHtml(invoice.customer_address)}</p>` : ""}
     </div>
@@ -356,36 +384,32 @@ function buildPaymentSection(invoice, settings, options) {
 
   if (!showBank && !showPaynow) return "";
 
-  const bankBox = showBank ? `<div style="height:31mm;padding:5mm 3mm 4mm 0;display:grid;grid-template-columns:13mm 1fr;">
+  const bankBox = showBank ? `<div style="padding:4mm 3mm 4mm 0;display:grid;grid-template-columns:13mm 1fr;">
     <div style="width:10mm;height:10mm;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${secondary};color:white;">
       <svg viewBox="0 0 24 24" width="5mm" height="5mm" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10h18M5 10v8M9 10v8M15 10v8M19 10v8M3 19h18M2 7l10-5 10 5z"/></svg>
     </div>
     <div>
-      <p style="margin:.6mm 0;font-size:7pt;"><strong style="display:block;margin-bottom:1mm;">Bank Transfer Details</strong></p>
+      <p style="margin:0 0 1.5mm;font-size:7pt;font-weight:700;">We accept payment via bank transfer to the following:</p>
       <p style="margin:.6mm 0;font-size:7pt;">${escapeHtml(settings.bankAccountHolderName)}</p>
       <p style="margin:.6mm 0;font-size:7pt;">Bank: ${escapeHtml(settings.bankName)}</p>
       <p style="margin:.6mm 0;font-size:7pt;">BIC/SWIFT: ${escapeHtml(settings.bicSwift)}</p>
-      <p style="margin:.6mm 0;font-size:7pt;">Account: ${escapeHtml(settings.bankAccountNumber)}</p>
+      <p style="margin:.6mm 0;font-size:7pt;">Account Number: ${escapeHtml(settings.bankAccountNumber)}</p>
     </div>
   </div>` : "";
 
-  const paynowBox = showPaynow ? `<div style="height:31mm;padding:5mm 3mm 4mm 5mm;${showBank ? "border-left:1px solid #d8dce3;" : ""}display:grid;grid-template-columns:13mm 1fr;">
+  const paynowBox = showPaynow ? `<div style="padding:4mm 3mm 4mm 5mm;${showBank ? "border-left:1px solid #d8dce3;" : ""}display:grid;grid-template-columns:13mm 1fr;align-items:center;">
     <div style="width:10mm;height:10mm;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${secondary};color:white;">
       <svg viewBox="0 0 24 24" width="5mm" height="5mm" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 6h6M8 10h8M8 14h5M10 18h4"/></svg>
     </div>
-    <div style="display:grid;grid-template-columns:1fr ${showQr ? "auto" : ""};gap:2mm;align-items:center;">
-      <p style="margin:.6mm 0;font-size:7pt;">PayNow to ${escapeHtml(settings.paynowIdentifier)}</p>
+    <div style="display:flex;align-items:center;gap:3mm;">
+      <p style="margin:0;font-size:7pt;">Payment via PayNow to <strong>${escapeHtml(settings.paynowIdentifier)}</strong></p>
       ${showQr ? `<img src="${escapeHtml(qrCode)}" alt="QR" style="width:18mm;height:18mm;object-fit:contain;">` : ""}
     </div>
   </div>` : "";
 
-  return `<section style="break-inside:avoid;">
-    <div style="display:grid;grid-template-columns:${showBank && showPaynow ? "58% 42%" : "1fr"};border-bottom:.3mm solid #d8dce3;">
+  return `<section style="break-inside:avoid;border-bottom:.3mm solid #d8dce3;">
+    <div style="display:grid;grid-template-columns:${showBank && showPaynow ? "58% 42%" : "1fr"};">
       ${bankBox}${paynowBox}
-    </div>
-    <div style="display:grid;grid-template-columns:12mm 1fr;align-items:center;height:12mm;border-bottom:.3mm solid #d8dce3;">
-      <div style="width:8mm;height:8mm;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${primary};color:white;"><svg viewBox="0 0 24 24" width="4mm" height="4mm" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg></div>
-      <p style="margin:0;font-size:7pt;">${escapeHtml(settings.paymentReferenceInstruction)}</p>
     </div>
   </section>`;
 }
@@ -411,26 +435,52 @@ function buildSignatureSection(settings, options) {
 
 function buildFooterSection(invoice, settings) {
   const primary = settings.primaryColor || "#061e4b";
+  const secondary = settings.secondaryColor || "#ff5a52";
   const footerNote = settings.footerNote || "";
-  const termsAndConditions = settings.termsAndConditions || "";
   const computerStatement = settings.computerGeneratedStatement || "";
+  const payoutStatement = settings.payoutStatement || "";
 
-  let notesHtml = "";
-  if (settings.defaultNotes || invoice.notes) {
-    notesHtml = `<div style="margin-bottom:3mm;"><p style="font-size:6.5pt;font-weight:700;margin:0 0 1mm;">Notes:</p><p style="font-size:6.5pt;margin:0;color:#555;">${escapeHtml(invoice.notes || settings.defaultNotes)}</p></div>`;
+  let paymentRefHtml = "";
+  if (settings.paymentReferenceInstruction) {
+    paymentRefHtml = `<div style="display:grid;grid-template-columns:12mm 1fr;align-items:start;min-height:10mm;border-bottom:.3mm solid #d8dce3;padding:2.5mm 0;">
+      <div style="width:8mm;height:8mm;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${primary};color:white;"><svg viewBox="0 0 24 24" width="4mm" height="4mm" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg></div>
+      <p style="margin:0;font-size:7pt;color:#333;padding-top:1.5mm;">${escapeHtml(settings.paymentReferenceInstruction)}</p>
+    </div>`;
   }
 
-  let termsHtml = "";
-  if (termsAndConditions) {
-    termsHtml = `<div style="margin-bottom:3mm;"><p style="font-size:6.5pt;font-weight:700;margin:0 0 1mm;">Terms & Conditions:</p><p style="font-size:6.5pt;margin:0;color:#555;white-space:pre-line;">${escapeHtml(termsAndConditions)}</p></div>`;
+  let payoutHtml = "";
+  if (payoutStatement) {
+    payoutHtml = `<div style="display:grid;grid-template-columns:12mm 1fr;align-items:start;min-height:10mm;border-bottom:.3mm solid #d8dce3;padding:2.5mm 0;">
+      <div style="width:8mm;height:8mm;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#e8e8e8;color:#666;"><svg viewBox="0 0 24 24" width="4mm" height="4mm" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+      <p style="margin:0;font-size:7pt;color:#555;padding-top:1.5mm;">${escapeHtml(payoutStatement)}</p>
+    </div>`;
   }
 
-  return `<footer style="margin-top:auto;border-top:.35mm solid ${primary};padding-top:4mm;">
-    ${notesHtml}
-    ${termsHtml}
-    ${computerStatement ? `<p style="font-size:6pt;color:#999;margin:2mm 0 0;">${escapeHtml(computerStatement)}</p>` : ""}
-    ${footerNote ? `<p style="font-size:6pt;color:#999;margin:1mm 0 0;">${escapeHtml(footerNote)}</p>` : ""}
-    ${settings.companyWebsite ? `<p style="font-size:6pt;color:#999;margin:1mm 0 0;">${escapeHtml(settings.companyWebsite)}</p>` : ""}
+  let computerHtml = "";
+  if (computerStatement) {
+    computerHtml = `<div style="display:grid;grid-template-columns:12mm 1fr;align-items:start;min-height:10mm;border-bottom:.3mm solid #d8dce3;padding:2.5mm 0;">
+      <div style="width:8mm;height:8mm;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#e8e8e8;color:#666;"><svg viewBox="0 0 24 24" width="4mm" height="4mm" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+      <p style="margin:0;font-size:7pt;color:#555;padding-top:1.5mm;">${escapeHtml(computerStatement)}</p>
+    </div>`;
+  }
+
+  let registeredOfficeHtml = "";
+  if (settings.registeredOfficeAddress || settings.financeEmail) {
+    const officeLine = [
+      settings.financeEmail ? `Attention: ${settings.financeEmail}` : "",
+      settings.registeredOfficeAddress || settings.companyAddress
+    ].filter(Boolean).join(", ");
+    registeredOfficeHtml = `<div style="display:grid;grid-template-columns:12mm 1fr;align-items:start;margin-top:3mm;padding-top:3mm;border-top:.3mm solid ${primary};">
+      <div style="width:8mm;height:8mm;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${secondary};color:white;"><svg viewBox="0 0 24 24" width="4mm" height="4mm" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+      <p style="margin:0;font-size:6.5pt;color:#555;padding-top:1.5mm;"><strong>Registered Office:</strong> ${escapeHtml(officeLine)}</p>
+    </div>`;
+  }
+
+  return `<footer style="margin-top:auto;padding-top:4mm;">
+    ${paymentRefHtml}
+    ${payoutHtml}
+    ${computerHtml}
+    ${registeredOfficeHtml}
   </footer>`;
 }
 
@@ -457,7 +507,6 @@ function buildInvoiceHtml(invoice, settings = defaultSettings, options = {}) {
   <style>
     @page { size: ${settings.pdfPageSize || "A4"} ${settings.pdfOrientation || "portrait"}; margin: 0; }
     ${dynamicStyles}
-    .logo-row { height: 20mm; display: flex; align-items: flex-start; border-bottom: .35mm solid #7f8ba2; padding-bottom: 3mm; }
     .logo-image { max-width: 62mm; max-height: 16.5mm; object-fit: contain; object-position: left top; }
     .wordmark { color: ${settings.primaryColor || "#07132f"}; font-family: Georgia, "Times New Roman", serif; font-size: 25pt; line-height: 1; font-weight: 700; letter-spacing: .8px; white-space: nowrap; }
   </style>

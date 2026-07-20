@@ -3,13 +3,38 @@
  *
  * Handles customer-facing invoice viewing (no authentication required).
  * When a customer opens their invoice link, the status is updated to "Viewed"
- * if it was previously "Sent". Tracks view events in the activity log.
+ * if it was previously "Sent". Tracks view events in invoice_view_log and audit_logs.
+ * Records IP address, device info, and timestamp for each view.
  * Auto-generates Stripe session + QR code on-the-fly if not already stored.
  */
 
 const { pool } = require("../config/db");
 const { notifyCustomerViewed } = require("../services/invoiceNotificationService");
 const { generateQRCode } = require("../services/qrCodeService");
+const { getInvoiceSettings } = require("../models/invoiceSettingsModel");
+
+/**
+ * Parse a user-agent string into a simple device description.
+ */
+function parseDeviceInfo(userAgent) {
+  const ua = String(userAgent || "").toLowerCase();
+  let device = "Unknown";
+  if (ua.includes("mobile") || ua.includes("android") || ua.includes("iphone")) {
+    device = "Mobile";
+  } else if (ua.includes("tablet") || ua.includes("ipad")) {
+    device = "Tablet";
+  } else if (ua.includes("windows") || ua.includes("macintosh") || ua.includes("linux")) {
+    device = "Desktop";
+  }
+
+  let browser = "Unknown";
+  if (ua.includes("chrome") && !ua.includes("edg")) browser = "Chrome";
+  else if (ua.includes("safari") && !ua.includes("chrome")) browser = "Safari";
+  else if (ua.includes("firefox")) browser = "Firefox";
+  else if (ua.includes("edg")) browser = "Edge";
+
+  return `${device} / ${browser}`;
+}
 
 /**
  * GET /api/public/invoice/:invoiceId
@@ -117,6 +142,7 @@ async function viewInvoice(req, res) {
     // Capture view tracking data
     const userAgent = (req.headers["user-agent"] || "").substring(0, 512);
     const ipAddress = req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown";
+    const deviceInfo = parseDeviceInfo(userAgent);
 
     // Update status to "Viewed" on first access
     if (invoice.status === "Sent") {
@@ -128,21 +154,38 @@ async function viewInvoice(req, res) {
 
       try {
         await pool.query(
-          "INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, 'invoice', ?, NULL)",
-          ["invoice_status:Viewed", invoice.invoice_id]
+          `INSERT INTO audit_logs (user_id, activity_type, action_description, affected_record, status, created_at, ip_address, device_info)
+           VALUES (NULL, 'invoice', 'invoice_status:Viewed', ?, 'Success', NOW(), ?, ?)`,
+          [String(invoice.invoice_id), ipAddress, deviceInfo]
         );
       } catch { /* non-critical */ }
 
       notifyCustomerViewed(invoice.invoiceId, invoice.customer_name).catch(() => {});
     }
 
-    // Always record the view event
+    // Always record the view event in invoice_view_log table
     try {
       await pool.query(
-        "INSERT INTO audit_log (action, entity_type, entity_id, user_user_id) VALUES (?, 'invoice', ?, NULL)",
-        [`customer_viewed|ip:${ipAddress}|ua:${userAgent.substring(0, 100)}`, invoice.invoice_id]
+        `INSERT INTO invoice_view_log (invoice_id, view_date, ip_address, user_agent, device_info)
+         VALUES (?, NOW(), ?, ?, ?)`,
+        [invoice.invoice_id, ipAddress, userAgent, deviceInfo]
+      );
+    } catch { /* table may not exist yet */ }
+
+    // Also write to audit_logs
+    try {
+      await pool.query(
+        `INSERT INTO audit_logs (user_id, activity_type, action_description, affected_record, status, created_at, ip_address, device_info)
+         VALUES (NULL, 'invoice', 'invoice_viewed', ?, 'Success', NOW(), ?, ?)`,
+        [String(invoice.invoice_id), ipAddress, deviceInfo]
       );
     } catch { /* non-critical */ }
+
+    // Load invoice display settings for client-side rendering
+    let invoiceSettings = {};
+    try {
+      invoiceSettings = (await getInvoiceSettings()) || {};
+    } catch { /* non-critical — template will use defaults */ }
 
     res.json({
       invoice: {
@@ -158,8 +201,13 @@ async function viewInvoice(req, res) {
         payment_url: isPayable ? invoice.payment_url : null,
         qr_code: isPayable ? qrCodeDataUri : null,
         is_paid: invoice.status === "Paid",
-        paid_date: invoice.status === "Paid" ? (invoice.payment_date || null) : null
-      }
+        is_pending_review: invoice.status === "Pending Review",
+        paid_date: invoice.status === "Paid" ? (invoice.payment_date || null) : null,
+        view_date: new Date().toISOString(),
+        view_ip: ipAddress,
+        view_device: deviceInfo
+      },
+      settings: invoiceSettings
     });
   } catch (error) {
     console.error("[PUBLIC VIEW]", error.message);

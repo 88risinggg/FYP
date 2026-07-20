@@ -117,8 +117,10 @@ function isValidEmail(email) {
 }
 
 function isCompletedOrder(status, orderStatus) {
-  const s = String(status || "").toLowerCase();
-  const os = String(orderStatus || "").toLowerCase();
+  const s = String(status || "").toLowerCase().trim();
+  const os = String(orderStatus || "").toLowerCase().trim();
+  // If neither status field is provided, treat as completed (user imported these intentionally)
+  if (!s && !os) return true;
   return s === "complete" || s === "completed" || os === "completed" || os === "complete";
 }
 
@@ -150,11 +152,6 @@ function validateRecord(record, index, mapping, dateFormat) {
   else if (!isValidEmail(record.email)) errors.push("Invalid email format");
   if (!record.shopTitle) errors.push("Shop/service provider is required");
   if (!record.serviceName) errors.push("Service name is required");
-  if (!record.bookedDate) errors.push("Booking date is required");
-  else {
-    const parsed = parseDate(record.bookedDate, dateFormat);
-    if (!parsed) errors.push(`Invalid date format for booking date: ${record.bookedDate}`);
-  }
   if (!record.totalRevenue || parseAmount(record.totalRevenue) <= 0) {
     errors.push("Total revenue must be a positive number");
   }
@@ -172,8 +169,8 @@ function validateRecord(record, index, mapping, dateFormat) {
     }
   }
 
-  // Order status validation
-  if (!isCompletedOrder(record.status, record.orderStatus)) {
+  // Order status validation (only fail if status is explicitly non-complete)
+  if ((record.status || record.orderStatus) && !isCompletedOrder(record.status, record.orderStatus)) {
     errors.push(`Order is not completed (status: ${record.status || "N/A"}, orderStatus: ${record.orderStatus || "N/A"}). Only completed orders can generate invoices.`);
   }
 

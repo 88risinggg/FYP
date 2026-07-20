@@ -48,10 +48,32 @@ router.get("/:id/pdf", async (req, res) => {
     }
 
     const invoice = rows[0];
-    const [items] = await pool.query(
-      "SELECT description, quantity, unit_price, amount FROM invoice_item WHERE invoice_invoice_id = ?",
-      [invoiceId]
-    );
+
+    // Load line items: try invoice_item table first, fall back to items_json column
+    let items = [];
+    try {
+      const [itemRows] = await pool.query(
+        "SELECT description, quantity, unit_price, amount FROM invoice_item WHERE invoice_invoice_id = ?",
+        [invoiceId]
+      );
+      items = itemRows;
+    } catch {
+      // invoice_item table may not exist — fall back to items_json
+    }
+    if (items.length === 0) {
+      try {
+        const [jsonRows] = await pool.query(
+          "SELECT items_json FROM invoice WHERE invoice_id = ? AND items_json IS NOT NULL",
+          [invoiceId]
+        );
+        if (jsonRows.length > 0 && jsonRows[0].items_json) {
+          const parsed = typeof jsonRows[0].items_json === "string"
+            ? JSON.parse(jsonRows[0].items_json)
+            : jsonRows[0].items_json;
+          items = Array.isArray(parsed) ? parsed : [];
+        }
+      } catch { /* no items available */ }
+    }
     invoice.items = items;
 
     // Generate real Stripe URL if placeholder or missing (for unpaid invoices)
@@ -100,6 +122,114 @@ router.get("/:id/pdf", async (req, res) => {
     res.send(pdfBuffer);
   } catch (error) {
     res.status(500).json({ message: "Failed to generate PDF.", detail: error.message });
+  }
+});
+
+/**
+ * GET /api/invoices/:id/html
+ * Returns the invoice rendered as HTML (same template as PDF) for browser printing.
+ * Does NOT require Puppeteer — returns raw HTML that can be displayed in a print window.
+ */
+router.get("/:id/html", async (req, res) => {
+  try {
+    const invoiceId = Number(req.params.id);
+    const [rows] = await pool.query(
+      `SELECT i.invoice_id, i.invoiceId, i.status, i.issue_date, i.due_date, i.total_amount,
+              i.payment_url, i.qr_code_url, i.shop_title, i.service_provider,
+              c.name AS customer_name, c.email AS customer_email, c.address AS customer_address
+       FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id
+       WHERE i.invoice_id = ? LIMIT 1`,
+      [invoiceId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Invoice not found." });
+    }
+
+    const invoice = rows[0];
+
+    // Load line items: try invoice_item table first, fall back to items_json column
+    let items = [];
+    try {
+      const [itemRows] = await pool.query(
+        "SELECT description, quantity, unit_price, amount FROM invoice_item WHERE invoice_invoice_id = ?",
+        [invoiceId]
+      );
+      items = itemRows;
+    } catch {
+      // invoice_item table may not exist — fall back to items_json
+    }
+    if (items.length === 0) {
+      try {
+        const [jsonRows] = await pool.query(
+          "SELECT items_json FROM invoice WHERE invoice_id = ? AND items_json IS NOT NULL",
+          [invoiceId]
+        );
+        if (jsonRows.length > 0 && jsonRows[0].items_json) {
+          const parsed = typeof jsonRows[0].items_json === "string"
+            ? JSON.parse(jsonRows[0].items_json)
+            : jsonRows[0].items_json;
+          items = Array.isArray(parsed) ? parsed : [];
+        }
+      } catch { /* no items available */ }
+    }
+    invoice.items = items;
+
+    // Determine amount paid
+    try {
+      const [paidRows] = await pool.query(
+        `SELECT COALESCE(SUM(amount), 0) AS amount_paid FROM payment
+         WHERE invoice_invoice_id = ? AND LOWER(status) IN ('completed', 'paid', 'successful', 'success')`,
+        [invoiceId]
+      );
+      invoice.amount_paid = Number(paidRows[0]?.amount_paid || 0);
+    } catch {
+      invoice.amount_paid = invoice.status === "Paid" ? Number(invoice.total_amount || 0) : 0;
+    }
+
+    const { buildInvoiceHtml } = require("../services/pdfService");
+    const { getInvoiceSettings, defaultSettings } = require("../models/invoiceSettingsModel");
+
+    const settings = { ...defaultSettings, ...((await getInvoiceSettings()) || {}) };
+
+    // Resolve logo
+    let logoDataUri = "";
+    const logoUrl = settings.branding?.companyLogoUrl || settings.companyLogoUrl;
+    if (logoUrl) {
+      try {
+        const fs = require("fs/promises");
+        const path = require("path");
+        if (logoUrl.startsWith("/uploads/invoice-logos/")) {
+          const fileName = path.basename(logoUrl);
+          const filePath = path.join(__dirname, "..", "..", "uploads", "invoice-logos", fileName);
+          const content = await fs.readFile(filePath);
+          const ext = path.extname(fileName).toLowerCase();
+          const mimeType = ext === ".png" ? "image/png" : ext === ".svg" ? "image/svg+xml" : "image/jpeg";
+          logoDataUri = `data:${mimeType};base64,${content.toString("base64")}`;
+        }
+      } catch { /* non-critical */ }
+    }
+
+    // Generate QR code if payable
+    const isPayable = !["Paid", "Cancelled", "Refunded"].includes(invoice.status);
+    let qrCodeDataUri = null;
+    if (isPayable && invoice.payment_url && settings.qrCodeDisplay) {
+      try {
+        const { generateQRCode } = require("../services/qrCodeService");
+        qrCodeDataUri = await generateQRCode(invoice.payment_url);
+      } catch { /* non-critical */ }
+    }
+
+    const html = buildInvoiceHtml(invoice, settings, {
+      paymentUrl: isPayable ? invoice.payment_url : null,
+      qrCodeDataUri,
+      logoDataUri
+    });
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(html);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to generate invoice HTML.", detail: error.message });
   }
 });
 
@@ -181,6 +311,30 @@ router.get("/:id/reminders", async (req, res) => {
       return res.json({ reminders: [] });
     }
     res.status(500).json({ message: "Failed to fetch reminder history.", detail: error.message });
+  }
+});
+
+/**
+ * GET /api/invoices/:id/views
+ * Get view tracking history for a specific invoice.
+ */
+router.get("/:id/views", async (req, res) => {
+  try {
+    const invoiceId = Number(req.params.id);
+    const [views] = await pool.query(
+      `SELECT view_id, view_date, ip_address, user_agent, device_info
+       FROM invoice_view_log
+       WHERE invoice_id = ?
+       ORDER BY view_date DESC
+       LIMIT 50`,
+      [invoiceId]
+    );
+    res.json({ views });
+  } catch (error) {
+    if (error.code === "ER_NO_SUCH_TABLE") {
+      return res.json({ views: [] });
+    }
+    res.status(500).json({ message: "Failed to fetch view history.", detail: error.message });
   }
 });
 
