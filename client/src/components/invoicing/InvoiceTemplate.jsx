@@ -522,7 +522,7 @@ export default function InvoiceTemplate({ invoice, settings, options = {} }) {
       <HeroSection invoice={invoice} settings={mergedSettings} />
       <ItemsTable invoice={invoice} settings={mergedSettings} />
       <SummarySection invoice={invoice} settings={mergedSettings} />
-      <StripePaymentSection invoice={invoice} settings={mergedSettings} paymentUrl={options.paymentUrl || "https://checkout.stripe.com/test"} qrCodeUrl={options.stripeQrCodeUrl} />
+      <StripePaymentSection invoice={invoice} settings={mergedSettings} paymentUrl={options.paymentUrl} qrCodeUrl={options.stripeQrCodeUrl} />
       <PaymentSection settings={mergedSettings} qrCodeUrl={options.qrCodeUrl} />
       <SignatureSection settings={mergedSettings} signatureUrl={options.signatureUrl} stampUrl={options.stampUrl} />
       <FooterSection invoice={invoice} settings={mergedSettings} />
