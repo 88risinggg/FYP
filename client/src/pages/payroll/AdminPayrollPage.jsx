@@ -3943,6 +3943,7 @@ export default function AdminPayrollPage() {
         user={session?.user}
         sidebarSections={payrollSidebarSections}
         sidebarTitle="Automated Invoicing & Payroll System"
+        homePath="/dashboard/payroll/admin"
         searchPlaceholder="Search payroll, staff, approvals..."
       >
         <section>
@@ -3958,6 +3959,7 @@ export default function AdminPayrollPage() {
       user={session?.user}
       sidebarSections={payrollSidebarSections}
       sidebarTitle="Automated Invoicing & Payroll System"
+      homePath="/dashboard/payroll/admin"
       searchPlaceholder="Search payroll, staff, approvals..."
     >
       {isLoading ? (

@@ -215,6 +215,7 @@ export default function AdminInvoicingDashboard() {
       user={session?.user}
       sidebarSections={invoicingSidebarSections}
       sidebarTitle="Automated Invoicing & Payroll System"
+      homePath="/dashboard/invoicing/admin"
       theme="adminInvoicing"
     >
       {normalizedPath === "/dashboard/invoicing/admin" ? (

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
   Check,
@@ -85,6 +85,7 @@ export default function DashboardLayout({
   user,
   sidebarSections = defaultSidebarSections,
   sidebarTitle,
+  homePath,
   searchPlaceholder = "Search invoices, users, settings...",
   profileName,
   profileRole,
@@ -100,6 +101,7 @@ export default function DashboardLayout({
   hideSidebar = false
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const roleProfile = roleProfiles[user?.role];
   const displayName = profileName || user?.name || roleProfile?.name || "User";
   const displayRole = profileRole || roleProfile?.role || user?.role || "User";
@@ -142,6 +144,16 @@ export default function DashboardLayout({
     profileSubtext: "text-[#7b6660]",
     menuItem: "flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#6f4f47] transition hover:bg-[#FDD9CD]/45 hover:text-[#251E1F]"
   };
+
+  function openSettings(section = "") {
+    const currentLocation = `${location.pathname}${location.search}`;
+    const previousLocation = location.pathname === "/dashboard/settings"
+      ? location.state?.from
+      : currentLocation;
+    navigate(`/dashboard/settings${section ? `?section=${section}` : ""}`, {
+      state: { from: previousLocation || "/module-selection" }
+    });
+  }
 
   const usesManagedNotifications = notifications.length > 0 || typeof notificationBadgeCount === "number";
   const displayNotifications = fetchedNotifications || notifications;
@@ -385,6 +397,7 @@ export default function DashboardLayout({
           onClose={() => setMobileSidebarOpen(false)}
           desktopCollapsed={sidebarCollapsed}
           onToggleDesktop={toggleDesktopSidebar}
+          homePath={homePath}
         />
       ) : null}
 
@@ -413,10 +426,24 @@ export default function DashboardLayout({
             </button>
           ) : null}
 
-          <VanidayLogo
-            compact
-            className="shrink-0 border-r border-[#f0d2ca] pr-4"
-          />
+          {homePath ? (
+            <Link
+              to={homePath}
+              aria-label="Go to dashboard"
+              title="Go to dashboard"
+              className="shrink-0 rounded-md outline-none transition-opacity hover:opacity-75 focus-visible:ring-2 focus-visible:ring-[#F38978]/45"
+            >
+              <VanidayLogo
+                compact
+                className="border-r border-[#f0d2ca] pr-4"
+              />
+            </Link>
+          ) : (
+            <VanidayLogo
+              compact
+              className="shrink-0 border-r border-[#f0d2ca] pr-4"
+            />
+          )}
 
           <h1 className={classes.title}>
             {pageTitle}
@@ -576,7 +603,7 @@ export default function DashboardLayout({
                   <div className="py-1.5">
                     <button
                       type="button"
-                      onClick={() => { setShowProfileMenu(false); navigate("/dashboard/settings"); }}
+                      onClick={() => { setShowProfileMenu(false); openSettings("profile"); }}
                       className={classes.menuItem}
                     >
                       <User size={15} />
@@ -584,7 +611,7 @@ export default function DashboardLayout({
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setShowProfileMenu(false); navigate("/dashboard/settings"); }}
+                      onClick={() => { setShowProfileMenu(false); openSettings(); }}
                       className={classes.menuItem}
                     >
                       <Settings size={15} />
@@ -592,7 +619,7 @@ export default function DashboardLayout({
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setShowProfileMenu(false); navigate("/dashboard/settings"); }}
+                      onClick={() => { setShowProfileMenu(false); openSettings("security"); }}
                       className={classes.menuItem}
                     >
                       <Shield size={15} />

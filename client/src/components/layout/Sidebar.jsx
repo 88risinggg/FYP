@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { ChevronDown, PanelLeftClose, X } from "lucide-react";
 
 import VanidayLogo from "../branding/VanidayLogo.jsx";
@@ -17,6 +17,7 @@ export default function Sidebar({
   onClose,
   desktopCollapsed = false,
   onToggleDesktop,
+  homePath,
   theme
 }) {
   const location = useLocation();
@@ -56,7 +57,19 @@ export default function Sidebar({
       className={`${classes.aside} ${mobileOpen ? "translate-x-0" : "-translate-x-full"} ${desktopCollapsed ? "lg:pointer-events-none lg:invisible lg:-translate-x-full" : "lg:visible lg:translate-x-0"}`}
     >
       <div className={`flex h-20 items-center gap-3 border-b px-5 ${classes.headerBorder}`}>
-        <VanidayLogo compact className="min-w-0 flex-1" />
+        {homePath ? (
+          <Link
+            to={homePath}
+            onClick={onClose}
+            aria-label="Go to dashboard"
+            title="Go to dashboard"
+            className="min-w-0 flex-1 rounded-md outline-none transition-opacity hover:opacity-75 focus-visible:ring-2 focus-visible:ring-[#F38978]/45"
+          >
+            <VanidayLogo compact />
+          </Link>
+        ) : (
+          <VanidayLogo compact className="min-w-0 flex-1" />
+        )}
         {onToggleDesktop ? (
           <button
             type="button"

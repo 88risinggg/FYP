@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
+import { useLocation } from "react-router-dom";
 import { getStoredSession } from "../../services/sessionService.js";
 import { SETTINGS_SAVE_RESULT_EVENT } from "../../services/settingsEvents.js";
 
@@ -61,8 +62,30 @@ const floatingSaveSections = new Set([
   "profile", "security", "notifications", "invoice", "payroll", "company", "api", "appearance", "language", "privacy"
 ]);
 
+export function resolveSettingsHomePath(from = "", user = {}) {
+  const moduleHomes = [
+    ["/dashboard/invoicing/admin", "/dashboard/invoicing/admin"],
+    ["/dashboard/payroll/admin", "/dashboard/payroll/admin"],
+    ["/dashboard/invoicing/finance", "/dashboard/invoicing/finance"],
+    ["/dashboard/payroll/finance", "/dashboard/payroll/finance"],
+    ["/dashboard/payroll/hr", "/dashboard/payroll/hr"],
+    ["/dashboard/payroll/staff", "/dashboard/payroll/staff"]
+  ];
+  const matchedHome = moduleHomes.find(([prefix]) => String(from).startsWith(prefix));
+  if (matchedHome) return matchedHome[1];
+
+  const allowedModules = user.allowedModules || [];
+  if (user.role === "Admin" && allowedModules.length === 1) {
+    if (allowedModules.includes("invoicing")) return "/dashboard/invoicing/admin";
+    if (allowedModules.includes("payroll")) return "/dashboard/payroll/admin";
+  }
+  return "/module-selection";
+}
+
 export default function SettingsPage() {
   const session = getStoredSession();
+  const location = useLocation();
+  const homePath = resolveSettingsHomePath(location.state?.from, session?.user);
   const requestedSection = new URLSearchParams(window.location.search).get("section");
   const [activeSection, setActiveSection] = useState(
     settingsMenu.some((item) => item.id === requestedSection) ? requestedSection : "profile"
@@ -175,6 +198,7 @@ export default function SettingsPage() {
       user={session?.user}
       searchPlaceholder="Search settings..."
       hideSidebar
+      homePath={homePath}
       onSearch={setSettingsSearch}
     >
       <section className="flex flex-col gap-6 pb-24 lg:flex-row">

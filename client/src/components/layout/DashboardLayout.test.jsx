@@ -28,6 +28,13 @@ afterEach(() => {
 });
 
 describe("DashboardLayout search", () => {
+  it("uses the Vaniday logo as a module dashboard link when a home path is provided", () => {
+    renderLayout({ homePath: "/dashboard/payroll/admin" });
+
+    fireEvent.click(screen.getByRole("link", { name: "Go to dashboard" }));
+    expect(screen.getByTestId("location").textContent).toBe("/dashboard/payroll/admin");
+  });
+
   it("does not render an inert search input", () => {
     renderLayout({ searchPlaceholder: "Decorative search" });
     expect(screen.queryByPlaceholderText("Decorative search")).toBeNull();
