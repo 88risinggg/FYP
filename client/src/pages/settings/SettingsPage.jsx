@@ -73,6 +73,10 @@ const sidebarSections = [
 export default function SettingsPage() {
   const session = getStoredSession();
   const [activeSection, setActiveSection] = useState("profile");
+  const [settingsSearch, setSettingsSearch] = useState("");
+  const visibleSettings = settingsMenu.filter((item) =>
+    item.label.toLowerCase().includes(settingsSearch.trim().toLowerCase())
+  );
 
   function renderSection() {
     switch (activeSection) {
@@ -118,13 +122,14 @@ export default function SettingsPage() {
       sidebarSections={sidebarSections}
       sidebarTitle="Automated Invoicing & Payroll System"
       searchPlaceholder="Search settings..."
+      onSearch={setSettingsSearch}
     >
       <section className="flex flex-col gap-6 lg:flex-row">
         {/* Settings Sidebar */}
         <nav className="w-full shrink-0 lg:w-64">
           <div className="app-panel rounded-2xl p-3">
             <div className="space-y-0.5">
-              {settingsMenu.map((item) => {
+              {visibleSettings.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeSection === item.id;
                 const isDanger = item.id === "danger";
@@ -148,6 +153,9 @@ export default function SettingsPage() {
                   </button>
                 );
               })}
+              {visibleSettings.length === 0 ? (
+                <p className="px-3 py-4 text-center text-sm text-[#7b6660]">No settings sections match your search.</p>
+              ) : null}
             </div>
           </div>
         </nav>

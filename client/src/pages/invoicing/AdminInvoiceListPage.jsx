@@ -32,7 +32,8 @@ export default function AdminInvoiceListPage() {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [query, setQuery] = useState("");
+  const searchParam = params.get("search") || "";
+  const [query, setQuery] = useState(searchParam);
   const status = params.get("status") || "";
   const range = params.get("range") || "all-time";
   const invoiceId = params.get("invoiceId");
@@ -49,6 +50,10 @@ export default function AdminInvoiceListPage() {
     });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    setQuery(searchParam);
+  }, [searchParam]);
 
   const filtered = useMemo(() => {
     const start = range === "custom" && params.get("startDate") ? new Date(`${params.get("startDate")}T00:00:00`) : rangeStart(range);

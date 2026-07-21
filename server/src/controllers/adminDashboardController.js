@@ -7,6 +7,7 @@ const {
 const { getAdminEmailDeliveryData } = require("../models/adminEmailDeliveryModel");
 const {
   getAllInvoiceValidationErrors,
+  getInvoiceUploadHistory,
   getInvoiceValidationSummary
 } = require("../models/invoiceValidationSummaryModel");
 
@@ -169,9 +170,20 @@ async function getValidationSummary(req, res) {
   }
 }
 
+async function getValidationUploadHistory(req, res) {
+  try {
+    res.json(await getInvoiceUploadHistory(req.query));
+  } catch (error) {
+    console.error("[Admin invoice upload history] Failed to load records:", error);
+    res.status(500).json({
+      message: "Unable to load invoice upload history."
+    });
+  }
+}
+
 async function getValidationErrors(req, res) {
   try {
-    const errors = await getAllInvoiceValidationErrors();
+    const errors = await getAllInvoiceValidationErrors(req.query);
     res.json(errors);
   } catch (error) {
     res.status(500).json({
@@ -188,5 +200,6 @@ module.exports = {
   getPaymentReminderSummary,
   getPaymentUpdates,
   getValidationErrors,
+  getValidationUploadHistory,
   getValidationSummary
 };

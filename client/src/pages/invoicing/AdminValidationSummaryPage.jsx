@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  ArrowRight,
   CheckCircle2,
   Clock3,
   FileClock,
@@ -16,8 +17,11 @@ const statusStyles = {
   Pending: "bg-amber-50 text-amber-700",
   Validated: "bg-blue-50 text-blue-700",
   Successful: "bg-emerald-50 text-emerald-700",
+  "Partial Success": "bg-sky-50 text-sky-700",
   Failed: "bg-rose-50 text-rose-700"
 };
+
+const uploadHistoryPath = "/dashboard/invoicing/admin/dashboard/validation-summary/upload-history";
 
 function formatCount(value) {
   return new Intl.NumberFormat("en-SG").format(Number(value || 0));
@@ -64,18 +68,24 @@ function EmptyMessage({ children }) {
   );
 }
 
-function ResultCard({ title, value, note, icon: Icon, tone }) {
+function ResultCard({ title, value, note, icon: Icon, tone, to }) {
   return (
-    <section className="flex min-h-44 flex-col justify-between rounded-xl border border-[#f0d2ca] bg-white/95 p-5 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
-      <span className={`flex h-10 w-10 items-center justify-center rounded-full ${tone}`}>
-        <Icon size={20} />
-      </span>
+    <Link
+      to={to}
+      className="group flex min-h-44 flex-col justify-between rounded-xl border border-[#f0d2ca] bg-white/95 p-5 shadow-[0_10px_28px_rgba(37,30,31,0.06)] transition hover:-translate-y-0.5 hover:border-[#F38978] focus:outline-none focus:ring-2 focus:ring-[#F38978]"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span className={`flex h-10 w-10 items-center justify-center rounded-full ${tone}`}>
+          <Icon size={20} />
+        </span>
+        <ArrowRight size={18} className="text-[#b99b93] transition group-hover:translate-x-0.5 group-hover:text-[#F38978]" />
+      </div>
       <div>
         <p className="text-sm font-bold text-[#514440]">{title}</p>
         <p className="mt-2 text-3xl font-bold text-[#251E1F]">{formatCount(value)}</p>
         <p className="mt-2 text-xs text-[#7b6660]">{note}</p>
       </div>
-    </section>
+    </Link>
   );
 }
 
@@ -113,6 +123,12 @@ function ErrorReport({ upload }) {
           <span>{upload.errorMessage}</span>
         </div>
       ) : null}
+      <Link
+        to={`/dashboard/invoicing/admin/dashboard/validation-errors?uploadId=${upload.uploadId}`}
+        className="inline-flex items-center gap-2 text-sm font-bold text-[#F38978] hover:text-[#d96858]"
+      >
+        View Error Report <ArrowRight size={15} />
+      </Link>
     </div>
   );
 }
@@ -212,6 +228,14 @@ export default function AdminValidationSummaryPage() {
     load();
   }, []);
 
+  useEffect(() => {
+    if (!loading && window.location.hash === "#recent-uploads") {
+      window.requestAnimationFrame(() => {
+        document.getElementById("recent-uploads")?.scrollIntoView({ block: "start" });
+      });
+    }
+  }, [loading]);
+
   if (loading) {
     return <div className="rounded-xl border border-[#f0d2ca] bg-white p-8 text-center text-[#514440]">Loading validation summary...</div>;
   }
@@ -238,9 +262,9 @@ export default function AdminValidationSummaryPage() {
         {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div> : null}
 
         <div className="grid gap-4 md:grid-cols-3">
-          <ResultCard title="Recent Uploads" value={recentUploads.length} note="Latest 5 invoice upload attempts, newest first" icon={FileClock} tone="bg-blue-50 text-blue-700" />
-          <ResultCard title="Successful Uploads" value={summary.successfulUploads} note="Successfully processed uploads (all time)" icon={CheckCircle2} tone="bg-emerald-50 text-emerald-700" />
-          <ResultCard title="Failed Uploads" value={summary.failedUploads} note="Failed validation or processing (all time)" icon={XCircle} tone="bg-rose-50 text-rose-700" />
+          <ResultCard title="Total Uploads" value={summary.totalUploads} note="All recorded invoice upload batches" icon={FileClock} tone="bg-blue-50 text-blue-700" to={uploadHistoryPath} />
+          <ResultCard title="Successful Uploads" value={summary.successfulUploads} note="Fully successful upload batches (all time)" icon={CheckCircle2} tone="bg-emerald-50 text-emerald-700" to={`${uploadHistoryPath}?status=Successful`} />
+          <ResultCard title="Failed Uploads" value={summary.failedUploads} note="Failed validation or processing batches (all time)" icon={XCircle} tone="bg-rose-50 text-rose-700" to={`${uploadHistoryPath}?status=Failed`} />
         </div>
 
         <div className="grid gap-4 xl:grid-cols-2">
@@ -263,10 +287,23 @@ export default function AdminValidationSummaryPage() {
           </Panel>
         </div>
 
-        <Panel title="Upload History" icon={Clock3}>
-          <p className="mb-4 text-xs text-[#7b6660]">All recorded invoice upload attempts, newest first.</p>
-          <UploadHistory uploads={data?.uploadHistory || []} />
-        </Panel>
+        <div id="recent-uploads" className="scroll-mt-24">
+          <Panel
+            title="Recent Uploads"
+            icon={Clock3}
+            action={(
+              <Link
+                to={uploadHistoryPath}
+                className="inline-flex items-center gap-2 rounded-lg border border-[#ead3cc] bg-white px-3 py-2 text-xs font-bold text-[#514440] hover:border-[#F38978] hover:text-[#F38978]"
+              >
+                View All Uploads <ArrowRight size={14} />
+              </Link>
+            )}
+          >
+            <p className="mb-4 text-xs text-[#7b6660]">Latest 5 recorded invoice upload batches, newest first.</p>
+            <UploadHistory uploads={recentUploads} />
+          </Panel>
+        </div>
       </div>
     </section>
   );
