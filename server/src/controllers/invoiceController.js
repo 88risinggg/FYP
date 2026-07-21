@@ -574,10 +574,14 @@ async function sendInvoice(req, res) {
     }
 
     // Fetch line items for PDF
-    const [items] = await connection.query(
-      "SELECT description, quantity, unit_price, amount FROM invoice_item WHERE invoice_invoice_id = ?",
-      [invoiceId]
-    );
+    let items = [];
+    try {
+      const [itemRows] = await connection.query(
+        "SELECT description, quantity, unit_price, amount FROM invoice_item WHERE invoice_invoice_id = ?",
+        [invoiceId]
+      );
+      items = itemRows;
+    } catch { /* invoice_item table may not exist */ }
     invoice.items = items;
 
     // If no items from invoice_item, try items_json
@@ -665,9 +669,13 @@ async function sendInvoice(req, res) {
     });
   } catch (error) {
     await connection.rollback();
-    await writeAuditLog(connection, "invoice_email_failed", "invoice", invoiceId, req.user?.userId, {
-      newValue: JSON.stringify({ emailType: "Invoice Issued", message: error.message, errorCode: error.code, triggerSource: "Finance" })
-    });
+    console.error("[SEND INVOICE] Error:", error.message, error.code, error.type);
+    // Attempt audit log — may fail if connection is in a bad state
+    try {
+      await writeAuditLog(connection, "invoice_email_failed", "invoice", invoiceId, req.user?.userId, {
+        newValue: JSON.stringify({ emailType: "Invoice Issued", message: error.message, errorCode: error.code, triggerSource: "Finance" })
+      });
+    } catch { /* non-critical */ }
     res.status(500).json({
       message: "Failed to send invoice.",
       detail: error.message

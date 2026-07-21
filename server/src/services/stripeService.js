@@ -62,7 +62,7 @@ async function createCheckoutSession(invoice) {
   const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
   const session = await stripe.checkout.sessions.create({
-    payment_method_types: ["card", "paynow"],
+    payment_method_types: ["card"],
     line_items: [{
       price_data: {
         currency: "sgd",
@@ -77,7 +77,7 @@ async function createCheckoutSession(invoice) {
     mode: "payment",
     success_url: `${process.env.CLIENT_URL || "http://localhost:5173"}/payment/success?invoice=${invoice.invoiceId}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${process.env.CLIENT_URL || "http://localhost:5173"}/payment/cancelled?invoice=${invoice.invoiceId}`,
-    customer_email: invoice.customer_email,
+    customer_email: invoice.customer_email || undefined,
     metadata: {
       invoice_id: String(invoice.invoice_id),
       invoiceId: invoice.invoiceId

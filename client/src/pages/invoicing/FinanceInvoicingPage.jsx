@@ -25,6 +25,7 @@ import {
   Settings2,
   ShieldAlert,
   ShieldCheck,
+  Trash2,
   TrendingUp,
   Upload,
   X
@@ -83,7 +84,34 @@ const financeSidebarSections = [
         label: "Dashboard",
         icon: LayoutDashboard,
         path: "/dashboard/invoicing/finance",
-        end: true
+        end: true,
+        children: [
+          {
+            label: "Overview",
+            path: "/dashboard/invoicing/finance",
+            end: true
+          },
+          {
+            label: "Customers",
+            path: "/dashboard/invoicing/finance/customers"
+          },
+          {
+            label: "Invoices",
+            path: "/dashboard/invoicing/finance/invoices"
+          },
+          {
+            label: "Payments",
+            path: "/dashboard/invoicing/finance/payments"
+          },
+          {
+            label: "Fraud Detection",
+            path: "/dashboard/invoicing/finance/fraud"
+          },
+          {
+            label: "Reports",
+            path: "/dashboard/invoicing/finance/reports"
+          }
+        ]
       }
     ]
   },
@@ -3678,12 +3706,14 @@ export default function FinanceInvoicingPage() {
       pageTitle="Automated Invoicing System - Finance Invoice Management"
       user={session?.user}
       sidebarSections={financeSidebarSections}
+      sidebarTitle="Automated Invoicing & Payroll System"
       searchPlaceholder="Search invoices, customers, payments..."
       onSearch={handleGlobalSearch}
       notifications={notifications}
       notificationBadgeCount={notificationBadgeCount}
       onMarkNotificationRead={handleMarkNotificationRead}
       onMarkAllRead={handleMarkAllRead}
+      theme="adminInvoicing"
     >
       <div className="space-y-6">
         {renderActiveView()}
