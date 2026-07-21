@@ -49,6 +49,7 @@ import {
   getShgBandAmount,
   resolveFinancePayrollConfig
 } from "../../utils/payrollRules.js";
+import { createPayrollReportPdf } from "../../utils/payrollReportPdf.js";
 import FinanceRequestsPage from "./FinanceRequestsPage.jsx";
 
 /*
@@ -1196,141 +1197,16 @@ function getCpfDeductionProcessRows(run) {
 // 6. PDF generation helpers
 // -----------------------------------------------------------------------------
 
-function escapePdfText(value) {
-  return String(value ?? "")
-    .replaceAll("\\", "\\\\")
-    .replaceAll("(", "\\(")
-    .replaceAll(")", "\\)");
-}
-
-function wrapPdfText(value, maxLength = 28) {
-  const words = String(value ?? "").split(" ");
-  const lines = [];
-  let currentLine = "";
-
-  words.forEach((word) => {
-    const nextLine = currentLine ? `${currentLine} ${word}` : word;
-
-    if (nextLine.length > maxLength) {
-      if (currentLine) lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine = nextLine;
-    }
-  });
-
-  if (currentLine) lines.push(currentLine);
-  return lines.length ? lines : [""];
-}
-
 function createPdfBlob({ footer, summaryRows = [], tableRows = [], subtitle, title }) {
-  const commands = [];
-  const page = { width: 612, height: 792, margin: 42 };
-  let y = 708;
-
-  const rect = (x, rectY, width, height, color) => {
-    commands.push("q", `${color} rg`, `${x} ${rectY} ${width} ${height} re`, "f", "Q");
-  };
-  const line = (x1, y1, x2, y2, color = "0.82 0.77 0.88", width = 1) => {
-    commands.push("q", `${color} RG`, `${width} w`, `${x1} ${y1} m`, `${x2} ${y2} l`, "S", "Q");
-  };
-  const text = (value, x, textY, size = 9, color = "0.12 0.08 0.18") => {
-    commands.push(
-      "BT",
-      `${color} rg`,
-      `/F1 ${size} Tf`,
-      `${x} ${textY} Td`,
-      `(${escapePdfText(value)}) Tj`,
-      "ET"
-    );
-  };
-
-  rect(0, 0, page.width, page.height, "0.98 0.97 1");
-  rect(0, 724, page.width, 68, "0.20 0.04 0.36");
-  rect(0, 720, page.width, 4, "0.78 0.30 1");
-  text("AUTOMATED PAYROLL SYSTEM", page.margin, 765, 10, "0.90 0.80 1");
-  text(title, page.margin, 742, 20, "1 1 1");
-  text(`Generated: ${formatDateTime(new Date())}`, 398, 746, 9, "0.90 0.80 1");
-  text(subtitle, page.margin, 704, 10, "0.42 0.25 0.58");
-
-  if (summaryRows.length) {
-    text("Summary", page.margin, y - 28, 14, "0.12 0.08 0.18");
-    y -= 48;
-
-    const cardWidth = 254;
-    summaryRows.slice(0, 8).forEach(([label, detail, value], index) => {
-      const x = page.margin + (index % 2) * (cardWidth + 20);
-      const cardY = y - Math.floor(index / 2) * 58;
-
-      rect(x, cardY - 40, cardWidth, 48, "1 1 1");
-      line(x, cardY - 40, x + cardWidth, cardY - 40, "0.78 0.30 1", 0.8);
-      text(label, x + 12, cardY - 8, 8, "0.42 0.25 0.58");
-      text(detail, x + 12, cardY - 22, 9, "0.12 0.08 0.18");
-      text(value, x + 142, cardY - 22, 9, "0.12 0.08 0.18");
-    });
-
-    y -= Math.ceil(summaryRows.slice(0, 8).length / 2) * 58 + 8;
-  }
-
-  if (tableRows.length) {
-    const [headers, ...rows] = tableRows;
-    const tableWidth = page.width - page.margin * 2;
-    const columnWidth = tableWidth / headers.length;
-
-    text("Details", page.margin, y, 14, "0.12 0.08 0.18");
-    y -= 24;
-    rect(page.margin, y - 16, tableWidth, 24, "0.93 0.88 0.98");
-    headers.forEach((header, index) => {
-      text(header, page.margin + index * columnWidth + 8, y - 7, 7, "0.30 0.12 0.48");
-    });
-    y -= 20;
-
-    rows.slice(0, 18).forEach((row, rowIndex) => {
-      const wrappedColumns = row.map((cell) => wrapPdfText(cell, headers.length > 4 ? 18 : 26));
-      const rowHeight = Math.max(30, Math.max(...wrappedColumns.map((column) => column.length)) * 10 + 14);
-
-      rect(page.margin, y - rowHeight + 8, tableWidth, rowHeight, rowIndex % 2 === 0 ? "1 1 1" : "0.96 0.94 0.98");
-      wrappedColumns.forEach((lines, columnIndex) => {
-        lines.slice(0, 3).forEach((lineText, lineIndex) => {
-          text(lineText, page.margin + columnIndex * columnWidth + 8, y - 8 - lineIndex * 10, 7, "0.12 0.08 0.18");
-        });
-      });
-      y -= rowHeight;
-    });
-
-    if (rows.length > 18) {
-      text(`Showing first 18 of ${rows.length} rows.`, page.margin, y - 8, 8, "0.42 0.25 0.58");
-    }
-  }
-
-  line(page.margin, 42, page.width - page.margin, 42);
-  text(footer || "Prepared by Finance Payroll.", page.margin, 26, 8, "0.42 0.25 0.58");
-
-  const content = commands.join("\n");
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`
-  ];
-  const offsets = [0];
-  let pdf = "%PDF-1.4\n";
-
-  objects.forEach((object, index) => {
-    offsets.push(pdf.length);
-    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  return createPayrollReportPdf({
+    category: "FINANCE PAYROLL",
+    categorySubtitle: "Payroll controls, statutory reporting and reconciliation",
+    footer: footer || "Prepared by Finance Payroll.",
+    summaryRows,
+    tableRows,
+    subtitle,
+    title
   });
-
-  const xrefOffset = pdf.length;
-  pdf += `xref\n0 ${objects.length + 1}\n`;
-  pdf += "0000000000 65535 f \n";
-  offsets.slice(1).forEach((offset) => {
-    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
-  });
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-
-  return new Blob([pdf], { type: "application/pdf" });
 }
 
 function downloadPdf(filename, pdfBlob) {

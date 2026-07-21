@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
+import VanidayLogo from "../components/branding/VanidayLogo.jsx";
 import { clearSession, getStoredSession } from "../services/sessionService.js";
 
 const moduleDetails = {
@@ -96,16 +97,8 @@ export default function ModuleSelectionPage() {
 
       <div className="relative z-10 mx-auto flex min-h-[calc(100vh-3rem)] max-w-6xl flex-col">
         <header className="flex items-center justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#ead3cc] bg-white/800 text-sm font-bold shadow-lg shadow-[#251E1F]/10 backdrop-blur">
-              AIP
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-[#251E1F]">
-                Automated Invoicing & Payroll System
-              </p>
-              <p className="text-xs text-[#7b6660]/70">Secure module launcher</p>
-            </div>
+          <div className="rounded-xl border border-[#ead3cc] bg-white/800 px-4 py-3 shadow-lg shadow-[#251E1F]/10 backdrop-blur">
+            <VanidayLogo />
           </div>
 
           <button

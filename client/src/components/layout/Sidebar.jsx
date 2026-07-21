@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { ChevronDown, ClipboardList, PanelLeftClose, X } from "lucide-react";
+import { ChevronDown, PanelLeftClose, X } from "lucide-react";
+
+import VanidayLogo from "../branding/VanidayLogo.jsx";
 
 function isPathActive(pathname, item) {
   if (!item?.path) return false;
@@ -22,7 +24,6 @@ export default function Sidebar({
   const classes = {
     aside: "fixed inset-y-0 left-0 z-30 w-64 border-r border-[#f2d5cc] bg-gradient-to-b from-[#fff8f5] via-[#fff3ee] to-[#FDD9CD]/80 shadow-2xl shadow-[#f2b5a9]/20 backdrop-blur-2xl transition-transform duration-200 ease-out lg:flex lg:flex-col",
     headerBorder: "border-[#f2d5cc]",
-    logo: "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F38978]/15 text-[#F38978] ring-1 ring-[#F38978]/25 shadow-lg shadow-[#F38978]/15",
     toggleButton: "ml-auto hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[#6f4f47] transition hover:bg-[#FDD9CD]/45 hover:text-[#F38978] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]/45 lg:inline-flex",
     sectionLabel: "mb-3 px-2 text-[11px] font-bold uppercase tracking-wide text-[#b06b5f]",
     itemBase: "flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[#F38978]/45",
@@ -55,10 +56,7 @@ export default function Sidebar({
       className={`${classes.aside} ${mobileOpen ? "translate-x-0" : "-translate-x-full"} ${desktopCollapsed ? "lg:pointer-events-none lg:invisible lg:-translate-x-full" : "lg:visible lg:translate-x-0"}`}
     >
       <div className={`flex h-20 items-center gap-3 border-b px-5 ${classes.headerBorder}`}>
-        <div className={classes.logo}>
-          <ClipboardList size={23} strokeWidth={2.2} />
-        </div>
-        <p className="min-w-0 flex-1 text-sm font-semibold leading-5 text-[#251E1F]">{title}</p>
+        <VanidayLogo compact className="min-w-0 flex-1" />
         {onToggleDesktop ? (
           <button
             type="button"

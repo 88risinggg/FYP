@@ -5,8 +5,6 @@
  * Uses html-pdf-node to render HTML to a PDF buffer.
  */
 
-const puppeteer = require("puppeteer-core");
-
 /**
  * Get the Puppeteer browser executable path.
  */
@@ -30,6 +28,7 @@ function getExecutablePath() {
  * @returns {Buffer} PDF file buffer.
  */
 async function generatePayslipPDF(payslip) {
+  const puppeteer = await import("puppeteer-core");
   const html = buildPayslipHtml(payslip);
 
   const browser = await puppeteer.launch({

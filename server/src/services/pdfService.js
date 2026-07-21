@@ -8,7 +8,6 @@
 
 const fs = require("fs/promises");
 const path = require("path");
-const puppeteer = require("puppeteer-core");
 
 const { pool } = require("../config/db");
 const { defaultSettings, getInvoiceSettings } = require("../models/invoiceSettingsModel");
@@ -353,8 +352,8 @@ function buildSummarySection(invoice, settings) {
     taxRow = `<tr><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;font-weight:800;text-transform:uppercase;">${escapeHtml(settings.taxName)} (${settings.taxPercentage}%)</td><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;text-align:right;">${formatMoney(taxAmount, settings)}</td></tr>`;
   }
 
-  return `<section style="display:grid;grid-template-columns:56% 44%;break-inside:avoid;border-bottom:.35mm solid ${primary};">
-    <div style="display:grid;grid-template-columns:13mm 1fr;align-items:center;align-self:end;min-height:18mm;padding-bottom:2mm;">
+  return `<section class="summary">
+    <div class="due-panel">
       <div style="width:10mm;height:10mm;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${primary};color:white;">
         <svg viewBox="0 0 24 24" width="5mm" height="5mm" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
       </div>
@@ -550,6 +549,8 @@ function buildInvoiceHtml(invoice, settings = defaultSettings, options = {}) {
     ${dynamicStyles}
     .logo-image { max-width: 62mm; max-height: 16.5mm; object-fit: contain; object-position: left top; }
     .wordmark { color: ${settings.primaryColor || "#07132f"}; font-family: Georgia, "Times New Roman", serif; font-size: 25pt; line-height: 1; font-weight: 700; letter-spacing: .8px; white-space: nowrap; }
+    .summary { display: grid; grid-template-columns: 56% 44%; break-inside: avoid; border-bottom: .35mm solid var(--primary); }
+    .due-panel { display: grid; grid-template-columns: 13mm 1fr; align-items: center; align-self: end; min-height: 18mm; padding-bottom: 2mm; }
   </style>
 </head>
 <body>
@@ -573,6 +574,7 @@ function buildInvoiceHtml(invoice, settings = defaultSettings, options = {}) {
 // =====================================================
 
 async function generateInvoicePDF(invoice, options = {}) {
+  const puppeteer = await import("puppeteer-core");
   const hydratedInvoice = await hydrateInvoice(invoice);
   const settings = {
     ...defaultSettings,

@@ -22,6 +22,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { login } from "../services/authService.js";
 import { startHealthCheck } from "../services/apiClient.js";
 import { saveSession } from "../services/sessionService.js";
+import VanidayLogo from "../components/branding/VanidayLogo.jsx";
 
 const features = [
   {
@@ -216,13 +217,8 @@ export default function LoginPage() {
 
         <header className="relative z-20 border-b border-[#f0d2ca] bg-white/800 backdrop-blur-xl">
           <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
-            <a href="#top" className="flex min-w-0 items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#F38978]/30 bg-[#F38978]/10 text-sm font-bold text-[#6f5b55] shadow-lg shadow-[#F38978]/25">
-                AIP
-              </div>
-              <span className="truncate text-sm font-semibold text-[#251E1F] sm:text-base">
-                Automated Invoicing & Payroll System
-              </span>
+            <a href="#top" className="flex min-w-0 items-center" aria-label="Vaniday home">
+              <VanidayLogo />
             </a>
 
             <nav className="hidden items-center gap-7 text-sm font-medium text-[#6f5b55] lg:flex">
@@ -557,9 +553,7 @@ export default function LoginPage() {
               </button>
 
               <div className="pr-8">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#F38978] to-[#F38978] text-sm font-bold text-[#251E1F] shadow-lg shadow-[#F38978]/30">
-                  AIP
-                </div>
+                <VanidayLogo compact />
                 <h2 className="mt-6 text-2xl font-semibold tracking-normal text-[#251E1F]">
                   Login to System
                 </h2>

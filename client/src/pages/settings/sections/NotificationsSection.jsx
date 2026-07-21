@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bell, Check, Loader2, X } from "lucide-react";
 import { fetchNotificationSettings, updateNotificationSettings } from "../../../services/settingsService.js";
+import { reportSettingsSaveResult } from "../../../services/settingsEvents.js";
 
 const invoiceNotifications = [
   { key: "invoice_approved", label: "Invoice Approved" },
@@ -59,8 +60,10 @@ export default function NotificationsSection() {
     try {
       await updateNotificationSettings(prefs);
       showToast("Notification preferences saved");
+      reportSettingsSaveResult(true);
     } catch (err) {
       showToast(err.message, "error");
+      reportSettingsSaveResult(false);
     } finally {
       setSaving(false);
     }
@@ -97,7 +100,7 @@ export default function NotificationsSection() {
         </div>
 
         <div className="mt-6 pt-4 border-t border-[#ead3cc]">
-          <button type="button" onClick={handleSave} disabled={saving}
+          <button type="button" data-settings-save onClick={handleSave} disabled={saving}
             className="primary-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
             Save Preferences
@@ -126,9 +129,9 @@ function NotificationGroup({ title, items, prefs, onToggle }) {
 
 function Toggle({ checked, onChange }) {
   return (
-    <button type="button" onClick={onChange}
-      className={`relative h-6 w-11 rounded-full transition-colors duration-200 ${checked ? "bg-[#F38978]" : "bg-[#f0d2ca]"}`}>
-      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${checked ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+    <button type="button" data-settings-control onClick={onChange}
+      className={`relative ml-3 h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${checked ? "bg-[#F38978]" : "bg-[#f0d2ca]"}`}>
+      <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${checked ? "translate-x-5" : "translate-x-0"}`} />
     </button>
   );
 }

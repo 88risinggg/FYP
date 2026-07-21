@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Loader2, Wallet, X } from "lucide-react";
 import { fetchPayrollSettings, updatePayrollSettings } from "../../../services/settingsService.js";
+import { reportSettingsSaveResult } from "../../../services/settingsEvents.js";
 
 export default function PayrollSettingsSection() {
   const [form, setForm] = useState({
@@ -46,7 +47,8 @@ export default function PayrollSettingsSection() {
     try {
       await updatePayrollSettings(form);
       showToast("Payroll settings saved");
-    } catch (err) { showToast(err.message, "error"); }
+      reportSettingsSaveResult(true);
+    } catch (err) { showToast(err.message, "error"); reportSettingsSaveResult(false); }
     finally { setSaving(false); }
   }
 
@@ -88,7 +90,7 @@ export default function PayrollSettingsSection() {
             <ToggleRow label="Payroll Lock" name="payroll_lock" checked={form.payroll_lock} onChange={handleChange} />
           </div>
 
-          <button type="submit" disabled={saving}
+          <button type="submit" data-settings-save disabled={saving}
             className="primary-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
             Save Settings
@@ -127,8 +129,8 @@ function ToggleRow({ label, name, checked, onChange }) {
       <span className="text-sm text-[#251E1F]">{label}</span>
       <label className="relative cursor-pointer">
         <input type="checkbox" name={name} checked={checked} onChange={onChange} className="peer sr-only" />
-        <div className="h-6 w-11 rounded-full bg-[#f0d2ca] transition peer-checked:bg-[#F38978]" />
-        <div className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-[22px]" />
+        <div className="h-6 w-11 shrink-0 rounded-full bg-[#f0d2ca] transition peer-checked:bg-[#F38978]" />
+        <div className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
       </label>
     </div>
   );

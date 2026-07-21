@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Check, Monitor, Moon, Palette, Sun, X } from "lucide-react";
+import { applyAppearance, DEFAULT_APPEARANCE, normalizeAppearance } from "../../../services/appearanceService.js";
 import { fetchAppearance, updateAppearance } from "../../../services/settingsService.js";
+import { reportSettingsSaveResult } from "../../../services/settingsEvents.js";
 
 const themes = [
   { id: "light", label: "Light", icon: Sun },
@@ -10,11 +12,11 @@ const themes = [
 
 const accentColors = [
   { value: "#F38978", label: "Coral" },
-  { value: "#F26E5F", label: "Pink" },
-  { value: "#3269A8", label: "Blue" },
-  { value: "#34D399", label: "Green" },
-  { value: "#F59E0B", label: "Amber" },
-  { value: "#FB7185", label: "Rose" }
+  { value: "#E9A17B", label: "Peach" },
+  { value: "#D98FA3", label: "Blush" },
+  { value: "#A591C7", label: "Lavender" },
+  { value: "#7FA6C9", label: "Powder Blue" },
+  { value: "#83A991", label: "Sage" }
 ];
 
 const fontSizes = [
@@ -24,13 +26,9 @@ const fontSizes = [
 ];
 
 export default function AppearanceSection() {
-  const [settings, setSettings] = useState({
-    theme: "system",
-    accent_color: "#F38978",
-    compact_mode: false,
-    font_size: "medium"
-  });
+  const [settings, setSettings] = useState(DEFAULT_APPEARANCE);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
 
   useEffect(() => { loadSettings(); }, []);
@@ -38,7 +36,9 @@ export default function AppearanceSection() {
   async function loadSettings() {
     try {
       const data = await fetchAppearance();
-      setSettings((prev) => ({ ...prev, ...data }));
+      const nextSettings = normalizeAppearance(data);
+      setSettings(nextSettings);
+      applyAppearance(nextSettings);
     } catch (err) { /* ignore */ }
     finally { setLoading(false); }
   }
@@ -48,12 +48,24 @@ export default function AppearanceSection() {
     setTimeout(() => setToast(null), 4000);
   }
 
-  async function save(newSettings) {
-    setSettings(newSettings);
+  function updateDraft(newSettings) {
+    const normalizedSettings = applyAppearance(newSettings, { persist: false });
+    setSettings(normalizedSettings);
+  }
+
+  async function handleSave() {
+    setSaving(true);
     try {
-      await updateAppearance(newSettings);
+      await updateAppearance(settings);
+      applyAppearance(settings);
       showToast("Appearance saved");
-    } catch (err) { showToast(err.message, "error"); }
+      reportSettingsSaveResult(true);
+    } catch (err) {
+      showToast(err.message, "error");
+      reportSettingsSaveResult(false);
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (loading) {
@@ -80,7 +92,7 @@ export default function AppearanceSection() {
                 const Icon = t.icon;
                 const isActive = settings.theme === t.id;
                 return (
-                  <button key={t.id} type="button" onClick={() => save({ ...settings, theme: t.id })}
+                  <button key={t.id} type="button" data-settings-control onClick={() => updateDraft({ ...settings, theme: t.id })}
                     className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition ${
                       isActive ? "border-[#F38978]/50 bg-[#F38978]/10 shadow-lg shadow-[#f2b5a9]/15" : "border-[#ead3cc] bg-[#fff3ee]/70 hover:bg-[#FDD9CD]/45"
                     }`}>
@@ -97,13 +109,17 @@ export default function AppearanceSection() {
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Accent Color</p>
             <div className="flex flex-wrap gap-3">
               {accentColors.map((c) => (
-                <button key={c.value} type="button" onClick={() => save({ ...settings, accent_color: c.value })}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
-                    settings.accent_color === c.value ? "ring-2 ring-[#f0d2ca] ring-offset-2 ring-offset-[#fff8f5]" : "hover:scale-110"
+                <button key={c.value} type="button" data-settings-control onClick={() => updateDraft({ ...settings, accent_color: c.value })}
+                  className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition ${
+                    settings.accent_color === c.value
+                      ? "border-[#F38978]/50 bg-white text-[#251E1F] shadow-md"
+                      : "border-[#ead3cc] bg-[#fff3ee]/70 text-[#7b6660] hover:-translate-y-0.5 hover:bg-white"
                   }`}
-                  style={{ backgroundColor: c.value }}
                   title={c.label}>
-                  {settings.accent_color === c.value && <Check size={14} className="text-[#251E1F]" />}
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full shadow-inner" style={{ backgroundColor: c.value }}>
+                    {settings.accent_color === c.value && <Check size={13} className="text-white drop-shadow" />}
+                  </span>
+                  {c.label}
                 </button>
               ))}
             </div>
@@ -114,7 +130,7 @@ export default function AppearanceSection() {
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Font Size</p>
             <div className="flex gap-3">
               {fontSizes.map((f) => (
-                <button key={f.value} type="button" onClick={() => save({ ...settings, font_size: f.value })}
+                <button key={f.value} type="button" data-settings-control onClick={() => updateDraft({ ...settings, font_size: f.value })}
                   className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition ${
                     settings.font_size === f.value
                     ? "border-[#F38978]/50 bg-[#F38978]/10 text-[#251E1F]"
@@ -132,11 +148,12 @@ export default function AppearanceSection() {
               <span className="text-sm font-medium text-[#251E1F]">Compact Mode</span>
               <p className="text-xs text-[#7b6660]">Reduce spacing and padding throughout the UI</p>
             </div>
-            <button type="button" onClick={() => save({ ...settings, compact_mode: !settings.compact_mode })}
-              className={`relative h-6 w-11 rounded-full transition ${settings.compact_mode ? "bg-[#F38978]" : "bg-[#f0d2ca]"}`}>
-              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${settings.compact_mode ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+            <button type="button" data-settings-control onClick={() => updateDraft({ ...settings, compact_mode: !settings.compact_mode })}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition ${settings.compact_mode ? "bg-[#F38978]" : "bg-[#f0d2ca]"}`}>
+              <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${settings.compact_mode ? "translate-x-5" : "translate-x-0"}`} />
             </button>
           </div>
+          <button type="button" data-settings-save onClick={handleSave} disabled={saving}>Save appearance</button>
         </div>
       </div>
     </div>

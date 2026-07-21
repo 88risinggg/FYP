@@ -9,6 +9,42 @@
 
 const { pool } = require("../config/db");
 
+let privacyTablesPromise;
+
+function ensurePrivacyTables() {
+  if (!privacyTablesPromise) {
+    privacyTablesPromise = Promise.all([
+      pool.query(`CREATE TABLE IF NOT EXISTS user_privacy_settings (
+        user_id INT NOT NULL PRIMARY KEY,
+        analytics_tracking TINYINT(1) NOT NULL DEFAULT 1,
+        profile_visible TINYINT(1) NOT NULL DEFAULT 1,
+        activity_visible TINYINT(1) NOT NULL DEFAULT 0,
+        analytics_cookies TINYINT(1) NOT NULL DEFAULT 1,
+        marketing_cookies TINYINT(1) NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )`),
+      pool.query(`CREATE TABLE IF NOT EXISTS account_action_requests (
+        request_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        user_name VARCHAR(255) NOT NULL,
+        user_email VARCHAR(255) NOT NULL,
+        request_type VARCHAR(40) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        reviewed_at TIMESTAMP NULL,
+        reviewed_by INT NULL,
+        review_note VARCHAR(500) NULL,
+        INDEX idx_account_requests_user (user_id, request_type, status),
+        INDEX idx_account_requests_status (request_type, status, requested_at)
+      )`)
+    ]).catch((error) => {
+      privacyTablesPromise = null;
+      throw error;
+    });
+  }
+  return privacyTablesPromise;
+}
+
 // ─── Profile ────────────────────────────────────────────────────────────────
 
 async function getProfile(userId) {
@@ -388,14 +424,19 @@ async function getAppearanceSettings(userId) {
 
 async function upsertAppearanceSettings(userId, data) {
   await pool.query(
-    `UPDATE user SET theme = ?, accent_color = ?, compact_mode = ?, font_size = ?, ui_language = ?
+    `UPDATE user SET
+       theme = COALESCE(?, theme),
+       accent_color = COALESCE(?, accent_color),
+       compact_mode = COALESCE(?, compact_mode),
+       font_size = COALESCE(?, font_size),
+       ui_language = COALESCE(?, ui_language)
      WHERE user_id = ?`,
     [
-      data.theme || "system",
-      data.accent_color || "#7B2FF7",
-      data.compact_mode ? 1 : 0,
-      data.font_size || "medium",
-      data.language || "en",
+      data.theme ?? null,
+      data.accent_color ?? null,
+      data.compact_mode === undefined ? null : (data.compact_mode ? 1 : 0),
+      data.font_size ?? null,
+      data.language ?? null,
       userId
     ]
   );
@@ -417,6 +458,165 @@ async function upsertApiSettings(userId, data) {
      WHERE user_id = ?`,
     [data.api_key, data.webhook_url || null, data.webhook_secret || null, data.webhooks_enabled ? 1 : 0, userId]
   );
+}
+
+// Privacy preferences and account action requests are kept separately so their
+// lifecycle and approval history remain available even if an account is deleted.
+async function getPrivacySettings(userId) {
+  await ensurePrivacyTables();
+  const [rows] = await pool.query(
+    `SELECT analytics_tracking, profile_visible, activity_visible,
+            analytics_cookies, marketing_cookies
+     FROM user_privacy_settings WHERE user_id = ?`,
+    [userId]
+  );
+  return rows[0] || {
+    analytics_tracking: 1,
+    profile_visible: 1,
+    activity_visible: 0,
+    analytics_cookies: 1,
+    marketing_cookies: 0
+  };
+}
+
+async function upsertPrivacySettings(userId, data) {
+  await ensurePrivacyTables();
+  const value = (key, fallback) => data[key] === undefined ? fallback : (data[key] ? 1 : 0);
+  await pool.query(
+    `INSERT INTO user_privacy_settings
+       (user_id, analytics_tracking, profile_visible, activity_visible, analytics_cookies, marketing_cookies)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       analytics_tracking = VALUES(analytics_tracking),
+       profile_visible = VALUES(profile_visible),
+       activity_visible = VALUES(activity_visible),
+       analytics_cookies = VALUES(analytics_cookies),
+       marketing_cookies = VALUES(marketing_cookies)`,
+    [userId, value("analytics_tracking", 1), value("profile_visible", 1), value("activity_visible", 0),
+      value("analytics_cookies", 1), value("marketing_cookies", 0)]
+  );
+  return getPrivacySettings(userId);
+}
+
+async function getPersonalDataExport(userId) {
+  await ensurePrivacyTables();
+  const [[users], privacy, notifications, appearance, audit] = await Promise.all([
+    pool.query("SELECT * FROM user WHERE user_id = ?", [userId]),
+    getPrivacySettings(userId),
+    getNotificationSettings(userId),
+    getAppearanceSettings(userId),
+    getSettingsAuditLogs(userId, { page: 1, limit: 1000, search: "", module: "" })
+  ]);
+  const account = { ...(users[0] || {}) };
+  ["password", "api_key", "webhook_secret", "recovery_codes"].forEach((field) => delete account[field]);
+  return { exported_at: new Date().toISOString(), account, privacy, notifications, appearance, audit_logs: audit.logs };
+}
+
+async function createAccountActionRequest(userId, requestType) {
+  await ensurePrivacyTables();
+  const [users] = await pool.query("SELECT name, email FROM user WHERE user_id = ?", [userId]);
+  if (!users[0]) return null;
+  const [pending] = await pool.query(
+    "SELECT * FROM account_action_requests WHERE user_id = ? AND request_type = ? AND status = 'pending' LIMIT 1",
+    [userId, requestType]
+  );
+  if (pending[0]) return { ...pending[0], alreadyPending: true };
+  const [result] = await pool.query(
+    `INSERT INTO account_action_requests (user_id, user_name, user_email, request_type)
+     VALUES (?, ?, ?, ?)`,
+    [userId, users[0].name, users[0].email, requestType]
+  );
+  return {
+    request_id: result.insertId,
+    user_id: userId,
+    user_name: users[0].name,
+    user_email: users[0].email,
+    status: "pending",
+    request_type: requestType,
+    alreadyPending: false
+  };
+}
+
+async function notifyAdminsOfDeletionRequest(request) {
+  const [admins] = await pool.query("SELECT user_id FROM user WHERE role_name = 'Admin' AND status = 1");
+  if (!admins.length) return 0;
+  const marker = `Deletion request #${request.request_id}`;
+  const [notified] = await pool.query(
+    "SELECT user_id FROM notification WHERE type = 'account_deletion_request' AND message LIKE ?",
+    [`%${marker}%`]
+  );
+  const notifiedIds = new Set(notified.map((item) => Number(item.user_id)));
+  const values = admins.filter((admin) => !notifiedIds.has(Number(admin.user_id))).map((admin) => [
+    admin.user_id,
+    "account_deletion_request",
+    "Account deletion approval required",
+    `${marker}: ${request.user_name} (${request.user_email}) requested account deletion. Review it in Settings > Danger Zone.`,
+    0,
+    new Date()
+  ]);
+  if (!values.length) return 0;
+  const [result] = await pool.query(
+    "INSERT INTO notification (user_id, type, title, message, is_read, created_at) VALUES ?",
+    [values]
+  );
+  return result.affectedRows || values.length;
+}
+
+async function listDeletionRequests() {
+  await ensurePrivacyTables();
+  const [rows] = await pool.query(
+    `SELECT request_id, user_id, user_name, user_email, status, requested_at, reviewed_at, reviewed_by, review_note
+     FROM account_action_requests WHERE request_type = 'account_deletion'
+     ORDER BY FIELD(status, 'pending', 'rejected', 'approved'), requested_at DESC`
+  );
+  return rows;
+}
+
+async function reviewDeletionRequest(requestId, adminId, decision, note = "") {
+  await ensurePrivacyTables();
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query(
+      "SELECT * FROM account_action_requests WHERE request_id = ? AND request_type = 'account_deletion' FOR UPDATE",
+      [requestId]
+    );
+    const request = rows[0];
+    if (!request || request.status !== "pending") {
+      await connection.rollback();
+      return null;
+    }
+    if (decision === "approved") {
+      await connection.query("DELETE FROM user WHERE user_id = ?", [request.user_id]);
+    }
+    await connection.query(
+      `UPDATE account_action_requests SET status = ?, reviewed_at = NOW(), reviewed_by = ?, review_note = ?
+       WHERE request_id = ?`,
+      [decision, adminId, note || null, requestId]
+    );
+    await connection.commit();
+    return { ...request, status: decision };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function resetUserSettings(userId) {
+  await ensurePrivacyTables();
+  await Promise.all([
+    pool.query(
+      `UPDATE user SET notification_preferences = NULL, payroll_config_json = NULL,
+       connected_accounts_json = NULL, theme = 'system', accent_color = '#F38978',
+       compact_mode = 0, font_size = 'medium', ui_language = 'en',
+       api_key = NULL, webhook_url = NULL, webhook_secret = NULL, webhooks_enabled = 0
+       WHERE user_id = ?`,
+      [userId]
+    ),
+    pool.query("DELETE FROM user_privacy_settings WHERE user_id = ?", [userId])
+  ]);
 }
 
 module.exports = {
@@ -447,5 +647,13 @@ module.exports = {
   getAppearanceSettings,
   upsertAppearanceSettings,
   getApiSettings,
-  upsertApiSettings
+  upsertApiSettings,
+  getPrivacySettings,
+  upsertPrivacySettings,
+  getPersonalDataExport,
+  createAccountActionRequest,
+  notifyAdminsOfDeletionRequest,
+  listDeletionRequests,
+  reviewDeletionRequest,
+  resetUserSettings
 };

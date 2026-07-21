@@ -203,3 +203,37 @@ export function deleteAccount(password) {
     body: JSON.stringify({ password })
   });
 }
+
+export function fetchPrivacySettings() {
+  return apiRequest("/api/settings/privacy");
+}
+
+export function updatePrivacySettings(data) {
+  return apiRequest("/api/settings/privacy", {
+    method: "PUT",
+    body: JSON.stringify(data)
+  });
+}
+
+export function exportPersonalData() {
+  return apiRequest("/api/settings/privacy/export");
+}
+
+export function requestAccountData() {
+  return apiRequest("/api/settings/privacy/data-request", { method: "POST" });
+}
+
+export function resetSettings() {
+  return apiRequest("/api/settings/reset-settings", { method: "POST" });
+}
+
+export function fetchDeletionRequests() {
+  return apiRequest("/api/settings/deletion-requests");
+}
+
+export function reviewDeletionRequest(requestId, decision, note = "") {
+  return apiRequest(`/api/settings/deletion-requests/${requestId}/review`, {
+    method: "POST",
+    body: JSON.stringify({ decision, note })
+  });
+}

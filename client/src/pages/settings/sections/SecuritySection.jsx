@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Download, Eye, EyeOff, Key, Loader2, Shield, Smartphone, X } from "lucide-react";
 import { changePassword, fetch2FA, update2FA, generateRecoveryCodes } from "../../../services/settingsService.js";
+import { reportSettingsSaveResult } from "../../../services/settingsEvents.js";
 
 export default function SecuritySection() {
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
@@ -51,10 +52,12 @@ export default function SecuritySection() {
     e.preventDefault();
     if (form.newPassword !== form.confirmPassword) {
       showToast("Passwords do not match", "error");
+      reportSettingsSaveResult(false);
       return;
     }
     if (form.newPassword.length < 8) {
       showToast("Password must be at least 8 characters", "error");
+      reportSettingsSaveResult(false);
       return;
     }
     setSaving(true);
@@ -62,8 +65,10 @@ export default function SecuritySection() {
       await changePassword({ currentPassword: form.currentPassword, newPassword: form.newPassword });
       showToast("Password changed successfully");
       setForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      reportSettingsSaveResult(true);
     } catch (err) {
       showToast(err.message, "error");
+      reportSettingsSaveResult(false);
     } finally {
       setSaving(false);
     }
@@ -140,7 +145,7 @@ export default function SecuritySection() {
             onChange={(e) => setForm((p) => ({ ...p, confirmPassword: e.target.value }))}
             show={showNew} onToggle={() => setShowNew(!showNew)} />
 
-          <button type="submit" disabled={saving}
+          <button type="submit" data-settings-save disabled={saving}
             className="primary-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
             Update Password

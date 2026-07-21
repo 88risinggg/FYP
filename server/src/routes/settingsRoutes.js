@@ -6,7 +6,7 @@
  */
 
 const express = require("express");
-const { authenticateToken } = require("../middleware/authMiddleware");
+const { authenticateToken, requireRole } = require("../middleware/authMiddleware");
 const settingsController = require("../controllers/settingsController");
 
 const router = express.Router();
@@ -66,8 +66,17 @@ router.get("/api-keys", settingsController.getApiSettings);
 router.post("/api-keys/generate", settingsController.generateApiKey);
 router.put("/api-keys", settingsController.updateApiSettings);
 
+// Data & Privacy
+router.get("/privacy", settingsController.getPrivacy);
+router.put("/privacy", settingsController.updatePrivacy);
+router.get("/privacy/export", settingsController.exportPersonalData);
+router.post("/privacy/data-request", settingsController.requestAccountData);
+
 // Danger Zone
 router.post("/deactivate", settingsController.deactivateAccount);
 router.post("/delete-account", settingsController.deleteAccount);
+router.post("/reset-settings", settingsController.resetSettings);
+router.get("/deletion-requests", requireRole("Admin"), settingsController.getDeletionRequests);
+router.post("/deletion-requests/:id/review", requireRole("Admin"), settingsController.reviewDeletionRequest);
 
 module.exports = router;

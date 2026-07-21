@@ -1,7 +1,6 @@
 const express = require("express");
 const { getInvoiceReports, exportFinancialReport } = require("../controllers/reportController");
 const { authenticateToken } = require("../middleware/authMiddleware");
-const puppeteer = require("puppeteer-core");
 
 const router = express.Router();
 
@@ -12,6 +11,7 @@ router.get("/invoices/export", exportFinancialReport);
 // Server-side PDF generation from HTML (used by client pdfExportService)
 router.post("/generate-pdf", async (req, res) => {
   try {
+    const puppeteer = await import("puppeteer-core");
     const { html, fileName, orientation } = req.body;
 
     if (!html) {

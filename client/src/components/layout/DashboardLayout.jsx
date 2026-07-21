@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import Sidebar from "./Sidebar.jsx";
+import VanidayLogo from "../branding/VanidayLogo.jsx";
 import { clearSession, getStoredSession } from "../../services/sessionService.js";
 import { apiRequest } from "../../services/apiClient.js";
 
@@ -93,7 +94,8 @@ export default function DashboardLayout({
   profilePath,
   onMarkNotificationRead,
   onMarkAllRead,
-  theme
+  theme,
+  hideSidebar = false
 }) {
   const navigate = useNavigate();
   const roleProfile = roleProfiles[user?.role];
@@ -281,6 +283,13 @@ export default function DashboardLayout({
   function handleNotificationClick(notification) {
     const notificationId = notification.notification_id || notification.id;
     const isRead = notification.is_read === 1 || notification.is_read === true || notification.read;
+    const isDeletionRequest = notification.type === "account_deletion_request";
+
+    if (isDeletionRequest) {
+      setShowNotifications(false);
+      navigate("/dashboard/settings?section=danger");
+    }
+
     if (isRead || !notificationId) return;
 
     if (onMarkNotificationRead) {
@@ -302,7 +311,7 @@ export default function DashboardLayout({
   return (
     <div className={classes.page}>
       <div className={classes.grid} />
-      {mobileSidebarOpen ? (
+      {!hideSidebar && mobileSidebarOpen ? (
         <button
           type="button"
           aria-label="Close sidebar"
@@ -310,27 +319,31 @@ export default function DashboardLayout({
           onClick={() => setMobileSidebarOpen(false)}
         />
       ) : null}
-      <Sidebar
-        sections={sidebarSections}
-        title={sidebarTitle}
-        theme={theme}
-        mobileOpen={mobileSidebarOpen}
-        onClose={() => setMobileSidebarOpen(false)}
-        desktopCollapsed={sidebarCollapsed}
-        onToggleDesktop={toggleDesktopSidebar}
-      />
+      {!hideSidebar ? (
+        <Sidebar
+          sections={sidebarSections}
+          title={sidebarTitle}
+          theme={theme}
+          mobileOpen={mobileSidebarOpen}
+          onClose={() => setMobileSidebarOpen(false)}
+          desktopCollapsed={sidebarCollapsed}
+          onToggleDesktop={toggleDesktopSidebar}
+        />
+      ) : null}
 
-      <div className={`relative z-10 transition-[padding-left] duration-200 ease-out ${sidebarCollapsed ? "lg:pl-0" : "lg:pl-64"}`}>
+      <div className={`relative z-10 transition-[padding-left] duration-200 ease-out ${hideSidebar || sidebarCollapsed ? "lg:pl-0" : "lg:pl-64"}`}>
         <header className={classes.header}>
-          <button
-            type="button"
-            onClick={() => setMobileSidebarOpen(true)}
-            className={`${classes.iconButton} lg:hidden`}
-            aria-label="Open menu"
-          >
-            <Menu size={21} />
-          </button>
-          {sidebarCollapsed ? (
+          {!hideSidebar ? (
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(true)}
+              className={`${classes.iconButton} lg:hidden`}
+              aria-label="Open menu"
+            >
+              <Menu size={21} />
+            </button>
+          ) : null}
+          {!hideSidebar && sidebarCollapsed ? (
             <button
               type="button"
               onClick={toggleDesktopSidebar}
@@ -342,6 +355,11 @@ export default function DashboardLayout({
               <PanelLeftOpen size={21} aria-hidden="true" />
             </button>
           ) : null}
+
+          <VanidayLogo
+            compact
+            className="shrink-0 border-r border-[#f0d2ca] pr-4"
+          />
 
           <h1 className={classes.title}>
             {pageTitle}

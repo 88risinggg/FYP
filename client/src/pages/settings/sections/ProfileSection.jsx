@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Camera, Check, Loader2, X } from "lucide-react";
 import { fetchProfile, updateProfile } from "../../../services/settingsService.js";
+import { reportSettingsSaveResult } from "../../../services/settingsEvents.js";
 
 export default function ProfileSection() {
   const [loading, setLoading] = useState(true);
@@ -78,14 +79,17 @@ export default function ProfileSection() {
     e.preventDefault();
     if (!form.name.trim()) {
       showToast("Full Name is required", "error");
+      reportSettingsSaveResult(false);
       return;
     }
     setSaving(true);
     try {
       await updateProfile(form);
       showToast("Profile updated successfully");
+      reportSettingsSaveResult(true);
     } catch (err) {
       showToast(err.message, "error");
+      reportSettingsSaveResult(false);
     } finally {
       setSaving(false);
     }
@@ -165,12 +169,12 @@ export default function ProfileSection() {
 
           {/* Actions */}
           <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving}
+            <button type="submit" data-settings-save disabled={saving}
               className="primary-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
               {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
               Save Changes
             </button>
-            <button type="button" onClick={loadProfile}
+            <button type="button" data-settings-local-cancel onClick={loadProfile}
               className="rounded-xl border border-[#ead3cc] bg-white px-5 py-2.5 text-sm font-semibold text-[#7b6660] transition hover:bg-[#FDD9CD]/50 hover:text-[#251E1F]">
               Cancel
             </button>

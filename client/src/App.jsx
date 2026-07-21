@@ -17,6 +17,8 @@ import HRPayrollPage from "./pages/payroll/HRPayrollPage.jsx";
 import StaffPayrollPage from "./pages/payroll/StaffPayrollPage.jsx";
 import SettingsPage from "./pages/settings/SettingsPage.jsx";
 import { startHealthCheck, stopHealthCheck } from "./services/apiClient.js";
+import { applyAppearance, readCachedAppearance } from "./services/appearanceService.js";
+import { fetchAppearance } from "./services/settingsService.js";
 import { getStoredSession } from "./services/sessionService.js";
 
 function ProtectedRoute({ children }) {
@@ -144,10 +146,33 @@ function StaffOrHRPayrollRoute({ children }) {
 
 export default function App() {
   useEffect(() => {
-    if (getStoredSession()) {
+    const session = getStoredSession();
+    let active = true;
+    const systemTheme = window.matchMedia?.("(prefers-color-scheme: dark)");
+    const handleSystemThemeChange = () => {
+      const cached = readCachedAppearance();
+      if (cached.theme === "system") applyAppearance(cached, { persist: false });
+    };
+
+    applyAppearance(readCachedAppearance(), { persist: false });
+
+    if (session) {
       startHealthCheck();
+      fetchAppearance()
+        .then((appearance) => {
+          if (active) applyAppearance(appearance);
+        })
+        .catch(() => {
+          // Cached settings remain active when the API is temporarily unavailable.
+        });
     }
-    return () => stopHealthCheck();
+
+    systemTheme?.addEventListener?.("change", handleSystemThemeChange);
+    return () => {
+      active = false;
+      systemTheme?.removeEventListener?.("change", handleSystemThemeChange);
+      stopHealthCheck();
+    };
   }, []);
 
   return (

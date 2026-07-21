@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Building2, Camera, Check, Loader2, X } from "lucide-react";
 import { fetchCompanySettings, updateCompanySettings } from "../../../services/settingsService.js";
+import { reportSettingsSaveResult } from "../../../services/settingsEvents.js";
 
 export default function CompanySettingsSection() {
   const [form, setForm] = useState({
@@ -55,7 +56,8 @@ export default function CompanySettingsSection() {
     try {
       await updateCompanySettings(form);
       showToast("Company settings saved");
-    } catch (err) { showToast(err.message, "error"); }
+      reportSettingsSaveResult(true);
+    } catch (err) { showToast(err.message, "error"); reportSettingsSaveResult(false); }
     finally { setSaving(false); }
   }
 
@@ -113,7 +115,7 @@ export default function CompanySettingsSection() {
             </div>
           </div>
 
-          <button type="submit" disabled={saving}
+          <button type="submit" data-settings-save disabled={saving}
             className="primary-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
             Save Settings

@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --app-accent: #F38978;
+  color-scheme: light;
+}
+
+html[data-font-size="small"] { font-size: 14px; }
+html[data-font-size="medium"] { font-size: 16px; }
+html[data-font-size="large"] { font-size: 18px; }
+
 * {
   box-sizing: border-box;
 }
@@ -10,7 +19,94 @@ body {
   margin: 0;
   background: #fff8f5;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  transition: background-color 180ms ease, color 180ms ease;
 }
+
+/* Runtime accent colour. Exact class-token selectors avoid activating hover-only utilities. */
+[class~="text-[#F38978]"] { color: var(--app-accent) !important; }
+[class~="bg-[#F38978]"] { background-color: var(--app-accent) !important; }
+[class~="border-[#F38978]"] { border-color: var(--app-accent) !important; }
+[class~="border-[#F38978]/20"] { border-color: color-mix(in srgb, var(--app-accent) 20%, transparent) !important; }
+[class~="border-[#F38978]/25"] { border-color: color-mix(in srgb, var(--app-accent) 25%, transparent) !important; }
+[class~="border-[#F38978]/30"] { border-color: color-mix(in srgb, var(--app-accent) 30%, transparent) !important; }
+[class~="border-[#F38978]/35"] { border-color: color-mix(in srgb, var(--app-accent) 35%, transparent) !important; }
+[class~="border-[#F38978]/40"] { border-color: color-mix(in srgb, var(--app-accent) 40%, transparent) !important; }
+[class~="border-[#F38978]/50"] { border-color: color-mix(in srgb, var(--app-accent) 50%, transparent) !important; }
+[class~="border-[#F38978]/70"] { border-color: color-mix(in srgb, var(--app-accent) 70%, transparent) !important; }
+[class~="bg-[#F38978]/5"] { background-color: color-mix(in srgb, var(--app-accent) 5%, transparent) !important; }
+[class~="bg-[#F38978]/10"] { background-color: color-mix(in srgb, var(--app-accent) 10%, transparent) !important; }
+[class~="bg-[#F38978]/12"] { background-color: color-mix(in srgb, var(--app-accent) 12%, transparent) !important; }
+[class~="bg-[#F38978]/15"] { background-color: color-mix(in srgb, var(--app-accent) 15%, transparent) !important; }
+[class~="bg-[#F38978]/20"] { background-color: color-mix(in srgb, var(--app-accent) 20%, transparent) !important; }
+[class~="bg-[#F38978]/25"] { background-color: color-mix(in srgb, var(--app-accent) 25%, transparent) !important; }
+[class~="bg-[#F38978]/30"] { background-color: color-mix(in srgb, var(--app-accent) 30%, transparent) !important; }
+[class~="bg-[#F38978]/40"] { background-color: color-mix(in srgb, var(--app-accent) 40%, transparent) !important; }
+[class~="ring-[#F38978]"] { --tw-ring-color: var(--app-accent) !important; }
+[class~="ring-[#F38978]/25"] { --tw-ring-color: color-mix(in srgb, var(--app-accent) 25%, transparent) !important; }
+[class~="ring-[#F38978]/45"] { --tw-ring-color: color-mix(in srgb, var(--app-accent) 45%, transparent) !important; }
+[class~="from-[#F38978]"] { --tw-gradient-from: var(--app-accent) var(--tw-gradient-from-position) !important; --tw-gradient-to: color-mix(in srgb, var(--app-accent) 0%, transparent) var(--tw-gradient-to-position) !important; }
+[class~="to-[#F38978]"] { --tw-gradient-to: var(--app-accent) var(--tw-gradient-to-position) !important; }
+.primary-button { background-color: var(--app-accent) !important; }
+
+/* Compact density applies to shared panels and navigation without shrinking controls below touch targets. */
+html[data-compact="true"] .app-panel.p-6 { padding: 1rem !important; }
+html[data-compact="true"] .app-panel.p-5 { padding: 0.875rem !important; }
+html[data-compact="true"] main { --compact-section-gap: 1rem; }
+html[data-compact="true"] header.h-20,
+html[data-compact="true"] aside > div.h-20 { height: 4rem !important; }
+
+/* Dark theme overrides the shared hard-coded light palette used by existing screens. */
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] [class~="bg-[#fff8f5]"] {
+  background-color: #171214 !important;
+  color: #f8efec;
+}
+
+html[data-theme="dark"] .app-page {
+  background-color: #171214 !important;
+  background-image: radial-gradient(circle at 15% 15%, #3a2422 0%, transparent 34%), linear-gradient(135deg, #171214, #211719 55%, #2b1c1b) !important;
+}
+
+html[data-theme="dark"] .app-panel,
+html[data-theme="dark"] [class~="bg-white"],
+html[data-theme="dark"] [class~="bg-white/95"],
+html[data-theme="dark"] [class~="bg-white/800"],
+html[data-theme="dark"] [class~="bg-[#fff3ee]/70"] {
+  background-color: rgba(42, 32, 34, 0.96) !important;
+  border-color: rgba(255, 255, 255, 0.11) !important;
+}
+
+html[data-theme="dark"] [class~="bg-[#FDD9CD]"],
+html[data-theme="dark"] [class~="bg-[#FDD9CD]/45"],
+html[data-theme="dark"] [class~="bg-[#FDD9CD]/55"],
+html[data-theme="dark"] [class~="bg-[#FDD9CD]/80"] {
+  background-color: color-mix(in srgb, var(--app-accent) 18%, #24191b) !important;
+}
+
+html[data-theme="dark"] [class~="text-[#251E1F]"],
+html[data-theme="dark"] [class~="text-[#514440]"] {
+  color: #f8efec !important;
+}
+
+html[data-theme="dark"] [class~="text-[#7b6660]"],
+html[data-theme="dark"] [class~="text-[#6f5b55]"],
+html[data-theme="dark"] [class~="text-[#6f4f47]"] {
+  color: #cbb9b5 !important;
+}
+
+html[data-theme="dark"] [class~="border-[#f0d2ca]"],
+html[data-theme="dark"] [class~="border-[#ead3cc]"],
+html[data-theme="dark"] [class~="border-[#f2d5cc]"] {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+html[data-theme="dark"] [class~="from-[#fff8f5]"] { --tw-gradient-from: #171214 var(--tw-gradient-from-position) !important; }
+html[data-theme="dark"] [class~="via-[#fff3ee]"] { --tw-gradient-to: rgba(33, 23, 25, 0) var(--tw-gradient-to-position) !important; --tw-gradient-stops: var(--tw-gradient-from), #211719 var(--tw-gradient-via-position), var(--tw-gradient-to) !important; }
+html[data-theme="dark"] [class~="to-[#FDD9CD]"] { --tw-gradient-to: #2b1c1b var(--tw-gradient-to-position) !important; }
 
 * {
   scrollbar-width: thin;
@@ -79,4 +175,21 @@ body {
 @keyframes pulse {
   0%, 100% { opacity: 0.65; }
   50% { opacity: 1; }
+}
+/* Settings pages use the shared floating action bar instead of local form actions. */
+[data-settings-save],
+[data-settings-local-cancel] {
+  display: none !important;
+}
+
+.settings-save-button {
+  background: #f29a8a !important;
+  color: #302222 !important;
+  box-shadow: 0 12px 30px rgb(225 127 110 / 24%);
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.settings-save-button:hover:not(:disabled) {
+  background: #eb8877 !important;
+  transform: translateY(-1px);
 }
