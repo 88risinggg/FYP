@@ -8,7 +8,7 @@
  * Preserves the same API surface so existing code does not need changes.
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 // Constants
 export const PAGE_MARGIN = 20;

@@ -23,7 +23,7 @@ export function fetchModuleAuditSummary(module) {
 }
 
 export async function exportModuleAuditLogs(module, filters = {}) {
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
   const token = localStorage.getItem("authToken");
   const response = await fetch(
     `${API_BASE}/api/audit-logs/export${toQuery({ module, ...filters })}`,

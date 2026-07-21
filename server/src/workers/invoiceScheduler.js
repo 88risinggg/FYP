@@ -162,7 +162,15 @@ function startInvoiceScheduler() {
     return null;
   }
 
-  setInterval(runInvoiceSchedulerOnce, DEFAULT_INTERVAL_MS);
+  const runSafely = async () => {
+    try {
+      await runInvoiceSchedulerOnce();
+    } catch (error) {
+      console.error("Invoice scheduler run failed:", error.message);
+    }
+  };
+
+  setInterval(runSafely, DEFAULT_INTERVAL_MS);
 
   console.log(`Invoice scheduler running every ${DEFAULT_INTERVAL_MS / 1000}s.`);
   return true;

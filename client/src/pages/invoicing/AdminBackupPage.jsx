@@ -372,7 +372,7 @@ export default function AdminBackupPage() {
                           type="button"
                           onClick={() => {
                             const link = document.createElement("a");
-                            link.href = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:5000"}/api/admin/backups/${backup.backup_id}/download`;
+                            link.href = `${import.meta.env.VITE_API_BASE_URL || ""}/api/admin/backups/${backup.backup_id}/download`;
                             link.setAttribute("download", "");
                             // Use fetch with auth header for download
                             const token = localStorage.getItem("authToken");

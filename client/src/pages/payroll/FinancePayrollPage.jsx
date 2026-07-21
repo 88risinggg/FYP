@@ -80,7 +80,7 @@ client/src/pages/payroll/FinancePayrollPage.guide.md
 
 const pageTitle = "Automated Payroll System - Finance Payroll Dashboard";
 const FINANCE_PAYROLL_STORAGE_KEY = "financePayrollWorkflowStateV3";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 const payrollSidebarSections = [
   {

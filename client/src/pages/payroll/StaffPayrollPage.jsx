@@ -25,7 +25,7 @@ import StaffLoanPage from "./StaffLoanPage.jsx";
 import StaffClaimsPage from "./StaffClaimsPage.jsx";
 
 const pageTitle = "Automated Payroll System – Staff Payroll Portal";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 const payrollSidebarSections = [
   {
@@ -201,7 +201,7 @@ export default function StaffPayrollPage() {
 
   function downloadPayslip(payslip) {
     if (!payslip.file_path) return;
-    const url = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:5000"}${payslip.file_path}`;
+    const url = `${import.meta.env.VITE_API_BASE_URL || ""}${payslip.file_path}`;
     window.open(url, "_blank");
   }
 

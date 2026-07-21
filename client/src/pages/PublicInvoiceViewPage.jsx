@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 
 import InvoiceTemplate from "../components/invoicing/InvoiceTemplate.jsx";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-SG", { style: "currency", currency: "SGD" }).format(Number(value || 0));

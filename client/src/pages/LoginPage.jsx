@@ -89,7 +89,7 @@ export default function LoginPage() {
     setError("");
     setIsLoading(true);
     try {
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
       const response = await fetch(`${API_BASE}/api/auth/google/login`);
       const data = await response.json();
       if (data.redirectUrl) {
@@ -109,7 +109,7 @@ export default function LoginPage() {
     setError("");
     setIsLoading(true);
     try {
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
       const response = await fetch(`${API_BASE}/api/auth/otp/request`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -133,7 +133,7 @@ export default function LoginPage() {
     setError("");
     setIsLoading(true);
     try {
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
       const response = await fetch(`${API_BASE}/api/auth/otp/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

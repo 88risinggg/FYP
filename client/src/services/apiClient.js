@@ -1,6 +1,6 @@
 import { clearSession, getStoredSession } from "./sessionService.js";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const TOKEN_KEY = "authToken";
 
 function forceLogout() {

@@ -269,7 +269,7 @@ function escapeHtml(value) {
 
 
 function openPrintableInvoice(invoice) {
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
   const token = localStorage.getItem("authToken");
 
   // Download the actual PDF from the server
@@ -1215,7 +1215,7 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
 
   useEffect(() => {
     async function loadDashboardExtras() {
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
       const token = localStorage.getItem("authToken");
       const headers = { "Content-Type": "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
@@ -2218,7 +2218,7 @@ async function parseSpreadsheetFile(file) {
   const fileName = file.name.toLowerCase();
 
   if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
     const token = localStorage.getItem("authToken");
 
     const formData = new FormData();
@@ -2365,7 +2365,7 @@ function BulkUploadView({ onProcessed }) {
       // Flag invalid rows to fraud detection
       if (flaggedRows.length > 0) {
         try {
-          const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+          const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
           const token = localStorage.getItem("authToken");
           await fetch(`${API_BASE}/api/fraud/flag-invalid-rows`, {
             method: "POST",
