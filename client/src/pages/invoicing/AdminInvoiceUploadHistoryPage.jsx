@@ -1,7 +1,7 @@
 import {
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  FileClock,
   FilterX,
   RefreshCw,
   Search
@@ -9,6 +9,12 @@ import {
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
+import AdminInvoicingFullView, {
+  ActiveFilters,
+  FullViewEmpty,
+  FullViewError,
+  FullViewLoading
+} from "../../components/invoicing/AdminInvoicingFullView.jsx";
 import { fetchInvoiceUploadHistory } from "../../services/adminDashboardService.js";
 
 const summaryPath = "/dashboard/invoicing/admin/dashboard/validation-summary#recent-uploads";
@@ -127,32 +133,35 @@ export default function AdminInvoiceUploadHistoryPage() {
 
   const uploads = data.uploads || [];
   const pagination = data.pagination || {};
+  const dateError = filters.startDate && filters.endDate && filters.startDate > filters.endDate
+    ? "End date must be on or after the start date."
+    : "";
+  const visibleFilters = {
+    ...(appliedFilters.startDate ? { startDate: appliedFilters.startDate } : {}),
+    ...(appliedFilters.endDate ? { endDate: appliedFilters.endDate } : {}),
+    ...(appliedFilters.status ? { status: appliedFilters.status } : {}),
+    ...(appliedFilters.uploadedBy ? { uploadedBy: appliedFilters.uploadedBy } : {}),
+    ...(appliedFilters.fileName ? { fileName: appliedFilters.fileName } : {}),
+    ...(appliedFilters.batchId ? { batchId: appliedFilters.batchId } : {}),
+    ...(appliedFilters.sort !== "latest" ? { sort: appliedFilters.sort } : {})
+  };
 
   return (
-    <section
-      className="-m-4 min-h-[calc(100vh-5rem)] p-4 text-[#251E1F] sm:-m-6 sm:p-6"
-      style={{ backgroundImage: "linear-gradient(90deg, #FDD9CD 0%, #fff8f5 15%, #fffaf8 58%, #FDD9CD 100%)" }}
+    <AdminInvoicingFullView
+      title="Invoice Upload History"
+      description="Review invoice file uploads, processing results and validation outcomes."
+      backTo={summaryPath}
+      backLabel="Back to Invoice Validation Summary"
+      icon={FileClock}
+      count={pagination.total || 0}
+      countLabel={pagination.total === 1 ? "upload record" : "upload records"}
+      actions={(
+        <button type="button" onClick={() => load(appliedFilters, true)} disabled={refreshing} className="inline-flex items-center gap-2 rounded-lg border border-[#ead3cc] bg-white px-4 py-2 text-sm font-bold hover:border-[#F38978] disabled:opacity-60">
+          <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+          {refreshing ? "Refreshing..." : "Refresh"}
+        </button>
+      )}
     >
-      <div className="w-full space-y-4">
-        <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[#f0d2ca] pb-5">
-          <div>
-            <Link to={summaryPath} className="mb-3 inline-flex items-center gap-2 text-sm font-bold text-[#F38978] hover:text-[#d96858]">
-              <ArrowLeft size={16} /> Back to Validation Summary
-            </Link>
-            <h2 className="text-2xl font-bold">Invoice Upload History</h2>
-            <p className="mt-1 text-sm text-[#6f5b55]">Review and investigate recorded invoice upload batches.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => load(appliedFilters, true)}
-            disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#ead3cc] bg-white px-4 py-2 text-sm font-bold hover:border-[#F38978] disabled:opacity-60"
-          >
-            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
-            {refreshing ? "Refreshing..." : "Refresh"}
-          </button>
-        </header>
-
         <form onSubmit={applyFilters} className="rounded-xl border border-[#f0d2ca] bg-white/95 p-4 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
             <input type="date" aria-label="Start date" value={filters.startDate} onChange={(event) => setFilters({ ...filters, startDate: event.target.value })} className="rounded-lg border border-[#ead3cc] px-3 py-2 text-sm" />
@@ -175,20 +184,21 @@ export default function AdminInvoiceUploadHistoryPage() {
               <option value="created-desc">Highest created invoices</option>
             </select>
             <div className="flex gap-2">
-              <button type="submit" className="primary-button inline-flex flex-1 items-center justify-center gap-2 px-3 py-2 text-sm font-bold"><Search size={15} /> Apply</button>
-              <button type="button" onClick={clearFilters} aria-label="Clear filters" className="inline-flex items-center justify-center rounded-lg border border-[#ead3cc] px-3 py-2 text-[#7b6660] hover:text-[#F38978]"><FilterX size={16} /></button>
+              <button type="submit" disabled={Boolean(dateError)} className="primary-button inline-flex flex-1 items-center justify-center gap-2 px-3 py-2 text-sm font-bold disabled:opacity-50"><Search size={15} /> Apply Filters</button>
+              <button type="button" onClick={clearFilters} className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#ead3cc] px-3 py-2 text-sm font-bold text-[#7b6660] hover:text-[#F38978]"><FilterX size={16} /> Clear Filters</button>
             </div>
           </div>
+          {dateError ? <p className="mt-3 text-sm font-semibold text-rose-700" role="alert">{dateError}</p> : <div className="mt-3"><ActiveFilters filters={visibleFilters} labels={{ startDate: "From", endDate: "To", status: "Status", uploadedBy: "Uploaded by", fileName: "File", batchId: "Batch", sort: "Sort" }} /></div>}
         </form>
 
-        {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div> : null}
+        {error ? <FullViewError message="The invoice upload history could not be loaded." onRetry={() => load(appliedFilters)} backTo={summaryPath} backLabel="Back to Invoice Validation Summary" /> : null}
 
-        <section className="overflow-hidden rounded-xl border border-[#f0d2ca] bg-white/95 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
+        {!error ? <section className="overflow-hidden rounded-xl border border-[#f0d2ca] bg-white/95 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f0d2ca] px-5 py-4">
             <h3 className="font-bold">Upload batches</h3>
             <p className="text-sm text-[#7b6660]">{formatCount(pagination.total)} records</p>
           </div>
-          <div className="overflow-x-auto">
+          {loading ? <FullViewLoading label="Loading invoice upload history..." /> : uploads.length === 0 ? <FullViewEmpty message="No upload records match the selected filters." hasFilters={Object.keys(visibleFilters).length > 0} onClear={clearFilters} /> : <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-[#fff8f5] text-xs uppercase text-[#7b6660]">
                 <tr>
@@ -198,16 +208,12 @@ export default function AdminInvoiceUploadHistoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
-                  <tr><td colSpan="11" className="px-4 py-12 text-center text-[#7b6660]">Loading upload history...</td></tr>
-                ) : !uploads.length ? (
-                  <tr><td colSpan="11" className="px-4 py-12 text-center text-[#7b6660]">No upload batches match the selected filters.</td></tr>
-                ) : uploads.map((upload) => (
+                {uploads.map((upload) => (
                   <UploadRow key={upload.uploadId} upload={upload} expanded={expandedUploadId === upload.uploadId} onToggle={() => setExpandedUploadId(expandedUploadId === upload.uploadId ? null : upload.uploadId)} />
                 ))}
               </tbody>
             </table>
-          </div>
+          </div>}
           <div className="flex items-center justify-between gap-4 border-t border-[#f0d2ca] px-5 py-4">
             <p className="text-sm text-[#7b6660]">Page {pagination.page || 1} of {pagination.totalPages || 1}</p>
             <div className="flex gap-2">
@@ -215,9 +221,8 @@ export default function AdminInvoiceUploadHistoryPage() {
               <button type="button" onClick={() => changePage((pagination.page || 1) + 1)} disabled={(pagination.page || 1) >= (pagination.totalPages || 1)} className="inline-flex items-center gap-1 rounded-lg border border-[#ead3cc] px-3 py-2 text-sm font-bold disabled:opacity-40">Next <ChevronRight size={15} /></button>
             </div>
           </div>
-        </section>
-      </div>
-    </section>
+        </section> : null}
+    </AdminInvoicingFullView>
   );
 }
 
@@ -234,7 +239,7 @@ function UploadRow({ upload, expanded, onToggle }) {
         <td className="px-3 py-3"><StatusBadge status={upload.status} /></td><td className="whitespace-nowrap px-3 py-3">{formatDuration(upload.processingDurationMs)}</td>
         <td className="whitespace-nowrap px-3 py-3">
           <button type="button" onClick={onToggle} className="font-bold text-[#F38978] hover:text-[#d96858]">{expanded ? "Hide Details" : "View Details"}</button>
-          {upload.invalidRows > 0 || upload.errorMessage ? <Link to={`/dashboard/invoicing/admin/dashboard/validation-errors?uploadId=${upload.uploadId}`} className="ml-3 font-bold text-rose-600 hover:text-rose-700">Error Report</Link> : null}
+          {upload.invalidRows > 0 || upload.errorMessage ? <Link to={`/dashboard/invoicing/admin/dashboard/validation-errors/${upload.uploadId}`} className="ml-3 font-bold text-rose-600 hover:text-rose-700">View Error Report</Link> : null}
         </td>
       </tr>
       {expanded ? (

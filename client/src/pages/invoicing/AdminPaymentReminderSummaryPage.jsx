@@ -14,14 +14,12 @@ import {
   XCircle
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { fetchPaymentReminderSummary } from "../../services/adminDashboardService.js";
 import { getStoredSession } from "../../services/sessionService.js";
 
 const basePath = "/dashboard/invoicing/admin";
-const invoiceListPath = `${basePath}/invoices`;
-const paymentListPath = `${basePath}/payments`;
 const rangeOptions = [
   { value: "today", label: "Today" },
   { value: "last-7-days", label: "Last 7 Days" },
@@ -180,27 +178,21 @@ function EmailDeliverySummaryCard({ summary, range }) {
 }
 
 function PaymentActionMenu({ payment }) {
-  const pendingBankTransfer = normalizedStatus(payment.paymentMethod).includes("bank") &&
-    normalizedStatus(payment.status).includes("pending");
-
   return (
     <details className="relative">
-      <summary className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg border border-[#ead3cc] bg-white text-[#514440] transition hover:border-[#F38978] hover:text-[#F38978]">
+      <summary aria-label={`Actions for payment ${payment.reference || payment.id}`} title="Payment actions" className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg border border-[#ead3cc] bg-white text-[#514440] transition hover:border-[#F38978] hover:text-[#F38978]">
         <MoreHorizontal size={16} />
       </summary>
       <div className="absolute right-0 z-20 mt-2 w-52 rounded-lg border border-[#ead3cc] bg-white p-2 text-sm shadow-xl shadow-[#251E1F]/10">
-        <Link className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-[#fff8f5]" to={`${paymentListPath}/${payment.id || payment.reference}`}>
+        <Link className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-[#fff8f5]" to={`${basePath}/payment-updates/${encodeURIComponent(payment.id || payment.reference)}?from=payment-updates`}>
           <CreditCard size={15} /> View Payment
         </Link>
-        <Link className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-[#fff8f5]" to={payment.invoiceId ? `${invoiceListPath}/${payment.invoiceId}` : `${invoiceListPath}?keyword=${encodeURIComponent(payment.invoiceNo || payment.reference || "")}`}>
-          <FileText size={15} /> View Invoice
-        </Link>
-        {pendingBankTransfer ? (
-          <Link className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-[#fff8f5]" to={`${paymentListPath}/${payment.id || payment.reference}/verify`}>
-            <ShieldCheck size={15} /> Verify Payment
+        {payment.invoiceId ? (
+          <Link className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-[#fff8f5]" to={`${basePath}/invoice-records/${payment.invoiceId}?from=payment-updates`}>
+            <FileText size={15} /> View Invoice
           </Link>
-        ) : null}
-        <Link className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-[#fff8f5]" to={`${basePath}/audit-logs?activityType=Payment&keyword=${encodeURIComponent(payment.reference || payment.id || "")}`}>
+        ) : <span className="flex cursor-not-allowed items-center gap-2 rounded-md px-3 py-2 text-[#9c7b72]" title="No related invoice is available"><FileText size={15} /> Invoice unavailable</span>}
+        <Link className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-[#fff8f5]" to={`${basePath}/audit-trail?keyword=${encodeURIComponent(payment.reference || payment.id || "")}&from=payment-updates`}>
           <Eye size={15} /> View Audit Log
         </Link>
       </div>
@@ -233,7 +225,7 @@ function RecentPaymentUpdatesTable({ payments }) {
             <tr key={payment.id || payment.reference} className="border-b border-[#f4ded7] transition hover:bg-[#fff8f5]">
               <td className="whitespace-nowrap px-4 py-3 text-[#514440]">{formatDateTime(payment.date)}</td>
               <td className="whitespace-nowrap px-4 py-3 font-bold text-[#251E1F]">
-                <Link to={`${paymentListPath}/${payment.id || payment.reference}`}>{payment.reference || "-"}</Link>
+                <Link to={`${basePath}/payment-updates/${encodeURIComponent(payment.id || payment.reference)}?from=payment-updates`}>{payment.reference || "-"}</Link>
               </td>
               <td className="px-4 py-3 text-[#514440]">
                 {payment.customerId ? (

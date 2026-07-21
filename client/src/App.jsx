@@ -10,6 +10,11 @@ import AdminInvoicingDashboard from "./pages/invoicing/AdminInvoicingDashboard.j
 import AdminReminderCategoryPage from "./pages/invoicing/AdminReminderCategoryPage.jsx";
 import AdminEmailDeliveryPage from "./pages/invoicing/AdminEmailDeliveryPage.jsx";
 import AdminPaymentUpdatesPage from "./pages/invoicing/AdminPaymentUpdatesPage.jsx";
+import AdminInvoiceUploadHistoryPage from "./pages/invoicing/AdminInvoiceUploadHistoryPage.jsx";
+import AdminValidationErrorsPage from "./pages/invoicing/AdminValidationErrorsPage.jsx";
+import AdminRecentStatusChangesPage from "./pages/invoicing/AdminRecentStatusChangesPage.jsx";
+import AdminInvoicingRecordPage from "./pages/invoicing/AdminInvoicingRecordPage.jsx";
+import AdminInvoiceAuditTrailPage from "./pages/invoicing/AdminInvoiceAuditTrailPage.jsx";
 import FinanceInvoicingPage from "./pages/invoicing/FinanceInvoicingPage.jsx";
 import AdminPayrollPage from "./pages/payroll/AdminPayrollPage.jsx";
 import FinancePayrollPage from "./pages/payroll/FinancePayrollPage.jsx";
@@ -211,6 +216,62 @@ export default function App() {
         element={
           <AdminInvoicingRoute>
             <AdminPaymentUpdatesPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/payment-updates/:recordId"
+        element={
+          <AdminInvoicingRoute>
+            <AdminInvoicingRecordPage mode="payment" />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/invoice-records/:recordId"
+        element={
+          <AdminInvoicingRoute>
+            <AdminInvoicingRecordPage mode="invoice" />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/audit-trail"
+        element={
+          <AdminInvoicingRoute>
+            <AdminInvoiceAuditTrailPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/dashboard/validation-summary/upload-history"
+        element={
+          <AdminInvoicingRoute>
+            <AdminInvoiceUploadHistoryPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/dashboard/validation-errors"
+        element={
+          <AdminInvoicingRoute>
+            <AdminValidationErrorsPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/dashboard/validation-errors/:uploadId"
+        element={
+          <AdminInvoicingRoute>
+            <AdminValidationErrorsPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/dashboard/invoice-performance/status-changes"
+        element={
+          <AdminInvoicingRoute>
+            <AdminRecentStatusChangesPage />
           </AdminInvoicingRoute>
         }
       />

@@ -183,6 +183,9 @@ async function getValidationUploadHistory(req, res) {
 
 async function getValidationErrors(req, res) {
   try {
+    if (req.query.uploadId && !/^\d+$/.test(String(req.query.uploadId))) {
+      return res.status(400).json({ message: "A valid upload batch identifier is required." });
+    }
     const errors = await getAllInvoiceValidationErrors(req.query);
     res.json(errors);
   } catch (error) {

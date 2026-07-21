@@ -15,7 +15,6 @@ import AdminDashboardHomePage from "./AdminDashboardHomePage.jsx";
 import AdminInvoicePerformancePage from "./AdminInvoicePerformancePage.jsx";
 import AdminInvoiceActivityTrendPage from "./AdminInvoiceActivityTrendPage.jsx";
 import AdminInvoiceListPage from "./AdminInvoiceListPage.jsx";
-import AdminRecentStatusChangesPage from "./AdminRecentStatusChangesPage.jsx";
 import AdminInvoiceSettingsPage from "./AdminInvoiceSettingsPage.jsx";
 import AdminPaymentReminderSummaryPage from "./AdminPaymentReminderSummaryPage.jsx";
 import AdminRoleActionPage from "./AdminRoleActionPage.jsx";
@@ -24,8 +23,6 @@ import AdminReminderSettingsPage from "./AdminReminderSettingsPage.jsx";
 import AdminUserManagementPage from "./AdminUserManagementPage.jsx";
 import AdminUserProfilePage from "./AdminUserProfilePage.jsx";
 import AdminValidationSummaryPage from "./AdminValidationSummaryPage.jsx";
-import AdminValidationErrorsPage from "./AdminValidationErrorsPage.jsx";
-import AdminInvoiceUploadHistoryPage from "./AdminInvoiceUploadHistoryPage.jsx";
 import AdminTemplatePreviewPage from "./AdminTemplatePreviewPage.jsx";
 
 const pageTitle = "Automated Invoicing System - Admin Dashboard";
@@ -187,24 +184,19 @@ export default function AdminInvoicingDashboard() {
   const isAuditLogs = normalizedPath === "/dashboard/invoicing/admin/audit-logs";
   const isInvoicePerformance = normalizedPath === "/dashboard/invoicing/admin/dashboard/invoice-performance";
   const isInvoiceActivityTrend = normalizedPath === "/dashboard/invoicing/admin/dashboard/invoice-performance/activity-trend";
-  const isRecentStatusChanges = normalizedPath === "/dashboard/invoicing/admin/dashboard/invoice-performance/status-changes";
   const isInvoiceList = normalizedPath === "/dashboard/invoicing/admin/invoices";
   const isPaymentReminderSummary = normalizedPath === "/dashboard/invoicing/admin/dashboard/payment-reminder-summary";
   const isValidationSummary = normalizedPath === "/dashboard/invoicing/admin/dashboard/validation-summary";
-  const isValidationUploadHistory = normalizedPath === "/dashboard/invoicing/admin/dashboard/validation-summary/upload-history";
-  const isValidationErrors = normalizedPath === "/dashboard/invoicing/admin/dashboard/validation-errors";
   const currentPageTitle = isUserManagement || userProfileMatch
     ? "Automated Invoicing System - User Management"
     : isRolesManagement || roleCreateMatch || roleActionMatch
       ? "Automated Invoicing System - Roles & Permissions"
-    : isInvoicePerformance || isInvoiceActivityTrend || isRecentStatusChanges
+    : isInvoicePerformance || isInvoiceActivityTrend
       ? "Automated Invoicing System - Invoice Performance"
     : isPaymentReminderSummary
       ? "Automated Invoicing System - Payment & Reminder Summary"
-    : isValidationSummary || isValidationUploadHistory
+    : isValidationSummary
       ? "Automated Invoicing System - Validation Summary"
-    : isValidationErrors
-      ? "Automated Invoicing System - All Validation Errors"
     : isInvoiceSettings
       ? "Automated Invoicing System - Invoice Settings"
     : isReminderSettings
@@ -215,10 +207,6 @@ export default function AdminInvoicingDashboard() {
 
   if (isInvoiceActivityTrend) {
     return <AdminInvoiceActivityTrendPage />;
-  }
-
-  if (isRecentStatusChanges) {
-    return <AdminRecentStatusChangesPage />;
   }
 
   return (
@@ -239,10 +227,6 @@ export default function AdminInvoicingDashboard() {
         <AdminPaymentReminderSummaryPage />
       ) : isValidationSummary ? (
         <AdminValidationSummaryPage />
-      ) : isValidationUploadHistory ? (
-        <AdminInvoiceUploadHistoryPage />
-      ) : isValidationErrors ? (
-        <AdminValidationErrorsPage />
       ) : isUserManagement ? (
         <AdminUserManagementPage />
       ) : userProfileMatch ? (

@@ -124,7 +124,7 @@ function ErrorReport({ upload }) {
         </div>
       ) : null}
       <Link
-        to={`/dashboard/invoicing/admin/dashboard/validation-errors?uploadId=${upload.uploadId}`}
+        to={`/dashboard/invoicing/admin/dashboard/validation-errors/${upload.uploadId}`}
         className="inline-flex items-center gap-2 text-sm font-bold text-[#F38978] hover:text-[#d96858]"
       >
         View Error Report <ArrowRight size={15} />

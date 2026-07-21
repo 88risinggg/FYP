@@ -93,9 +93,14 @@ function mapValidationErrors(row, startingIndex = 0) {
     uploadBatchId: String(row.affected_record || row.audit_log_id),
     rowNumber: error.source_row_number === null ? null : Number(error.source_row_number),
     invoiceNumber: error.invoice_number || "",
+    customerName: error.customer_name || error.customer || "",
     fieldName: error.field_name || "General",
+    errorCategory: error.error_category || error.category || error.field_name || "General",
     invalidValue: error.invalid_value ?? null,
     errorMessage: error.error_message,
+    errorStatus: error.resolved_at ? "Resolved" : "Open",
+    resolvedBy: error.resolved_by || null,
+    resolvedAt: error.resolved_at || null,
     fileName: row.upload_file_name,
     status: uploadStatus(row),
     uploaderEmail: row.user_name || "Unknown user",
@@ -265,11 +270,45 @@ async function getAllInvoiceValidationErrors(filters = {}) {
     ORDER BY created_at DESC, audit_log_id DESC
   `, params);
 
-  const allErrors = rows.flatMap((row) => mapValidationErrors(row));
+  const keyword = String(filters.keyword || "").trim().toLowerCase().slice(0, 100);
+  const batchId = String(filters.batchId || "").trim().toLowerCase().slice(0, 100);
+  const fileName = String(filters.fileName || "").trim().toLowerCase().slice(0, 255);
+  const errorStatus = String(filters.errorStatus || "").trim().toLowerCase();
+  const errorCategory = String(filters.errorCategory || "").trim().toLowerCase().slice(0, 100);
+  const fieldName = String(filters.fieldName || "").trim().toLowerCase().slice(0, 100);
+  const startDate = /^\d{4}-\d{2}-\d{2}$/.test(filters.startDate || "") ? new Date(`${filters.startDate}T00:00:00+08:00`).getTime() : null;
+  const endDate = /^\d{4}-\d{2}-\d{2}$/.test(filters.endDate || "") ? new Date(`${filters.endDate}T23:59:59.999+08:00`).getTime() : null;
+  const page = Math.max(1, Number.parseInt(filters.page, 10) || 1);
+  const pageSize = Math.max(10, Math.min(100, Number.parseInt(filters.pageSize, 10) || 20));
+  const allErrors = rows.flatMap((row) => mapValidationErrors(row)).filter((item) => {
+    if (batchId && !item.uploadBatchId.toLowerCase().includes(batchId)) return false;
+    if (fileName && !String(item.fileName || "").toLowerCase().includes(fileName)) return false;
+    if (errorStatus && item.errorStatus.toLowerCase() !== errorStatus) return false;
+    if (errorCategory && !item.errorCategory.toLowerCase().includes(errorCategory)) return false;
+    if (fieldName && !item.fieldName.toLowerCase().includes(fieldName)) return false;
+    const uploadedAt = new Date(item.uploadedAt || 0).getTime();
+    if (startDate && uploadedAt < startDate) return false;
+    if (endDate && uploadedAt > endDate) return false;
+    if (!keyword) return true;
+    return [item.invoiceNumber, item.customerName, item.errorMessage, item.invalidValue]
+      .some((value) => String(value || "").toLowerCase().includes(keyword));
+  });
+  const categorySummary = allErrors.reduce((summary, item) => {
+    summary[item.errorCategory] = (summary[item.errorCategory] || 0) + 1;
+    return summary;
+  }, {});
+  const pagedErrors = allErrors.slice((page - 1) * pageSize, page * pageSize);
   return {
     totalErrors: allErrors.length,
     upload: rows.length === 1 ? mapUpload(rows[0]) : null,
-    errors: allErrors
+    categorySummary: Object.entries(categorySummary).map(([category, count]) => ({ category, count })),
+    errors: pagedErrors,
+    pagination: {
+      page,
+      pageSize,
+      total: allErrors.length,
+      totalPages: Math.max(1, Math.ceil(allErrors.length / pageSize))
+    }
   };
 }
 

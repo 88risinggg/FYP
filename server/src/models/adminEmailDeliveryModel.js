@@ -177,12 +177,18 @@ function withinToday(value, bounds) {
 function applyFilters(records, options) {
   const status = String(options.status || "").toLowerCase();
   const emailType = String(options.emailType || "").toLowerCase();
+  const recipient = String(options.recipient || "").trim().toLowerCase();
+  const invoiceNumber = String(options.invoiceNumber || "").trim().toLowerCase();
+  const provider = String(options.provider || "").trim().toLowerCase();
   const keyword = String(options.keyword || "").trim().toLowerCase();
   const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(options.dateFrom || "") ? new Date(`${options.dateFrom}T00:00:00+08:00`).getTime() : null;
   const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(options.dateTo || "") ? new Date(`${options.dateTo}T23:59:59.999+08:00`).getTime() : null;
   return records.filter((record) => {
     if (status && record.deliveryStatus.toLowerCase() !== status) return false;
     if (emailType && record.emailType.toLowerCase() !== emailType) return false;
+    if (recipient && !String(record.recipientEmail || "").toLowerCase().includes(recipient)) return false;
+    if (invoiceNumber && !String(record.invoiceNumber || "").toLowerCase().includes(invoiceNumber)) return false;
+    if (provider && !String(record.provider || "").toLowerCase().includes(provider)) return false;
     const date = new Date(record.sentAt || record.attemptedAt || record.scheduledAt || record.createdAt || 0).getTime();
     if (dateFrom && date < dateFrom) return false;
     if (dateTo && date > dateTo) return false;

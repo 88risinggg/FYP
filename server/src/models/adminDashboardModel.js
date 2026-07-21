@@ -957,7 +957,14 @@ async function getRecentPaymentUpdates(context, paymentContext, missingTables, o
   const filters = [];
   const status = String(options.status || "").trim();
   const method = String(options.method || "").trim();
+  const customer = String(options.customer || "").trim().slice(0, 100);
+  const updatedBy = String(options.updatedBy || "").trim().slice(0, 100);
   const keyword = String(options.keyword || "").trim().slice(0, 100);
+  const recordId = String(options.recordId || "").trim().slice(0, 100);
+  if (recordId) {
+    filters.push(`(${paymentContext.idExpr || paymentContext.referenceExpr} = ? OR ${paymentContext.referenceExpr} = ?)`);
+    params.push(recordId, recordId);
+  }
   if (status && paymentContext.statusExpr) {
     filters.push(`LOWER(${paymentContext.statusExpr}) = LOWER(?)`);
     params.push(status);
@@ -965,6 +972,14 @@ async function getRecentPaymentUpdates(context, paymentContext, missingTables, o
   if (method && paymentContext.methodExpr) {
     filters.push(`LOWER(${paymentContext.methodExpr}) LIKE LOWER(?)`);
     params.push(`%${method}%`);
+  }
+  if (customer) {
+    filters.push(`${customerNameExpr} LIKE ?`);
+    params.push(`%${customer}%`);
+  }
+  if (updatedBy) {
+    filters.push(`${updatedByExpr} LIKE ?`);
+    params.push(`%${updatedBy}%`);
   }
   if (/^\d{4}-\d{2}-\d{2}$/.test(options.dateFrom || "") && dateExpr) {
     filters.push(`${dateExpr} >= ?`);
