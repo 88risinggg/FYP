@@ -82,11 +82,9 @@ const FIELD_ALIASES = {
 };
 
 function getFieldValue(row, mapping, fieldName) {
-  const rowKeys = Object.keys(row);
-  // Normalize row keys: trim whitespace, remove BOM characters, lowercase for matching
+  const rowKeys = Object.keys(row || {});
   const rowKeysNormalized = rowKeys.map(k => k.replace(/^\uFEFF/, "").trim().toLowerCase());
 
-  // 1. Try the configured mapping first (exact case-insensitive match)
   const configuredColumn = mapping[fieldName];
   if (configuredColumn) {
     const normalized = configuredColumn.replace(/^\uFEFF/, "").trim().toLowerCase();
@@ -96,7 +94,6 @@ function getFieldValue(row, mapping, fieldName) {
     }
   }
 
-  // 2. Try the built-in aliases for this field
   const aliases = FIELD_ALIASES[fieldName] || [];
   for (const alias of aliases) {
     const idx = rowKeysNormalized.indexOf(alias.toLowerCase());
@@ -105,10 +102,24 @@ function getFieldValue(row, mapping, fieldName) {
     }
   }
 
-  // 3. Partial/contains match as last resort (e.g. "Order ID" contains "order")
-  const primaryAliases = FIELD_ALIASES[fieldName]?.slice(0, 3) || [];
-  for (const alias of primaryAliases) {
+  for (const alias of aliases) {
     const idx = rowKeysNormalized.findIndex(k => k.includes(alias.toLowerCase()));
+    if (idx !== -1) {
+      return String(row[rowKeys[idx]] || "").trim();
+    }
+  }
+
+  const fallbackMap = {
+    orderId: ["invoice_id", "invoiceid", "id"],
+    customerName: ["customer_name", "customername", "name"],
+    email: ["customer_email", "customeremail", "email"],
+    shopTitle: ["company_name", "company", "vendor_name"],
+    serviceName: ["invoice_number", "invoice_no", "invoice", "service"],
+    totalRevenue: ["amount", "total_amount", "totalamount", "amount_due", "grand_total"]
+  };
+
+  for (const fallback of fallbackMap[fieldName] || []) {
+    const idx = rowKeysNormalized.indexOf(fallback.toLowerCase());
     if (idx !== -1) {
       return String(row[rowKeys[idx]] || "").trim();
     }
