@@ -1,3 +1,4 @@
+
 import { useMemo } from "react";
 
 /**
@@ -267,15 +268,13 @@ function SummarySection({ invoice, settings }) {
   );
 }
 
-function PaymentSection({ settings, qrCodeUrl }) {
-  const primary = settings.primaryColor || "#251E1F";
-  const secondary = settings.secondaryColor || "#F38978";
+function PaymentSection({ settings, qrCodeUrl, hasStripePayment }) {
+  const primary = settings.primaryColor || "#061e4b";
+  const secondary = settings.secondaryColor || "#ff5a52";
   const showBank = settings.bankDetailsDisplay;
-  // Only show PayNow if there's actually an identifier configured
   const showPaynow = settings.paynowDisplay && settings.paynowIdentifier;
-  // Only show the PayNow QR if qrCodeDisplay is on AND we have a real PayNow QR (not Stripe QR)
-  const isStripeQr = qrCodeUrl && String(qrCodeUrl).includes("checkout.stripe.com");
-  const showQr = settings.qrCodeDisplay && qrCodeUrl && showPaynow && !isStripeQr;
+  // Never show QR in PayNow section when Stripe payment is active — Stripe QR is shown above
+  const showQr = false;
 
   if (!showBank && !showPaynow) return null;
 
@@ -301,10 +300,7 @@ function PaymentSection({ settings, qrCodeUrl }) {
             <div style={{ width: "10mm", height: "10mm", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: secondary, color: "white" }}>
               <svg viewBox="0 0 24 24" width="5mm" height="5mm" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="5" y="2" width="14" height="20" rx="2" /><path d="M9 6h6M8 10h8M8 14h5M10 18h4" /></svg>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "3mm" }}>
-              <p style={{ margin: 0, fontSize: "7pt" }}>Payment via PayNow to <strong>{settings.paynowIdentifier}</strong></p>
-              {showQr && <img src={qrCodeUrl} alt="QR" style={{ width: "18mm", height: "18mm", objectFit: "contain" }} />}
-            </div>
+            <p style={{ margin: 0, fontSize: "7pt" }}>Payment via PayNow to <strong>{settings.paynowIdentifier}</strong></p>
           </div>
         )}
       </div>
@@ -494,6 +490,7 @@ export default function InvoiceTemplate({ invoice, settings, options = {} }) {
     ...settings,
   }), [settings]);
 
+  const hasStripePayment = Boolean(options.paymentUrl || options.stripeQrCodeUrl);
   const borderStyle = mergedSettings.invoiceBorderStyle || "modern";
   const borderCss = borderStyle === "classic"
     ? "1px solid #251E1F"
@@ -525,7 +522,7 @@ export default function InvoiceTemplate({ invoice, settings, options = {} }) {
       <ItemsTable invoice={invoice} settings={mergedSettings} />
       <SummarySection invoice={invoice} settings={mergedSettings} />
       <StripePaymentSection invoice={invoice} settings={mergedSettings} paymentUrl={options.paymentUrl} qrCodeUrl={options.stripeQrCodeUrl} />
-      <PaymentSection settings={mergedSettings} qrCodeUrl={options.qrCodeUrl} />
+      <PaymentSection settings={mergedSettings} qrCodeUrl={options.qrCodeUrl} hasStripePayment={hasStripePayment} />
       <SignatureSection settings={mergedSettings} signatureUrl={options.signatureUrl} stampUrl={options.stampUrl} />
       <FooterSection invoice={invoice} settings={mergedSettings} />
     </div>

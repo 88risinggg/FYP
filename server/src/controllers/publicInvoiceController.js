@@ -54,7 +54,7 @@ async function viewInvoice(req, res) {
         `SELECT
           i.invoice_id, i.invoiceId, i.status,
           i.issue_date, i.due_date, i.total_amount,
-          i.payment_url, i.qr_code_url, i.created_at,
+          i.payment_url, i.qr_code_url, i.stripe_session_id, i.payment_status, i.payment_date, i.created_at,
           c.name AS customer_name, c.email AS customer_email, c.address AS customer_address
         FROM invoice i
         INNER JOIN customer c ON c.customer_id = i.customer_id
@@ -67,7 +67,7 @@ async function viewInvoice(req, res) {
         `SELECT
           i.invoice_id, i.invoiceId, i.status,
           i.issue_date, i.due_date, i.total_amount,
-          NULL AS payment_url, NULL AS qr_code_url, i.created_at,
+          NULL AS payment_url, NULL AS qr_code_url, NULL AS stripe_session_id, NULL AS payment_status, NULL AS payment_date, i.created_at,
           c.name AS customer_name, c.email AS customer_email, c.address AS customer_address
         FROM invoice i
         INNER JOIN customer c ON c.customer_id = i.customer_id
@@ -116,9 +116,25 @@ async function viewInvoice(req, res) {
 
     invoice.items = items;
 
+    if (invoice.payment_status === "paid" && invoice.status !== "Paid") {
+      try {
+        await pool.query("UPDATE invoice SET status = 'Paid' WHERE invoice_id = ?", [invoice.invoice_id]);
+        invoice.status = "Paid";
+      } catch { /* non-critical */ }
+    }
+
     const isPayable = !["Paid", "Cancelled", "Refunded"].includes(invoice.status);
 
-    // Only generate a new Stripe session if payment_url is missing or a stale placeholder
+    async function isStripeSessionExpired() {
+      if (!invoice.stripe_session_id || !process.env.STRIPE_SECRET_KEY) return false;
+      const { retrieveSession } = require("../services/stripeService");
+      const session = await retrieveSession(invoice.stripe_session_id);
+      if (!session) return true;
+      if (session.payment_status === "paid") return false;
+      return session.expires_at ? Number(session.expires_at) * 1000 <= Date.now() : false;
+    }
+
+    // Only generate a new Stripe session if payment_url is missing, stale, or the stored Stripe session expired
     const isPlaceholderUrl = invoice.payment_url && (
       invoice.payment_url.includes("cs_test_sent_") ||
       invoice.payment_url.includes("cs_test_viewed_") ||
@@ -126,12 +142,14 @@ async function viewInvoice(req, res) {
       invoice.payment_url.includes("cs_test_paid_")
     );
 
-    // Has a real Stripe URL already — skip generation entirely
+    // Has a real Stripe URL already — skip generation entirely unless the session expired
     const hasRealUrl = invoice.payment_url &&
       !isPlaceholderUrl &&
       invoice.payment_url.startsWith("https://checkout.stripe.com");
 
-    if (isPayable && !hasRealUrl) {
+    const expiredStripeSession = await isStripeSessionExpired();
+
+    if (isPayable && (!hasRealUrl || expiredStripeSession)) {
       try {
         const { createCheckoutSession } = require("../services/stripeService");
         const stripeResult = await createCheckoutSession({
@@ -220,7 +238,7 @@ async function viewInvoice(req, res) {
         items: invoice.items,
         payment_url: isPayable ? invoice.payment_url : null,
         qr_code: isPayable ? qrCodeDataUri : null,
-        is_paid: invoice.status === "Paid",
+        is_paid: invoice.status === "Paid" || invoice.payment_status === "paid",
         is_pending_review: invoice.status === "Pending Review",
         paid_date: invoice.status === "Paid" ? (invoice.payment_date || null) : null,
         view_date: new Date().toISOString(),
