@@ -26,7 +26,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   TrendingUp,
-  Trash2,
   Upload,
   X
 } from "lucide-react";
@@ -51,8 +50,7 @@ import {
   sendInvoice,
   sendInvoiceReminder,
   validateBulkInvoiceRows,
-  fetchFinancialExport,
-  voidInvoice
+  fetchFinancialExport
 } from "../../services/invoiceService.js";
 import { getStoredSession } from "../../services/sessionService.js";
 import {
@@ -961,7 +959,6 @@ function InvoiceTable({
   onToggleAll,
   onView,
   onSend,
-  onVoid,
   onScheduleInvoice
 }) {
   if (invoices.length === 0) {
@@ -1074,16 +1071,7 @@ function InvoiceTable({
                       Download Receipt
                     </button>
                   ) : null}
-                  {!['Void', 'Cancelled'].includes(invoice.status) ? (
-                    <button
-                      type="button"
-                      onClick={() => onVoid(invoice)}
-                      className="inline-flex items-center gap-2 rounded-lg border border-rose-400/30 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-500/10"
-                    >
-                      <Trash2 size={14} />
-                      Void Invoice
-                    </button>
-                  ) : null}
+
                   {["Sent", "Viewed", "Overdue"].includes(invoice.status) ? (
                     <button
                       type="button"
@@ -2005,7 +1993,6 @@ function InvoicesView({
   onCreateClick,
   onViewInvoice,
   onSendInvoice,
-  onVoidInvoice,
   onScheduleInvoices
 }) {
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState(new Set());
@@ -2157,7 +2144,6 @@ function InvoicesView({
             onToggleAll={toggleAllInvoices}
             onView={onViewInvoice}
             onSend={onSendInvoice}
-            onVoid={onVoidInvoice}
             onScheduleInvoice={(invoiceId) => {
               setSelectedInvoiceIds(new Set([invoiceId]));
               setIsScheduleModalOpen(true);
@@ -3623,20 +3609,6 @@ export default function FinanceInvoicingPage() {
     await loadWorkspaceData();
   }
 
-  async function handleVoidInvoice(invoice) {
-    const reason = window.prompt(`Why should ${invoice.invoiceId} be voided?`);
-    if (!reason?.trim()) return;
-    if (!window.confirm(`Void ${invoice.invoiceId}? The record will be retained for audit.`)) return;
-    setError("");
-    try {
-      await voidInvoice(invoice.invoice_id, reason.trim());
-      setSelectedInvoice(null);
-      await loadWorkspaceData();
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  }
-
   async function handleVanidayImportComplete() {
     // Refresh invoice data after a successful Vaniday import
     await loadWorkspaceData();
@@ -3696,7 +3668,6 @@ export default function FinanceInvoicingPage() {
         onCreateClick={() => setIsCreating(true)}
         onViewInvoice={setSelectedInvoice}
         onSendInvoice={handleSendInvoice}
-        onVoidInvoice={handleVoidInvoice}
         onScheduleInvoices={loadWorkspaceData}
       />
     );

@@ -273,8 +273,9 @@ function PaymentSection({ settings, qrCodeUrl }) {
   const showBank = settings.bankDetailsDisplay;
   // Only show PayNow if there's actually an identifier configured
   const showPaynow = settings.paynowDisplay && settings.paynowIdentifier;
-  // Only show the PayNow QR if qrCodeDisplay is on AND we have a PayNow QR
-  const showQr = settings.qrCodeDisplay && qrCodeUrl && showPaynow;
+  // Only show the PayNow QR if qrCodeDisplay is on AND we have a real PayNow QR (not Stripe QR)
+  const isStripeQr = qrCodeUrl && String(qrCodeUrl).includes("checkout.stripe.com");
+  const showQr = settings.qrCodeDisplay && qrCodeUrl && showPaynow && !isStripeQr;
 
   if (!showBank && !showPaynow) return null;
 
@@ -411,7 +412,7 @@ function SignatureSection({ settings, signatureUrl, stampUrl }) {
   );
 }
 
-function FooterSection({ invoice, settings }) {
+function FooterSection({ invoice: _invoice, settings }) {
   const primary = settings.primaryColor || "#061e4b";
   const secondary = settings.secondaryColor || "#ff5a52";
 

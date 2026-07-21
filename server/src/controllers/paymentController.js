@@ -178,6 +178,124 @@ async function createStripePaymentLink(req, res) {
 }
 
 /**
+ * POST /api/payments/stripe/confirm
+ *
+ * Called by the client success page to confirm a Stripe checkout session
+ * and mark the invoice as Paid. This is a fallback for when the webhook
+ * hasn't fired yet (e.g. local dev, demo mode, or webhook delay).
+ *
+ * Body: { invoiceId (string like "INV-000001"), session_id }
+ */
+async function confirmStripePayment(req, res) {
+  const { invoiceId, session_id: sessionId } = req.body || {};
+
+  if (!invoiceId) {
+    return res.status(400).json({ message: "invoiceId is required." });
+  }
+
+  try {
+    // Look up the invoice by string invoiceId
+    const [rows] = await pool.query(
+      `SELECT i.invoice_id, i.status, i.total_amount, i.stripe_session_id
+       FROM invoice i WHERE i.invoiceId = ? LIMIT 1`,
+      [invoiceId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Invoice not found." });
+    }
+
+    const invoice = rows[0];
+
+    // Already paid — nothing to do
+    if (invoice.status === "Paid") {
+      return res.json({ status: "Paid", message: "Invoice is already marked as paid." });
+    }
+
+    // Try to verify with Stripe if we have a real key
+    const { retrieveSession } = require("../services/stripeService");
+    const sid = sessionId || invoice.stripe_session_id;
+    let confirmedByStripe = false;
+    let transactionId = `STRIPE-CONFIRM-${Date.now()}`;
+    let payAmount = Number(invoice.total_amount);
+
+    if (sid && process.env.STRIPE_SECRET_KEY) {
+      try {
+        const session = await retrieveSession(sid);
+        if (session && session.payment_status === "paid") {
+          confirmedByStripe = true;
+          transactionId = session.payment_intent || sid;
+          payAmount = session.amount_total ? session.amount_total / 100 : payAmount;
+        } else if (session && session.payment_status !== "paid") {
+          // Stripe says not paid
+          return res.json({ status: invoice.status, message: "Payment not yet confirmed by Stripe." });
+        }
+      } catch (stripeErr) {
+        console.error("[CONFIRM] Stripe session retrieval failed:", stripeErr.message);
+        // Fall through — mark paid anyway based on success page redirect
+      }
+    } else {
+      // No Stripe key (demo mode) or no session ID — trust the success redirect
+      confirmedByStripe = true;
+    }
+
+    if (!confirmedByStripe) {
+      return res.json({ status: invoice.status, message: "Unable to confirm payment." });
+    }
+
+    // Mark invoice as Paid
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // Prevent double-processing
+      const [lockRows] = await connection.query(
+        "SELECT status FROM invoice WHERE invoice_id = ? FOR UPDATE",
+        [invoice.invoice_id]
+      );
+      if (lockRows[0]?.status === "Paid") {
+        await connection.rollback();
+        return res.json({ status: "Paid", message: "Invoice already paid." });
+      }
+
+      // Insert payment record
+      await connection.query(
+        `INSERT INTO payment (payment_date, amount, status, transaction_id, invoice_invoice_id, payment_method_name)
+         VALUES (NOW(), ?, 'Completed', ?, ?, 'Stripe')`,
+        [String(payAmount), transactionId, invoice.invoice_id]
+      );
+
+      // Update invoice status
+      await connection.query(
+        `UPDATE invoice
+         SET status = 'Paid', payment_status = 'paid', payment_method = 'card',
+             payment_date = NOW(), transaction_id = ?
+         WHERE invoice_id = ?`,
+        [transactionId, invoice.invoice_id]
+      );
+
+      await connection.commit();
+
+      // Notify Finance (non-blocking)
+      try {
+        const { notifyPaymentSuccess } = require("../services/invoiceNotificationService");
+        notifyPaymentSuccess(invoiceId, null, payAmount).catch(() => {});
+      } catch { /* non-blocking */ }
+
+      res.json({ status: "Paid", message: "Invoice marked as paid.", amount: payAmount });
+    } catch (dbErr) {
+      await connection.rollback();
+      throw dbErr;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error("[CONFIRM PAYMENT]", error.message);
+    res.status(500).json({ message: "Failed to confirm payment.", detail: error.message });
+  }
+}
+
+/**
  * POST /api/payments/stripe/webhook
  */
 async function stripeWebhook(req, res) {
@@ -265,6 +383,7 @@ async function getPaymentHistory(req, res) {
 }
 
 module.exports = {
+  confirmStripePayment,
   createStripePaymentLink,
   getPaymentHistory,
   getPaymentsWorkspace,

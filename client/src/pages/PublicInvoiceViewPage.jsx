@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 
 import InvoiceTemplate from "../components/invoicing/InvoiceTemplate.jsx";
 
@@ -16,6 +16,9 @@ function formatDate(value) {
 
 export default function PublicInvoiceViewPage() {
   const { invoiceId } = useParams();
+  const [searchParams] = useSearchParams();
+  const sessionId = searchParams.get("session_id");
+
   const [invoice, setInvoice] = useState(null);
   const [settings, setSettings] = useState(null);
   const [error, setError] = useState("");
@@ -35,6 +38,17 @@ export default function PublicInvoiceViewPage() {
   useEffect(() => {
     async function loadInvoice() {
       try {
+        // If returning from Stripe checkout, confirm payment first
+        if (sessionId) {
+          try {
+            await fetch(`${API_BASE}/api/payments/stripe/confirm`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ invoiceId, session_id: sessionId })
+            });
+          } catch { /* non-critical — continue loading invoice */ }
+        }
+
         const res = await fetch(`${API_BASE}/api/public/invoice/${invoiceId}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || "Invoice not found");
@@ -50,7 +64,7 @@ export default function PublicInvoiceViewPage() {
       }
     }
     loadInvoice();
-  }, [invoiceId]);
+  }, [invoiceId, sessionId]);
 
   async function handleSubmitPayment(e) {
     e.preventDefault();
@@ -125,9 +139,11 @@ export default function PublicInvoiceViewPage() {
             settings={settings || {}}
             options={{
               logoUrl: settings?.companyLogoUrl || settings?.branding?.companyLogoUrl || "",
-              qrCodeUrl: "",
-              stripeQrCodeUrl: invoice.qr_code || invoice.qr_code_url || "",
-              paymentUrl: invoice.payment_url ? String(invoice.payment_url) : "",
+              // qrCodeUrl is for the static PayNow QR in PaymentSection — we don't have one here
+              qrCodeUrl: null,
+              // stripeQrCodeUrl is for the Stripe payment QR — only show if invoice is not paid
+              stripeQrCodeUrl: invoice.is_paid ? "" : (invoice.qr_code || invoice.qr_code_url || ""),
+              paymentUrl: invoice.is_paid ? "" : (invoice.payment_url ? String(invoice.payment_url) : ""),
               signatureUrl: settings?.signatureUrl || "",
               stampUrl: settings?.companyStampUrl || settings?.branding?.companyStampUrl || "",
             }}

@@ -1,5 +1,6 @@
 const express = require("express");
 const {
+  confirmStripePayment,
   createStripePaymentLink,
   getPaymentsWorkspace,
   getPaymentHistory,
@@ -108,6 +109,8 @@ async function submitModernTreasuryTransfer(req, res) {
 
 // Webhook must be before auth middleware for raw body access
 router.post("/stripe/webhook", stripeWebhook);
+// Confirm endpoint is also pre-auth — called from the public success page
+router.post("/stripe/confirm", confirmStripePayment);
 
 router.use(authenticateToken);
 router.get("/", getPaymentsWorkspace);

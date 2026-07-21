@@ -8,41 +8,50 @@ export default function PaymentSuccessPage() {
   const invoiceId = searchParams.get("invoice");
   const sessionId = searchParams.get("session_id");
 
-  const [status, setStatus] = useState("loading"); // loading | paid | pending | error
+  const [status, setStatus] = useState("loading"); // loading | paid | error
   const [invoice, setInvoice] = useState(null);
 
   useEffect(() => {
     if (!invoiceId) { setStatus("error"); return; }
 
-    // Poll the public invoice endpoint to confirm paid status
-    // Stripe webhook updates the DB — give it a moment to process
-    let attempts = 0;
-    const maxAttempts = 8;
-    const interval = setInterval(async () => {
-      attempts++;
+    async function confirmAndLoad() {
       try {
-        const res = await fetch(`${API_BASE}/api/public/invoice/${invoiceId}`);
-        const data = await res.json();
-        if (data.invoice?.status === "Paid") {
-          setInvoice(data.invoice);
-          setStatus("paid");
-          clearInterval(interval);
-        } else if (attempts >= maxAttempts) {
-          // Webhook may still be processing — show pending state
-          setInvoice(data.invoice);
-          setStatus("pending");
-          clearInterval(interval);
-        }
-      } catch {
-        if (attempts >= maxAttempts) {
-          setStatus("error");
-          clearInterval(interval);
-        }
-      }
-    }, 1500);
+        // Step 1: Tell the server to mark the invoice as Paid
+        // (handles webhook delay and demo mode with no real Stripe key)
+        const confirmRes = await fetch(`${API_BASE}/api/payments/stripe/confirm`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ invoiceId, session_id: sessionId })
+        });
+        const confirmData = await confirmRes.json();
 
-    return () => clearInterval(interval);
-  }, [invoiceId]);
+        if (!confirmRes.ok) {
+          console.error("[PaymentSuccess] confirm failed:", confirmData.message);
+          setStatus("error");
+          return;
+        }
+
+        // Step 2: Load the invoice to display confirmation details
+        const invoiceRes = await fetch(`${API_BASE}/api/public/invoice/${invoiceId}`);
+        const invoiceData = await invoiceRes.json();
+
+        setInvoice(invoiceData.invoice || null);
+
+        // confirmData.status comes back as "Paid" once confirmed
+        if (confirmData.status === "Paid" || invoiceData.invoice?.status === "Paid") {
+          setStatus("paid");
+        } else {
+          // Very unlikely — server confirmed but invoice still not Paid
+          setStatus("error");
+        }
+      } catch (err) {
+        console.error("[PaymentSuccess] unexpected error:", err);
+        setStatus("error");
+      }
+    }
+
+    confirmAndLoad();
+  }, [invoiceId, sessionId]);
 
   if (status === "loading") {
     return (
@@ -81,34 +90,6 @@ export default function PaymentSuccessPage() {
               className="block w-full rounded-xl bg-[#061e4b] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0a2d6b]"
             >
               View Invoice
-            </Link>
-          </div>
-          <p className="mt-6 text-xs text-[#7b6660]/50">Powered by Stripe • Vaniday Invoicing</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (status === "pending") {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#f5f5f5] px-4">
-        <div className="w-full max-w-md rounded-2xl bg-white p-10 text-center shadow-lg">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100">
-            <svg className="h-8 w-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-[#061e4b]">Payment Processing</h1>
-          <p className="mt-2 text-sm text-[#7b6660]">
-            Your payment for <strong className="text-[#251E1F]">{invoiceId}</strong> is being processed.
-            This usually takes a few seconds.
-          </p>
-          <div className="mt-8 space-y-3">
-            <Link
-              to={`/invoice/view/${invoiceId}`}
-              className="block w-full rounded-xl bg-[#061e4b] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0a2d6b]"
-            >
-              Check Invoice Status
             </Link>
           </div>
           <p className="mt-6 text-xs text-[#7b6660]/50">Powered by Stripe • Vaniday Invoicing</p>
