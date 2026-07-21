@@ -269,8 +269,8 @@ function SummarySection({ invoice, settings }) {
 }
 
 function PaymentSection({ settings, qrCodeUrl, hasStripePayment }) {
-  const primary = settings.primaryColor || "#061e4b";
-  const secondary = settings.secondaryColor || "#ff5a52";
+  const primary = settings.primaryColor || "#251E1F";
+  const secondary = settings.secondaryColor || "#F38978";
   const showBank = settings.bankDetailsDisplay;
   const showPaynow = settings.paynowDisplay && settings.paynowIdentifier;
   // Never show QR in PayNow section when Stripe payment is active — Stripe QR is shown above

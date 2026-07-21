@@ -51,7 +51,8 @@ import {
   sendInvoice,
   sendInvoiceReminder,
   validateBulkInvoiceRows,
-  fetchFinancialExport
+  fetchFinancialExport,
+  voidInvoice
 } from "../../services/invoiceService.js";
 import { getStoredSession } from "../../services/sessionService.js";
 import {
@@ -165,7 +166,8 @@ const statusStyles = {
   Sent: "border-[#D6E4FF] bg-[#EAF2FF] text-[#3269A8]",
   Viewed: "border-[#35A69B]/30 bg-[#E7F7F5] text-[#218178]",
   Paid: "border-emerald-400/30 bg-emerald-500/15 text-emerald-700",
-  Overdue: "border-rose-400/30 bg-rose-500/15 text-rose-700"
+  Overdue: "border-rose-400/30 bg-rose-500/15 text-rose-700",
+  Void: "border-slate-400/30 bg-slate-500/10 text-slate-600"
 };
 
 const emptyItem = {
@@ -661,6 +663,104 @@ function InvoiceDetailsModal({ invoice, onClose }) {
   );
 }
 
+function VoidInvoiceModal({ invoice, onCancel, onVoided }) {
+  const [reason, setReason] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleVoid() {
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
+      setError("Please provide a reason for voiding this invoice.");
+      return;
+    }
+    setError("");
+    setIsSubmitting(true);
+    try {
+      await voidInvoice(invoice.invoice_id, trimmedReason);
+      await onVoided();
+    } catch (err) {
+      setError(err.message || "Failed to void invoice.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#251E1F]/80 p-4 backdrop-blur">
+      <div className="app-panel w-full max-w-lg rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-4 border-b border-[#f0d2ca] pb-5">
+          <div>
+            <p className="text-sm font-semibold text-rose-600">Void Invoice</p>
+            <h2 className="mt-1 text-xl font-semibold text-[#251E1F]">
+              {invoice.invoiceId}
+            </h2>
+            <p className="mt-1 text-sm text-[#7b6660]">
+              {invoice.customer_name} &middot; Current status:{" "}
+              <span className="font-semibold">{invoice.status}</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg p-2 text-[#7b6660] hover:bg-[#FDD9CD]/30 hover:text-[#251E1F]"
+            aria-label="Close void dialog"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          <div className="rounded-xl border border-rose-400/25 bg-rose-500/[0.06] p-4 text-sm text-rose-700">
+            <p className="font-semibold">This action cannot be undone.</p>
+            <p className="mt-1 text-xs text-rose-600">
+              The invoice will be marked <strong>Void</strong> and retained for audit. It will no
+              longer appear in revenue totals or be payable by the customer.
+            </p>
+          </div>
+
+          <ErrorBanner message={error} />
+
+          <label className="block">
+            <span className="text-sm font-medium text-[#7b6660]">
+              Reason for voiding <span className="text-rose-600">*</span>
+            </span>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              placeholder="e.g. Duplicate invoice, incorrect customer, error in line items..."
+              className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white px-3 py-3 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/60 focus:border-rose-400 resize-none"
+            />
+          </label>
+        </div>
+
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-xl border border-[#f0d2ca] px-5 py-3 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/30"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleVoid}
+            disabled={isSubmitting}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSubmitting ? (
+              <><Loader2 size={16} className="animate-spin" /> Voiding...</>
+            ) : (
+              <><X size={16} /> Confirm Void</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InvoiceCreationModal({ customers, nextInvoiceId, defaultDueDate: configuredDueDate, onCancel, onCreated }) {
   const today = toDateInputValue(new Date());
   const defaultDueDate = configuredDueDate || toDateInputValue(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000));
@@ -987,7 +1087,8 @@ function InvoiceTable({
   onToggleAll,
   onView,
   onSend,
-  onScheduleInvoice
+  onScheduleInvoice,
+  onVoidInvoice
 }) {
   if (invoices.length === 0) {
     return (
@@ -1112,6 +1213,16 @@ function InvoiceTable({
                     >
                       <Mail size={14} />
                       Send Reminder
+                    </button>
+                  ) : null}
+                  {!["Paid", "Void", "Cancelled", "Refunded"].includes(invoice.status) ? (
+                    <button
+                      type="button"
+                      onClick={() => onVoidInvoice(invoice)}
+                      className="inline-flex items-center gap-2 rounded-lg border border-rose-400/30 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-500/10"
+                    >
+                      <X size={14} />
+                      Void
                     </button>
                   ) : null}
                 </div>
@@ -2026,6 +2137,8 @@ function InvoicesView({
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState(new Set());
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [scheduleMessage, setScheduleMessage] = useState("");
+  const [voidTarget, setVoidTarget] = useState(null);
+  const [voidMessage, setVoidMessage] = useState("");
   const visibleInvoices = useMemo(() => {
     let filtered = invoices;
 
@@ -2105,6 +2218,13 @@ function InvoicesView({
     await onScheduleInvoices();
   }
 
+  async function handleVoided() {
+    setVoidMessage(`${voidTarget.invoiceId} has been voided and retained for audit.`);
+    setVoidTarget(null);
+    await onScheduleInvoices();
+    setTimeout(() => setVoidMessage(""), 5000);
+  }
+
   return (
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-4">
@@ -2148,6 +2268,11 @@ function InvoicesView({
                 {scheduleMessage}
               </div>
             ) : null}
+            {voidMessage ? (
+              <div className="rounded-xl border border-slate-400/30 bg-slate-500/10 px-4 py-3 text-sm text-slate-700">
+                {voidMessage}
+              </div>
+            ) : null}
           </div>
           {customerFilter ? (
             <button
@@ -2176,6 +2301,7 @@ function InvoicesView({
               setSelectedInvoiceIds(new Set([invoiceId]));
               setIsScheduleModalOpen(true);
             }}
+            onVoidInvoice={setVoidTarget}
           />
         )}
       </SectionShell>
@@ -2185,6 +2311,14 @@ function InvoicesView({
           selectedCount={selectedCount}
           onCancel={() => setIsScheduleModalOpen(false)}
           onConfirm={confirmSchedule}
+        />
+      ) : null}
+
+      {voidTarget ? (
+        <VoidInvoiceModal
+          invoice={voidTarget}
+          onCancel={() => setVoidTarget(null)}
+          onVoided={handleVoided}
         />
       ) : null}
     </div>

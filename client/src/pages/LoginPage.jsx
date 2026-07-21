@@ -177,7 +177,7 @@ export default function LoginPage() {
       startHealthCheck();
       navigate("/module-selection", { replace: true });
     } catch (requestError) {
-      setError("Invalid email or password");
+      setError(requestError.message || "Invalid email or password");
     } finally {
       setIsLoading(false);
     }
