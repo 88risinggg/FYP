@@ -13,10 +13,13 @@ export default function AuditLogsSection() {
 
   useEffect(() => { loadLogs(); }, [page, moduleFilter]);
 
-  async function loadLogs() {
+  async function loadLogs(overrides = {}) {
+    const nextPage = overrides.page ?? page;
+    const nextSearch = overrides.search ?? search;
+    const nextModule = overrides.module ?? moduleFilter;
     setLoading(true);
     try {
-      const data = await fetchAuditLogs({ page, limit, search, module: moduleFilter });
+      const data = await fetchAuditLogs({ page: nextPage, limit, search: nextSearch, module: nextModule });
       setLogs(data.logs || []);
       setTotal(data.total || 0);
     } catch (err) { /* ignore */ }
@@ -26,7 +29,7 @@ export default function AuditLogsSection() {
   function handleSearch(e) {
     e.preventDefault();
     setPage(1);
-    loadLogs();
+    loadLogs({ page: 1, search });
   }
 
   function formatDate(d) {
@@ -53,7 +56,7 @@ export default function AuditLogsSection() {
               placeholder="Search actions..."
               className="w-full bg-transparent text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50" />
             {search && (
-              <button type="button" onClick={() => { setSearch(""); setPage(1); setTimeout(loadLogs, 0); }} className="text-[#7b6660] hover:text-[#251E1F]">
+              <button type="button" aria-label="Clear audit log search" onClick={() => { setSearch(""); setPage(1); loadLogs({ page: 1, search: "" }); }} className="text-[#7b6660] hover:text-[#251E1F]">
                 <X size={14} />
               </button>
             )}

@@ -50,8 +50,8 @@ async function listUsers({ search, roleId, status }) {
   const hasSearch = Boolean(search);
 
   if (hasSearch) {
-    where.push("LOWER(user.email) LIKE LOWER(?)");
-    params.push(`${search}%`);
+    where.push("(LOWER(user.name) LIKE LOWER(?) OR LOWER(user.email) LIKE LOWER(?))");
+    params.push(`%${search}%`, `%${search}%`);
   }
 
   if (roleId) {

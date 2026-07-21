@@ -1,6 +1,6 @@
 import { AlertCircle, ArrowLeft, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { fetchInvoiceValidationErrors } from "../../services/adminDashboardService.js";
 
@@ -10,6 +10,7 @@ const statusStyles = {
   Pending: "bg-amber-50 text-amber-700",
   Validated: "bg-blue-50 text-blue-700",
   Successful: "bg-emerald-50 text-emerald-700",
+  "Partial Success": "bg-sky-50 text-sky-700",
   Failed: "bg-rose-50 text-rose-700"
 };
 
@@ -32,6 +33,8 @@ function StatusBadge({ status }) {
 }
 
 export default function AdminValidationErrorsPage() {
+  const [searchParams] = useSearchParams();
+  const uploadId = searchParams.get("uploadId") || "";
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -43,7 +46,7 @@ export default function AdminValidationErrorsPage() {
     setError("");
 
     try {
-      setData(await fetchInvoiceValidationErrors());
+      setData(await fetchInvoiceValidationErrors({ uploadId }));
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -54,7 +57,7 @@ export default function AdminValidationErrorsPage() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [uploadId]);
 
   if (loading) {
     return <div className="rounded-xl border border-[#f0d2ca] bg-white p-8 text-center text-[#514440]">Loading validation errors...</div>;
@@ -73,9 +76,10 @@ export default function AdminValidationErrorsPage() {
             <Link to={summaryPath} className="mb-3 inline-flex items-center gap-2 text-sm font-bold text-[#F38978] hover:text-[#d96858]">
               <ArrowLeft size={16} /> Back to Validation Summary
             </Link>
-            <h2 className="text-2xl font-bold">All Invoice Validation Errors</h2>
+            <h2 className="text-2xl font-bold">{uploadId ? "Invoice Validation Error Report" : "All Invoice Validation Errors"}</h2>
             <p className="mt-1 text-sm text-[#6f5b55]">
-              {errors.length} recorded {errors.length === 1 ? "error" : "errors"} across invoice uploads.
+              {data?.upload ? `${data.upload.fileName} · Batch ${data.upload.uploadBatchId} · ` : ""}
+              {errors.length} recorded {errors.length === 1 ? "error" : "errors"}{uploadId ? "." : " across invoice uploads."}
             </p>
           </div>
           <button
@@ -107,6 +111,7 @@ export default function AdminValidationErrorsPage() {
                 <thead>
                   <tr className="border-y border-[#f0d2ca] bg-[#fff8f5] text-xs uppercase text-[#7b6660]">
                     <th className="px-3 py-3">File name</th>
+                    <th className="px-3 py-3">Upload batch</th>
                     <th className="px-3 py-3">Row</th>
                     <th className="px-3 py-3">Invoice #</th>
                     <th className="px-3 py-3">Field</th>
@@ -120,6 +125,7 @@ export default function AdminValidationErrorsPage() {
                   {errors.map((item) => (
                     <tr key={item.validationErrorId} className="border-b border-[#f4ded7] align-top hover:bg-[#fff8f5]">
                       <td className="max-w-56 truncate px-3 py-3 font-bold" title={item.fileName}>{item.fileName}</td>
+                      <td className="max-w-48 truncate px-3 py-3 font-mono text-xs" title={item.uploadBatchId}>{item.uploadBatchId}</td>
                       <td className="px-3 py-3 font-bold">{item.rowNumber ?? "File"}</td>
                       <td className="px-3 py-3 text-[#514440]">{item.invoiceNumber || "-"}</td>
                       <td className="px-3 py-3 text-[#514440]">{item.fieldName}</td>

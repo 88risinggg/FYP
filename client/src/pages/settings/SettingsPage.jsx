@@ -73,7 +73,11 @@ export default function SettingsPage() {
   const [pendingSection, setPendingSection] = useState(null);
   const [sectionVersion, setSectionVersion] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [settingsSearch, setSettingsSearch] = useState("");
   const settingsContentRef = useRef(null);
+  const visibleSettings = settingsMenu.filter((item) =>
+    item.label.toLowerCase().includes(settingsSearch.trim().toLowerCase())
+  );
 
   useEffect(() => {
     const content = settingsContentRef.current;
@@ -171,13 +175,14 @@ export default function SettingsPage() {
       user={session?.user}
       searchPlaceholder="Search settings..."
       hideSidebar
+      onSearch={setSettingsSearch}
     >
       <section className="flex flex-col gap-6 pb-24 lg:flex-row">
         {/* Settings Sidebar */}
         <nav className="w-full shrink-0 lg:w-64">
           <div className="app-panel rounded-2xl p-3">
             <div className="space-y-0.5">
-              {settingsMenu.map((item) => {
+              {visibleSettings.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeSection === item.id;
                 const isDanger = item.id === "danger";
@@ -201,6 +206,9 @@ export default function SettingsPage() {
                   </button>
                 );
               })}
+              {visibleSettings.length === 0 ? (
+                <p className="px-3 py-4 text-center text-sm text-[#7b6660]">No settings sections match your search.</p>
+              ) : null}
             </div>
           </div>
         </nav>

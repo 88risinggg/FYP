@@ -59,8 +59,14 @@ export function fetchInvoiceValidationSummary() {
   });
 }
 
-export function fetchInvoiceValidationErrors() {
-  return apiRequest("/api/admin/invoicing/dashboard/validation-errors", {
+export function fetchInvoiceUploadHistory(filters = {}) {
+  return apiRequest(`/api/admin/invoicing/dashboard/validation-summary/uploads${toQueryString(filters)}`, {
+    headers: authHeaders()
+  });
+}
+
+export function fetchInvoiceValidationErrors(filters = {}) {
+  return apiRequest(`/api/admin/invoicing/dashboard/validation-errors${toQueryString(filters)}`, {
     headers: authHeaders()
   });
 }

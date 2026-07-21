@@ -5,6 +5,7 @@ import {
   Check,
   FileBarChart,
   LayoutDashboard,
+  Loader2,
   LogOut,
   Menu,
   PanelLeftOpen,
@@ -88,6 +89,7 @@ export default function DashboardLayout({
   profileName,
   profileRole,
   onSearch,
+  searchEndpoint,
   notifications = [],
   notificationBadgeCount,
   notificationsPath,
@@ -102,6 +104,9 @@ export default function DashboardLayout({
   const displayName = profileName || user?.name || roleProfile?.name || "User";
   const displayRole = profileRole || roleProfile?.role || user?.role || "User";
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [fetchedNotifications, setFetchedNotifications] = useState(null);
@@ -145,6 +150,58 @@ export default function DashboardLayout({
     : displayNotifications.filter((notification) => !(
         notification.is_read === 1 || notification.is_read === true || notification.read
       )).length;
+  const searchEnabled = typeof onSearch === "function" || Boolean(searchEndpoint);
+
+  useEffect(() => {
+    if (!searchEndpoint || !searchQuery.trim()) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    setSearchLoading(true);
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const separator = searchEndpoint.includes("?") ? "&" : "?";
+        const data = await apiRequest(`${searchEndpoint}${separator}q=${encodeURIComponent(searchQuery.trim())}`);
+        if (active) {
+          setSearchResults(Array.isArray(data) ? data : data?.results || []);
+          setSearchOpen(true);
+        }
+      } catch {
+        if (active) {
+          setSearchResults([]);
+          setSearchOpen(true);
+        }
+      } finally {
+        if (active) setSearchLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [searchEndpoint, searchQuery]);
+
+  function getSearchResultDetails(result) {
+    const employeeId = result.employee_id || result.employee_code || result.staff_id;
+    const title = result.title || result.name || result.staff_name || employeeId || result.id || "Search result";
+    const subtitle = result.subtitle || [result.email, result.department_name, result.status]
+      .filter(Boolean)
+      .join(" • ");
+    const href = result.href || (employeeId
+      ? `/dashboard/payroll/hr/staff?highlight=${encodeURIComponent(employeeId)}`
+      : "");
+    return { href, subtitle, title };
+  }
+
+  function selectSearchResult(result) {
+    const { href } = getSearchResultDetails(result);
+    setSearchOpen(false);
+    if (href) navigate(href);
+  }
 
   function toggleDesktopSidebar() {
     setSidebarCollapsed((current) => {
@@ -366,25 +423,53 @@ export default function DashboardLayout({
           </h1>
 
           {/* Search */}
-          <div className={classes.searchWrap}>
+          {searchEnabled ? <div className={`${classes.searchWrap} relative`}>
             <Search size={16} className={classes.searchIcon} />
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
+                setSearchOpen(Boolean(e.target.value.trim()));
                 if (onSearch) onSearch(e.target.value);
               }}
+              onFocus={() => { if (searchQuery.trim()) setSearchOpen(true); }}
               onKeyDown={handleSearchKeyDown}
               placeholder={searchPlaceholder}
               className={classes.searchInput}
             />
             {searchQuery && (
-              <button type="button" onClick={() => { setSearchQuery(""); if (onSearch) onSearch(""); }} className={classes.mutedButton}>
+              <button type="button" aria-label="Clear search" onClick={() => { setSearchQuery(""); setSearchResults([]); setSearchOpen(false); if (onSearch) onSearch(""); }} className={classes.mutedButton}>
                 <X size={14} />
               </button>
             )}
-          </div>
+            {searchEndpoint && searchOpen ? (
+              <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-40 overflow-hidden rounded-xl border border-[#f0d2ca] bg-white shadow-2xl shadow-[#f2b5a9]/30">
+                {searchLoading ? (
+                  <div className="flex items-center justify-center gap-2 px-4 py-5 text-sm text-[#7b6660]"><Loader2 size={16} className="animate-spin" /> Searching...</div>
+                ) : searchResults.length ? (
+                  <div className="max-h-72 overflow-y-auto py-1">
+                    {searchResults.map((result, index) => {
+                      const details = getSearchResultDetails(result);
+                      return (
+                        <button
+                          key={`${result.type || "result"}-${result.id || result.employee_id || index}`}
+                          type="button"
+                          onClick={() => selectSearchResult(result)}
+                          className="block w-full px-4 py-3 text-left hover:bg-[#fff3ee]"
+                        >
+                          <span className="block truncate text-sm font-semibold text-[#251E1F]">{details.title}</span>
+                          {details.subtitle ? <span className="mt-0.5 block truncate text-xs text-[#7b6660]">{details.subtitle}</span> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="px-4 py-5 text-center text-sm text-[#7b6660]">No matching records found.</div>
+                )}
+              </div>
+            ) : null}
+          </div> : null}
 
           {/* Notifications */}
           <div className="relative">

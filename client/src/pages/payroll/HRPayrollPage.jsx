@@ -2972,7 +2972,7 @@ export default function HRPayrollPage() {
   const location = useLocation();
   const heading = routeHeadings[location.pathname] || "Dashboard";
   const activePath = location.pathname.replace(/\/+$/, "") || "/";
-  const headerSearchEndpoint = `${API_BASE_URL}/api/hr/search`;
+  const headerSearchEndpoint = "/api/hr/search";
 
   const renderContent = () => {
     if (activePath === "/dashboard/payroll/hr/staff") {

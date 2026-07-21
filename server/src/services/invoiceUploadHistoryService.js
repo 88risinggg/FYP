@@ -5,6 +5,8 @@
  * Validation errors are stored as JSON in upload_validation_errors_json column.
  */
 
+const crypto = require("crypto");
+
 const { pool } = require("../config/db");
 
 function fileNameFromMetadata(file = {}) {
@@ -55,22 +57,53 @@ async function recordValidationAttempt({ file, validation, user }) {
     : Number(validation.invalidCount || validation.validCount || 0);
   const isFailed = Boolean(validation.message) || Number(validation.validCount || 0) === 0;
   const errors = validationErrorRows(validation);
+  const requestFingerprint = crypto.createHash("sha256").update(JSON.stringify({
+    userId: user?.userId || null,
+    fileName: fileNameFromMetadata(file),
+    fileType: String(file?.type || ""),
+    totalRows,
+    validCount: Number(validation.validCount || 0),
+    invalidCount: Number(validation.invalidCount || 0),
+    rows: validation.rows || [],
+    message: validation.message || ""
+  })).digest("hex");
+
+  // A browser retry can submit the exact validation request twice. Reuse only
+  // a very recent identical request; completed or deliberately repeated uploads
+  // outside this retry window remain separate audit batches.
+  const [duplicateRows] = await pool.execute(
+    `SELECT audit_log_id
+     FROM audit_logs
+     WHERE activity_type = 'invoice_upload'
+       AND user_id <=> ?
+       AND new_value = ?
+       AND created_at >= DATE_SUB(NOW(), INTERVAL 10 SECOND)
+     ORDER BY audit_log_id DESC
+     LIMIT 1`,
+    [user?.userId || null, JSON.stringify({ requestFingerprint })]
+  );
+  if (duplicateRows[0]?.audit_log_id) {
+    return Number(duplicateRows[0].audit_log_id);
+  }
+
+  const uploadBatchId = `UPL-${crypto.randomUUID()}`;
 
   const [result] = await pool.execute(
     `INSERT INTO audit_logs (
       module, activity_type, action_description, affected_record, status, user_id, user_name,
       upload_file_name, upload_file_type, upload_total_rows, upload_valid_rows,
       upload_invalid_rows, upload_created_invoices, upload_error_message,
-      upload_validation_errors_json, upload_completed_at, created_at
+      upload_validation_errors_json, upload_completed_at, new_value, created_at
     ) VALUES (
-      'Invoice', 'invoice_upload', ?, NULL, ?, ?, ?,
+      'Invoice', 'invoice_upload', ?, ?, ?, ?, ?,
       ?, ?, ?, ?,
       ?, 0, ?,
-      ?, ?, NOW()
+      ?, ?, ?, NOW()
     )`,
     [
       `Upload: ${fileNameFromMetadata(file)} (${isFailed ? "Failed" : "Validated"})`,
-      isFailed ? "failed" : "pending",
+      uploadBatchId,
+      isFailed ? "Failed" : "Info",
       user?.userId || null,
       user?.email || "System",
       fileNameFromMetadata(file),
@@ -80,7 +113,8 @@ async function recordValidationAttempt({ file, validation, user }) {
       Number(validation.invalidCount || 0),
       validation.message || null,
       errors.length > 0 ? JSON.stringify(errors) : null,
-      isFailed ? new Date() : null
+      isFailed ? new Date() : null,
+      JSON.stringify({ requestFingerprint })
     ]
   );
 
@@ -96,14 +130,35 @@ async function updateUploadOutcome(connection, {
 }) {
   if (!uploadId) return false;
 
-  const dbStatus = status === "Successful" ? "success" : status === "Failed" ? "failed" : "pending";
+  const dbStatus = status === "Successful" ? "Success" : status === "Failed" ? "Failed" : "Info";
 
   const [result] = await connection.execute(
     `UPDATE audit_logs
-     SET status = ?, upload_created_invoices = ?, upload_error_message = ?, upload_completed_at = NOW(),
-         action_description = CONCAT('Upload: ', upload_file_name, ' (', ?, ')')
+     SET status = IF(? = 'Success' AND ? > 0
+                       AND (COALESCE(upload_invalid_rows, 0) > 0 OR ? < COALESCE(upload_valid_rows, 0)),
+                     'Warning', ?),
+         upload_created_invoices = ?, upload_error_message = ?, upload_completed_at = NOW(),
+         action_description = CONCAT(
+           'Upload: ', upload_file_name, ' (',
+           IF(? = 'Success' AND ? > 0
+                 AND (COALESCE(upload_invalid_rows, 0) > 0 OR ? < COALESCE(upload_valid_rows, 0)),
+              'Partial Success', ?),
+           ')'
+         )
      WHERE audit_log_id = ? AND activity_type = 'invoice_upload'`,
-    [dbStatus, createdInvoices, errorMessage, status, uploadId]
+    [
+      dbStatus,
+      createdInvoices,
+      createdInvoices,
+      dbStatus,
+      createdInvoices,
+      errorMessage,
+      dbStatus,
+      createdInvoices,
+      createdInvoices,
+      status,
+      uploadId
+    ]
   );
   return result.affectedRows > 0;
 }
