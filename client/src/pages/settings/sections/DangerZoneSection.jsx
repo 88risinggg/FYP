@@ -89,8 +89,8 @@ export default function DangerZoneSection() {
   return (
     <div className="space-y-6">
       {toast && <Toast toast={toast} />}
-      <div className="rounded-2xl border-2 border-rose-500/30 bg-rose-500/[0.04] p-6 shadow-lg shadow-rose-500/5">
-        <div className="flex items-center gap-3"><AlertTriangle size={20} className="text-rose-400" /><h2 className="text-xl font-semibold text-rose-700">Danger Zone</h2></div>
+      <div className="rounded-2xl border-2 border-rose-500/30 bg-rose-500/[0.04] p-6 shadow-lg shadow-[#C55245]/5">
+        <div className="flex items-center gap-3"><AlertTriangle size={20} className="text-rose-400" /><h2 className="text-xl font-semibold text-rose-400">Danger Zone</h2></div>
         <p className="mt-1 text-sm text-rose-700/70">Sensitive actions require two confirmations before they run.</p>
         <div className="mt-6 space-y-4">
           <DangerAction icon={XCircle} title="Deactivate Account" description="Temporarily disable your account. Contact an administrator to reactivate it." buttonLabel="Deactivate" onClick={() => openConfirmation("deactivate")} />
@@ -102,7 +102,7 @@ export default function DangerZoneSection() {
 
       {isAdmin && (
         <div className="app-panel rounded-2xl p-6">
-          <div className="flex items-center gap-3"><Trash2 size={19} className="text-[#d98686]" /><h3 className="text-lg font-semibold text-[#251E1F]">Account Deletion Approvals</h3></div>
+          <div className="flex items-center gap-3"><Trash2 size={19} className="text-[#C55245]" /><h3 className="text-lg font-semibold text-[#251E1F]">Account Deletion Approvals</h3></div>
           <p className="mt-1 text-sm text-[#7b6660]">Only administrators can approve permanent account deletion.</p>
           <div className="mt-5 space-y-3">
             {requestsLoading ? <div className="h-24 animate-pulse rounded-xl bg-[#FDD9CD]/30" /> : null}
@@ -110,7 +110,7 @@ export default function DangerZoneSection() {
             {requests.filter((request) => request.status === "pending").map((request) => (
               <div key={request.request_id} className="flex flex-col gap-3 rounded-xl border border-[#ead3cc] bg-[#fff3ee]/60 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0"><p className="text-sm font-semibold text-[#251E1F]">{request.user_name}</p><p className="truncate text-xs text-[#7b6660]">{request.user_email} · Requested {new Date(request.requested_at).toLocaleString()}</p></div>
-                <div className="flex gap-2"><button type="button" onClick={() => openConfirmation("reject", request)} className="flex-1 rounded-lg border border-[#ead3cc] bg-white px-3 py-2 text-xs font-semibold text-[#7b6660] sm:flex-none">Reject</button><button type="button" onClick={() => openConfirmation("approve", request)} className="flex-1 rounded-lg bg-[#d98686] px-3 py-2 text-xs font-semibold text-white sm:flex-none">Approve</button></div>
+                <div className="flex gap-2"><button type="button" onClick={() => openConfirmation("reject", request)} className="flex-1 rounded-lg border border-[#ead3cc] bg-white px-3 py-2 text-xs font-semibold text-[#7b6660] sm:flex-none">Reject</button><button type="button" onClick={() => openConfirmation("approve", request)} className="flex-1 rounded-lg bg-[#C55245] px-3 py-2 text-xs font-semibold text-white sm:flex-none">Approve</button></div>
               </div>
             ))}
           </div>
@@ -124,10 +124,10 @@ export default function DangerZoneSection() {
             <span className="mt-4 inline-flex rounded-full bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-700">Confirmation {confirmation.stage} of 2</span>
             <p className="mt-3 text-sm leading-6 text-[#7b6660]">{confirmation.stage === 1 ? copy.first : copy.second}</p>
             {confirmation.request && <p className="mt-3 rounded-xl bg-[#fff3ee] p-3 text-sm font-medium text-[#251E1F]">{confirmation.request.user_name} · {confirmation.request.user_email}</p>}
-            {confirmation.type === "delete" && confirmation.stage === 1 && <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" className="mt-4 w-full rounded-xl border border-[#ead3cc] bg-white px-3 py-2.5 text-sm outline-none focus:border-rose-400" />}
+            {confirmation.type === "delete" && confirmation.stage === 1 && <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" className="mt-4 w-full rounded-xl border border-[#F0D2CA] bg-white px-3 py-2.5 text-sm outline-none focus:border-rose-400" />}
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button type="button" onClick={() => { setConfirmation(null); setPassword(""); }} disabled={actionLoading} className="rounded-xl border border-[#ead3cc] bg-white px-4 py-2.5 text-sm font-semibold text-[#7b6660]">Cancel</button>
-              <button type="button" onClick={confirmation.stage === 1 ? continueConfirmation : executeAction} disabled={actionLoading} className="rounded-xl bg-[#d98686] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{actionLoading ? <Loader2 size={15} className="mx-auto animate-spin" /> : confirmation.stage === 1 ? "Continue" : copy.confirm}</button>
+              <button type="button" onClick={confirmation.stage === 1 ? continueConfirmation : executeAction} disabled={actionLoading} className="rounded-xl bg-[#C55245] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{actionLoading ? <Loader2 size={15} className="mx-auto animate-spin" /> : confirmation.stage === 1 ? "Continue" : copy.confirm}</button>
             </div>
           </div>
         </div>
@@ -137,7 +137,7 @@ export default function DangerZoneSection() {
 }
 
 function DangerAction({ icon: Icon, title, description, buttonLabel, onClick }) {
-  return <div className="flex flex-col gap-3 rounded-xl border border-rose-500/15 bg-rose-500/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-start gap-3"><Icon size={18} className="mt-0.5 shrink-0 text-rose-400" /><div><p className="text-sm font-medium text-[#251E1F]">{title}</p><p className="mt-0.5 text-xs text-rose-700/60">{description}</p></div></div><button type="button" onClick={onClick} className="w-full shrink-0 rounded-lg border border-rose-400/30 bg-rose-500/15 px-4 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-500/25 sm:w-auto">{buttonLabel}</button></div>;
+  return <div className="flex flex-col gap-3 rounded-xl border border-rose-500/15 bg-rose-500/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-start gap-3"><Icon size={18} className="mt-0.5 shrink-0 text-rose-400" /><div><p className="text-sm font-medium text-[#251E1F]">{title}</p><p className="mt-0.5 text-xs text-rose-400/60">{description}</p></div></div><button type="button" onClick={onClick} className="w-full shrink-0 rounded-lg border border-rose-400/30 bg-rose-500/15 px-4 py-2 text-xs font-semibold text-rose-400 transition hover:bg-rose-500/25 sm:w-auto">{buttonLabel}</button></div>;
 }
 
 function Toast({ toast }) {

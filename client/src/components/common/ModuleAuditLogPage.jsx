@@ -17,10 +17,10 @@ import {
 } from "../../services/auditLogService.js";
 
 const STATUS_STYLES = {
-  Success: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  Failed:  "bg-red-50 text-red-700 border-red-200",
-  Warning: "bg-amber-50 text-amber-700 border-amber-200",
-  Info:    "bg-blue-50 text-blue-700 border-blue-200",
+  Success: "bg-[#FFF6F2] text-emerald-700 border-emerald-200",
+  Failed:  "bg-[#FDD9CD] text-red-700 border-[#FDD9CD]",
+  Warning: "bg-[#FDD9CD] text-amber-700 border-[#FDD9CD]",
+  Info:    "bg-[#FFF6F2] text-[#2D7C83] border-[#F0D2CA]",
 };
 
 function formatDate(v) {
@@ -198,7 +198,7 @@ export default function ModuleAuditLogPage({ module, title, description }) {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="flex items-center gap-2 rounded-xl border border-[#FDD9CD] bg-[#FDD9CD] px-4 py-3 text-sm text-red-700">
           <AlertCircle size={15} /> {error}
         </div>
       )}

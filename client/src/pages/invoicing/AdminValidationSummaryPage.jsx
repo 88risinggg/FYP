@@ -14,11 +14,11 @@ import { Link } from "react-router-dom";
 import { fetchInvoiceValidationSummary } from "../../services/adminDashboardService.js";
 
 const statusStyles = {
-  Pending: "bg-amber-50 text-amber-700",
-  Validated: "bg-blue-50 text-blue-700",
-  Successful: "bg-emerald-50 text-emerald-700",
-  "Partial Success": "bg-sky-50 text-sky-700",
-  Failed: "bg-rose-50 text-rose-700"
+  Pending: "bg-[#FFF4D8] text-[#9A6412]",
+  Validated: "bg-[#E9F7EF] text-[#2F8758]",
+  Successful: "bg-[#E9F7EF] text-[#2F8758]",
+  "Partial Success": "bg-[#FFF4D8] text-[#9A6412]",
+  Failed: "bg-[#FFF0EB] text-[#C94C3A]"
 };
 
 const uploadHistoryPath = "/dashboard/invoicing/admin/dashboard/validation-summary/upload-history";
@@ -78,7 +78,7 @@ function ResultCard({ title, value, note, icon: Icon, tone, to }) {
         <span className={`flex h-10 w-10 items-center justify-center rounded-full ${tone}`}>
           <Icon size={20} />
         </span>
-        <ArrowRight size={18} className="text-[#b99b93] transition group-hover:translate-x-0.5 group-hover:text-[#F38978]" />
+        <ArrowRight size={18} className="text-[#7B6660] transition group-hover:translate-x-0.5 group-hover:text-[#F38978]" />
       </div>
       <div>
         <p className="text-sm font-bold text-[#514440]">{title}</p>
@@ -118,14 +118,14 @@ function ErrorReport({ upload }) {
         ))}
       </div>
       {upload.errorMessage ? (
-        <div className="flex gap-2 rounded-lg bg-rose-50 px-3 py-3 text-sm text-rose-700">
+        <div className="flex gap-2 rounded-lg bg-[#FDD9CD] px-3 py-3 text-sm text-rose-700">
           <AlertCircle size={17} className="mt-0.5 shrink-0" />
           <span>{upload.errorMessage}</span>
         </div>
       ) : null}
       <Link
         to={`/dashboard/invoicing/admin/dashboard/validation-errors/${upload.uploadId}`}
-        className="inline-flex items-center gap-2 text-sm font-bold text-[#F38978] hover:text-[#d96858]"
+        className="inline-flex items-center gap-2 text-sm font-bold text-[#F38978] hover:text-[#E87562]"
       >
         View Error Report <ArrowRight size={15} />
       </Link>
@@ -259,12 +259,12 @@ export default function AdminValidationSummaryPage() {
           </button>
         </div>
 
-        {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div> : null}
+        {error ? <div className="rounded-xl border border-[#FDD9CD] bg-[#FDD9CD] px-4 py-3 text-sm font-semibold text-rose-700">{error}</div> : null}
 
         <div className="grid gap-4 md:grid-cols-3">
-          <ResultCard title="Total Uploads" value={summary.totalUploads} note="All recorded invoice upload batches" icon={FileClock} tone="bg-blue-50 text-blue-700" to={uploadHistoryPath} />
-          <ResultCard title="Successful Uploads" value={summary.successfulUploads} note="Fully successful upload batches (all time)" icon={CheckCircle2} tone="bg-emerald-50 text-emerald-700" to={`${uploadHistoryPath}?status=Successful`} />
-          <ResultCard title="Failed Uploads" value={summary.failedUploads} note="Failed validation or processing batches (all time)" icon={XCircle} tone="bg-rose-50 text-rose-700" to={`${uploadHistoryPath}?status=Failed`} />
+          <ResultCard title="Total Uploads" value={summary.totalUploads} note="All recorded invoice upload batches" icon={FileClock} tone="bg-[#FFF6F2] text-[#2D7C83]" to={uploadHistoryPath} />
+          <ResultCard title="Successful Uploads" value={summary.successfulUploads} note="Fully successful upload batches (all time)" icon={CheckCircle2} tone="bg-[#FFF6F2] text-emerald-700" to={`${uploadHistoryPath}?status=Successful`} />
+          <ResultCard title="Failed Uploads" value={summary.failedUploads} note="Failed validation or processing batches (all time)" icon={XCircle} tone="bg-[#FDD9CD] text-rose-700" to={`${uploadHistoryPath}?status=Failed`} />
         </div>
 
         <div className="grid gap-4 xl:grid-cols-2">
@@ -277,7 +277,7 @@ export default function AdminValidationSummaryPage() {
             action={(
               <Link
                 to="/dashboard/invoicing/admin/dashboard/validation-errors"
-                className="whitespace-nowrap text-xs font-bold text-[#F38978] hover:text-[#d96858]"
+                className="whitespace-nowrap text-xs font-bold text-[#F38978] hover:text-[#E87562]"
               >
                 View all errors
               </Link>

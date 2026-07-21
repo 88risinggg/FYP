@@ -40,7 +40,7 @@ export default function SecuritySection() {
 
     const levels = [
       { label: "Very Weak", color: "bg-rose-500", width: "20%" },
-      { label: "Weak", color: "bg-orange-500", width: "40%" },
+      { label: "Weak", color: "bg-[#E87562]", width: "40%" },
       { label: "Fair", color: "bg-amber-500", width: "60%" },
       { label: "Strong", color: "bg-emerald-400", width: "80%" },
       { label: "Very Strong", color: "bg-emerald-300", width: "100%" }

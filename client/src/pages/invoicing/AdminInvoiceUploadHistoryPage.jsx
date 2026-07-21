@@ -20,10 +20,10 @@ import { fetchInvoiceUploadHistory } from "../../services/adminDashboardService.
 const summaryPath = "/dashboard/invoicing/admin/dashboard/validation-summary#recent-uploads";
 
 const statusStyles = {
-  Pending: "bg-amber-50 text-amber-700",
-  Successful: "bg-emerald-50 text-emerald-700",
-  "Partial Success": "bg-sky-50 text-sky-700",
-  Failed: "bg-rose-50 text-rose-700"
+  Pending: "bg-[#FFF4D8] text-[#9A6412]",
+  Successful: "bg-[#E9F7EF] text-[#2F8758]",
+  "Partial Success": "bg-[#FFF4D8] text-[#9A6412]",
+  Failed: "bg-[#FFF0EB] text-[#C94C3A]"
 };
 
 function formatCount(value) {
@@ -238,8 +238,8 @@ function UploadRow({ upload, expanded, onToggle }) {
         <td className="px-3 py-3 font-semibold text-rose-700">{formatCount(upload.invalidRows)}</td><td className="px-3 py-3">{formatCount(upload.createdInvoices)}</td>
         <td className="px-3 py-3"><StatusBadge status={upload.status} /></td><td className="whitespace-nowrap px-3 py-3">{formatDuration(upload.processingDurationMs)}</td>
         <td className="whitespace-nowrap px-3 py-3">
-          <button type="button" onClick={onToggle} className="font-bold text-[#F38978] hover:text-[#d96858]">{expanded ? "Hide Details" : "View Details"}</button>
-          {upload.invalidRows > 0 || upload.errorMessage ? <Link to={`/dashboard/invoicing/admin/dashboard/validation-errors/${upload.uploadId}`} className="ml-3 font-bold text-rose-600 hover:text-rose-700">View Error Report</Link> : null}
+          <button type="button" onClick={onToggle} className="font-bold text-[#F38978] hover:text-[#E87562]">{expanded ? "Hide Details" : "View Details"}</button>
+          {upload.invalidRows > 0 || upload.errorMessage ? <Link to={`/dashboard/invoicing/admin/dashboard/validation-errors/${upload.uploadId}`} className="ml-3 font-bold text-rose-600 hover:text-rose-600">View Error Report</Link> : null}
         </td>
       </tr>
       {expanded ? (

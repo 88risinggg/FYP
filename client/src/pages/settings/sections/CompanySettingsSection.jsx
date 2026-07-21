@@ -86,7 +86,7 @@ export default function CompanySettingsSection() {
                   <Building2 size={24} className="text-[#F38978]" />
                 )}
               </div>
-              <label className="absolute -bottom-1 -right-1 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-[#F38978] text-[#251E1F] shadow transition hover:bg-[#E77463]">
+              <label className="absolute -bottom-1 -right-1 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-[#F38978] text-white shadow transition hover:bg-[#E77463]">
                 <Camera size={11} />
                 <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
               </label>

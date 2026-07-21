@@ -22,16 +22,16 @@ const focusDestinations = {
 };
 
 const statusConfig = [
-  { key: "draft", label: "Draft", color: "#8f7d77" },
+  { key: "draft", label: "Draft", color: "#7B6660" },
   { key: "sent", label: "Sent", color: "#4f8fd8" },
   { key: "viewed", label: "Viewed", color: "#35a69b" },
-  { key: "paid", label: "Paid", color: "#3f8f62" },
+  { key: "paid", label: "Paid", color: "#2F8758" },
   { key: "overdue", label: "Overdue", color: "#c94c3a" }
 ];
 
 const severityStyles = {
-  Critical: "bg-[#fde8e4] text-[#a43e30]",
-  High: "bg-[#fff0df] text-[#9a5b12]",
+  Critical: "bg-[#FDD9CD] text-[#C55245]",
+  High: "bg-[#FFF0EB] text-[#C55245]",
   Medium: "bg-[#eaf2ff] text-[#3269a8]",
   Low: "bg-[#f2eee9] text-[#6f5b55]"
 };
@@ -287,11 +287,11 @@ export default function AdminDashboardHomePage() {
   );
   const kpiCards = [
     { title: "Total Invoices", value: formatCount(summary.totalInvoices), icon: FileText, accent: "#F38978", available: availability.invoices !== false },
-    { title: "Paid Revenue", value: formatCurrency(summary.paidRevenue), icon: Banknote, accent: "#3f8f62", available: availability.payments !== false },
+    { title: "Paid Revenue", value: formatCurrency(summary.paidRevenue), icon: Banknote, accent: "#2F8758", available: availability.payments !== false },
     { title: "Outstanding Amount", value: formatCurrency(summary.outstandingAmount), icon: AlertTriangle, accent: "#d97706", available: availability.payments !== false },
     { title: "Overdue Invoices", value: formatCount(summary.overdueInvoices), icon: Clock3, accent: "#c94c3a", available: availability.invoices !== false && availability.payments !== false },
     { title: "Payments to Verify", value: formatCount(summary.paymentsToVerify), icon: CreditCard, accent: "#4f8fd8", available: availability.payments !== false },
-    { title: "Validation Errors", value: formatCount(summary.validationErrors), icon: ShieldAlert, accent: "#a43e30", available: availability.validation !== false },
+    { title: "Validation Errors", value: formatCount(summary.validationErrors), icon: ShieldAlert, accent: "#C94C3A", available: availability.validation !== false },
     { title: "Void Invoices", value: formatCount(summary.voidInvoices), icon: Ban, accent: "#6f5b55", available: availability.invoices !== false }
   ];
 
@@ -325,7 +325,7 @@ export default function AdminDashboardHomePage() {
 
             {error ? (
               <div role="alert" className="flex flex-col gap-3 rounded-lg border border-[#F38978]/40 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm font-semibold text-[#a43e30]">{error}</p>
+                <p className="text-sm font-semibold text-[#C55245]">{error}</p>
                 <button type="button" onClick={() => loadDashboard()} disabled={loading} className="self-start text-sm font-bold text-[#b64d3b] underline underline-offset-2 disabled:opacity-60">
                   Retry
                 </button>
@@ -347,9 +347,9 @@ export default function AdminDashboardHomePage() {
                   <div className="xl:col-span-2 [&>section]:h-full">
                     <Section title="Today's Focus" description="Priority invoicing issues that need attention today.">
                       {todayFocus.length ? todayFocus.map((item) => <FocusItem key={item.type} item={item} />) : (
-                        <div className="rounded-lg border border-dashed border-[#cde5d5] bg-[#f4fbf6] px-5 py-8 text-center">
-                          <CheckCircle2 size={24} className="mx-auto text-[#3f8f62]" aria-hidden="true" />
-                          <p className="mt-2 text-sm font-semibold text-[#356f4d]">No urgent invoicing issues require attention.</p>
+                        <div className="rounded-lg border border-dashed border-[#FDD9CD] bg-[#FFF6F2] px-5 py-8 text-center">
+                          <CheckCircle2 size={24} className="mx-auto text-[#2F8758]" aria-hidden="true" />
+                          <p className="mt-2 text-sm font-semibold text-[#2F8758]">No urgent invoicing issues require attention.</p>
                         </div>
                       )}
                     </Section>

@@ -218,7 +218,7 @@ export default function SettingsPage() {
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
                       isActive
                         ? isDanger
-                          ? "bg-rose-500/15 text-rose-700 shadow-lg shadow-rose-500/10"
+                          ? "bg-rose-500/15 text-rose-700 shadow-lg shadow-[#C55245]/10"
                           : "bg-gradient-to-r from-[#FDD9CD] to-[#fff3ee] text-[#251E1F] shadow-lg shadow-[#f2b5a9]/20"
                         : isDanger
                           ? "text-rose-500/70 hover:bg-rose-500/10 hover:text-rose-700"
@@ -266,7 +266,7 @@ export default function SettingsPage() {
             {saving ? "Saving..." : "Save Changes"}
           </button>
           <button type="button" onClick={() => setConfirmAction("cancel")}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#e6cbc4] bg-white px-5 py-3 text-sm font-semibold text-[#6f5b56] transition hover:bg-[#fff3ee]">
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#F0D2CA] bg-white px-5 py-3 text-sm font-semibold text-[#7B6660] transition hover:bg-[#fff3ee]">
             <X size={17} /> Cancel
           </button>
           </div>
@@ -286,12 +286,12 @@ export default function SettingsPage() {
             </p>
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button type="button" onClick={() => { setConfirmAction(null); setPendingSection(null); }}
-                className="rounded-xl border border-[#e6cbc4] bg-white px-4 py-2.5 text-sm font-semibold text-[#6f5b56] hover:bg-[#fff3ee]">
+                className="rounded-xl border border-[#F0D2CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#7B6660] hover:bg-[#fff3ee]">
                 Keep Editing
               </button>
               <button type="button"
                 onClick={confirmAction === "save" ? handleFloatingSave : () => discardChanges(confirmAction === "navigate" ? pendingSection : null)}
-                className={confirmAction === "save" ? "settings-save-button rounded-xl px-4 py-2.5 text-sm font-semibold" : "rounded-xl bg-[#d98686] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#c97575]"}>
+                className={confirmAction === "save" ? "settings-save-button rounded-xl px-4 py-2.5 text-sm font-semibold" : "rounded-xl bg-[#C55245] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#C55245]"}>
                 {confirmAction === "save" ? "Confirm Save" : "Discard Changes"}
               </button>
             </div>

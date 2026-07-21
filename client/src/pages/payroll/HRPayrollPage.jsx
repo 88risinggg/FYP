@@ -92,17 +92,17 @@ function printPayslip(payslip) {
     <head>
       <title>Payslip — ${payslip.staff_name} — ${payslip.period_month} ${payslip.period_year}</title>
       <style>
-        body { font-family: Arial, sans-serif; padding: 40px; color: #000; }
+        body { font-family: Arial, sans-serif; padding: 40px; color: #251E1F; }
         h1 { font-size: 20px; margin-bottom: 4px; }
-        h2 { font-size: 16px; color: #444; margin-bottom: 20px; }
+        h2 { font-size: 16px; color: #7B6660; margin-bottom: 20px; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-        th { background: #f5f5f5; padding: 8px 12px; text-align: left; font-size: 12px; text-transform: uppercase; }
-        td { padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
-        .total-row td { font-weight: bold; background: #f9f9f9; }
+        th { background: #FFF8F5; padding: 8px 12px; text-align: left; font-size: 12px; text-transform: uppercase; }
+        td { padding: 8px 12px; border-bottom: 1px solid #F0D2CA; font-size: 13px; }
+        .total-row td { font-weight: bold; background: #FFF3EE; }
         .net-pay { background: #FFF3EE; padding: 16px; border-radius: 8px; display: flex; justify-content: space-between; margin-top: 20px; }
         .net-pay span:last-child { font-size: 24px; font-weight: bold; color: #F38978; }
-        .footer { margin-top: 40px; text-align: center; color: #999; font-size: 11px; }
+        .footer { margin-top: 40px; text-align: center; color: #7B6660; font-size: 11px; }
         @media print { body { padding: 20px; } }
       </style>
     </head>
@@ -484,7 +484,7 @@ function HRDashboardView() {
 
       {/* Section 2 — Stats Row */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5 flex flex-col items-center justify-center">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 flex flex-col items-center justify-center">
           <CircularProgress
             percentage={totalStaff > 0 ? (activeStaff / totalStaff) * 100 : 0}
             color="#F38978"
@@ -494,7 +494,7 @@ function HRDashboardView() {
           <p className="text-xs text-[#251E1F]/30 mt-2">{totalStaff} total</p>
         </div>
 
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5 flex flex-col justify-between min-h-[140px]">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 flex flex-col justify-between min-h-[140px]">
           <p className="text-xs text-[#7b6660]">Total Payroll</p>
           <p className="text-2xl font-bold text-[#251E1F]">
             ${totalPayroll.toLocaleString()}
@@ -502,17 +502,17 @@ function HRDashboardView() {
           <p className="text-xs text-[#251E1F]/30">Net pay (latest run)</p>
         </div>
 
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5 flex flex-col items-center justify-center">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 flex flex-col items-center justify-center">
           <CircularProgress
             percentage={totalPayslips > 0 ? (pendingFinance / totalPayslips) * 100 : 0}
-            color="#F59E0B"
+            color="#E87562"
             value={pendingFinance}
             label="Pending Finance"
           />
           <p className="text-xs text-[#251E1F]/30 mt-2">awaiting approval</p>
         </div>
 
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5 flex flex-col justify-between min-h-[140px]">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 flex flex-col justify-between min-h-[140px]">
           <p className="text-xs text-[#7b6660]">Sent This Month</p>
           <p className="text-2xl font-bold text-emerald-700">{sentThisMonth}</p>
           <p className="text-xs text-[#251E1F]/30">payslips delivered</p>
@@ -529,7 +529,7 @@ function HRDashboardView() {
             { label: "Upload Payroll", icon: "↑", path: "/dashboard/payroll/hr/upload", color: "bg-[#F38978]/20 hover:bg-[#F38978]/40" },
             { label: "New Payroll Run", icon: "+", path: "/dashboard/payroll/hr/payroll-runs", color: "bg-emerald-500/20 hover:bg-emerald-500/40" },
             { label: "View Pending", icon: "👁", path: "/dashboard/payroll/hr/payslips", color: "bg-yellow-500/20 hover:bg-yellow-500/40" },
-            { label: "Staff Records", icon: "👥", path: "/dashboard/payroll/hr/staff", color: "bg-blue-500/20 hover:bg-blue-500/40" }
+            { label: "Staff Records", icon: "👥", path: "/dashboard/payroll/hr/staff", color: "bg-[#2D7C83]/20 hover:bg-[#2D7C83]/40" }
           ].map(action => (
             <button
               key={action.path}
@@ -563,7 +563,7 @@ function HRDashboardView() {
           {showRequests && (
             <div className="mt-4 space-y-3">
               {pendingRequests.map(req => (
-                <div key={req.request_id} className="flex items-center justify-between rounded-lg border border-[#f0d2ca] bg-white/800 p-3">
+                <div key={req.request_id} className="flex items-center justify-between rounded-lg border border-[#f0d2ca] bg-white/80 p-3">
                   <div>
                     <p className="text-sm font-medium text-[#251E1F]">{req.staff_id}</p>
                     <p className="text-xs text-[#7b6660]">
@@ -599,7 +599,7 @@ function HRDashboardView() {
       {/* Section 4 — Four Column Bottom Grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Column 1 — Upcoming Deadlines */}
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-[#251E1F]/30 mb-3">
             📅 Upcoming Deadlines
           </p>
@@ -621,7 +621,7 @@ function HRDashboardView() {
         </div>
 
         {/* Column 2 — Recent Activity */}
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-[#251E1F]/30 mb-3">
             🕓 Recent Activity
           </p>
@@ -641,7 +641,7 @@ function HRDashboardView() {
         </div>
 
         {/* Column 3 — Birthdays This Month */}
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-[#251E1F]/30 mb-3">
             🎂 Birthdays This Month
           </p>
@@ -670,7 +670,7 @@ function HRDashboardView() {
         </div>
 
         {/* Column 4 — Payroll Cost by Department */}
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-[#251E1F]/30 mb-3">
             📊 Payroll by Department
           </p>
@@ -680,7 +680,7 @@ function HRDashboardView() {
                 <span className="text-[#251E1F]">{dept.name}</span>
                 <span className="text-[#7b6660]">${dept.total.toLocaleString()}</span>
               </div>
-              <div className="h-2 rounded-full bg-white/800">
+              <div className="h-2 rounded-full bg-white/80">
                 <div
                   className="h-2 rounded-full bg-[#F38978] transition-all duration-700"
                   style={{ width: `${(dept.total / maxTotal) * 100}%` }}
@@ -692,7 +692,7 @@ function HRDashboardView() {
       </div>
 
       {/* Section 5 — Payroll History */}
-      <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
+      <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm font-semibold text-[#251E1F]">📊 Payroll Cost — Last 6 Months</p>
           <p className="text-xs text-[#251E1F]/30">Net pay distributed</p>
@@ -709,7 +709,7 @@ function HRDashboardView() {
                   <span className={`text-xs w-16 shrink-0 ${isCurrent ? "text-[#251E1F] font-semibold" : "text-[#251E1F]/50"}`}>
                     {month.shortLabel} {String(month.label).split(" ")[1]?.slice(2)}
                   </span>
-                  <div className="flex-1 h-5 rounded-full bg-white/800 overflow-hidden">
+                  <div className="flex-1 h-5 rounded-full bg-white/80 overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-700"
                       style={{
@@ -1181,7 +1181,7 @@ function StaffRecordsView() {
           <button
             type="button"
             onClick={fetchStaff}
-            className="rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
           >
             Refresh
           </button>
@@ -1194,7 +1194,7 @@ function StaffRecordsView() {
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search staff records..."
-              className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-[#251E1F] outline-none placeholder:text-[#7b6660]/50"
+              className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F] outline-none placeholder:text-[#7b6660]/50"
             />
           </label>
           <button
@@ -1239,7 +1239,7 @@ function StaffRecordsView() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[#f0d2ca] bg-white/800 text-[#7b6660]">
+              <thead className="border-b border-[#f0d2ca] bg-white/80 text-[#7b6660]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Employee Code</th>
                   <th className="px-4 py-3 font-medium">Name</th>
@@ -1279,11 +1279,11 @@ function StaffRecordsView() {
                     </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                            <button type="button" onClick={() => handleEdit(staff)} className="rounded-lg bg-blue-500/20 px-3 py-1 text-xs text-blue-700 hover:bg-blue-500/30">Edit</button>
+                            <button type="button" onClick={() => handleEdit(staff)} className="rounded-lg bg-[#2D7C83]/20 px-3 py-1 text-xs text-[#2D7C83] hover:bg-[#2D7C83]/30">Edit</button>
                             <button type="button" onClick={() => handleDeleteStaff(getStaffActionId(staff))} className="rounded-lg bg-red-500/20 px-3 py-1 text-xs text-red-700 hover:bg-red-500/30" >
                             Delete
                           </button>
-                          <button type="button" onClick={() => handleViewHistory(staff)} className="rounded-lg bg-white/800 px-3 py-1 text-xs text-[#251E1F]/60 hover:bg-white/20">History</button>
+                          <button type="button" onClick={() => handleViewHistory(staff)} className="rounded-lg bg-white/80 px-3 py-1 text-xs text-[#251E1F]/60 hover:bg-white/20">History</button>
                         </div>
                       </td>
                       </tr>
@@ -1300,7 +1300,7 @@ function StaffRecordsView() {
                   <button
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-1 text-sm text-[#251E1F] disabled:opacity-30 hover:bg-[#FDD9CD]/45"
+                    className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-1 text-sm text-[#251E1F] disabled:opacity-30 hover:bg-[#FDD9CD]/45"
                   >
                     ← Prev
                   </button>
@@ -1311,7 +1311,7 @@ function StaffRecordsView() {
                       className={`rounded-lg border px-3 py-1 text-sm transition ${
                         page === currentPage
                           ? 'border-[#F38978] bg-[#F38978]/30 text-[#251E1F]'
-                          : 'border-[#f0d2ca] bg-white/800 text-[#251E1F]/50 hover:bg-[#FDD9CD]/45'
+                          : 'border-[#f0d2ca] bg-white/80 text-[#251E1F]/50 hover:bg-[#FDD9CD]/45'
                       }`}
                     >
                       {page}
@@ -1320,7 +1320,7 @@ function StaffRecordsView() {
                   <button
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
-                    className="rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-1 text-sm text-[#251E1F] disabled:opacity-30 hover:bg-[#FDD9CD]/45"
+                    className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-1 text-sm text-[#251E1F] disabled:opacity-30 hover:bg-[#FDD9CD]/45"
                   >
                     Next →
                   </button>
@@ -1332,18 +1332,18 @@ function StaffRecordsView() {
       </div>
 
       {isEditModalOpen && editingStaff && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#251E1F]/50">
           <div className="app-panel rounded-2xl w-full max-w-md p-6 m-4 max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="staff-edit-title">
             <h3 id="staff-edit-title" className="text-lg font-semibold text-[#251E1F]">Edit Staff Record</h3>
             <div className="mt-4 space-y-4">
-              <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+              <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
                 <p className="text-sm font-medium text-[#251E1F]">{getStaffDisplayName(editingStaff)}</p>
                 <p className="mt-1 text-xs text-[#7b6660]">{getStaffDisplayId(editingStaff)}</p>
                 <p className="mt-3 text-xs text-[#7b6660]">
                   Personal fields below must only be updated when requested by the staff member.
                 </p>
               </div>
-              <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+              <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
                 <p className="text-sm font-semibold text-[#251E1F]">Personal Fields</p>
                 <div className="mt-3 space-y-3">
                   <div>
@@ -1353,7 +1353,7 @@ function StaffRecordsView() {
                       type="email"
                       value={editFormData.email || ""}
                       onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
-                      className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-[#251E1F] placeholder-white/30"
+                      className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F] placeholder-white/30"
                     />
                   </div>
                   <div>
@@ -1363,7 +1363,7 @@ function StaffRecordsView() {
                       type="tel"
                       value={editFormData.phone || ""}
                       onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
-                      className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-[#251E1F] placeholder-white/30"
+                      className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F] placeholder-white/30"
                     />
                   </div>
                   <div>
@@ -1373,7 +1373,7 @@ function StaffRecordsView() {
                       type="text"
                       value={editFormData.address || ""}
                       onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
-                      className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-[#251E1F] placeholder-white/30"
+                      className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F] placeholder-white/30"
                     />
                   </div>
                   <label className="flex items-start gap-2 text-xs text-[#7b6660]">
@@ -1394,7 +1394,7 @@ function StaffRecordsView() {
                   ) : null}
                 </div>
               </div>
-              <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+              <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
                 <p className="text-sm font-semibold text-[#251E1F]">Employment Fields</p>
               <div>
                 <label htmlFor="staff-edit-department" className="block text-sm font-medium text-[#7b6660]">Department ID</label>
@@ -1403,7 +1403,7 @@ function StaffRecordsView() {
                   type="text"
                   value={editFormData.department_id || ""}
                   onChange={(e) => setEditFormData({ ...editFormData, department_id: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-[#251E1F] placeholder-white/30"
+                  className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F] placeholder-white/30"
                 />
               </div>
               <div>
@@ -1413,7 +1413,7 @@ function StaffRecordsView() {
                   type="number"
                   value={editFormData.base_salary || ""}
                   onChange={(e) => setEditFormData({ ...editFormData, base_salary: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-[#251E1F] placeholder-white/30"
+                  className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F] placeholder-white/30"
                 />
               </div>
               <div>
@@ -1424,9 +1424,9 @@ function StaffRecordsView() {
                   onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
                   className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-[#251E1F]"
                 >
-                  <option value="Active" style={{ backgroundColor: '#1e293b', color: '#ffffff' }}>Active</option>
-                  <option value="Inactive" style={{ backgroundColor: '#1e293b', color: '#ffffff' }}>Inactive</option>
-                  <option value="Leave" style={{ backgroundColor: '#1e293b', color: '#ffffff' }}>Leave</option>
+                  <option value="Active" style={{ backgroundColor: '#251E1F', color: '#ffffff' }}>Active</option>
+                  <option value="Inactive" style={{ backgroundColor: '#251E1F', color: '#ffffff' }}>Inactive</option>
+                  <option value="Leave" style={{ backgroundColor: '#251E1F', color: '#ffffff' }}>Leave</option>
                 </select>
               </div>
               </div>
@@ -1445,7 +1445,7 @@ function StaffRecordsView() {
                   setIsEditModalOpen(false);
                   setEditingStaff(null);
                 }}
-                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
               >
                 Cancel
               </button>
@@ -1454,7 +1454,7 @@ function StaffRecordsView() {
         </div>
       )}
       {historyStaff && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#251E1F]/50">
           <div className="app-panel rounded-2xl w-full max-w-2xl p-6 m-4" role="dialog">
             <h3 className="text-lg font-semibold text-[#251E1F]">
               Payroll History — {historyStaff.name || historyStaff.staff_name}
@@ -1490,7 +1490,7 @@ function StaffRecordsView() {
               )}
             </div>
             <button
-              className="mt-4 rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm text-[#251E1F] hover:bg-[#FDD9CD]/45"
+              className="mt-4 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm text-[#251E1F] hover:bg-[#FDD9CD]/45"
               onClick={() => { setHistoryStaff(null); setHistoryPayslips([]); }}
             >
               Close
@@ -1501,7 +1501,7 @@ function StaffRecordsView() {
       
 
       {/* Advance requests list for HR */}
-      <div className="rounded-2xl border border-[#f0d2ca] bg-white/800 p-4">
+      <div className="rounded-2xl border border-[#f0d2ca] bg-white/80 p-4">
         <h4 className="text-sm font-semibold text-[#251E1F]">Advance Pay Requests</h4>
         <div className="mt-3">
           {loadingRequests ? (
@@ -1655,12 +1655,12 @@ function PayrollUploadView() {
               setUploadProgress(0);
               setError(""); setValidationResult(null); setCommitResult(null); setAlert(null);
             }}
-            className="block w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#251E1F] file:mr-4 file:rounded-md file:border-0 file:bg-[#F38978] file:px-4 file:py-2 file:text-[#251E1F] hover:file:bg-[#F38978]"
+            className="block w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] file:mr-4 file:rounded-md file:border-0 file:bg-[#F38978] file:px-4 file:py-2 file:text-white hover:file:bg-[#F38978]"
           />
           <button
             type="submit"
             disabled={uploading}
-            className="inline-flex items-center justify-center rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#F38978] disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex items-center justify-center rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#F38978] disabled:cursor-not-allowed disabled:opacity-70"
           >
             {uploading ? (
               <span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" size={16} /> Validating...</span>
@@ -1669,12 +1669,12 @@ function PayrollUploadView() {
             )}
           </button>
         </div>
-        <div className="mt-4 rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-3 text-sm text-[#7b6660]">
+        <div className="mt-4 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3 text-sm text-[#7b6660]">
           Selected file: <span className="font-semibold text-[#251E1F]">{selectedFile?.name || "none"}</span>
         </div>
         {(uploading || uploadProgress > 0) ? (
           <div className="mt-4" role="progressbar" aria-label="Upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={uploadProgress}>
-            <div className="h-3 overflow-hidden rounded-full border border-[#f0d2ca] bg-black/30">
+            <div className="h-3 overflow-hidden rounded-full border border-[#f0d2ca] bg-[#251E1F]/30">
               <div
                 className="h-full rounded-full bg-emerald-400 transition-all duration-150"
                 style={{ width: `${uploadProgress}%` }}
@@ -1758,7 +1758,7 @@ function PayrollUploadView() {
               </table>
             </div>
             <div className="mt-5 flex items-center gap-4">
-              <button onClick={handleCommit} disabled={committing || selectedRows.size === 0} className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50">
+              <button onClick={handleCommit} disabled={committing || selectedRows.size === 0} className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50">
                 {committing ? <span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" size={16} /> Saving...</span> : `Confirm & Save ${selectedRows.size} Record(s)`}
               </button>
               <button onClick={() => { setValidationResult(null); setSelectedFile(null); setAlert(null); }} className="text-sm text-[#7b6660] hover:text-[#251E1F]">Cancel</button>
@@ -1771,9 +1771,9 @@ function PayrollUploadView() {
         <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-6 text-[#251E1F]">
           <div className="flex items-center gap-2 text-emerald-700"><CheckCircle2 size={18} /><span className="font-semibold">Commit Complete</span></div>
           <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
-            <div className="rounded-lg border border-[#f0d2ca] bg-black/10 px-3 py-2">Created: <span className="font-semibold text-[#251E1F]">{commitResult.totalCreated ?? 0}</span></div>
-            <div className="rounded-lg border border-[#f0d2ca] bg-black/10 px-3 py-2">Skipped: <span className="font-semibold text-[#251E1F]">{commitResult.totalSkipped ?? 0}</span></div>
-            <div className="rounded-lg border border-[#f0d2ca] bg-black/10 px-3 py-2">Conflicts: <span className="font-semibold text-[#251E1F]">{commitResult.conflicts?.length ?? 0}</span></div>
+            <div className="rounded-lg border border-[#f0d2ca] bg-[#251E1F]/10 px-3 py-2">Created: <span className="font-semibold text-[#251E1F]">{commitResult.totalCreated ?? 0}</span></div>
+            <div className="rounded-lg border border-[#f0d2ca] bg-[#251E1F]/10 px-3 py-2">Skipped: <span className="font-semibold text-[#251E1F]">{commitResult.totalSkipped ?? 0}</span></div>
+            <div className="rounded-lg border border-[#f0d2ca] bg-[#251E1F]/10 px-3 py-2">Conflicts: <span className="font-semibold text-[#251E1F]">{commitResult.conflicts?.length ?? 0}</span></div>
           </div>
         </div>
       ) : null}
@@ -1919,7 +1919,7 @@ function PayrollRunsView() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search staff or period"
-              className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-[#251E1F]"
+              className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F]"
             />
           </label>
           <label className="text-sm text-[#7b6660]">
@@ -1930,7 +1930,7 @@ function PayrollRunsView() {
               value={monthFilter}
               onChange={(e) => setMonthFilter(e.target.value)}
               placeholder="June"
-              className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-[#251E1F]"
+              className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F]"
             />
           </label>
           <label className="text-sm text-[#7b6660]">
@@ -1941,7 +1941,7 @@ function PayrollRunsView() {
               value={yearFilter}
               onChange={(e) => setYearFilter(e.target.value)}
               placeholder="2026"
-              className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-[#251E1F]"
+              className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F]"
             />
           </label>
           <label className="text-sm text-[#7b6660]">
@@ -1981,7 +1981,7 @@ function PayrollRunsView() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[#f0d2ca] bg-white/800 text-[#7b6660]">
+              <thead className="border-b border-[#f0d2ca] bg-white/80 text-[#7b6660]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Run ID</th>
                   <th className="px-4 py-3 font-medium">Period</th>
@@ -2005,7 +2005,7 @@ function PayrollRunsView() {
                           if (node) { rowRefs.current.set(rowKey, node); } else { rowRefs.current.delete(rowKey); }
                         }}
                         onClick={() => fetchRunDetail(run.payroll_run_id || run.run_id)}
-                        className={`border-b border-[#f0d2ca] text-[#251E1F] transition-colors duration-300 cursor-pointer hover:bg-white/800 ${isSearchMatched ? "bg-amber-400/10" : ""} ${isExpanded ? "bg-[#F38978]/10" : ""}`}
+                        className={`border-b border-[#f0d2ca] text-[#251E1F] transition-colors duration-300 cursor-pointer hover:bg-white/80 ${isSearchMatched ? "bg-amber-400/10" : ""} ${isExpanded ? "bg-[#F38978]/10" : ""}`}
                       >
                         <td className="px-4 py-3 text-[#7b6660]">{run.payroll_run_id || run.run_id || "-"}</td>
                         <td className="px-4 py-3">
@@ -2014,8 +2014,8 @@ function PayrollRunsView() {
                         <td className="px-4 py-3">
                           <span className={`rounded-full px-3 py-1 text-xs font-medium ${
                             run.status === "Closed" ? "bg-emerald-500/20 text-emerald-700" :
-                            run.status === "finance_approved" ? "bg-blue-500/20 text-blue-700" :
-                            run.status === "Draft" ? "bg-gray-500/20 text-gray-300" :
+                            run.status === "finance_approved" ? "bg-emerald-500/20 text-emerald-700" :
+                            run.status === "Draft" ? "bg-[#7B6660]/20 text-[#7B6660]" :
                             "bg-yellow-500/20 text-yellow-700"
                           }`}>
                             {run.status || "-"}
@@ -2044,7 +2044,7 @@ function PayrollRunsView() {
                                   </p>
                                   <div className="overflow-x-auto rounded-lg border border-[#f0d2ca]">
                                     <table className="min-w-full text-left text-xs">
-                                      <thead className="bg-white/800 text-[#7b6660]/80">
+                                      <thead className="bg-white/80 text-[#7b6660]/80">
                                         <tr>
                                           <th className="px-3 py-2 font-medium">#</th>
                                           <th className="px-3 py-2 font-medium">Employee ID</th>
@@ -2059,7 +2059,7 @@ function PayrollRunsView() {
                                       </thead>
                                       <tbody>
                                         {detail.map((row, idx) => (
-                                          <tr key={row.payroll_id} className="border-t border-[#f0d2ca] text-[#251E1F] hover:bg-white/800">
+                                          <tr key={row.payroll_id} className="border-t border-[#f0d2ca] text-[#251E1F] hover:bg-white/80">
                                             <td className="px-3 py-2 text-[#7b6660]/60">{idx + 1}</td>
                                             <td className="px-3 py-2 text-[#7b6660]">{row.employee_id}</td>
                                             <td className="px-3 py-2 font-medium">{row.staff_name}</td>
@@ -2071,9 +2071,9 @@ function PayrollRunsView() {
                                             <td className="px-3 py-2">
                                               <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
                                                 row.payslip_status === "sent_to_staff" ? "bg-emerald-500/20 text-emerald-700" :
-                                                row.payslip_status === "finance_approved" ? "bg-blue-500/20 text-blue-700" :
+                                                row.payslip_status === "finance_approved" ? "bg-emerald-500/20 text-emerald-700" :
                                                 row.payslip_status === "finance_pending" ? "bg-yellow-500/20 text-yellow-700" :
-                                                "bg-white/800 text-[#7b6660]"
+                                                "bg-white/80 text-[#7b6660]"
                                               }`}>
                                                 {row.payslip_status || "draft"}
                                               </span>
@@ -2341,21 +2341,21 @@ function PayslipsView() {
   const getStatusColor = (status) => {
     switch (status) {
       case "draft":
-        return "bg-gray-500/20 text-gray-300";
+        return "bg-[#7B6660]/20 text-[#7B6660]";
       case "finance_pending":
         return "bg-yellow-500/20 text-yellow-700";
       case "finance_approved":
-        return "bg-blue-500/20 text-blue-700";
+        return "bg-emerald-500/20 text-emerald-700";
       case "admin_pending":
         return "bg-[#F38978]/20 text-[#6f5b55]";
       case "admin_approved":
-        return "bg-cyan-500/20 text-cyan-700";
+        return "bg-emerald-500/20 text-emerald-700";
       case "sent_to_staff":
         return "bg-emerald-500/20 text-emerald-700";
       case "rejected":
         return "bg-red-500/20 text-red-700";
       default:
-        return "bg-white/800 text-[#251E1F]";
+        return "bg-white/80 text-[#251E1F]";
     }
   };
 
@@ -2520,7 +2520,7 @@ function PayslipsView() {
               className="mt-2 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-[#251E1F]"
             >
               {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(m => (
-                <option key={m} value={m} style={{ backgroundColor: '#1e293b', color: '#ffffff' }}>{m}</option>
+                <option key={m} value={m} style={{ backgroundColor: '#251E1F', color: '#ffffff' }}>{m}</option>
               ))}
             </select>
           </div>
@@ -2530,7 +2530,7 @@ function PayslipsView() {
               type="number"
               value={payrollYear}
               onChange={(e) => setPayrollYear(parseInt(e.target.value))}
-              className="mt-2 w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-[#251E1F]"
+              className="mt-2 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F]"
             />
           </div>
         </div>
@@ -2560,7 +2560,7 @@ function PayslipsView() {
               setGenerating(false);
             }
           }}
-          className="w-full rounded-lg bg-[#F38978] px-4 py-3 text-sm font-semibold text-[#251E1F] transition hover:bg-[#e87562] disabled:opacity-50"
+          className="w-full rounded-lg bg-[#F38978] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#e87562] disabled:opacity-50"
         >
           {generating ? (
             <span className="flex items-center justify-center gap-2">
@@ -2582,7 +2582,7 @@ function PayslipsView() {
               type="file"
               accept=".csv,.xlsx,.xls"
               onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-              className="block w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#251E1F] file:mr-4 file:rounded-md file:border-0 file:bg-[#F38978] file:px-4 file:py-2 file:text-[#251E1F] hover:file:bg-[#F38978]"
+              className="block w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] file:mr-4 file:rounded-md file:border-0 file:bg-[#F38978] file:px-4 file:py-2 file:text-white hover:file:bg-[#F38978]"
             />
           </div>
 
@@ -2605,7 +2605,7 @@ function PayslipsView() {
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search payslips..."
-              className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-[#251E1F] outline-none placeholder:text-[#7b6660]/50"
+              className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F] outline-none placeholder:text-[#7b6660]/50"
             />
           </label>
           <div className="text-sm text-[#7b6660]">
@@ -2615,7 +2615,7 @@ function PayslipsView() {
       </div>
 
       <div className="app-panel rounded-2xl overflow-hidden">
-        <div className="flex items-start justify-between gap-4 border-b border-[#f0d2ca] bg-white/800 p-6">
+        <div className="flex items-start justify-between gap-4 border-b border-[#f0d2ca] bg-white/80 p-6">
           <div>
             <h3 className="text-lg font-semibold text-[#251E1F]">Payslips</h3>
             <p className="mt-1 text-sm text-[#7b6660]">{payslips.length} payslips for {new Date(filterYear, filterMonth - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' })}</p>
@@ -2647,7 +2647,7 @@ function PayslipsView() {
             <button
               type="button"
               onClick={fetchPayslips}
-              className="rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+              className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
             >
               Refresh
             </button>
@@ -2670,7 +2670,7 @@ function PayslipsView() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[#f0d2ca] bg-white/800 text-[#7b6660]">
+              <thead className="border-b border-[#f0d2ca] bg-white/80 text-[#7b6660]">
                   <tr>
                     <th className="px-4 py-3 font-medium">Payslip ID</th>
                   <th className="px-4 py-3 font-medium">Staff Name</th>
@@ -2745,7 +2745,7 @@ function PayslipsView() {
 
       {/* Payslip Preview Modal */}
       {previewPayslip && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#251E1F]/60 backdrop-blur-sm">
           <div className="app-panel rounded-2xl w-full max-w-2xl p-6 m-4 max-h-[90vh] overflow-y-auto"
             role="dialog" aria-modal="true">
 
@@ -2760,14 +2760,14 @@ function PayslipsView() {
                 </button>
                 <button
                   onClick={() => setPreviewPayslip(null)}
-                  className="rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                  className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] hover:bg-[#FDD9CD]/45"
                 >
                   ✕ Close
                 </button>
               </div>
             </div>
 
-            <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-6">
+            <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-6">
               <div className="text-center mb-6 pb-4 border-b border-[#f0d2ca]">
                 <h2 className="text-xl font-bold text-[#251E1F]">PayNivo Pte Ltd</h2>
                 <p className="text-sm text-[#7b6660]">Payslip for {previewPayslip.period_month} {previewPayslip.period_year}</p>
@@ -2789,7 +2789,7 @@ function PayslipsView() {
 
               <div className="mb-4">
                 <p className="text-xs text-[#251E1F]/30 uppercase tracking-wider mb-2">Earnings</p>
-                <div className="rounded-lg border border-[#f0d2ca] bg-black/20 overflow-hidden">
+                <div className="rounded-lg border border-[#f0d2ca] bg-[#251E1F]/20 overflow-hidden">
                   <div className="flex justify-between px-4 py-2 border-b border-[#f0d2ca]">
                     <span className="text-sm text-[#251E1F]">Basic Salary</span>
                     <span className="text-sm text-[#251E1F]">${Number(previewPayslip.gross_salary || 0).toFixed(2)}</span>
@@ -2803,7 +2803,7 @@ function PayslipsView() {
 
               <div className="mb-4">
                 <p className="text-xs text-[#251E1F]/30 uppercase tracking-wider mb-2">Deductions</p>
-                <div className="rounded-lg border border-[#f0d2ca] bg-black/20 overflow-hidden">
+                <div className="rounded-lg border border-[#f0d2ca] bg-[#251E1F]/20 overflow-hidden">
                   <div className="flex justify-between px-4 py-2 border-b border-[#f0d2ca]">
                     <span className="text-sm text-[#251E1F]">Employee CPF (20%)</span>
                     <span className="text-sm text-red-700">-${(Number(previewPayslip.gross_salary || 0) * 0.20).toFixed(2)}</span>
@@ -2823,7 +2823,7 @@ function PayslipsView() {
 
               <div className="mb-4">
                 <p className="text-xs text-[#251E1F]/30 uppercase tracking-wider mb-2">CPF Contributions</p>
-                <div className="rounded-lg border border-[#f0d2ca] bg-black/20 overflow-hidden">
+                <div className="rounded-lg border border-[#f0d2ca] bg-[#251E1F]/20 overflow-hidden">
                   <div className="flex justify-between px-4 py-2 border-b border-[#f0d2ca]">
                     <span className="text-sm text-[#251E1F]">Employee CPF (20%)</span>
                     <span className="text-sm text-[#251E1F]">${(Number(previewPayslip.gross_salary || 0) * 0.20).toFixed(2)}</span>
@@ -2832,9 +2832,9 @@ function PayslipsView() {
                     <span className="text-sm text-[#251E1F]">Employer CPF (17%)</span>
                     <span className="text-sm text-[#251E1F]">${(Number(previewPayslip.gross_salary || 0) * 0.17).toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between px-4 py-2 bg-blue-500/5">
-                    <span className="text-sm font-semibold text-blue-700">Total CPF</span>
-                    <span className="text-sm font-semibold text-blue-700">${(Number(previewPayslip.gross_salary || 0) * 0.37).toFixed(2)}</span>
+                  <div className="flex justify-between px-4 py-2 bg-[#2D7C83]/5">
+                    <span className="text-sm font-semibold text-[#2D7C83]">Total CPF</span>
+                    <span className="text-sm font-semibold text-[#2D7C83]">${(Number(previewPayslip.gross_salary || 0) * 0.37).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -2925,7 +2925,7 @@ function NotificationsView() {
         ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-[#f0d2ca] bg-white/800 text-[#7b6660]">
+            <thead className="border-b border-[#f0d2ca] bg-white/80 text-[#7b6660]">
               <tr>
                 <th className="px-4 py-3 font-medium">Type</th>
                 <th className="px-4 py-3 font-medium">Message</th>
@@ -2944,14 +2944,14 @@ function NotificationsView() {
                     <span className={`rounded-full px-3 py-1 text-xs font-medium ${
                       notif.priority === "High" ? "bg-red-500/20 text-red-700" :
                       notif.priority === "Medium" ? "bg-yellow-500/20 text-yellow-700" :
-                      "bg-blue-500/20 text-blue-700"
+                      "bg-[#2D7C83]/20 text-[#2D7C83]"
                     }`}>
                       {notif.priority}
                     </span>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      notif.read ? "bg-white/800 text-[#251E1F]/70" : "bg-blue-500/20 text-blue-700"
+                      notif.read ? "bg-white/80 text-[#251E1F]/70" : "bg-[#2D7C83]/20 text-[#2D7C83]"
                     }`}>
                       {notif.read ? "Read" : "Unread"}
                     </span>

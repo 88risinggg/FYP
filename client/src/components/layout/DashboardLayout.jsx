@@ -121,7 +121,7 @@ export default function DashboardLayout({
     header: "sticky top-0 z-10 flex h-20 items-center gap-4 border-b border-[#f2d5cc] bg-[#fff8f5]/85 px-4 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur-2xl sm:px-6",
     iconButton: "flex h-10 w-10 items-center justify-center rounded-lg text-[#6f4f47] transition hover:bg-[#FDD9CD]/45 hover:text-[#F38978] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]/45",
     title: "min-w-0 flex-1 truncate text-base font-semibold text-[#251E1F] sm:text-lg",
-    searchWrap: "hidden w-full max-w-sm items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 shadow-lg shadow-[#F38978]/10 backdrop-blur lg:flex",
+    searchWrap: "hidden w-full max-w-sm items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 shadow-lg shadow-[#F38978]/10 backdrop-blur lg:flex",
     searchIcon: "text-[#F38978]",
     searchInput: "w-full bg-transparent text-sm text-[#251E1F] outline-none placeholder:text-[#9c7b72]",
     mutedButton: "text-[#6f4f47] hover:text-[#F38978]",
@@ -630,7 +630,7 @@ export default function DashboardLayout({
                     <button
                       type="button"
                       onClick={() => { setShowProfileMenu(false); handleLogout(); }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-rose-400 transition hover:bg-rose-500/10 hover:text-rose-700"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-rose-400 transition hover:bg-rose-500/10 hover:text-rose-400"
                     >
                       <LogOut size={15} />
                       Logout

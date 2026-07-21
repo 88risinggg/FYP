@@ -12,12 +12,12 @@ export function FullViewStatus({ value }) {
   const label = displayValue(value);
   const normalized = String(value || "").trim().toLowerCase();
   const className = ["successful", "success", "sent", "paid", "completed", "verified", "delivered", "accepted"].includes(normalized)
-    ? "bg-emerald-50 text-emerald-700"
+    ? "bg-[#FFF6F2] text-emerald-700"
     : ["failed", "rejected", "refunded", "chargeback", "bounced", "error"].includes(normalized)
-      ? "bg-rose-50 text-rose-700"
+      ? "bg-[#FDD9CD] text-rose-700"
       : ["partial success", "processing", "validated"].includes(normalized)
-        ? "bg-sky-50 text-sky-700"
-        : "bg-amber-50 text-amber-700";
+        ? "bg-[#FFF6F2] text-[#2D7C83]"
+        : "bg-[#FDD9CD] text-amber-700";
 
   return <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${className}`}>{label}</span>;
 }
@@ -50,12 +50,12 @@ export function FullViewLoading({ label = "Loading records..." }) {
 export function FullViewError({ message, onRetry, backTo, backLabel }) {
   const navigate = useNavigate();
   return (
-    <div className="rounded-lg border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800" role="alert">
+    <div className="rounded-lg border border-[#FDD9CD] bg-[#FDD9CD] p-5 text-sm text-rose-800" role="alert">
       <p className="font-bold">{message || "The records could not be loaded."}</p>
       <p className="mt-1">Try again or return to the previous Invoicing page.</p>
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" onClick={onRetry} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 font-bold"><RefreshCw size={15} /> Retry</button>
-        <button type="button" onClick={() => navigate(backTo)} className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold"><ArrowLeft size={15} /> {backLabel}</button>
+        <button type="button" onClick={() => navigate(backTo)} className="inline-flex items-center gap-2 rounded-lg border border-[#FDD9CD] bg-white px-3 py-2 font-bold"><ArrowLeft size={15} /> {backLabel}</button>
       </div>
     </div>
   );

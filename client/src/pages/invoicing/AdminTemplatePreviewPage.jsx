@@ -75,8 +75,8 @@ export default function AdminTemplatePreviewPage() {
           companyEmail: s.companyEmail || s.company_email || s.financeEmail || "",
           companyRegistrationNumber: s.companyRegistrationNumber || s.company_registration_number || "",
           companyWebsite: s.companyWebsite || "",
-          primaryColor: s.primaryColor || s.primary_color || "#061e4b",
-          secondaryColor: s.secondaryColor || s.secondary_color || "#ff5a52",
+          primaryColor: s.primaryColor || s.primary_color || "#251E1F",
+          secondaryColor: s.secondaryColor || s.secondary_color || "#F38978",
           fontFamily: s.fontFamily || s.font_family || "Arial, Helvetica, sans-serif",
           fontSizeBase: s.fontSizeBase || s.font_size_base || 12,
           invoicePrefix: s.invoicePrefix || s.invoice_prefix || "INV",
@@ -121,8 +121,8 @@ export default function AdminTemplatePreviewPage() {
           companyAddress: "1 Raffles Place, #20-01, Singapore 048616",
           companyPhone: "+65 6123 4567",
           companyEmail: "finance@vaniday.com",
-          primaryColor: "#061e4b",
-          secondaryColor: "#ff5a52",
+          primaryColor: "#251E1F",
+          secondaryColor: "#F38978",
           fontFamily: "Arial, Helvetica, sans-serif",
           fontSizeBase: 12,
           invoicePrefix: "INV",
@@ -199,8 +199,8 @@ export default function AdminTemplatePreviewPage() {
   if (loading) {
     return (
       <div className="flex h-[calc(100vh-64px)] items-center justify-center">
-        <RefreshCw className="h-6 w-6 animate-spin text-purple-600" />
-        <span className="ml-2 text-sm text-gray-600">Loading settings...</span>
+        <RefreshCw className="h-6 w-6 animate-spin text-[#2D7C83]" />
+        <span className="ml-2 text-sm text-[#7B6660]">Loading settings...</span>
       </div>
     );
   }
@@ -209,16 +209,16 @@ export default function AdminTemplatePreviewPage() {
     <div className="flex h-[calc(100vh-64px)] overflow-hidden">
       {/* Left Panel — Settings Controls */}
       <div className="w-[380px] shrink-0 overflow-y-auto border-r bg-white p-4 space-y-5">
-        <h2 className="flex items-center gap-2 text-lg font-bold text-gray-900">
-          <Palette className="h-5 w-5 text-purple-600" />
+        <h2 className="flex items-center gap-2 text-lg font-bold text-[#251E1F]">
+          <Palette className="h-5 w-5 text-[#2D7C83]" />
           Template Configuration
         </h2>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-[#7B6660]">
           Changes reflect instantly in the preview. Settings are NOT saved until you click Save in Invoice Settings.
         </p>
 
         {loadError && (
-          <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <div className="flex items-center gap-2 rounded-lg border border-[#FDD9CD] bg-[#FDD9CD] px-3 py-2 text-xs text-amber-700">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>Could not load saved settings. Using defaults.</span>
           </div>
@@ -226,7 +226,7 @@ export default function AdminTemplatePreviewPage() {
 
         {/* Status Preview Selector */}
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">Preview Status</label>
+          <label className="mb-1 block text-xs font-medium text-[#7B6660]">Preview Status</label>
           <select
             value={previewStatus}
             onChange={(e) => setPreviewStatus(e.target.value)}
@@ -240,14 +240,14 @@ export default function AdminTemplatePreviewPage() {
 
         {/* Colors */}
         <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Colors</legend>
+          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Colors</legend>
           <div className="flex gap-3">
             <div className="flex-1">
-              <label className="text-xs text-gray-500">Primary</label>
+              <label className="text-xs text-[#7B6660]">Primary</label>
               <input type="color" value={settings.primaryColor} onChange={(e) => updateSetting("primaryColor", e.target.value)} className="h-8 w-full cursor-pointer rounded" />
             </div>
             <div className="flex-1">
-              <label className="text-xs text-gray-500">Secondary</label>
+              <label className="text-xs text-[#7B6660]">Secondary</label>
               <input type="color" value={settings.secondaryColor} onChange={(e) => updateSetting("secondaryColor", e.target.value)} className="h-8 w-full cursor-pointer rounded" />
             </div>
           </div>
@@ -255,9 +255,9 @@ export default function AdminTemplatePreviewPage() {
 
         {/* Typography */}
         <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Typography</legend>
+          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Typography</legend>
           <div>
-            <label className="text-xs text-gray-500">Font Family</label>
+            <label className="text-xs text-[#7B6660]">Font Family</label>
             <select value={settings.fontFamily} onChange={(e) => updateSetting("fontFamily", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm">
               <option value="Arial, Helvetica, sans-serif">Arial</option>
               <option value="'Times New Roman', serif">Times New Roman</option>
@@ -268,14 +268,14 @@ export default function AdminTemplatePreviewPage() {
             </select>
           </div>
           <div>
-            <label className="text-xs text-gray-500">Base Font Size: {settings.fontSizeBase}pt</label>
+            <label className="text-xs text-[#7B6660]">Base Font Size: {settings.fontSizeBase}pt</label>
             <input type="range" min="8" max="16" value={settings.fontSizeBase} onChange={(e) => updateSetting("fontSizeBase", Number(e.target.value))} className="w-full" />
           </div>
         </fieldset>
 
         {/* Company Info */}
         <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Company Info</legend>
+          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Company Info</legend>
           <input placeholder="Company Name" value={settings.companyName} onChange={(e) => updateSetting("companyName", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
           <input placeholder="UEN Number" value={settings.uenNumber} onChange={(e) => updateSetting("uenNumber", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
           <input placeholder="GST Registration" value={settings.gstRegistrationNumber} onChange={(e) => updateSetting("gstRegistrationNumber", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
@@ -288,14 +288,14 @@ export default function AdminTemplatePreviewPage() {
 
         {/* Invoice Settings */}
         <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Invoice</legend>
+          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Invoice</legend>
           <div className="flex gap-2">
             <div className="flex-1">
-              <label className="text-xs text-gray-500">Prefix</label>
+              <label className="text-xs text-[#7B6660]">Prefix</label>
               <input value={settings.invoicePrefix} onChange={(e) => updateSetting("invoicePrefix", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
             </div>
             <div className="flex-1">
-              <label className="text-xs text-gray-500">Currency</label>
+              <label className="text-xs text-[#7B6660]">Currency</label>
               <input value={settings.currencySymbol} onChange={(e) => updateSetting("currencySymbol", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
             </div>
           </div>
@@ -303,10 +303,10 @@ export default function AdminTemplatePreviewPage() {
 
         {/* Tax */}
         <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Tax</legend>
+          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Tax</legend>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => toggleSetting("taxEnabled")} className="text-purple-600">
-              {settings.taxEnabled ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5 text-gray-400" />}
+            <button type="button" onClick={() => toggleSetting("taxEnabled")} className="text-[#2D7C83]">
+              {settings.taxEnabled ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5 text-[#7B6660]" />}
             </button>
             <span className="text-sm">{settings.taxEnabled ? "Tax Enabled" : "Tax Disabled"}</span>
           </div>
@@ -320,7 +320,7 @@ export default function AdminTemplatePreviewPage() {
 
         {/* Display Toggles */}
         <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Display</legend>
+          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Display</legend>
           {[
             ["watermarkEnabled", "Watermark"],
             ["qrCodeDisplay", "QR Code"],
@@ -329,9 +329,9 @@ export default function AdminTemplatePreviewPage() {
             ["signatureDisplay", "Signature"],
           ].map(([key, label]) => (
             <div key={key} className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">{label}</span>
-              <button type="button" onClick={() => toggleSetting(key)} className="text-purple-600">
-                {settings[key] ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5 text-gray-400" />}
+              <span className="text-sm text-[#251E1F]">{label}</span>
+              <button type="button" onClick={() => toggleSetting(key)} className="text-[#2D7C83]">
+                {settings[key] ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5 text-[#7B6660]" />}
               </button>
             </div>
           ))}
@@ -339,7 +339,7 @@ export default function AdminTemplatePreviewPage() {
 
         {/* Payment Details */}
         <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Payment Details</legend>
+          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Payment Details</legend>
           <input placeholder="Bank Account Holder" value={settings.bankAccountHolderName} onChange={(e) => updateSetting("bankAccountHolderName", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
           <input placeholder="Bank Name" value={settings.bankName} onChange={(e) => updateSetting("bankName", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
           <input placeholder="Account Number" value={settings.bankAccountNumber} onChange={(e) => updateSetting("bankAccountNumber", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
@@ -349,9 +349,9 @@ export default function AdminTemplatePreviewPage() {
 
         {/* Layout */}
         <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Layout</legend>
+          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Layout</legend>
           <div>
-            <label className="text-xs text-gray-500">Border Style</label>
+            <label className="text-xs text-[#7B6660]">Border Style</label>
             <select value={settings.invoiceBorderStyle} onChange={(e) => updateSetting("invoiceBorderStyle", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm">
               <option value="modern">Modern</option>
               <option value="classic">Classic</option>
@@ -359,7 +359,7 @@ export default function AdminTemplatePreviewPage() {
             </select>
           </div>
           <div>
-            <label className="text-xs text-gray-500">Table Style</label>
+            <label className="text-xs text-[#7B6660]">Table Style</label>
             <select value={settings.itemTableStyle} onChange={(e) => updateSetting("itemTableStyle", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm">
               <option value="striped">Striped</option>
               <option value="bordered">Bordered</option>
@@ -370,9 +370,9 @@ export default function AdminTemplatePreviewPage() {
 
         {/* Footer */}
         <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-gray-700">Footer</legend>
+          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Footer</legend>
           <div>
-            <label className="text-xs text-gray-500">Payment Reference Instruction</label>
+            <label className="text-xs text-[#7B6660]">Payment Reference Instruction</label>
             <textarea
               rows={2}
               value={settings.paymentReferenceInstruction}
@@ -381,7 +381,7 @@ export default function AdminTemplatePreviewPage() {
             />
           </div>
           <div>
-            <label className="text-xs text-gray-500">Computer Generated Statement</label>
+            <label className="text-xs text-[#7B6660]">Computer Generated Statement</label>
             <textarea
               rows={2}
               value={settings.computerGeneratedStatement}
@@ -393,11 +393,11 @@ export default function AdminTemplatePreviewPage() {
       </div>
 
       {/* Right Panel — Live Preview */}
-      <div className="flex flex-1 flex-col overflow-hidden bg-gray-100">
+      <div className="flex flex-1 flex-col overflow-hidden bg-[#FFF6F2]">
         {/* Zoom Controls */}
         <div className="flex items-center gap-2 border-b bg-white px-4 py-2">
-          <Eye className="h-4 w-4 text-gray-500" />
-          <span className="text-xs font-medium text-gray-600">Preview</span>
+          <Eye className="h-4 w-4 text-[#7B6660]" />
+          <span className="text-xs font-medium text-[#7B6660]">Preview</span>
           <div className="ml-auto flex items-center gap-1">
             {ZOOM_LEVELS.map((level) => (
               <button
@@ -406,8 +406,8 @@ export default function AdminTemplatePreviewPage() {
                 onClick={() => setZoom(level.value)}
                 className={`rounded px-2 py-1 text-xs font-medium transition ${
                   zoom === level.value
-                    ? "bg-purple-100 text-purple-700"
-                    : "text-gray-500 hover:bg-gray-100"
+                    ? "bg-[#FFF6F2] text-[#2D7C83]"
+                    : "text-[#7B6660] hover:bg-[#FFF6F2]"
                 }`}
               >
                 {level.label}
@@ -426,7 +426,7 @@ export default function AdminTemplatePreviewPage() {
             style={{
               transform: `scale(${computedScale})`,
               transformOrigin: "top center",
-              boxShadow: "0 4px 25px rgba(0,0,0,0.12), 0 1px 5px rgba(0,0,0,0.08)",
+              boxShadow: "0 4px 25px rgba(37,30,31,0.12), 0 1px 5px rgba(37,30,31,0.08)",
               borderRadius: "4px",
               overflow: "hidden",
             }}

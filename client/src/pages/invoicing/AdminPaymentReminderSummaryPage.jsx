@@ -147,7 +147,7 @@ function ReminderSummaryCard({ summary, range }) {
     >
       {!hasAnyData ? <EmptyState>No reminder activity requires attention today.</EmptyState> : null}
       <div className="grid gap-2 sm:grid-cols-2">
-        <MetricRow label="Reminders Sent Today" value={summary.sentToday} icon={Send} to={detailPath("sent-today")} accent="#3F8F62" />
+        <MetricRow label="Reminders Sent Today" value={summary.sentToday} icon={Send} to={detailPath("sent-today")} accent="#4F8FD8" />
         <MetricRow label="Reminders Scheduled Today" value={summary.scheduledToday} icon={CalendarDays} to={detailPath("scheduled-today")} accent="#4F8FD8" />
         <MetricRow label="Failed Reminders" value={summary.failedToday} icon={XCircle} to={detailPath("failed-today")} accent="#C94C3A" />
         <MetricRow label="Overdue Invoices Requiring Reminders" value={summary.overdueRequiringReminders} icon={BellRing} to={detailPath("overdue-requiring-reminders")} accent="#D97706" />
@@ -167,7 +167,7 @@ function EmailDeliverySummaryCard({ summary, range }) {
       action={<Link to={detailPath("logs")} className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-xs font-bold text-[#F38978] transition hover:border-[#F38978]">View Delivery Logs</Link>}
     >
       <div className="grid gap-2 sm:grid-cols-2">
-        <MetricRow label="Successfully Delivered Today" value={summary.successfulToday} icon={CheckCircle2} to={detailPath("successful-today")} accent="#3F8F62" />
+        <MetricRow label="Successfully Delivered Today" value={summary.successfulToday} icon={CheckCircle2} to={detailPath("successful-today")} accent="#2F8758" />
         <MetricRow label="Failed Today" value={summary.failedToday} icon={XCircle} to={detailPath("failed-today")} accent="#C94C3A" />
         <MetricRow label="Pending Delivery" value={summary.pendingDelivery} icon={Mail} to={detailPath("pending-delivery")} accent="#D97706" />
         <MetricRow label="Delivery Rate" value={summary.deliveryRate} icon={ShieldCheck} to={detailPath("delivery-rate")} accent="#4F8FD8" formatValue={(value) => `${Number(value || 0).toFixed(Number(value || 0) % 1 ? 1 : 0)}%`} />

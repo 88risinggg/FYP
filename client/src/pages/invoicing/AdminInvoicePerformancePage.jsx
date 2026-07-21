@@ -9,10 +9,10 @@ const performancePath = `${basePath}/dashboard/invoice-performance`;
 const invoiceListPath = `${basePath}/invoices`;
 const statuses = ["Draft", "Sent", "Viewed", "Paid", "Overdue"];
 const statusColors = {
-  Draft: "#8f7d77",
+  Draft: "#7B6660",
   Sent: "#4f8fd8",
   Viewed: "#35a69b",
-  Paid: "#3f8f62",
+  Paid: "#2F8758",
   Overdue: "#c94c3a"
 };
 const rangeOptions = [
@@ -148,14 +148,14 @@ function Card({ title, controls, children, className = "" }) {
 
 function SectionState({ state, children, emptyMessage }) {
   if (state.customError) {
-    return <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{state.customError}</p>;
+    return <p className="rounded-xl border border-[#FDD9CD] bg-[#FDD9CD] p-4 text-sm text-amber-800">{state.customError}</p>;
   }
   if (state.loading && !state.data) {
     return <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-[#7b6660]"><Loader2 className="animate-spin" size={18} /> Loading...</div>;
   }
   if (state.error) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="rounded-xl border border-[#FDD9CD] bg-[#FDD9CD] p-4 text-sm text-red-700">
         <p className="flex items-center gap-2"><AlertCircle size={17} /> {state.error}</p>
         <button type="button" onClick={state.retry} className="mt-3 inline-flex items-center gap-2 font-bold hover:underline">
           <RefreshCw size={15} /> Retry
@@ -272,7 +272,7 @@ function ActivityChart({ points }) {
             const y = pad.top + (1 - ratio) * (height - pad.top - pad.bottom);
             return <g key={ratio}><line x1={pad.left} x2={width - pad.right} y1={y} y2={y} stroke="#f3ddd6" /><text x={pad.left - 8} y={y + 4} textAnchor="end" className="fill-[#7b6660] text-[10px]">{formatCount(max * ratio)}</text></g>;
           })}
-          {active !== null ? <line x1={coordinates("createdCount")[active].x} x2={coordinates("createdCount")[active].x} y1={pad.top} y2={height - pad.bottom} stroke="#c9b9b3" strokeDasharray="4 4" /> : null}
+          {active !== null ? <line x1={coordinates("createdCount")[active].x} x2={coordinates("createdCount")[active].x} y1={pad.top} y2={height - pad.bottom} stroke="#7B6660" strokeDasharray="4 4" /> : null}
           {activitySeries.map((series) => {
             const coords = coordinates(series.key);
             return <g key={series.key}><polyline fill="none" stroke={series.color} strokeWidth="3" points={coords.map((point) => `${point.x},${point.y}`).join(" ")} />{coords.map((point, index) => <circle key={index} cx={point.x} cy={point.y} r="5" fill={series.color} stroke="white" strokeWidth="2" onMouseEnter={() => setActive(index)}><title>{`${point.point.period}: ${series.label} ${formatCount(point.point[series.key])}`}</title></circle>)}</g>;
@@ -348,7 +348,7 @@ export default function AdminInvoicePerformancePage() {
           <SectionState state={overdueState} emptyMessage="No overdue amounts found for this range.">
             <button type="button" onClick={() => navigate(invoiceTarget("overdue", overdueState))} className="block w-full rounded-xl p-2 text-left transition hover:bg-[#fff8f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]">
               <div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold">Outstanding overdue invoices</span><strong>{formatCurrency(overdueSummary.overdueAmount)}</strong></div>
-              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-[#f5e8e3]"><div className="h-full w-full rounded-full bg-[#F38978]" /></div>
+              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-[#FFF3EE]"><div className="h-full w-full rounded-full bg-[#F38978]" /></div>
             </button>
           </SectionState>
         </Card>
@@ -359,7 +359,7 @@ export default function AdminInvoicePerformancePage() {
               <div className="overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
                   <thead><tr className="border-y border-[#f0d2ca] bg-[#fff8f5] text-xs uppercase text-[#7b6660]"><th className="px-3 py-3">Invoice #</th><th className="px-3 py-3">Status Change</th><th className="px-3 py-3">Changed On</th><th className="px-3 py-3 text-right">Amount</th></tr></thead>
-                  <tbody>{recentChanges.map((change) => <tr key={change.id} className="border-b border-[#f5e8e3]"><td className="px-3 py-3">{change.invoiceId ? <Link to={`${invoiceListPath}?invoiceId=${encodeURIComponent(change.invoiceId)}`} className="font-bold text-[#F38978] hover:underline">{change.invoiceNo || "-"}</Link> : <span className="font-bold">{change.invoiceNo || "-"}</span>}</td><td className="px-3 py-3"><span className="inline-flex items-center gap-2"><span>{change.fromStatus}</span><ArrowRight size={14} className="text-[#F38978]" /><strong>{change.toStatus}</strong></span></td><td className="whitespace-nowrap px-3 py-3 text-[#7b6660]">{formatDateTime(change.changedOn)}</td><td className="whitespace-nowrap px-3 py-3 text-right font-semibold">{formatCurrency(change.amount)}</td></tr>)}</tbody>
+                  <tbody>{recentChanges.map((change) => <tr key={change.id} className="border-b border-[#FFF3EE]"><td className="px-3 py-3">{change.invoiceId ? <Link to={`${invoiceListPath}?invoiceId=${encodeURIComponent(change.invoiceId)}`} className="font-bold text-[#F38978] hover:underline">{change.invoiceNo || "-"}</Link> : <span className="font-bold">{change.invoiceNo || "-"}</span>}</td><td className="px-3 py-3"><span className="inline-flex items-center gap-2"><span>{change.fromStatus}</span><ArrowRight size={14} className="text-[#F38978]" /><strong>{change.toStatus}</strong></span></td><td className="whitespace-nowrap px-3 py-3 text-[#7b6660]">{formatDateTime(change.changedOn)}</td><td className="whitespace-nowrap px-3 py-3 text-right font-semibold">{formatCurrency(change.amount)}</td></tr>)}</tbody>
                 </table>
               </div>
             ) : <p className="rounded-xl border border-dashed border-[#f0c9bf] bg-[#fff8f5] p-8 text-center text-sm text-[#7b6660]">No status changes found for this range.</p>}

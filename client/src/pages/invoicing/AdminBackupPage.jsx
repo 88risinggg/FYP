@@ -354,7 +354,7 @@ export default function AdminBackupPage() {
                           backup.type === "FULL"
                             ? "bg-emerald-400/10 text-emerald-700 border border-emerald-300/20"
                             : backup.type === "INCREMENTAL"
-                            ? "bg-sky-400/10 text-sky-700 border border-sky-300/20"
+                            ? "bg-[#2D7C83]/10 text-[#2D7C83] border border-[#2D7C83]/20"
                             : backup.type === "DIFFERENTIAL"
                             ? "bg-[#FDD9CD]/45 text-[#F38978] border border-[#f0d2ca]"
                             : "bg-amber-400/10 text-amber-700 border border-amber-300/20"
@@ -395,7 +395,7 @@ export default function AdminBackupPage() {
                         <button
                           type="button"
                           onClick={() => setRestoreTarget(backup)}
-                          className="rounded-lg p-2 text-sky-700 hover:bg-sky-400/10"
+                          className="rounded-lg p-2 text-[#2D7C83] hover:bg-[#2D7C83]/10"
                           title="Restore"
                         >
                           <RotateCcw size={16} />
@@ -420,7 +420,7 @@ export default function AdminBackupPage() {
 
       {/* Restore Confirmation Modal */}
       {restoreTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#251E1F]/60 backdrop-blur-sm">
           <div className="app-panel w-full max-w-md rounded-xl p-6">
             <h3 className="text-lg font-semibold text-white mb-2">Confirm Restore</h3>
             <p className="text-sm text-[#7b6660] mb-1">

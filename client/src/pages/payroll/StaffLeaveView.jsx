@@ -9,12 +9,12 @@ import {
 } from "../../services/leaveService.js";
 
 const SkeletonBar = ({ width = "100%", height = "h-4" }) => (
-  <div className={`${height} rounded-lg bg-white/800 animate-pulse`} style={{ width }} />
+  <div className={`${height} rounded-lg bg-white/80 animate-pulse`} style={{ width }} />
 );
 
 function Panel({ title, children }) {
   return (
-    <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
+    <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
       <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">{title}</h3>
       {children}
     </div>
@@ -26,7 +26,7 @@ function LeaveStatusBadge({ status }) {
     pending: "border-amber-300/30 bg-amber-300/10 text-amber-700",
     approved: "border-emerald-300/30 bg-emerald-300/10 text-emerald-700",
     rejected: "border-red-300/30 bg-red-300/10 text-red-700",
-    cancelled: "border-gray-300/30 bg-gray-300/10 text-gray-200"
+    cancelled: "border-[#F0D2CA]/30 bg-[#FFF6F2]/10 text-[#7B6660]"
   };
 
   const label = status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unknown";
@@ -156,7 +156,7 @@ export default function StaffLeaveView() {
         {/* Skeleton: Balance cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {[1, 2, 3, 4].map(i => (
-            <div key={i} className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4 space-y-3">
+            <div key={i} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4 space-y-3">
               <SkeletonBar width="60%" height="h-3" />
               <SkeletonBar width="80%" height="h-5" />
               <SkeletonBar width="100%" height="h-2" />
@@ -164,14 +164,14 @@ export default function StaffLeaveView() {
           ))}
         </div>
         {/* Skeleton: Form */}
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5 space-y-3">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 space-y-3">
           <SkeletonBar width="30%" height="h-4" />
           <SkeletonBar width="100%" height="h-10" />
           <SkeletonBar width="100%" height="h-10" />
           <SkeletonBar width="100%" height="h-20" />
         </div>
         {/* Skeleton: Table */}
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5 space-y-3">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 space-y-3">
           <SkeletonBar width="30%" height="h-4" />
           {[1, 2, 3].map(i => <SkeletonBar key={i} height="h-12" />)}
         </div>
@@ -185,8 +185,8 @@ export default function StaffLeaveView() {
       {toast && (
         <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[70] w-full max-w-md rounded-xl border px-5 py-4 shadow-2xl backdrop-blur-sm animate-[slideDown_0.3s_ease-out] ${
           toast.type === "error"
-            ? "border-red-400/30 bg-red-50 text-red-700"
-            : "border-emerald-400/30 bg-emerald-50 text-emerald-700"
+            ? "border-red-400/30 bg-[#FDD9CD] text-red-700"
+            : "border-emerald-400/30 bg-[#FFF6F2] text-emerald-700"
         }`}>
           <div className="flex items-center gap-3">
             <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
@@ -210,7 +210,7 @@ export default function StaffLeaveView() {
             const progressPercent = entitled > 0 ? Math.min((used / entitled) * 100, 100) : 0;
 
             return (
-              <div key={bal.leave_type_id || bal.id} className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+              <div key={bal.leave_type_id || bal.id} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Calendar size={16} className="text-[#F38978]" />
                   <p className="text-sm font-medium text-[#251E1F]">{bal.leave_type || bal.leave_type_name || bal.name || "Leave"}</p>
@@ -230,7 +230,7 @@ export default function StaffLeaveView() {
                   </div>
                 </div>
                 {/* Progress bar */}
-                <div className="h-2 w-full rounded-full bg-white/800 overflow-hidden">
+                <div className="h-2 w-full rounded-full bg-white/80 overflow-hidden">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-[#F38978] to-[#F38978] transition-all duration-300"
                     style={{ width: `${progressPercent}%` }}
@@ -257,7 +257,7 @@ export default function StaffLeaveView() {
             <select
               value={selectedTypeId}
               onChange={(e) => setSelectedTypeId(e.target.value)}
-              className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978]"
+              className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978]"
             >
               <option value="" className="bg-[#fff3ee]">Select leave type...</option>
               {leaveTypes.map(type => (
@@ -276,7 +276,7 @@ export default function StaffLeaveView() {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978]"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978]"
               />
             </div>
             <div>
@@ -285,7 +285,7 @@ export default function StaffLeaveView() {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978]"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#251E1F] focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978]"
               />
             </div>
           </div>
@@ -298,7 +298,7 @@ export default function StaffLeaveView() {
               onChange={(e) => setReason(e.target.value)}
               rows={3}
               placeholder="Enter your reason for leave..."
-              className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2.5 text-sm text-[#251E1F] placeholder:text-[#251E1F]/30 focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978] resize-none"
+              className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#251E1F] placeholder:text-[#251E1F]/30 focus:border-[#F38978] focus:outline-none focus:ring-1 focus:ring-[#F38978] resize-none"
             />
           </div>
 
@@ -309,7 +309,7 @@ export default function StaffLeaveView() {
                 Attachment <span className="text-red-400">*</span> (Required for {selectedType?.name})
               </label>
               <div className="flex items-center gap-3">
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2.5 text-sm text-[#7b6660] hover:bg-[#FDD9CD]/45 transition">
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm text-[#7b6660] hover:bg-[#FDD9CD]/45 transition">
                   <Upload size={16} />
                   {attachment ? attachment.name : "Choose file..."}
                   <input
@@ -336,7 +336,7 @@ export default function StaffLeaveView() {
           <button
             type="submit"
             disabled={submitting}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#F38978] px-6 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#F38978] px-6 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
             {submitting ? (
               <>

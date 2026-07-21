@@ -32,7 +32,7 @@ describe("appearance service", () => {
   it("applies and caches theme, accent, density and font size", () => {
     const settings = applyAppearance({
       theme: "dark",
-      accent_color: "#7fa6c9",
+      accent_color: "#2d7c83",
       compact_mode: true,
       font_size: "large"
     });
@@ -40,7 +40,7 @@ describe("appearance service", () => {
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(document.documentElement.dataset.compact).toBe("true");
     expect(document.documentElement.dataset.fontSize).toBe("large");
-    expect(document.documentElement.style.getPropertyValue("--app-accent")).toBe("#7FA6C9");
+    expect(document.documentElement.style.getPropertyValue("--app-accent")).toBe("#2D7C83");
     expect(readCachedAppearance()).toEqual(settings);
   });
 

@@ -128,7 +128,7 @@ export default function ProfileSection() {
                   <span className="text-2xl font-bold text-[#F38978]">{form.name?.charAt(0) || "U"}</span>
                 )}
               </div>
-              <label className="absolute -bottom-1 -right-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-[#F38978] text-[#251E1F] shadow-lg transition hover:bg-[#E77463]">
+              <label className="absolute -bottom-1 -right-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-[#F38978] text-white shadow-lg transition hover:bg-[#E77463]">
                 <Camera size={13} />
                 <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
               </label>

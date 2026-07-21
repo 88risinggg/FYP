@@ -1101,14 +1101,14 @@ function getStatusClass(status) {
   }
 
   if (normalizedStatus.includes("approved") || normalizedStatus.includes("paid") || normalizedStatus.includes("sent")) {
-    return "border-[#7DD3FC]/25 bg-[#7DD3FC]/10 text-[#BAE6FD]";
+    return "border-[#2D7C83]/25 bg-[#2D7C83]/10 text-[#2D7C83]";
   }
 
   if (normalizedStatus.includes("exception")) {
     return "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]";
   }
 
-  return "border-[#f0d2ca] bg-white/800 text-[#7b6660]";
+  return "border-[#f0d2ca] bg-white/80 text-[#7b6660]";
 }
 
 function createTimelineEntry(action, owner = "Finance") {
@@ -1244,7 +1244,7 @@ function ActionButton({ children, disabled = false, disabledReason = "", icon: I
   const isBlockedWithReason = Boolean(disabled && disabledReason);
   const className =
     variant === "secondary"
-      ? "inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
+      ? "inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
       : "primary-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold";
   const handleClick = () => {
     if (isBlockedWithReason) {
@@ -1272,7 +1272,7 @@ function ActionButton({ children, disabled = false, disabledReason = "", icon: I
 
 function EmptyState({ message }) {
   return (
-    <div className="rounded-xl border border-dashed border-[#f0d2ca] bg-white/800 p-6 text-sm text-[#7b6660]">
+    <div className="rounded-xl border border-dashed border-[#f0d2ca] bg-white/80 p-6 text-sm text-[#7b6660]">
       {message}
     </div>
   );
@@ -1288,7 +1288,7 @@ function WorkflowCard({ run, step }) {
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978] ring-1 ring-[#F38978]/25">
           <Icon size={24} />
         </div>
-        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${completed ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#f0d2ca] bg-white/800 text-[#7b6660]"}`}>
+        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${completed ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"}`}>
           {completed ? "Completed" : "Pending"}
         </span>
       </div>
@@ -1357,7 +1357,7 @@ function ExceptionPanel({ run }) {
               {expandedException === group.message ? (
                 <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   {group.employees.map((employee) => (
-                    <div key={employee.id} className="rounded-lg border border-[#f0d2ca] bg-white/800 p-3">
+                    <div key={employee.id} className="rounded-lg border border-[#f0d2ca] bg-white/80 p-3">
                       <p className="font-semibold text-[#251E1F]">{employee.name}</p>
                       <p className="mt-1 text-xs text-[#7b6660]">{employee.department || "Missing department"}</p>
                       <p className="mt-1 text-xs text-[#7b6660]">Net pay: {formatMoney(getEmployeeNetPay(employee))}</p>
@@ -1399,20 +1399,20 @@ function AdminCpfConfigPanel() {
             Last updated: <span className="normal-case tracking-normal text-[#251E1F]">{lastUpdatedLabel}</span>
           </p>
         </div>
-        <span className="w-fit rounded-full border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 px-3 py-1 text-xs font-semibold text-[#BAE6FD]">
+        <span className="w-fit rounded-full border border-[#2D7C83]/25 bg-[#2D7C83]/10 px-3 py-1 text-xs font-semibold text-[#2D7C83]">
           Admin controlled
         </span>
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         {rows.map(([label, value]) => (
-          <div key={label} className="rounded-xl border border-[#f0d2ca] bg-white/800 p-3">
+          <div key={label} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">{label}</p>
             <p className="mt-2 text-sm font-semibold text-[#251E1F]">{value}</p>
           </div>
         ))}
       </div>
       <div className="mt-5 overflow-hidden rounded-xl border border-[#f0d2ca]">
-        <div className="grid grid-cols-3 gap-3 border-b border-[#f0d2ca] bg-white/800 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
+        <div className="grid grid-cols-3 gap-3 border-b border-[#f0d2ca] bg-white/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
           <span>Age Group</span>
           <span>Employee CPF</span>
           <span>Employer CPF</span>
@@ -1426,7 +1426,7 @@ function AdminCpfConfigPanel() {
         ))}
       </div>
       <div className="mt-5 overflow-hidden rounded-xl border border-[#f0d2ca]">
-        <div className="grid grid-cols-3 gap-3 border-b border-[#f0d2ca] bg-white/800 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
+        <div className="grid grid-cols-3 gap-3 border-b border-[#f0d2ca] bg-white/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
           <span>Component</span>
           <span>CPF</span>
           <span>Wage Type</span>
@@ -1443,7 +1443,7 @@ function AdminCpfConfigPanel() {
       </div>
       <div className="mt-5 grid gap-4 xl:grid-cols-2">
         <div className="overflow-hidden rounded-xl border border-[#f0d2ca]">
-          <div className="grid grid-cols-3 gap-3 border-b border-[#f0d2ca] bg-white/800 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
+          <div className="grid grid-cols-3 gap-3 border-b border-[#f0d2ca] bg-white/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
             <span>Deduction</span>
             <span>Type</span>
             <span>CPF Wage Base</span>
@@ -1456,9 +1456,9 @@ function AdminCpfConfigPanel() {
             </div>
           ))}
         </div>
-        <div className="rounded-xl border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 p-4">
+        <div className="rounded-xl border border-[#2D7C83]/25 bg-[#2D7C83]/10 p-4">
           <h4 className="text-sm font-semibold text-[#251E1F]">MBMF Applicability</h4>
-          <p className="mt-2 text-sm text-[#BAE6FD]">
+          <p className="mt-2 text-sm text-[#2D7C83]">
             Finance applies MBMF only when staff religion is {adminCpfConfiguration.mbmf?.applicableReligion || "Muslim"}.
             Other religions are skipped even if the deduction item appears in the payroll upload.
           </p>
@@ -1540,14 +1540,14 @@ function AuditTrailPanel({ run }) {
           <h3 className="text-lg font-semibold text-[#251E1F]">Audit Trail</h3>
           <p className="mt-1 text-sm text-[#7b6660]">Workflow activity captured for Finance review and audit readiness.</p>
         </div>
-        <span className="w-fit rounded-full border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 px-3 py-1 text-xs font-semibold text-[#BAE6FD]">
+        <span className="w-fit rounded-full border border-[#2D7C83]/25 bg-[#2D7C83]/10 px-3 py-1 text-xs font-semibold text-[#2D7C83]">
           {auditEntries.length} event(s)
         </span>
       </div>
       <div className="mt-5 grid gap-3">
         {auditEntries.length ? (
           auditEntries.slice(0, 8).map((entry, index) => (
-            <div key={`${entry.action}-${entry.at}-${index}`} className="grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 text-sm md:grid-cols-[10rem_1fr_8rem]">
+            <div key={`${entry.action}-${entry.at}-${index}`} className="grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm md:grid-cols-[10rem_1fr_8rem]">
               <span className="font-semibold text-[#251E1F]">{formatDateTime(entry.at)}</span>
               <span className="text-[#7b6660]">{entry.action}</span>
               <span className="text-right font-semibold text-[#F38978] md:text-left">{entry.owner}</span>
@@ -1573,7 +1573,7 @@ function StatCard({ detail, label, tone = "text-[#251E1F]", value }) {
 
 function PayrollStatsFilter({ filter, onFilterChange, onModeChange, resultCount }) {
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#f0d2ca] bg-white/800 p-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#f0d2ca] bg-white/80 p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F38978]/20 text-[#F38978]">
           <CalendarDays size={18} />
@@ -1584,12 +1584,12 @@ function PayrollStatsFilter({ filter, onFilterChange, onModeChange, resultCount 
         </div>
       </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="inline-flex rounded-xl border border-[#f0d2ca] bg-white/800 p-1">
+        <div className="inline-flex rounded-xl border border-[#f0d2ca] bg-white/80 p-1">
           {["month", "week"].map((mode) => (
             <button
               key={mode}
               type="button"
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition ${filter.mode === mode ? "bg-[#F38978] text-[#251E1F]" : "text-[#7b6660] hover:bg-white/800"}`}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition ${filter.mode === mode ? "bg-[#F38978] text-white" : "text-[#7b6660] hover:bg-white/80"}`}
               onClick={() => onModeChange(mode)}
             >
               {mode}
@@ -1609,7 +1609,7 @@ function PayrollStatsFilter({ filter, onFilterChange, onModeChange, resultCount 
 
 function RunSelector({ payrollRuns, selectedRunId, onSelectRun }) {
   return (
-    <label className="flex min-w-[17rem] items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 px-3 py-2.5">
+    <label className="flex min-w-[17rem] items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2.5">
       <Search size={16} className="text-[#F38978]" />
       <select
         value={selectedRunId}
@@ -1655,7 +1655,7 @@ function AccountingImpact({ payrollRuns = [], run }) {
           <h3 className="text-lg font-semibold text-[#251E1F]">Accounting Impact in Internal Ledger</h3>
           <p className="mt-1 text-sm text-[#7b6660]">Journal totals for the selected accounting period.</p>
         </div>
-        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${postedRuns === filteredRuns.length && filteredRuns.length ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#f0d2ca] bg-white/800 text-[#7b6660]"}`}>
+        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${postedRuns === filteredRuns.length && filteredRuns.length ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"}`}>
           {postedRuns}/{filteredRuns.length} posted
         </span>
       </div>
@@ -1718,10 +1718,10 @@ function CpfDeductionProcessPanel({ onAdvanceRun, run }) {
       </div>
       <div className="mt-5 grid gap-3 lg:grid-cols-3">
         {rows.map((row) => (
-          <div key={row.key} className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+          <div key={row.key} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-[#251E1F]">{row.label}</p>
-              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${row.completedAt ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#f0d2ca] bg-white/800 text-[#7b6660]"}`}>
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${row.completedAt ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"}`}>
                 {row.status}
               </span>
             </div>
@@ -1842,7 +1842,7 @@ function DashboardView({ onAdvanceRun, onSelectRun, payrollRuns, selectedRun }) 
           </div>
           <div className="mt-6 space-y-3 text-sm text-[#7b6660]">
             {workflowChecklist.map((item) => (
-              <div key={item.label} className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/800 p-3">
+              <div key={item.label} className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-3">
                 <CheckCircle2 size={17} className={item.completed ? "text-[#2f8758]" : "text-[#7b6660]/50"} />
                 <span>{item.label}</span>
               </div>
@@ -2007,7 +2007,7 @@ function PayrollRunsView({
         <aside className="app-panel rounded-2xl p-6">
           <h3 className="text-lg font-semibold text-[#251E1F]">{formatPayrollPeriod(selectedRun)}</h3>
           <p className="mt-1 text-sm text-[#7b6660]">Process the selected pay run in order.</p>
-          <div className="mt-4 grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 text-sm">
+          <div className="mt-4 grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm">
             <div className="flex items-center justify-between gap-3">
               <span className="text-[#7b6660]">Exceptions</span>
               <span className={exceptionCount ? "font-semibold text-[#9A6412]" : "font-semibold text-[#2f8758]"}>
@@ -2084,23 +2084,23 @@ function PayrollRunsView({
               Reconcile
             </ActionButton>
           </div>
-          <div className="mt-6 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 text-sm text-[#7b6660]">
+          <div className="mt-6 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm text-[#7b6660]">
             Bank reference: <span className="font-semibold text-[#251E1F]">{selectedRun.bankReference || "Pending payment"}</span>
           </div>
           {selectedRun.paymentProvider ? (
-            <div className="mt-3 rounded-xl border border-[#2f8758]/20 bg-[#2f8758]/10 p-4 text-sm text-[#065F46]">
+            <div className="mt-3 rounded-xl border border-[#2f8758]/20 bg-[#2f8758]/10 p-4 text-sm text-[#2D7C83]">
               {selectedRun.paymentProvider} submitted {selectedRun.paymentTransferCount || 0} transfer(s).
             </div>
           ) : null}
           {selectedRun.simulationAccount ? (
-            <div className="mt-3 rounded-xl border border-[#7DD3FC]/20 bg-[#7DD3FC]/10 p-4 text-sm text-[#D9F3FF]">
+            <div className="mt-3 rounded-xl border border-[#2D7C83]/20 bg-[#2D7C83]/10 p-4 text-sm text-[#FFF6F2]">
               <p className="font-semibold text-[#251E1F]">{selectedRun.simulationAccount.accountName}</p>
               <p className="mt-1">
                 Balance: {formatMoney(selectedRun.simulationAccount.balanceBefore)} to {formatMoney(selectedRun.simulationAccount.balanceAfter)}
               </p>
             </div>
           ) : null}
-          <div className="mt-3 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 text-sm text-[#7b6660]">
+          <div className="mt-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm text-[#7b6660]">
             Modern Treasury recipients: <span className="font-semibold text-[#251E1F]">{approvedStaffCount - missingRecipientCount}/{approvedStaffCount}</span>
           </div>
           {paymentError ? (
@@ -2132,7 +2132,7 @@ function PayrollRunsView({
 
 function PayrollItemList({ items, title }) {
   return (
-    <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+    <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
       <h4 className="text-sm font-semibold text-[#251E1F]">{title}</h4>
       <div className="mt-3 space-y-2">
         {items.length ? (
@@ -2203,7 +2203,7 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
           </div>
           <button
             type="button"
-            className="rounded-xl border border-[#f0d2ca] bg-white/800 p-2 text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="rounded-xl border border-[#f0d2ca] bg-white/80 p-2 text-[#251E1F] hover:bg-[#FDD9CD]/45"
             onClick={onClose}
           >
             <X size={18} />
@@ -2218,7 +2218,7 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
             <h4 className="text-sm font-semibold text-[#251E1F]">Employee & Payment Details</h4>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {[
@@ -2253,7 +2253,7 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
                       />
                     )
                   ) : (
-                    <p className="rounded-xl border border-[#f0d2ca] bg-white/800 px-3 py-2.5 text-sm font-semibold text-[#251E1F]">
+                    <p className="rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2.5 text-sm font-semibold text-[#251E1F]">
                       {draft[field] || "Not recorded"}
                     </p>
                   )}
@@ -2262,7 +2262,7 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
             </div>
           </div>
 
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
             <h4 className="text-sm font-semibold text-[#251E1F]">Finance Checks</h4>
             <div className="mt-4 grid gap-2">
               {exceptions.length ? (
@@ -2277,7 +2277,7 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
                 </div>
               )}
             </div>
-            <div className="mt-4 rounded-lg border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 p-3 text-sm text-[#BAE6FD]">
+            <div className="mt-4 rounded-lg border border-[#2D7C83]/25 bg-[#2D7C83]/10 p-3 text-sm text-[#2D7C83]">
               MBMF: {mbmfReview.eligible ? "Applied" : "Skipped"} / Employee {formatMoney(mbmfReview.employeeAmount)} / Employer {formatMoney(mbmfReview.employerAmount)}
             </div>
           </div>
@@ -2483,7 +2483,7 @@ function PayslipsApprovalView() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[#f0d2ca] bg-white/800 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
+              <thead className="border-b border-[#f0d2ca] bg-white/80 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
                 <tr>
                   <th className="px-4 py-3">Staff</th>
                   <th className="px-4 py-3">Period</th>
@@ -2537,7 +2537,7 @@ function PayslipsApprovalView() {
       </div>
 
       {rejectingPayslipId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#251E1F]/50 px-4">
           <div className="app-panel w-full max-w-md rounded-2xl p-6">
             <div className="mb-4 flex items-center gap-3">
               <AlertCircle className="text-red-700" size={20} />
@@ -2547,7 +2547,7 @@ function PayslipsApprovalView() {
               value={rejectReason}
               onChange={(event) => setRejectReason(event.target.value)}
               placeholder="Enter rejection reason..."
-              className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#251E1F] placeholder-white/30"
+              className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] placeholder-white/30"
               rows={4}
             />
             <div className="mt-6 flex gap-3">
@@ -2565,7 +2565,7 @@ function PayslipsApprovalView() {
                   setRejectingPayslipId(null);
                   setRejectReason("");
                 }}
-                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
               >
                 Cancel
               </button>
@@ -2657,7 +2657,7 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, payrol
                 <span className="block text-xs">{employee.bankAccount || "Missing account"}</span>
               </span>
               <span>
-                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${status === "Approved" ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : status === "Hold" ? "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]" : "border-[#f0d2ca] bg-white/800 text-[#7b6660]"}`}>
+                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${status === "Approved" ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : status === "Hold" ? "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]" : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"}`}>
                   {status}
                 </span>
               </span>
@@ -2723,7 +2723,7 @@ function NotificationRecordsView({ selectedRun }) {
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978]">
                 <Send size={21} />
               </div>
-              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${notification.status === "Sent" ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#f0d2ca] bg-white/800 text-[#7b6660]"}`}>
+              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${notification.status === "Sent" ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"}`}>
                 {notification.status}
               </span>
             </div>
@@ -3085,7 +3085,7 @@ function PayrollReportsView({ onSelectRun, payrollRuns, selectedRun }) {
             <p className="mt-5 text-sm font-semibold text-[#251E1F]">{value}</p>
             <button
               type="button"
-              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
+              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
               onClick={() => downloadReport(selectedRun, title)}
             >
               <Download size={16} />
@@ -3141,7 +3141,7 @@ function PayrollSummariesView({ payrollRuns, selectedRun }) {
           </div>
           <div className="mt-6 space-y-3">
             {summaryRows.map(([label, value]) => (
-              <div key={label} className="flex items-center justify-between gap-4 rounded-xl border border-[#f0d2ca] bg-white/800 p-3 text-sm">
+              <div key={label} className="flex items-center justify-between gap-4 rounded-xl border border-[#f0d2ca] bg-white/80 p-3 text-sm">
                 <span className="text-[#7b6660]">{label}</span>
                 <span className="font-semibold text-[#251E1F]">{formatMoney(value)}</span>
               </div>

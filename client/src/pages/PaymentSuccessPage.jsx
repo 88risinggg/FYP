@@ -55,7 +55,7 @@ export default function PaymentSuccessPage() {
 
   if (status === "loading") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#f5f5f5] px-4">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#FFF8F5] px-4">
         <div className="w-full max-w-md rounded-2xl bg-white p-10 text-center shadow-lg">
           <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-[#f0d2ca] border-t-[#F38978]" />
           <p className="text-sm text-[#7b6660]">Confirming your payment…</p>
@@ -66,15 +66,15 @@ export default function PaymentSuccessPage() {
 
   if (status === "paid") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#f5f5f5] px-4">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#FFF8F5] px-4">
         <div className="w-full max-w-md rounded-2xl bg-white p-10 text-center shadow-lg">
           {/* Green tick */}
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-[#FFF6F2]">
             <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-[#061e4b]">Payment Successful</h1>
+          <h1 className="text-2xl font-bold text-[#251E1F]">Payment Successful</h1>
           <p className="mt-2 text-sm text-[#7b6660]">
             Thank you{invoice?.customer_name ? `, ${invoice.customer_name}` : ""}! Your payment for{" "}
             <strong className="text-[#251E1F]">{invoiceId}</strong> has been confirmed.
@@ -87,7 +87,7 @@ export default function PaymentSuccessPage() {
           <div className="mt-8 space-y-3">
             <Link
               to={`/invoice/view/${invoiceId}`}
-              className="block w-full rounded-xl bg-[#061e4b] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0a2d6b]"
+              className="block w-full rounded-xl bg-[#F38978] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#E87562]"
             >
               View Invoice
             </Link>
@@ -100,21 +100,21 @@ export default function PaymentSuccessPage() {
 
   // error state
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#f5f5f5] px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#FFF8F5] px-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-10 text-center shadow-lg">
-        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-rose-100">
+        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-[#FDD9CD]">
           <svg className="h-8 w-8 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </div>
-        <h1 className="text-2xl font-bold text-[#061e4b]">Something went wrong</h1>
+        <h1 className="text-2xl font-bold text-[#251E1F]">Something went wrong</h1>
         <p className="mt-2 text-sm text-[#7b6660]">
           We couldn't confirm your payment. Please check your invoice or contact support.
         </p>
         {invoiceId && (
           <Link
             to={`/invoice/view/${invoiceId}`}
-            className="mt-8 block w-full rounded-xl bg-[#061e4b] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0a2d6b]"
+            className="mt-8 block w-full rounded-xl bg-[#F38978] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#E87562]"
           >
             Return to Invoice
           </Link>

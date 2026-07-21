@@ -163,12 +163,12 @@ export default function StaffProfile({ onProfileSaved }) {
 
   if (fetchError) return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="rounded-xl border border-red-300/40 bg-red-50 px-6 py-5">
+      <div className="rounded-xl border border-red-300/40 bg-[#FDD9CD] px-6 py-5">
         <p className="text-sm text-red-700">{fetchError}</p>
         <button
           type="button"
           onClick={() => { setLoading(true); setFetchError(null); window.location.reload(); }}
-          className="mt-3 rounded-lg bg-red-100 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-200"
+          className="mt-3 rounded-lg bg-[#FDD9CD] px-4 py-2 text-sm font-medium text-red-700 hover:bg-[#FDD9CD]"
         >
           Try Again
         </button>
@@ -182,12 +182,12 @@ export default function StaffProfile({ onProfileSaved }) {
       {toast && (
         <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[70] w-full max-w-md rounded-xl border px-5 py-4 shadow-2xl backdrop-blur-sm animate-[slideDown_0.3s_ease-out] ${
           toast.type === "error"
-            ? "border-red-300/40 bg-red-50 text-red-700"
-            : "border-emerald-300/40 bg-emerald-50 text-emerald-700"
+            ? "border-red-300/40 bg-[#FDD9CD] text-red-700"
+            : "border-emerald-300/40 bg-[#FFF6F2] text-emerald-700"
         }`}>
           <div className="flex items-center gap-3">
             <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-              toast.type === "error" ? "bg-red-100 text-red-600" : "bg-emerald-100 text-emerald-600"
+              toast.type === "error" ? "bg-[#FDD9CD] text-red-600" : "bg-[#FFF6F2] text-emerald-600"
             }`}>
               {toast.type === "error" ? "✕" : "✓"}
             </span>
@@ -197,7 +197,7 @@ export default function StaffProfile({ onProfileSaved }) {
       )}
 
       {/* Personal Info */}
-      <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
+      <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
         <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">Personal Info</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <DisplayField label="Name" value={profile?.name || "-"} />
@@ -208,7 +208,7 @@ export default function StaffProfile({ onProfileSaved }) {
       </div>
 
       {/* Bank Details */}
-      <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
+      <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
         <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">Bank Details</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <DisplayField label="Bank" value={profile?.bank || "-"} />
@@ -217,7 +217,7 @@ export default function StaffProfile({ onProfileSaved }) {
       </div>
 
       {/* Employment Info (read-only) */}
-      <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
+      <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
         <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">Employment Info</h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <DisplayField label="Department" value={profile?.department || "-"} />
@@ -230,7 +230,7 @@ export default function StaffProfile({ onProfileSaved }) {
       </div>
 
       {/* Emergency Contacts */}
-      <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
+      <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
         <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">Emergency Contacts</h3>
 
         {contactsLoading ? (
@@ -243,7 +243,7 @@ export default function StaffProfile({ onProfileSaved }) {
         ) : (
           <div className="space-y-3">
             {contacts.map(contact => (
-              <div key={contact.contact_id} className="rounded-lg border border-[#f0d2ca] bg-black/10 px-4 py-3">
+              <div key={contact.contact_id} className="rounded-lg border border-[#f0d2ca] bg-[#251E1F]/10 px-4 py-3">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm font-medium text-[#251E1F]">
@@ -254,7 +254,7 @@ export default function StaffProfile({ onProfileSaved }) {
                   </div>
                   <div className="flex items-center gap-2">
                     {contact.is_primary === 1 && (
-                      <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] font-medium text-cyan-700">Primary</span>
+                      <span className="rounded-full bg-[#FFF6F2] px-2 py-0.5 text-[10px] font-medium text-[#2D7C83]">Primary</span>
                     )}
                     <button
                       type="button"
@@ -266,7 +266,7 @@ export default function StaffProfile({ onProfileSaved }) {
                     <button
                       type="button"
                       onClick={() => handleDeleteContact(contact.contact_id)}
-                      className="text-xs text-red-500 hover:text-red-700"
+                      className="text-xs text-red-500 hover:text-red-500"
                     >
                       Delete
                     </button>
@@ -282,7 +282,7 @@ export default function StaffProfile({ onProfileSaved }) {
           <button
             type="button"
             onClick={() => { resetContactForm(); setShowAddForm(true); }}
-            className="mt-3 rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="mt-3 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
           >
             + Add Contact
           </button>
@@ -290,7 +290,7 @@ export default function StaffProfile({ onProfileSaved }) {
 
         {/* Add/Edit form */}
         {(showAddForm || editingContact) && (
-          <div className="mt-4 rounded-lg border border-[#f0d2ca] bg-black/10 p-4 space-y-3">
+          <div className="mt-4 rounded-lg border border-[#f0d2ca] bg-[#251E1F]/10 p-4 space-y-3">
             <p className="text-sm font-medium text-[#251E1F]">{editingContact ? 'Edit Contact' : 'Add Emergency Contact'}</p>
 
             {contactError && (
@@ -345,14 +345,14 @@ export default function StaffProfile({ onProfileSaved }) {
               <button
                 type="button"
                 onClick={resetContactForm}
-                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSaveContact}
-                className="flex-1 rounded-lg bg-[#F38978] px-4 py-2 text-sm font-semibold text-[#251E1F] hover:brightness-110"
+                className="flex-1 rounded-lg bg-[#F38978] px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
               >
                 {editingContact ? 'Update' : 'Save'}
               </button>
@@ -366,7 +366,7 @@ export default function StaffProfile({ onProfileSaved }) {
         <button
           type="button"
           onClick={() => setShowEditModal(true)}
-          className="rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110"
+          className="rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110"
         >
           Edit Profile
         </button>
@@ -470,7 +470,7 @@ function EditProfileModal({ profile, token, userId, onClose, onSaved, onError })
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#251E1F]/60 backdrop-blur-sm">
       <div className="rounded-2xl border border-[#f0d2ca] bg-[#fff3ee] p-6 shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         <p className="text-lg font-semibold text-[#251E1F]">Edit Profile</p>
         <p className="mt-1 text-sm text-[#7b6660]">
@@ -503,7 +503,7 @@ function EditProfileModal({ profile, token, userId, onClose, onSaved, onError })
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2.5 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
           >
             Cancel
           </button>
@@ -511,7 +511,7 @@ function EditProfileModal({ profile, token, userId, onClose, onSaved, onError })
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 rounded-lg bg-[#F38978] px-4 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-60"
+            className="flex-1 rounded-lg bg-[#F38978] px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
           >
             {saving ? 'Saving…' : 'Save Changes'}
           </button>
@@ -524,7 +524,7 @@ function EditProfileModal({ profile, token, userId, onClose, onSaved, onError })
 /* ─── Shared Components ─── */
 function DisplayField({ label, value }) {
   return (
-    <div className="rounded-lg border border-[#f0d2ca] bg-black/10 px-4 py-3">
+    <div className="rounded-lg border border-[#f0d2ca] bg-[#251E1F]/10 px-4 py-3">
       <p className="text-xs uppercase tracking-wide text-[#7b6660]">{label}</p>
       <p className="mt-1 text-sm font-medium text-[#251E1F]">{value}</p>
     </div>

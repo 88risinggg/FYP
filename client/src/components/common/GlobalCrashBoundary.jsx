@@ -71,7 +71,7 @@ export default class GlobalCrashBoundary extends React.Component {
             Route: <span className="font-semibold break-all text-[#251E1F]">{window.location.pathname}</span>
           </p>
 
-          <div className="mt-6 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 text-sm text-[#251E1F]">
+          <div className="mt-6 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm text-[#251E1F]">
             {errorMessage}
           </div>
 
@@ -79,7 +79,7 @@ export default class GlobalCrashBoundary extends React.Component {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="rounded-lg bg-[#F38978] px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]"
+              className="rounded-lg bg-[#F38978] px-4 py-2 text-sm font-semibold text-white hover:bg-[#F38978]"
             >
               Reload Page
             </button>
@@ -90,7 +90,7 @@ export default class GlobalCrashBoundary extends React.Component {
                 localStorage.removeItem("authUser");
                 window.location.href = "/login";
               }}
-              className="rounded-lg border border-[#ead3cc] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+              className="rounded-lg border border-[#ead3cc] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
             >
               Reset Session
             </button>

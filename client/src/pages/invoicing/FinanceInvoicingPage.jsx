@@ -160,10 +160,10 @@ const financeSidebarSections = [
 const invoiceStatuses = ["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdue"];
 
 const statusStyles = {
-  Draft: "border-slate-400/25 bg-slate-400/10 text-slate-700",
+  Draft: "border-[#F0D2CA]/25 bg-[#FFF6F2]/10 text-[#251E1F]",
   Scheduled: "border-amber-400/30 bg-amber-500/15 text-amber-700",
-  Sent: "border-blue-400/30 bg-blue-500/15 text-blue-700",
-  Viewed: "border-cyan-400/30 bg-cyan-500/15 text-cyan-700",
+  Sent: "border-[#D6E4FF] bg-[#EAF2FF] text-[#3269A8]",
+  Viewed: "border-[#35A69B]/30 bg-[#E7F7F5] text-[#218178]",
   Paid: "border-emerald-400/30 bg-emerald-500/15 text-emerald-700",
   Overdue: "border-rose-400/30 bg-rose-500/15 text-rose-700"
 };
@@ -310,7 +310,7 @@ function openPrintableInvoice(invoice) {
             "</body>",
             `<style>@media print { .no-print { display: none !important; } }</style>
              <div class="no-print" style="position:fixed;top:12px;right:12px;z-index:9999;">
-               <button onclick="window.print()" style="padding:10px 20px;background:#061e4b;color:white;border:none;border-radius:6px;font-weight:bold;cursor:pointer;font-size:14px;">
+               <button onclick="window.print()" style="padding:10px 20px;background:#F38978;color:white;border:none;border-radius:6px;font-weight:bold;cursor:pointer;font-size:14px;">
                  Save as PDF / Print
                </button>
              </div>
@@ -612,7 +612,7 @@ function InvoiceDetailsModal({ invoice, onClose }) {
                   href={stripeUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#061e4b] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0a2d6b]"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#F38978] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#E87562]"
                 >
                   <CreditCard size={15} />
                   Pay Now with Card / PayNow — {formatCurrency(invoice.total_amount)}
@@ -637,7 +637,7 @@ function InvoiceDetailsModal({ invoice, onClose }) {
                   type="button"
                   onClick={handleGenerateStripeLink}
                   disabled={isGeneratingLink}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#061e4b] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0a2d6b] disabled:opacity-60"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#F38978] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#E87562] disabled:opacity-60"
                 >
                   {isGeneratingLink ? (
                     <><Loader2 size={15} className="animate-spin" /> Generating Link...</>
@@ -1065,7 +1065,7 @@ function InvoiceTable({
                     <button
                       type="button"
                       onClick={() => onSend(invoice.invoice_id)}
-                      className="inline-flex items-center gap-2 rounded-lg border border-blue-400/30 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-500/10"
+                      className="inline-flex items-center gap-2 rounded-lg border border-[#2D7C83]/30 px-3 py-2 text-xs font-semibold text-[#2D7C83] hover:bg-[#2D7C83]/10"
                     >
                       <Send size={14} />
                       Send Invoice
@@ -1806,7 +1806,7 @@ function InvoiceCompliancePanel({ invoices, fraudSummary }) {
             {reportSending ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
             {reportSent ? "Report Sent Ã¢Å“â€œ" : "Export Fraud Report"}
           </button>
-          <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${passed === checks.length ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-rose-400/25 bg-rose-400/10 text-rose-700"}`}>
+          <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${passed === checks.length ? "border-[#2D7C83]/25 bg-[#2D7C83]/10 text-[#2D7C83]" : "border-rose-400/25 bg-rose-400/10 text-rose-700"}`}>
             {passed}/{checks.length} passed
           </span>
         </div>
@@ -1821,7 +1821,7 @@ function InvoiceCompliancePanel({ invoices, fraudSummary }) {
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-medium text-[#251E1F]">{check.label}</p>
-                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${check.severity === "Critical" ? "bg-rose-500/20 text-rose-700" : check.severity === "High" ? "bg-amber-500/20 text-amber-700" : "bg-blue-500/20 text-blue-700"}`}>
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${check.severity === "Critical" ? "bg-rose-500/20 text-rose-700" : check.severity === "High" ? "bg-amber-500/20 text-amber-700" : "bg-[#2D7C83]/20 text-[#2D7C83]"}`}>
                   {check.severity}
                 </span>
               </div>
@@ -1875,10 +1875,10 @@ function InvoiceExceptionPanel({ invoices, fraudSummary }) {
           </div>
         ) : (
           exceptions.map((exc) => (
-            <div key={exc.message} className={`rounded-xl border p-4 text-sm ${exc.severity === "critical" ? "border-rose-400/25 bg-rose-500/10" : "border-[#D97706]/20 bg-[#D97706]/10"}`}>
+            <div key={exc.message} className={`rounded-xl border p-4 text-sm ${exc.severity === "critical" ? "border-rose-400/25 bg-rose-500/10" : "border-[#E87562]/20 bg-[#E87562]/10"}`}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <AlertCircle size={16} className={exc.severity === "critical" ? "text-rose-700" : "text-[#D97706]"} />
+                  <AlertCircle size={16} className={exc.severity === "critical" ? "text-rose-700" : "text-[#E87562]"} />
                   <span className="font-medium text-[#251E1F]">{exc.message}</span>
                 </div>
                 <span className="rounded-full border border-[#f0d2ca] bg-[#FDD9CD]/20 px-3 py-1 text-xs font-semibold text-[#251E1F]">
@@ -2108,8 +2108,8 @@ function InvoicesView({
   return (
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-4">
-        <MetricCard label="Draft" value={formatCurrency(metrics.Draft)} accent="text-slate-700" />
-        <MetricCard label="Sent" value={formatCurrency(metrics.Sent)} accent="text-blue-700" />
+        <MetricCard label="Draft" value={formatCurrency(metrics.Draft)} accent="text-[#251E1F]" />
+        <MetricCard label="Sent" value={formatCurrency(metrics.Sent)} accent="text-[#3269A8]" />
         <MetricCard label="Paid" value={formatCurrency(metrics.Paid)} accent="text-emerald-700" />
         <MetricCard label="Overdue" value={formatCurrency(metrics.Overdue)} accent="text-rose-700" />
       </section>
@@ -2639,7 +2639,7 @@ function PaymentsView() {
       >
         <ErrorBanner message={error} />
         {paymentLink ? (
-          <div className="mb-5 rounded-xl border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-700">
+          <div className="mb-5 rounded-xl border border-[#2D7C83]/30 bg-[#2D7C83]/10 px-4 py-3 text-sm text-[#2D7C83]">
             <span className="font-bold">Stripe payment link:</span> {paymentLink}
           </div>
         ) : null}
@@ -2671,7 +2671,7 @@ function PaymentsView() {
                           <button
                             type="button"
                             onClick={() => generateStripeLink(invoice.invoice_id)}
-                            className="inline-flex items-center gap-2 rounded-lg border border-blue-400/30 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-500/10"
+                            className="inline-flex items-center gap-2 rounded-lg border border-[#2D7C83]/30 px-3 py-2 text-xs font-semibold text-[#2D7C83] hover:bg-[#2D7C83]/10"
                           >
                             <LinkIcon size={14} />
                             Stripe Link
@@ -3333,7 +3333,7 @@ function ReportsView() {
         <MetricCard label="Gross Revenue" value={formatCurrency(reports?.summary?.gross_revenue)} accent="text-emerald-700" />
         <MetricCard label="Salon Payouts" value={formatCurrency(reports?.summary?.total_salon_payout)} accent="text-amber-700" />
         <MetricCard label="Outstanding" value={formatCurrency(reports?.summary?.outstanding_revenue)} accent="text-rose-700" />
-        <MetricCard label="Avg Commission" value={`${reports?.summary?.avg_commission_rate || 0}%`} accent="text-blue-700" />
+        <MetricCard label="Avg Commission" value={`${reports?.summary?.avg_commission_rate || 0}%`} accent="text-[#2D7C83]" />
       </section>
 
       {/* Tab Navigation + Export Buttons */}

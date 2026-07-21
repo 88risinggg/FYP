@@ -159,7 +159,7 @@ export default function AdminAuditLogsPage() {
         <button
           type="button"
           onClick={() => loadAuditData(filters, true)}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-4 py-2.5 text-sm font-semibold text-[#251E1F] hover:bg-white/800"
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-4 py-2.5 text-sm font-semibold text-[#251E1F] hover:bg-white/80"
         >
           <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
           Refresh
@@ -212,7 +212,7 @@ export default function AdminAuditLogsPage() {
           <button
             type="button"
             onClick={clearFilters}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#f0d2ca] px-3 py-2 text-sm font-semibold text-[#7b6660] hover:bg-white/800 hover:text-[#251E1F]"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#f0d2ca] px-3 py-2 text-sm font-semibold text-[#7b6660] hover:bg-white/80 hover:text-[#251E1F]"
           >
             <FilterX size={16} />
             Clear
@@ -360,4 +360,3 @@ export default function AdminAuditLogsPage() {
     </section>
   );
 }
-

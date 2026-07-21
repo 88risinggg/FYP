@@ -64,7 +64,7 @@ function getAuthHeaders(token) {
 }
 
 const SkeletonBar = ({ width = "100%", height = "h-4" }) => (
-  <div className={`${height} rounded-lg bg-white/800 animate-pulse`} style={{ width }} />
+  <div className={`${height} rounded-lg bg-white/80 animate-pulse`} style={{ width }} />
 );
 
 export default function StaffPayrollPage() {
@@ -209,14 +209,14 @@ export default function StaffPayrollPage() {
     const month = getMonthLabel(payslip.payroll_month, payslip.payroll_year);
     const fmt = (v) => `$${Number(v || 0).toFixed(2)}`;
     const html = `<!DOCTYPE html><html><head><title>Payslip - ${payslip.employee_name} - ${month}</title>
-<style>body{font-family:Arial,sans-serif;padding:40px;color:#000;font-size:12px}
-h1{font-size:20px;margin:0}h2{font-size:14px;color:#444;margin:4px 0 20px}
+<style>body{font-family:Arial,sans-serif;padding:40px;color:#251E1F;font-size:12px}
+h1{font-size:20px;margin:0}h2{font-size:14px;color:#7B6660;margin:4px 0 20px}
 .info{margin-bottom:20px}.info span{display:inline-block;margin-right:24px}
 table{width:100%;border-collapse:collapse;margin-bottom:16px}
-th{background:#f5f5f5;padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;border-bottom:2px solid #ddd}
-td{padding:8px 12px;border-bottom:1px solid #eee}
-.total td{font-weight:bold;background:#f9f9f9;border-top:2px solid #ddd}
-.footer{margin-top:40px;text-align:center;color:#999;font-size:10px}
+th{background:#FFF8F5;padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;border-bottom:2px solid #F0D2CA}
+td{padding:8px 12px;border-bottom:1px solid #F0D2CA}
+.total td{font-weight:bold;background:#FFF3EE;border-top:2px solid #F0D2CA}
+.footer{margin-top:40px;text-align:center;color:#7B6660;font-size:10px}
 @media print{body{padding:20px}}</style></head><body>
 <h1>PayNivo Pte Ltd</h1><h2>PAYSLIP — ${month}</h2>
 <div class="info"><span><strong>Name:</strong> ${payslip.employee_name || '-'}</span>
@@ -270,7 +270,7 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
               {/* Skeleton: stat cards */}
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {[1,2,3,4].map(i => (
-                  <div key={i} className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4 space-y-3">
+                  <div key={i} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4 space-y-3">
                     <SkeletonBar width="60%" height="h-3" />
                     <SkeletonBar width="80%" height="h-6" />
                   </div>
@@ -278,13 +278,13 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
               </div>
               {/* Skeleton: panels */}
               <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5 space-y-3">
+                <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 space-y-3">
                   <SkeletonBar width="40%" height="h-4" />
                   <SkeletonBar width="100%" height="h-3" />
                   <SkeletonBar width="70%" height="h-3" />
                   <SkeletonBar width="30%" height="h-8" />
                 </div>
-                <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5 space-y-3">
+                <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 space-y-3">
                   <SkeletonBar width="40%" height="h-4" />
                   <div className="grid grid-cols-2 gap-3">
                     <SkeletonBar height="h-10" />
@@ -295,7 +295,7 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
                 </div>
               </div>
               {/* Skeleton: recent payslips */}
-              <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5 space-y-3">
+              <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 space-y-3">
                 <SkeletonBar width="30%" height="h-4" />
                 {[1,2,3].map(i => <SkeletonBar key={i} height="h-12" />)}
               </div>
@@ -358,7 +358,7 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
 
       {/* Inactivity warning modal */}
       {showTimeoutWarning && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#251E1F]/60 backdrop-blur-sm">
           <div className="rounded-2xl border border-amber-400/30 bg-[#fff3ee] p-6 shadow-2xl w-full max-w-sm mx-4">
             <p className="text-lg font-semibold text-[#251E1F]">Session Expiring</p>
             <p className="mt-2 text-sm text-[#7b6660]">
@@ -371,7 +371,7 @@ td{padding:8px 12px;border-bottom:1px solid #eee}
                 // Trigger a synthetic activity event to reset timers
                 window.dispatchEvent(new Event('mousemove'));
               }}
-              className="mt-4 w-full rounded-lg bg-[#F38978] px-4 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110"
+              className="mt-4 w-full rounded-lg bg-[#F38978] px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110"
             >
               Stay Logged In
             </button>
@@ -403,7 +403,7 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
       {/* Key stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={DollarSign} label="Base Salary" value={formatCurrency(payrollInfo.salary)} accent="text-emerald-400" />
-        <StatCard icon={TrendingUp} label="Year-To-Date Net Pay" value={formatCurrency(ytd?.ytd_net_pay)} accent="text-cyan-400" />
+        <StatCard icon={TrendingUp} label="Year-To-Date Net Pay" value={formatCurrency(ytd?.ytd_net_pay)} accent="text-[#2D7C83]" />
         <StatCard icon={FileText} label="Payslips This Year" value={ytd?.total_payslips ?? 0} accent="text-[#F38978]" />
         <StatCard icon={Briefcase} label="Hire Date" value={payrollInfo.hireDate} accent="text-amber-400" />
       </div>
@@ -413,7 +413,7 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
         <button
           type="button"
           onClick={() => navigate("/dashboard/payroll/staff/payslips")}
-          className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 text-left transition hover:bg-[#FDD9CD]/45"
+          className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-left transition hover:bg-[#FDD9CD]/45"
         >
           <FileText size={20} className="text-[#F38978]" />
           <div>
@@ -424,7 +424,7 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
         <button
           type="button"
           onClick={() => navigate("/dashboard/payroll/staff/advance-payment")}
-          className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 text-left transition hover:bg-[#FDD9CD]/45"
+          className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-left transition hover:bg-[#FDD9CD]/45"
         >
           <DollarSign size={20} className="text-emerald-400" />
           <div>
@@ -435,7 +435,7 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
         <button
           type="button"
           onClick={() => navigate("/dashboard/payroll/staff/profile")}
-          className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 text-left transition hover:bg-[#FDD9CD]/45"
+          className="flex items-center gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-left transition hover:bg-[#FDD9CD]/45"
         >
           <UserCog size={20} className="text-amber-400" />
           <div>
@@ -464,7 +464,7 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
                 <button
                   type="button"
                   onClick={() => downloadPayslip(latest)}
-                  className="mt-2 inline-flex items-center gap-2 rounded-lg bg-[#F38978] px-4 py-2 text-sm font-semibold text-[#251E1F] hover:brightness-110"
+                  className="mt-2 inline-flex items-center gap-2 rounded-lg bg-[#F38978] px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
                 >
                   <Download size={16} />
                   Download PDF
@@ -497,7 +497,7 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
         {payslips.length > 0 ? (
           <div className="space-y-2">
             {payslips.slice(0, 3).map((p) => (
-              <div key={p.payroll_id} className="flex items-center justify-between rounded-lg border border-[#f0d2ca] bg-black/10 px-4 py-3">
+              <div key={p.payroll_id} className="flex items-center justify-between rounded-lg border border-[#f0d2ca] bg-[#251E1F]/10 px-4 py-3">
                 <div>
                   <p className="text-sm font-medium text-[#251E1F]">{getMonthLabel(p.payroll_month, p.payroll_year)}</p>
                   <p className="text-xs text-[#7b6660]">Net: {formatCurrency(p.net_salary)}</p>
@@ -508,7 +508,7 @@ function DashboardView({ profile, session, payrollInfo, summary, payslips, forma
                     <button
                       type="button"
                       onClick={() => downloadPayslip(p)}
-                      className="flex items-center gap-1.5 rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-1.5 text-xs font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                      className="flex items-center gap-1.5 rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-1.5 text-xs font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
                     >
                       <Download size={14} />
                       PDF
@@ -559,7 +559,7 @@ function PayslipsView({ payslips, formatCurrency, getMonthLabel, downloadPayslip
   return (
     <div className="space-y-3">
       {payslips.map((p) => (
-        <div key={p.payroll_id} className="flex flex-col gap-3 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div key={p.payroll_id} className="flex flex-col gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-semibold text-[#251E1F]">{getMonthLabel(p.payroll_month, p.payroll_year)}</p>
             <div className="mt-2 flex flex-wrap gap-3 text-xs text-[#7b6660]">
@@ -574,7 +574,7 @@ function PayslipsView({ payslips, formatCurrency, getMonthLabel, downloadPayslip
             <button
               type="button"
               onClick={() => printStaffPayslip(p)}
-              className="inline-flex items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/60"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/60"
             >
               <Printer size={16} />
               Print
@@ -583,7 +583,7 @@ function PayslipsView({ payslips, formatCurrency, getMonthLabel, downloadPayslip
               <button
                 type="button"
                 onClick={() => downloadPayslip(p)}
-                className="inline-flex items-center gap-2 rounded-lg border border-[#F38978]/30 bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/60"
+                className="inline-flex items-center gap-2 rounded-lg border border-[#F38978]/30 bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/60"
               >
                 <Download size={16} />
                 PDF
@@ -712,7 +712,7 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
 
   const advanceStatusStyles = {
     pending: "border-amber-300/30 bg-amber-300/10 text-amber-700",
-    hr_approved: "border-cyan-300/30 bg-cyan-300/10 text-cyan-700",
+    hr_approved: "border-emerald-300/30 bg-emerald-300/10 text-emerald-700",
     hr_rejected: "border-red-300/30 bg-red-300/10 text-red-700",
     finance_approved: "border-emerald-300/30 bg-emerald-300/10 text-emerald-700"
   };
@@ -730,8 +730,8 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
       {toast && (
         <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[70] w-full max-w-md rounded-xl border px-5 py-4 shadow-2xl backdrop-blur-sm animate-[slideDown_0.3s_ease-out] ${
           toast.type === "error"
-            ? "border-red-400/30 bg-red-50 text-red-700"
-            : "border-emerald-400/30 bg-emerald-50 text-emerald-700"
+            ? "border-red-400/30 bg-[#FDD9CD] text-red-700"
+            : "border-emerald-400/30 bg-[#FFF6F2] text-emerald-700"
         }`}>
           <div className="flex items-center gap-3">
             <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
@@ -787,7 +787,7 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
               type="button"
               onClick={handleSubmit}
               disabled={submitting}
-              className="rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-60"
+              className="rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
             >
               {submitting ? "Submitting…" : "Submit Request"}
             </button>
@@ -809,12 +809,12 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
         ) : (
           <div className="space-y-3">
             {requests.map((r) => (
-              <div key={r.request_id} className="rounded-xl border border-[#f0d2ca] bg-black/10 p-4">
+              <div key={r.request_id} className="rounded-xl border border-[#f0d2ca] bg-[#251E1F]/10 p-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-3">
                       <p className="text-sm font-semibold text-[#251E1F]">{formatCurrency(r.requested_amount)}</p>
-                      <span className={`rounded-full border px-3 py-0.5 text-xs font-semibold whitespace-nowrap ${advanceStatusStyles[r.status] || "border-gray-300/30 bg-gray-300/10 text-gray-200"}`}>
+                      <span className={`rounded-full border px-3 py-0.5 text-xs font-semibold whitespace-nowrap ${advanceStatusStyles[r.status] || "border-[#F0D2CA]/30 bg-[#FFF6F2]/10 text-[#7B6660]"}`}>
                         {statusLabels[r.status] || r.status}
                       </span>
                     </div>
@@ -906,7 +906,7 @@ function NotificationsView({ payslips, getMonthLabel }) {
           <button
             type="button"
             onClick={handleMarkAllRead}
-            className="rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-1.5 text-xs text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-1.5 text-xs text-[#251E1F] hover:bg-[#FDD9CD]/45"
           >
             Mark all as read
           </button>
@@ -914,7 +914,7 @@ function NotificationsView({ payslips, getMonthLabel }) {
       )}
 
       {notifications.length === 0 ? (
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-6 text-center">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-6 text-center">
           <Bell size={32} className="mx-auto text-[#F38978]/30" />
           <p className="mt-3 text-sm text-[#7b6660]">No notifications at this time.</p>
           <p className="mt-1 text-xs text-[#251E1F]/30">You'll be notified when a new payslip is available.</p>
@@ -929,7 +929,7 @@ function NotificationsView({ payslips, getMonthLabel }) {
                   ? "border-[#f0d2ca] bg-[#fff3ee]/50 text-[#7b6660]/60"
                   : n.type === "payslip_available"
                     ? "border-emerald-400/20 bg-emerald-400/5 text-emerald-700"
-                    : "border-[#f0d2ca] bg-white/800 text-[#7b6660]"
+                    : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -957,7 +957,7 @@ function NotificationsView({ payslips, getMonthLabel }) {
 /* ─── Shared Components ─── */
 function Panel({ title, children }) {
   return (
-    <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
+    <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
       <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">{title}</h3>
       {children}
     </div>
@@ -966,7 +966,7 @@ function Panel({ title, children }) {
 
 function StatCard({ icon: Icon, label, value, accent = "text-[#F38978]" }) {
   return (
-    <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+    <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
       <div className="flex items-center gap-2">
         <Icon size={16} className={accent} />
         <p className="text-xs uppercase tracking-wide text-[#7b6660]">{label}</p>
@@ -978,7 +978,7 @@ function StatCard({ icon: Icon, label, value, accent = "text-[#F38978]" }) {
 
 function InfoRow({ label, value }) {
   return (
-    <div className="rounded-lg border border-[#f0d2ca] bg-black/10 px-4 py-3">
+    <div className="rounded-lg border border-[#f0d2ca] bg-[#251E1F]/10 px-4 py-3">
       <p className="text-xs uppercase tracking-wide text-[#7b6660]">{label}</p>
       <p className="mt-1 text-sm font-medium text-[#251E1F]">{value}</p>
     </div>
@@ -987,7 +987,7 @@ function InfoRow({ label, value }) {
 
 function MiniStat({ label, value, highlight }) {
   return (
-    <div className="rounded-lg bg-black/20 px-3 py-2">
+    <div className="rounded-lg bg-[#251E1F]/20 px-3 py-2">
       <p className="text-xs text-[#7b6660]">{label}</p>
       <p className={`mt-0.5 text-sm font-semibold ${highlight ? "text-emerald-400" : "text-[#251E1F]"}`}>{value}</p>
     </div>
@@ -997,9 +997,9 @@ function MiniStat({ label, value, highlight }) {
 function StatusBadge({ status }) {
   const styles = {
     "Closed": "border-emerald-300/30 bg-emerald-300/10 text-emerald-700",
-    "Payslips Generated": "border-cyan-300/30 bg-cyan-300/10 text-cyan-700",
+    "Payslips Generated": "border-[#2D7C83]/30 bg-[#2D7C83]/10 text-[#2D7C83]",
     "Processing": "border-amber-300/30 bg-amber-300/10 text-amber-700",
-    "Draft": "border-gray-300/30 bg-gray-300/10 text-gray-200"
+    "Draft": "border-[#F0D2CA]/30 bg-[#FFF6F2]/10 text-[#7B6660]"
   };
 
   const label = status || "Unknown";

@@ -27,13 +27,13 @@ const ranges = [
 const rangeValues = new Set(ranges.map(([value]) => value));
 const countSeries = [
   { key: "createdCount", label: "Created", color: "#2563eb", dash: "" },
-  { key: "sentCount", label: "Sent", color: "#0f9f8f", dash: "8 5" },
-  { key: "paidCount", label: "Paid", color: "#e66f5c", dash: "3 4" }
+  { key: "sentCount", label: "Sent", color: "#4F8FD8", dash: "8 5" },
+  { key: "paidCount", label: "Paid", color: "#2F8758", dash: "3 4" }
 ];
 const valueSeries = [
   { key: "invoicedAmount", label: "Invoiced Amount", color: "#2563eb", dash: "" },
-  { key: "paidAmount", label: "Paid Amount", color: "#0f9f8f", dash: "8 5" },
-  { key: "overdueAmount", label: "Overdue Amount", color: "#e66f5c", dash: "3 4" }
+  { key: "paidAmount", label: "Paid Amount", color: "#2F8758", dash: "8 5" },
+  { key: "overdueAmount", label: "Overdue Amount", color: "#C94C3A", dash: "3 4" }
 ];
 
 function isoDate(daysAgo = 0) {
@@ -102,7 +102,7 @@ function groupingFor(range, metadata) {
 function controlClass(disabled) {
   return `inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] focus-visible:ring-offset-2 ${
     disabled
-      ? "cursor-not-allowed border-[#eaded9] bg-[#f7f3f1] text-[#ad9e99]"
+      ? "cursor-not-allowed border-[#F0D2CA] bg-[#FFF8F5] text-[#7B6660]"
       : "border-[#f0d2ca] bg-white text-[#514440] hover:border-[#F38978] hover:text-[#251E1F]"
   }`;
 }
@@ -245,7 +245,7 @@ function TrendChart({ data, mode, grouping, viewport, setViewport }) {
 
   return (
     <div>
-      <div className="relative select-none overflow-hidden rounded-xl border border-[#efd8d1] bg-white" onPointerLeave={() => setActiveIndex(null)}>
+      <div className="relative select-none overflow-hidden rounded-xl border border-[#F0D2CA] bg-white" onPointerLeave={() => setActiveIndex(null)}>
         <svg
           viewBox={`0 0 ${width} ${height}`}
           className="block min-h-[330px] w-full cursor-grab active:cursor-grabbing sm:min-h-[430px]"
@@ -261,8 +261,8 @@ function TrendChart({ data, mode, grouping, viewport, setViewport }) {
           {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
             const y = yFor(max * tick);
             return <g key={tick}>
-              <line x1={padding.left} x2={width - padding.right} y1={y} y2={y} stroke="#f2ded8" />
-              <text x={padding.left - 12} y={y + 4} textAnchor="end" className="fill-[#75625d] text-[12px]">
+              <line x1={padding.left} x2={width - padding.right} y1={y} y2={y} stroke="#FDD9CD" />
+              <text x={padding.left - 12} y={y + 4} textAnchor="end" className="fill-[#7B6660] text-[12px]">
                 {mode === "count" ? number(max * tick) : currency(max * tick)}
               </text>
             </g>;
@@ -271,11 +271,11 @@ function TrendChart({ data, mode, grouping, viewport, setViewport }) {
             const points = visible.map((point, index) => `${xFor(index)},${yFor(point[item.key])}`).join(" ");
             return <polyline key={item.key} fill="none" stroke={item.color} strokeWidth="3" strokeDasharray={item.dash} strokeLinejoin="round" strokeLinecap="round" points={points} />;
           })}
-          {active ? <line x1={xFor(activeIndex)} x2={xFor(activeIndex)} y1={padding.top} y2={height - padding.bottom} stroke="#8ba8ec" strokeDasharray="5 4" /> : null}
+          {active ? <line x1={xFor(activeIndex)} x2={xFor(activeIndex)} y1={padding.top} y2={height - padding.bottom} stroke="#2D7C83" strokeDasharray="5 4" /> : null}
           {visible.map((point, index) => (
             <g key={`${point.bucketKey}-${index}`}>
               {(index === 0 || index === visible.length - 1 || index % Math.max(1, Math.ceil(visible.length / 6)) === 0) ? (
-                <text x={xFor(index)} y={height - 20} textAnchor="middle" className="fill-[#75625d] text-[11px]">{point.period}</text>
+                <text x={xFor(index)} y={height - 20} textAnchor="middle" className="fill-[#7B6660] text-[11px]">{point.period}</text>
               ) : null}
               {activeIndex === index ? series.map((item) => <circle key={item.key} cx={xFor(index)} cy={yFor(point[item.key])} r="5" fill={item.color} stroke="white" strokeWidth="2" />) : null}
             </g>
@@ -292,7 +292,7 @@ function TrendChart({ data, mode, grouping, viewport, setViewport }) {
       <div className="mt-4" aria-label="Visible date-range navigator">
         <div
           ref={navigatorRef}
-          className="relative h-12 touch-none cursor-pointer rounded-lg border border-[#efd8d1] bg-[#fff8f5]"
+          className="relative h-12 touch-none cursor-pointer rounded-lg border border-[#F0D2CA] bg-[#fff8f5]"
           onPointerDown={onNavigatorDown}
           onPointerMove={onNavigatorMove}
           onPointerUp={() => { navigatorDrag.current = null; }}
@@ -419,7 +419,7 @@ export default function AdminInvoiceActivityTrendPage() {
           <label className="text-sm font-semibold">End date <input type="date" value={custom.endDate} min={custom.startDate} max={isoDate()} onChange={(event) => setCustom((current) => ({ ...current, endDate: event.target.value }))} className="ml-2 min-h-11 rounded-lg border border-[#f0d2ca] px-3" /></label>
         </div> : null}
 
-        {customError ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800" role="alert">{customError}</div> : null}
+        {customError ? <div className="rounded-lg border border-[#FDD9CD] bg-[#FDD9CD] px-4 py-3 text-sm font-semibold text-amber-800" role="alert">{customError}</div> : null}
 
         <section className="rounded-xl border border-[#f0d2ca] bg-white/95 p-4 shadow-[0_10px_28px_rgba(37,30,31,0.06)] sm:p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -427,7 +427,7 @@ export default function AdminInvoiceActivityTrendPage() {
             {loading ? <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#7b6660]" role="status"><span className="h-4 w-4 animate-spin rounded-full border-2 border-[#F38978] border-t-transparent" /> Loading historical data...</span> : null}
           </div>
 
-          {error ? <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#F38978]/30 bg-[#fff8f5] px-4 py-3 text-sm font-semibold text-[#a94738]" role="alert"><span>{error}</span><button type="button" onClick={load} className={controlClass(false)}>Retry</button></div> : null}
+          {error ? <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#F38978]/30 bg-[#fff8f5] px-4 py-3 text-sm font-semibold text-[#C55245]" role="alert"><span>{error}</span><button type="button" onClick={load} className={controlClass(false)}>Retry</button></div> : null}
 
           <div className="mb-4 flex flex-wrap gap-2" aria-label="Chart navigation controls">
             <button type="button" disabled={!canEarlier} onClick={() => move(-1)} className={controlClass(!canEarlier)} aria-label="Move to earlier invoice periods"><ChevronLeft size={17} /> Earlier</button>

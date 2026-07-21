@@ -12,11 +12,11 @@ const themes = [
 
 const accentColors = [
   { value: "#F38978", label: "Coral" },
-  { value: "#E9A17B", label: "Peach" },
-  { value: "#D98FA3", label: "Blush" },
-  { value: "#A591C7", label: "Lavender" },
-  { value: "#7FA6C9", label: "Powder Blue" },
-  { value: "#83A991", label: "Sage" }
+  { value: "#E87562", label: "Peach" },
+  { value: "#C55245", label: "Blush" },
+  { value: "#FDD9CD", label: "Lavender" },
+  { value: "#2D7C83", label: "Powder Blue" },
+  { value: "#7B6660", label: "Sage" }
 ];
 
 const fontSizes = [
@@ -94,7 +94,7 @@ export default function AppearanceSection() {
                 return (
                   <button key={t.id} type="button" data-settings-control onClick={() => updateDraft({ ...settings, theme: t.id })}
                     className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition ${
-                      isActive ? "border-[#F38978]/50 bg-[#F38978]/10 shadow-lg shadow-[#f2b5a9]/15" : "border-[#ead3cc] bg-[#fff3ee]/70 hover:bg-[#FDD9CD]/45"
+                      isActive ? "border-[#F38978]/50 bg-[#F38978]/10 shadow-lg shadow-[#FDD9CD]/15" : "border-[#F0D2CA] bg-[#fff3ee]/70 hover:bg-[#FDD9CD]/45"
                     }`}>
                     <Icon size={22} className={isActive ? "text-[#F38978]" : "text-[#7b6660]"} />
                     <span className={`text-xs font-medium ${isActive ? "text-[#251E1F]" : "text-[#7b6660]"}`}>{t.label}</span>
@@ -108,18 +108,23 @@ export default function AppearanceSection() {
           <div>
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Accent Color</p>
             <div className="flex flex-wrap gap-3">
-              {accentColors.map((c) => (
-                <button key={c.value} type="button" data-settings-control onClick={() => updateDraft({ ...settings, accent_color: c.value })}
+              {accentColors.map((accent) => (
+                <button
+                  key={accent.value}
+                  type="button"
+                  data-settings-control
+                  onClick={() => updateDraft({ ...settings, accent_color: accent.value })}
                   className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition ${
-                    settings.accent_color === c.value
+                    settings.accent_color === accent.value
                       ? "border-[#F38978]/50 bg-white text-[#251E1F] shadow-md"
-                      : "border-[#ead3cc] bg-[#fff3ee]/70 text-[#7b6660] hover:-translate-y-0.5 hover:bg-white"
+                      : "border-[#F0D2CA] bg-[#fff3ee]/70 text-[#7B6660] hover:-translate-y-0.5 hover:bg-white"
                   }`}
-                  title={c.label}>
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full shadow-inner" style={{ backgroundColor: c.value }}>
-                    {settings.accent_color === c.value && <Check size={13} className="text-white drop-shadow" />}
+                  title={accent.label}
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full shadow-inner" style={{ backgroundColor: accent.value }}>
+                    {settings.accent_color === accent.value && <Check size={13} className="text-white drop-shadow" />}
                   </span>
-                  {c.label}
+                  {accent.label}
                 </button>
               ))}
             </div>
@@ -134,7 +139,7 @@ export default function AppearanceSection() {
                   className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition ${
                     settings.font_size === f.value
                     ? "border-[#F38978]/50 bg-[#F38978]/10 text-[#251E1F]"
-                      : "border-[#ead3cc] bg-[#fff3ee]/70 text-[#7b6660] hover:bg-[#FDD9CD]/45"
+                      : "border-[#F0D2CA] bg-[#fff3ee]/70 text-[#7b6660] hover:bg-[#FDD9CD]/45"
                   }`}>
                   {f.label}
                 </button>
@@ -143,7 +148,7 @@ export default function AppearanceSection() {
           </div>
 
           {/* Compact Mode */}
-          <div className="flex items-center justify-between rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 px-4 py-3">
+          <div className="flex items-center justify-between rounded-xl border border-[#F0D2CA] bg-[#fff3ee]/70 px-4 py-3">
             <div>
               <span className="text-sm font-medium text-[#251E1F]">Compact Mode</span>
               <p className="text-xs text-[#7b6660]">Reduce spacing and padding throughout the UI</p>
@@ -163,7 +168,7 @@ export default function AppearanceSection() {
 function Toast({ toast }) {
   return (
     <div className={`fixed right-6 top-24 z-50 animate-[slideDown_0.3s_ease] rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
-      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-700" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-700"
+      toast.type === "error" ? "border-[#F3C6BC] bg-[#FFF0EB] text-[#C94C3A]" : "border-[#B8D9C6] bg-[#E9F7EF] text-[#2F8758]"
     }`}>
       <div className="flex items-center gap-2">
         {toast.type === "error" ? <X size={16} /> : <Check size={16} />}

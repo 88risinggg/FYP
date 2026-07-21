@@ -133,7 +133,7 @@ export default function DataPrivacySection() {
             {modal === "deletion" && <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" className="mt-4 w-full rounded-xl border border-[#ead3cc] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#F38978]" />}
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button type="button" onClick={() => { setModal(null); setPassword(""); }} className="rounded-xl border border-[#ead3cc] bg-white px-4 py-2.5 text-sm font-semibold text-[#7b6660]">Cancel</button>
-              <button type="button" onClick={confirmRequest} disabled={Boolean(actionLoading)} className={modal === "deletion" ? "rounded-xl bg-[#d98686] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" : "settings-save-button rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50"}>
+              <button type="button" onClick={confirmRequest} disabled={Boolean(actionLoading)} className={modal === "deletion" ? "rounded-xl bg-[#C55245] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" : "settings-save-button rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50"}>
                 {actionLoading ? "Submitting..." : "Confirm Request"}
               </button>
             </div>
@@ -149,7 +149,7 @@ function PreferenceGroup({ title, children }) {
 }
 
 function ActionCard({ title, description, buttonLabel, icon: Icon, loading, onClick, danger }) {
-  return <div className="flex flex-col gap-3 rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="text-sm font-medium text-[#251E1F]">{title}</p><p className="mt-0.5 text-xs text-[#7b6660]">{description}</p></div><button type="button" onClick={onClick} disabled={loading} className={`inline-flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold transition disabled:opacity-50 sm:w-auto ${danger ? "border border-rose-400/20 bg-rose-500/10 text-rose-700 hover:bg-rose-500/20" : "border border-[#ead3cc] bg-white text-[#251E1F] hover:bg-[#FDD9CD]/50"}`}>{loading ? <Loader2 size={12} className="animate-spin" /> : <Icon size={12} />}{buttonLabel}</button></div>;
+  return <div className="flex flex-col gap-3 rounded-xl border border-[#F0D2CA] bg-[#fff3ee]/70 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="text-sm font-medium text-[#251E1F]">{title}</p><p className="mt-0.5 text-xs text-[#7b6660]">{description}</p></div><button type="button" onClick={onClick} disabled={loading} className={`inline-flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold transition disabled:opacity-50 sm:w-auto ${danger ? "border border-rose-400/20 bg-rose-500/10 text-rose-700 hover:bg-rose-500/20" : "border border-[#F0D2CA] bg-white text-[#251E1F] hover:bg-[#FDD9CD]/50"}`}>{loading ? <Loader2 size={12} className="animate-spin" /> : <Icon size={12} />}{buttonLabel}</button></div>;
 }
 
 function ToggleRow({ label, checked, onChange, disabled = false }) {

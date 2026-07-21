@@ -4,8 +4,8 @@ import { fetchConnectedAccounts, connectAccount, disconnectAccount } from "../..
 
 const providers = [
   { id: "google", name: "Google", color: "text-red-400", bg: "bg-red-500/10" },
-  { id: "microsoft", name: "Microsoft", color: "text-blue-400", bg: "bg-blue-500/10" },
-  { id: "xero", name: "Xero", color: "text-sky-400", bg: "bg-sky-500/10" },
+  { id: "microsoft", name: "Microsoft", color: "text-[#2D7C83]", bg: "bg-[#2D7C83]/10" },
+  { id: "xero", name: "Xero", color: "text-[#2D7C83]", bg: "bg-[#2D7C83]/10" },
   { id: "quickbooks", name: "QuickBooks", color: "text-emerald-400", bg: "bg-emerald-500/10" },
   { id: "slack", name: "Slack", color: "text-[#F38978]", bg: "bg-[#FDD9CD]/45" }
 ];

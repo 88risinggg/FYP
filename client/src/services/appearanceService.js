@@ -9,7 +9,7 @@ export const DEFAULT_APPEARANCE = {
 const STORAGE_KEY = "vanidayAppearance";
 const VALID_THEMES = new Set(["light", "dark", "system"]);
 const VALID_FONT_SIZES = new Set(["small", "medium", "large"]);
-const VALID_ACCENTS = new Set(["#F38978", "#E9A17B", "#D98FA3", "#A591C7", "#7FA6C9", "#83A991"]);
+const VALID_ACCENTS = new Set(["#F38978", "#E87562", "#C55245", "#FDD9CD", "#2D7C83", "#7B6660"]);
 
 export function normalizeAppearance(value = {}) {
   const requestedAccent = String(value.accent_color || "").toUpperCase();

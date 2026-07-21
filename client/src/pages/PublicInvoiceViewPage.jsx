@@ -120,12 +120,12 @@ export default function PublicInvoiceViewPage() {
   const isPayable = !["Paid", "Cancelled", "Refunded", "Pending Review"].includes(invoice.status);
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] px-4 py-8">
+    <div className="min-h-screen bg-[#FFF8F5] px-4 py-8">
       <div className="mx-auto max-w-[900px]">
         {/* Invoice Template — same component used for PDF and Admin Preview */}
         <div
           style={{
-            boxShadow: "0 4px 25px rgba(0,0,0,0.1)",
+            boxShadow: "0 4px 25px rgba(37,30,31,0.1)",
             borderRadius: "4px",
             overflow: "visible",
             marginBottom: "2rem",
@@ -178,7 +178,7 @@ export default function PublicInvoiceViewPage() {
                 href={invoice.payment_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block w-full rounded-xl bg-[#061e4b] px-6 py-4 text-center text-sm font-semibold text-white transition hover:bg-[#0a2d6b]"
+                className="block w-full rounded-xl bg-[#F38978] px-6 py-4 text-center text-sm font-semibold text-white transition hover:bg-[#E87562]"
               >
                 Pay Now with Card / PayNow — {formatCurrency(invoice.total_amount)}
               </a>
@@ -206,7 +206,7 @@ export default function PublicInvoiceViewPage() {
                 </p>
                 <button
                   onClick={() => setShowPaymentForm(!showPaymentForm)}
-                  className="rounded-lg bg-[#F38978] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#e07868]"
+                  className="rounded-lg bg-[#F38978] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#E87562]"
                 >
                   {showPaymentForm ? "Cancel" : "Submit Payment Proof"}
                 </button>
@@ -282,7 +282,7 @@ export default function PublicInvoiceViewPage() {
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                      className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-50"
                     >
                       {submitting ? "Submitting..." : "Submit Payment for Review"}
                     </button>
