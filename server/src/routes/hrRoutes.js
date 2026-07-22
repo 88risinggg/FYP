@@ -1680,44 +1680,47 @@ router.put('/finance-requests/:id/approve', authenticateToken, allowRoles('Finan
 });
 
 // [Employee Loan Module] — Loan request endpoints
-// Table: loan_request (created by Staff, managed by HR)
+// Uses claims_and_loans table with type = 'loan'
+// Loan-specific fields (repayment_months, installments) in request_metadata
 
-// Create a loan request — only `Staff` may create requests
+const LOAN_SELECT = `
+  c.record_id AS loan_id, c.staff_employee_id, s.name AS staff_name,
+  c.amount AS requested_amount,
+  JSON_UNQUOTE(JSON_EXTRACT(c.request_metadata, '$.repayment_months')) AS repayment_months,
+  c.description AS reason, c.status,
+  JSON_UNQUOTE(JSON_EXTRACT(c.request_metadata, '$.monthly_installment')) AS monthly_installment,
+  JSON_UNQUOTE(JSON_EXTRACT(c.request_metadata, '$.outstanding_balance')) AS outstanding_balance,
+  JSON_UNQUOTE(JSON_EXTRACT(c.request_metadata, '$.total_paid')) AS total_paid,
+  c.submitted_at AS created_at,
+  JSON_UNQUOTE(JSON_EXTRACT(c.request_metadata, '$.created_by')) AS created_by,
+  JSON_UNQUOTE(JSON_EXTRACT(c.request_metadata, '$.approved_by')) AS approved_by,
+  c.reviewed_at AS approved_at, c.reviewer_comments AS hr_comments`;
+
+function safeParseMeta(val) {
+  if (!val) return {};
+  if (typeof val === 'object') return val;
+  try { return JSON.parse(val); } catch { return {}; }
+}
+
 router.post("/loan-requests", authenticateToken, allowRoles("Staff"), async (req, res) => {
   try {
     const { requested_amount, repayment_months, reason } = req.body || {};
-
-    // Validate requested_amount
     if (!requested_amount || Number(requested_amount) < 1 || Number(requested_amount) > 50000) {
       return res.status(400).json({ message: "Requested amount must be between 1 and 50000" });
     }
-
-    // Validate repayment_months
     if (!repayment_months || Number(repayment_months) < 1 || Number(repayment_months) > 36) {
       return res.status(400).json({ message: "Repayment period must be between 1 and 36 months" });
     }
-
-    // Derive staff_employee_id from JWT userId
     const [staffRows] = await pool.query('SELECT employee_id FROM staff WHERE user_user_id = ? LIMIT 1', [req.user.userId]);
     if (!staffRows.length) return res.status(400).json({ message: "Staff profile not found for current user" });
     const staffEmployeeId = staffRows[0].employee_id;
-
     const loanId = makeId('LN');
+    const metadata = JSON.stringify({ created_by: req.user.userId, repayment_months: Number(repayment_months), monthly_installment: null, outstanding_balance: Number(requested_amount), total_paid: 0, installments: [] });
     await pool.query(
-      `INSERT INTO loan_request 
-        (loan_id, staff_employee_id, requested_amount, repayment_months, reason, status, created_at, created_by)
-       VALUES (?, ?, ?, ?, ?, 'pending', NOW(), ?)`,
-      [loanId, staffEmployeeId, Number(requested_amount), Number(repayment_months), reason || '', req.user.userId]
+      `INSERT INTO claims_and_loans (record_id, type, amount, description, status, staff_employee_id, request_metadata, created_by) VALUES (?, 'loan', ?, ?, 'pending', ?, ?, ?)`,
+      [loanId, Number(requested_amount), reason || '', staffEmployeeId, metadata, req.user.userId]
     );
-
-    const [rows] = await pool.query(
-      `SELECT loan_id, staff_employee_id, requested_amount, repayment_months, reason, status, 
-              monthly_installment, total_paid, outstanding_balance, created_at, created_by, 
-              approved_by, approved_at, hr_comments 
-       FROM loan_request WHERE loan_id = ? LIMIT 1`,
-      [loanId]
-    );
-
+    const [rows] = await pool.query(`SELECT ${LOAN_SELECT} FROM claims_and_loans c JOIN staff s ON c.staff_employee_id = s.employee_id WHERE c.record_id = ? LIMIT 1`, [loanId]);
     addAudit(req.user.email, `Loan request created ${loanId} for employee ${staffEmployeeId}`, 'Payroll');
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -1725,316 +1728,78 @@ router.post("/loan-requests", authenticateToken, allowRoles("Staff"), async (req
   }
 });
 
-// List loan requests — Staff sees own only, HR sees all
 router.get("/loan-requests", authenticateToken, allowRoles("HR", "Staff"), async (req, res) => {
   try {
     let rows;
     if (req.user.role === "Staff") {
-      // Resolve staff_employee_id from JWT userId
-      const [staffRows] = await pool.query(
-        'SELECT employee_id FROM staff WHERE user_user_id = ? LIMIT 1',
-        [req.user.userId]
-      );
-      if (!staffRows.length) {
-        return res.status(400).json({ message: "Staff profile not found for current user" });
-      }
-      const staffEmployeeId = staffRows[0].employee_id;
-
-      [rows] = await pool.query(
-        `SELECT 
-          lr.loan_id,
-          lr.staff_employee_id,
-          s.name AS staff_name,
-          lr.requested_amount,
-          lr.repayment_months,
-          lr.reason,
-          lr.status,
-          lr.monthly_installment,
-          lr.outstanding_balance,
-          lr.created_at,
-          lr.hr_comments
-        FROM loan_request lr
-        JOIN staff s ON lr.staff_employee_id = s.employee_id
-        WHERE lr.staff_employee_id = ?
-        ORDER BY lr.created_at DESC`,
-        [staffEmployeeId]
-      );
+      const [staffRows] = await pool.query('SELECT employee_id FROM staff WHERE user_user_id = ? LIMIT 1', [req.user.userId]);
+      if (!staffRows.length) return res.status(400).json({ message: "Staff profile not found for current user" });
+      [rows] = await pool.query(`SELECT ${LOAN_SELECT} FROM claims_and_loans c JOIN staff s ON c.staff_employee_id = s.employee_id WHERE c.type = 'loan' AND c.staff_employee_id = ? ORDER BY c.submitted_at DESC`, [staffRows[0].employee_id]);
     } else {
-      // HR sees all loan requests
-      [rows] = await pool.query(
-        `SELECT 
-          lr.loan_id,
-          lr.staff_employee_id,
-          s.name AS staff_name,
-          lr.requested_amount,
-          lr.repayment_months,
-          lr.reason,
-          lr.status,
-          lr.monthly_installment,
-          lr.outstanding_balance,
-          lr.created_at,
-          lr.hr_comments
-        FROM loan_request lr
-        JOIN staff s ON lr.staff_employee_id = s.employee_id
-        ORDER BY lr.created_at DESC`
-      );
+      [rows] = await pool.query(`SELECT ${LOAN_SELECT} FROM claims_and_loans c JOIN staff s ON c.staff_employee_id = s.employee_id WHERE c.type = 'loan' ORDER BY c.submitted_at DESC`);
     }
-
     res.json(rows);
   } catch (err) {
     res.status(500).json({ message: 'Failed to retrieve loan requests', error: err.message });
   }
 });
 
-// Get single loan request with installments — Staff sees own only, HR sees any
 router.get("/loan-requests/:id", authenticateToken, allowRoles("HR", "Staff"), async (req, res) => {
   try {
-    // Fetch loan request by ID with staff name
-    const [loanRows] = await pool.query(
-      `SELECT 
-        lr.loan_id,
-        lr.staff_employee_id,
-        s.name AS staff_name,
-        lr.requested_amount,
-        lr.repayment_months,
-        lr.reason,
-        lr.status,
-        lr.monthly_installment,
-        lr.total_paid,
-        lr.outstanding_balance,
-        lr.created_at,
-        lr.created_by,
-        lr.approved_by,
-        lr.approved_at,
-        lr.hr_comments
-      FROM loan_request lr
-      JOIN staff s ON lr.staff_employee_id = s.employee_id
-      WHERE lr.loan_id = ?
-      LIMIT 1`,
-      [req.params.id]
-    );
-
-    if (!loanRows.length) {
-      return res.status(404).json({ message: "Loan request not found" });
-    }
-
+    const [loanRows] = await pool.query(`SELECT ${LOAN_SELECT}, c.request_metadata FROM claims_and_loans c JOIN staff s ON c.staff_employee_id = s.employee_id WHERE c.record_id = ? AND c.type = 'loan' LIMIT 1`, [req.params.id]);
+    if (!loanRows.length) return res.status(404).json({ message: "Loan request not found" });
     const loan = loanRows[0];
-
-    // Staff: verify ownership
     if (req.user.role === "Staff") {
-      const [staffRows] = await pool.query(
-        'SELECT employee_id FROM staff WHERE user_user_id = ? LIMIT 1',
-        [req.user.userId]
-      );
-      if (!staffRows.length) {
-        return res.status(400).json({ message: "Staff profile not found for current user" });
-      }
-      const staffEmployeeId = staffRows[0].employee_id;
-      if (loan.staff_employee_id !== staffEmployeeId) {
-        return res.status(403).json({ message: "Not authorized to view this loan request" });
-      }
+      const [staffRows] = await pool.query('SELECT employee_id FROM staff WHERE user_user_id = ? LIMIT 1', [req.user.userId]);
+      if (!staffRows.length || loan.staff_employee_id !== staffRows[0].employee_id) return res.status(403).json({ message: "Not authorized to view this loan request" });
     }
-
-    // Fetch installments ordered by installment_number
-    const [installments] = await pool.query(
-      `SELECT 
-        installment_id,
-        loan_id,
-        installment_number,
-        amount,
-        due_date,
-        status,
-        paid_at,
-        paid_by
-      FROM loan_installment
-      WHERE loan_id = ?
-      ORDER BY installment_number ASC`,
-      [req.params.id]
-    );
-
-    res.json({ ...loan, installments });
+    const meta = safeParseMeta(loan.request_metadata);
+    delete loan.request_metadata;
+    res.json({ ...loan, installments: Array.isArray(meta.installments) ? meta.installments : [] });
   } catch (err) {
     res.status(500).json({ message: 'Failed to retrieve loan request', error: err.message });
   }
 });
 
-// Approve a loan request — only HR
 router.put("/loan-requests/:id/approve", authenticateToken, allowRoles("HR"), async (req, res) => {
-  const conn = await pool.getConnection();
   try {
     const { id } = req.params;
     const { hr_comments } = req.body || {};
-
-    // Fetch the loan request
-    const [loanRows] = await conn.query(
-      `SELECT * FROM loan_request WHERE loan_id = ? LIMIT 1`,
-      [id]
-    );
-
-    if (!loanRows.length) {
-      conn.release();
-      return res.status(404).json({ message: "Loan request not found" });
-    }
-
-    const loan = loanRows[0];
-
-    // Validate pending status
-    if (loan.status !== 'pending') {
-      conn.release();
-      return res.status(400).json({ message: `Cannot approve request in status ${loan.status}` });
-    }
-
-    await conn.beginTransaction();
-
-    // Calculate monthly installment
-    const amount = Number(loan.requested_amount);
-    const months = Number(loan.repayment_months);
+    const [loanRows] = await pool.query("SELECT * FROM claims_and_loans WHERE record_id = ? AND type = 'loan' LIMIT 1", [id]);
+    if (!loanRows.length) return res.status(404).json({ message: "Loan request not found" });
+    if (loanRows[0].status !== 'pending') return res.status(400).json({ message: `Cannot approve request in status ${loanRows[0].status}` });
+    const meta = safeParseMeta(loanRows[0].request_metadata);
+    const amount = Number(loanRows[0].amount);
+    const months = Number(meta.repayment_months || 12);
     const monthlyInstallment = Math.floor(amount / months * 100) / 100;
     const lastInstallment = Math.round((amount - (monthlyInstallment * (months - 1))) * 100) / 100;
-
-    // Update loan_request to approved
-    await conn.query(
-      `UPDATE loan_request 
-       SET status = 'approved', 
-           approved_by = ?, 
-           approved_at = NOW(), 
-           hr_comments = ?, 
-           monthly_installment = ?, 
-           outstanding_balance = ?
-       WHERE loan_id = ?`,
-      [req.user.userId, hr_comments || null, monthlyInstallment, amount, id]
-    );
-
-    // Generate installments with batch INSERT
     const approvalDate = new Date();
-    const installmentValues = [];
+    const installments = [];
     for (let i = 1; i <= months; i++) {
-      const installmentId = makeId('LI');
-      const dueDate = new Date(approvalDate);
-      dueDate.setMonth(dueDate.getMonth() + i);
-      const dueDateStr = dueDate.toISOString().split('T')[0]; // YYYY-MM-DD
-      const installmentAmount = (i === months) ? lastInstallment : monthlyInstallment;
-      installmentValues.push([installmentId, id, i, installmentAmount, dueDateStr, 'unpaid']);
+      const dueDate = new Date(approvalDate); dueDate.setMonth(dueDate.getMonth() + i);
+      installments.push({ installment_id: makeId('LI'), installment_number: i, amount: (i === months) ? lastInstallment : monthlyInstallment, due_date: dueDate.toISOString().split('T')[0], status: 'unpaid', paid_at: null, paid_by: null });
     }
-
-    await conn.query(
-      `INSERT INTO loan_installment (installment_id, loan_id, installment_number, amount, due_date, status) VALUES ?`,
-      [installmentValues]
-    );
-
-    await conn.commit();
-
-    // Fetch the updated loan with staff name
-    const [updatedLoan] = await pool.query(
-      `SELECT 
-        lr.loan_id,
-        lr.staff_employee_id,
-        s.name AS staff_name,
-        lr.requested_amount,
-        lr.repayment_months,
-        lr.reason,
-        lr.status,
-        lr.monthly_installment,
-        lr.total_paid,
-        lr.outstanding_balance,
-        lr.created_at,
-        lr.created_by,
-        lr.approved_by,
-        lr.approved_at,
-        lr.hr_comments
-      FROM loan_request lr
-      JOIN staff s ON lr.staff_employee_id = s.employee_id
-      WHERE lr.loan_id = ?
-      LIMIT 1`,
-      [id]
-    );
-
-    // Fetch generated installments
-    const [installments] = await pool.query(
-      `SELECT 
-        installment_id,
-        loan_id,
-        installment_number,
-        amount,
-        due_date,
-        status,
-        paid_at,
-        paid_by
-      FROM loan_installment
-      WHERE loan_id = ?
-      ORDER BY installment_number ASC`,
-      [id]
-    );
-
+    const updatedMeta = JSON.stringify({ ...meta, approved_by: req.user.userId, monthly_installment: monthlyInstallment, outstanding_balance: amount, total_paid: 0, installments });
+    await pool.query(`UPDATE claims_and_loans SET status = 'approved', reviewer_comments = ?, reviewed_at = NOW(), monthly_installment = ?, outstanding_balance = ?, request_metadata = ? WHERE record_id = ? AND type = 'loan' AND status = 'pending'`, [hr_comments || null, monthlyInstallment, amount, updatedMeta, id]);
+    const [updatedLoan] = await pool.query(`SELECT ${LOAN_SELECT} FROM claims_and_loans c JOIN staff s ON c.staff_employee_id = s.employee_id WHERE c.record_id = ? LIMIT 1`, [id]);
     addAudit(req.user.email, `HR approved loan request ${id}`, 'Payroll');
     res.json({ ...updatedLoan[0], installments });
   } catch (err) {
-    await conn.rollback();
     res.status(500).json({ message: 'Failed to approve loan request', error: err.message });
-  } finally {
-    conn.release();
   }
 });
 
-// Reject a loan request — only HR
 router.put("/loan-requests/:id/reject", authenticateToken, allowRoles("HR"), async (req, res) => {
   try {
     const { id } = req.params;
     const { hr_comments } = req.body || {};
-
-    // Fetch the loan request
-    const [loanRows] = await pool.query(
-      `SELECT * FROM loan_request WHERE loan_id = ? LIMIT 1`,
-      [id]
-    );
-
-    if (!loanRows.length) {
-      return res.status(404).json({ message: "Loan request not found" });
-    }
-
-    const loan = loanRows[0];
-
-    // Validate pending status
-    if (loan.status !== 'pending') {
-      return res.status(400).json({ message: `Cannot reject request in status ${loan.status}` });
-    }
-
-    // Update loan_request to rejected
-    await pool.query(
-      `UPDATE loan_request 
-       SET status = 'rejected', 
-           approved_by = ?, 
-           approved_at = NOW(), 
-           hr_comments = ?
-       WHERE loan_id = ?`,
-      [req.user.userId, hr_comments || null, id]
-    );
-
-    // Fetch the updated loan with staff name
-    const [updatedLoan] = await pool.query(
-      `SELECT 
-        lr.loan_id,
-        lr.staff_employee_id,
-        s.name AS staff_name,
-        lr.requested_amount,
-        lr.repayment_months,
-        lr.reason,
-        lr.status,
-        lr.monthly_installment,
-        lr.total_paid,
-        lr.outstanding_balance,
-        lr.created_at,
-        lr.created_by,
-        lr.approved_by,
-        lr.approved_at,
-        lr.hr_comments
-      FROM loan_request lr
-      JOIN staff s ON lr.staff_employee_id = s.employee_id
-      WHERE lr.loan_id = ?
-      LIMIT 1`,
-      [id]
-    );
-
+    const [loanRows] = await pool.query("SELECT * FROM claims_and_loans WHERE record_id = ? AND type = 'loan' LIMIT 1", [id]);
+    if (!loanRows.length) return res.status(404).json({ message: "Loan request not found" });
+    if (loanRows[0].status !== 'pending') return res.status(400).json({ message: `Cannot reject request in status ${loanRows[0].status}` });
+    const meta = safeParseMeta(loanRows[0].request_metadata);
+    const updatedMeta = JSON.stringify({ ...meta, approved_by: req.user.userId });
+    await pool.query(`UPDATE claims_and_loans SET status = 'rejected', reviewer_comments = ?, reviewed_at = NOW(), request_metadata = ? WHERE record_id = ? AND type = 'loan' AND status = 'pending'`, [hr_comments || null, updatedMeta, id]);
+    const [updatedLoan] = await pool.query(`SELECT ${LOAN_SELECT} FROM claims_and_loans c JOIN staff s ON c.staff_employee_id = s.employee_id WHERE c.record_id = ? LIMIT 1`, [id]);
     addAudit(req.user.email, `HR rejected loan request ${id}`, 'Payroll');
     res.json(updatedLoan[0]);
   } catch (err) {
@@ -2042,78 +1807,28 @@ router.put("/loan-requests/:id/reject", authenticateToken, allowRoles("HR"), asy
   }
 });
 
-// Mark an installment as paid — only HR
 router.put("/loan-requests/:id/installments/:installmentId/pay", authenticateToken, allowRoles("HR"), async (req, res) => {
-  const conn = await pool.getConnection();
   try {
     const { id, installmentId } = req.params;
-
-    // Fetch the installment and validate it exists and belongs to this loan
-    const [installmentRows] = await conn.query(
-      `SELECT * FROM loan_installment WHERE installment_id = ? AND loan_id = ? LIMIT 1`,
-      [installmentId, id]
-    );
-
-    if (!installmentRows.length) {
-      conn.release();
-      return res.status(404).json({ message: "Installment not found" });
-    }
-
-    const installment = installmentRows[0];
-
-    // Validate installment is unpaid
-    if (installment.status === 'paid') {
-      conn.release();
-      return res.status(400).json({ message: "Installment is already paid" });
-    }
-
-    await conn.beginTransaction();
-
-    const installmentAmount = Number(installment.amount);
-
-    // Update installment to paid
-    await conn.query(
-      `UPDATE loan_installment 
-       SET status = 'paid', paid_at = NOW(), paid_by = ? 
-       WHERE installment_id = ?`,
-      [req.user.userId, installmentId]
-    );
-
-    // Update loan_request totals
-    await conn.query(
-      `UPDATE loan_request 
-       SET total_paid = total_paid + ?, 
-           outstanding_balance = outstanding_balance - ? 
-       WHERE loan_id = ?`,
-      [installmentAmount, installmentAmount, id]
-    );
-
-    await conn.commit();
-
-    // Fetch updated installment
-    const [updatedInstallment] = await pool.query(
-      `SELECT installment_id, loan_id, installment_number, amount, due_date, status, paid_at, paid_by
-       FROM loan_installment WHERE installment_id = ? LIMIT 1`,
-      [installmentId]
-    );
-
-    // Fetch updated loan balance info
-    const [updatedLoan] = await pool.query(
-      `SELECT loan_id, total_paid, outstanding_balance FROM loan_request WHERE loan_id = ? LIMIT 1`,
-      [id]
-    );
-
+    const [loanRows] = await pool.query("SELECT * FROM claims_and_loans WHERE record_id = ? AND type = 'loan' LIMIT 1", [id]);
+    if (!loanRows.length) return res.status(404).json({ message: "Loan request not found" });
+    const meta = safeParseMeta(loanRows[0].request_metadata);
+    const installments = Array.isArray(meta.installments) ? meta.installments : [];
+    const idx = installments.findIndex(i => i.installment_id === installmentId);
+    if (idx === -1) return res.status(404).json({ message: "Installment not found" });
+    if (installments[idx].status === 'paid') return res.status(400).json({ message: "Installment is already paid" });
+    const installmentAmount = Number(installments[idx].amount);
+    installments[idx].status = 'paid';
+    installments[idx].paid_at = new Date().toISOString();
+    installments[idx].paid_by = req.user.userId;
+    const newTotalPaid = Number(meta.total_paid || 0) + installmentAmount;
+    const newOutstanding = Number(meta.outstanding_balance || loanRows[0].amount) - installmentAmount;
+    const updatedMeta = JSON.stringify({ ...meta, total_paid: newTotalPaid, outstanding_balance: newOutstanding, installments });
+    await pool.query(`UPDATE claims_and_loans SET outstanding_balance = ?, request_metadata = ? WHERE record_id = ? AND type = 'loan'`, [newOutstanding, updatedMeta, id]);
     addAudit(req.user.email, `HR marked installment ${installmentId} as paid for loan ${id}`, 'Payroll');
-
-    res.json({
-      installment: updatedInstallment[0],
-      loan: updatedLoan[0]
-    });
+    res.json({ installment: installments[idx], loan: { loan_id: id, total_paid: newTotalPaid, outstanding_balance: newOutstanding } });
   } catch (err) {
-    await conn.rollback();
     res.status(500).json({ message: 'Failed to mark installment as paid', error: err.message });
-  } finally {
-    conn.release();
   }
 });
 
