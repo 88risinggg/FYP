@@ -1,5 +1,5 @@
-import { AlertCircle, ArrowRight, ChevronRight, Loader2, Maximize2, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, ArrowRight, ChevronRight, Loader2, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { fetchInvoicePerformance } from "../../services/adminDashboardService.js";
@@ -242,54 +242,6 @@ function DonutChart({ data, onSelect }) {
   );
 }
 
-const activitySeries = [
-  { key: "createdCount", label: "Created", color: "#4F7DE8" },
-  { key: "sentCount", label: "Sent", color: "#35A69B" },
-  { key: "paidCount", label: "Paid", color: "#F38978" }
-];
-
-function ActivityChart({ points }) {
-  const [active, setActive] = useState(null);
-  if (!points.length) return <p className="py-16 text-center text-sm text-[#7b6660]">No invoice activity found for this range.</p>;
-  const width = 760;
-  const height = 270;
-  const pad = { left: 46, right: 18, top: 20, bottom: 44 };
-  const max = Math.max(1, ...points.flatMap((point) => activitySeries.map((series) => Number(point[series.key] || 0))));
-  const coordinates = (key) => points.map((point, index) => ({
-    x: points.length === 1 ? width / 2 : pad.left + index / (points.length - 1) * (width - pad.left - pad.right),
-    y: pad.top + (1 - Number(point[key] || 0) / max) * (height - pad.top - pad.bottom),
-    point
-  }));
-
-  return (
-    <div>
-      <div className="mb-3 flex flex-wrap gap-4" aria-label="Invoice activity legend">
-        {activitySeries.map((series) => <span key={series.key} className="flex items-center gap-2 text-xs font-semibold"><span className="h-2.5 w-2.5 rounded-full" style={{ background: series.color }} />{series.label}</span>)}
-      </div>
-      <div className="relative overflow-x-auto" onMouseLeave={() => setActive(null)}>
-        <svg viewBox={`0 0 ${width} ${height}`} className="min-h-[250px] min-w-[620px] w-full" role="img" aria-label="Created, sent, and paid invoice activity over time">
-          {[0, .25, .5, .75, 1].map((ratio) => {
-            const y = pad.top + (1 - ratio) * (height - pad.top - pad.bottom);
-            return <g key={ratio}><line x1={pad.left} x2={width - pad.right} y1={y} y2={y} stroke="#f3ddd6" /><text x={pad.left - 8} y={y + 4} textAnchor="end" className="fill-[#7b6660] text-[10px]">{formatCount(max * ratio)}</text></g>;
-          })}
-          {active !== null ? <line x1={coordinates("createdCount")[active].x} x2={coordinates("createdCount")[active].x} y1={pad.top} y2={height - pad.bottom} stroke="#7B6660" strokeDasharray="4 4" /> : null}
-          {activitySeries.map((series) => {
-            const coords = coordinates(series.key);
-            return <g key={series.key}><polyline fill="none" stroke={series.color} strokeWidth="3" points={coords.map((point) => `${point.x},${point.y}`).join(" ")} />{coords.map((point, index) => <circle key={index} cx={point.x} cy={point.y} r="5" fill={series.color} stroke="white" strokeWidth="2" onMouseEnter={() => setActive(index)}><title>{`${point.point.period}: ${series.label} ${formatCount(point.point[series.key])}`}</title></circle>)}</g>;
-          })}
-          {points.map((point, index) => (index === 0 || index === points.length - 1 || index % Math.max(1, Math.ceil(points.length / 5)) === 0) ? <text key={point.bucketKey || index} x={coordinates("createdCount")[index].x} y={height - 15} textAnchor="middle" className="fill-[#7b6660] text-[10px]">{point.period}</text> : null)}
-        </svg>
-        {active !== null ? (
-          <div className="pointer-events-none absolute right-3 top-3 rounded-lg border border-[#ead3cc] bg-white p-3 text-xs shadow-xl">
-            <strong>{points[active].period}</strong>
-            {activitySeries.map((series) => <p key={series.key} className="mt-1" style={{ color: series.color }}>{series.label}: {formatCount(points[active][series.key])}</p>)}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 function ErrorAwareLink({ to, children }) {
   return <Link to={to} className="inline-flex items-center gap-2 text-sm font-bold text-[#F38978] hover:text-[#d86150] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]">{children}<ChevronRight size={15} /></Link>;
 }
@@ -297,7 +249,6 @@ function ErrorAwareLink({ to, children }) {
 export default function AdminInvoicePerformancePage() {
   const navigate = useNavigate();
   const statusState = usePerformanceSection("status", "all-time");
-  const activityState = usePerformanceSection("activity", "last-30-days");
   const overdueState = usePerformanceSection("paid-vs-overdue", "all-time");
   const changesState = usePerformanceSection("status-changes", "all-time");
 
@@ -309,17 +260,8 @@ export default function AdminInvoicePerformancePage() {
     }
     return `${invoiceListPath}?${params}`;
   }, []);
-  const activityPoints = activityState.data?.invoiceActivityTrend || [];
   const overdueSummary = overdueState.data?.paidVsOverdue || { overdueAmount: 0 };
   const recentChanges = (changesState.data?.recentStatusChanges || []).slice(0, 5);
-  const detailsParams = useMemo(() => {
-    const params = new URLSearchParams({ range: activityState.range, mode: "count" });
-    if (activityState.range === "custom") {
-      params.set("startDate", activityState.custom.startDate);
-      params.set("endDate", activityState.custom.endDate);
-    }
-    return params.toString();
-  }, [activityState.custom, activityState.range]);
 
   return (
     <div className="space-y-5">
@@ -328,17 +270,10 @@ export default function AdminInvoicePerformancePage() {
         <p className="mt-1 text-sm text-[#7b6660]">Track invoice health, payment value, and status movement.</p>
       </header>
 
-      <div className="grid gap-5 xl:grid-cols-[47fr_53fr]">
+      <div className="grid gap-5">
         <Card title="Invoice Status" controls={<RangeControl state={statusState} label="Invoice Status" />}>
           <SectionState state={statusState} emptyMessage="No invoices found for this range.">
             <DonutChart data={statusState.data?.invoiceStatus} onSelect={(status) => navigate(invoiceTarget(status, statusState))} />
-          </SectionState>
-        </Card>
-
-        <Card title="Invoice Activity Trend" controls={<div className="flex items-center gap-2"><Link to={`${performancePath}/activity-trend?${detailsParams}`} aria-label="Open Invoice Activity Trend full screen" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#f0d2ca] text-[#7b6660] hover:border-[#F38978] hover:text-[#F38978]"><Maximize2 size={16} /></Link><RangeControl state={activityState} label="Invoice Activity Trend" /></div>}>
-          <SectionState state={activityState} emptyMessage="No invoice activity found for this range.">
-            <ActivityChart points={activityPoints} />
-            <div className="mt-3"><ErrorAwareLink to={`${performancePath}/activity-trend?${detailsParams}`}>View Details</ErrorAwareLink></div>
           </SectionState>
         </Card>
       </div>
