@@ -13,7 +13,6 @@ import { getStoredSession } from "../../services/sessionService.js";
 import AdminAuditLogsPage from "./AdminAuditLogsPage.jsx";
 import AdminDashboardHomePage from "./AdminDashboardHomePage.jsx";
 import AdminInvoicePerformancePage from "./AdminInvoicePerformancePage.jsx";
-import AdminInvoiceActivityTrendPage from "./AdminInvoiceActivityTrendPage.jsx";
 import AdminInvoiceListPage from "./AdminInvoiceListPage.jsx";
 import AdminInvoiceSettingsPage from "./AdminInvoiceSettingsPage.jsx";
 import AdminPaymentReminderSummaryPage from "./AdminPaymentReminderSummaryPage.jsx";
@@ -123,7 +122,6 @@ const invoicingSidebarSections = [
 const routeHeadings = {
   "/dashboard/invoicing/admin": "Dashboard",
   "/dashboard/invoicing/admin/dashboard/invoice-performance": "Invoice Performance",
-  "/dashboard/invoicing/admin/dashboard/invoice-performance/activity-trend": "Invoice Activity Trend",
   "/dashboard/invoicing/admin/dashboard/invoice-performance/status-changes": "Recent Status Changes",
   "/dashboard/invoicing/admin/dashboard/payment-reminder-summary": "Payment & Reminder Summary",
   "/dashboard/invoicing/admin/dashboard/validation-summary": "Validation Summary",
@@ -183,7 +181,6 @@ export default function AdminInvoicingDashboard() {
   const isVanidayMapping = normalizedPath === "/dashboard/invoicing/admin/vaniday-mapping";
   const isAuditLogs = normalizedPath === "/dashboard/invoicing/admin/audit-logs";
   const isInvoicePerformance = normalizedPath === "/dashboard/invoicing/admin/dashboard/invoice-performance";
-  const isInvoiceActivityTrend = normalizedPath === "/dashboard/invoicing/admin/dashboard/invoice-performance/activity-trend";
   const isInvoiceList = normalizedPath === "/dashboard/invoicing/admin/invoices";
   const isPaymentReminderSummary = normalizedPath === "/dashboard/invoicing/admin/dashboard/payment-reminder-summary";
   const isValidationSummary = normalizedPath === "/dashboard/invoicing/admin/dashboard/validation-summary";
@@ -191,7 +188,7 @@ export default function AdminInvoicingDashboard() {
     ? "Automated Invoicing System - User Management"
     : isRolesManagement || roleCreateMatch || roleActionMatch
       ? "Automated Invoicing System - Roles & Permissions"
-    : isInvoicePerformance || isInvoiceActivityTrend
+    : isInvoicePerformance
       ? "Automated Invoicing System - Invoice Performance"
     : isPaymentReminderSummary
       ? "Automated Invoicing System - Payment & Reminder Summary"
@@ -204,10 +201,6 @@ export default function AdminInvoicingDashboard() {
       : isAuditLogs
         ? "Automated Invoicing System - Audit Logs"
       : pageTitle;
-
-  if (isInvoiceActivityTrend) {
-    return <AdminInvoiceActivityTrendPage />;
-  }
 
   return (
     <DashboardLayout
