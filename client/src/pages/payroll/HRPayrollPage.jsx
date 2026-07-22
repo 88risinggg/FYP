@@ -2169,7 +2169,7 @@ function PayslipsView() {
 
   const toggleSelect = (id) => {
     const payslip = payslips.find((item) => item.payslip_id === id);
-    if (!payslip || payslip.status !== "draft") return;
+    if (!payslip || (payslip.status || '').toLowerCase() !== "draft") return;
 
     const next = new Set(selectedIds);
     if (next.has(id)) next.delete(id);
@@ -2178,7 +2178,7 @@ function PayslipsView() {
   };
 
   const selectAllDrafts = () => {
-    const draftIds = payslips.filter(p => p.status === 'draft').map(p => p.payslip_id);
+    const draftIds = payslips.filter(p => (p.status || '').toLowerCase() === 'draft').map(p => p.payslip_id);
     if (draftIds.length === 0) return;
     // if all already selected, clear
     const allSelected = draftIds.every(id => selectedIds.has(id));
@@ -2187,7 +2187,7 @@ function PayslipsView() {
 
   const openConfirmBulkSend = (opts) => {
     // opts: { payslip_ids: [...]} or { allDrafts: true }
-    const draftIds = new Set(payslips.filter((p) => p.status === "draft").map((p) => p.payslip_id));
+    const draftIds = new Set(payslips.filter((p) => (p.status || '').toLowerCase() === "draft").map((p) => p.payslip_id));
     const payload = opts.allDrafts
       ? { allDrafts: true }
       : { payslip_ids: (opts.payslip_ids || []).filter((id) => draftIds.has(id)) };
@@ -2243,7 +2243,7 @@ function PayslipsView() {
 
   const performBulkSendToStaff = async () => {
     const approvedIds = payslips
-      .filter(p => p.status === 'admin_approved' || p.status === 'finance_approved')
+      .filter(p => ['admin_approved', 'finance_approved'].includes((p.status || '').toLowerCase()))
       .map(p => p.payslip_id);
     if (approvedIds.length === 0) {
       setError('No approved payslips to send to staff');
@@ -2339,7 +2339,7 @@ function PayslipsView() {
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
+    switch ((status || '').toLowerCase()) {
       case "draft":
         return "bg-gray-500/20 text-gray-300";
       case "finance_pending":
@@ -2631,18 +2631,18 @@ function PayslipsView() {
             <button
               type="button"
               onClick={() => openConfirmBulkSend({ allDrafts: true })}
-              disabled={actionInProgress === 'bulk' || payslips.filter(p => p.status === 'draft').length === 0}
+              disabled={actionInProgress === 'bulk' || payslips.filter(p => (p.status || '').toLowerCase() === 'draft').length === 0}
               className="rounded-lg bg-[#F38978]/20 px-4 py-2 text-sm font-medium text-[#F38978] hover:bg-[#F38978]/30 disabled:opacity-30 transition"
             >
-              {actionInProgress === 'bulk' ? 'Sending...' : `📤 Send to Finance (${payslips.filter(p => p.status === 'draft').length})`}
+              {actionInProgress === 'bulk' ? 'Sending...' : `📤 Send to Finance (${payslips.filter(p => (p.status || '').toLowerCase() === 'draft').length})`}
             </button>
             <button
               type="button"
               onClick={performBulkSendToStaff}
-              disabled={actionInProgress === 'bulk-staff' || payslips.filter(p => p.status === 'admin_approved' || p.status === 'finance_approved').length === 0}
+              disabled={actionInProgress === 'bulk-staff' || payslips.filter(p => ['admin_approved', 'finance_approved'].includes((p.status || '').toLowerCase())).length === 0}
               className="rounded-lg bg-emerald-500/20 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-500/30 disabled:opacity-30 transition"
             >
-              {actionInProgress === 'bulk-staff' ? 'Sending...' : `📨 Send to Staff (${payslips.filter(p => p.status === 'admin_approved' || p.status === 'finance_approved').length})`}
+              {actionInProgress === 'bulk-staff' ? 'Sending...' : `📨 Send to Staff (${payslips.filter(p => ['admin_approved', 'finance_approved'].includes((p.status || '').toLowerCase())).length})`}
             </button>
             <button
               type="button"
