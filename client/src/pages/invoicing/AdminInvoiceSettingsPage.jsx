@@ -2,7 +2,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
-  Circle,
   Clock3,
   FileSpreadsheet,
   FileText,
@@ -388,110 +387,6 @@ function ConfigurationStatusPanel({ status }) {
   );
 }
 
-const allowedWorkflowLabels = ["Draft", "Sent", "Viewed", "Paid", "Overdue"];
-
-const workflowNodeLayout = [
-  { status: "Draft", x: 10, y: 20, fill: "#F2F4F7", stroke: "#DEE3EA", text: "#526173" },
-  { status: "Sent", x: 113, y: 20, fill: "#EAF2FF", stroke: "#D6E4FF", text: "#2563EB" },
-  { status: "Viewed", x: 216, y: 20, fill: "#FFF2DE", stroke: "#FFE0B4", text: "#D97706" },
-  { status: "Overdue", x: 113, y: 92, fill: "#FFE8E8", stroke: "#FFD1D1", text: "#DC2626" },
-  { status: "Paid", x: 216, y: 92, fill: "#E7F7EA", stroke: "#CBEBD2", text: "#16803A" }
-];
-
-const workflowConnectors = [
-  { x1: 104, y1: 35, x2: 113, y2: 35 },
-  { x1: 207, y1: 35, x2: 216, y2: 35 },
-  { x1: 263, y1: 50, x2: 263, y2: 92 },
-  { x1: 160, y1: 50, x2: 160, y2: 92 },
-  { x1: 235, y1: 50, x2: 207, y2: 107 }
-];
-
-function uniqueWorkflowLabels(workflow) {
-  if (!Array.isArray(workflow) || workflow.length === 0) return allowedWorkflowLabels;
-
-  const labels = [];
-  workflow.forEach((edge) => {
-    [edge?.from, edge?.to].forEach((status) => {
-      if (allowedWorkflowLabels.includes(status) && !labels.includes(status)) labels.push(status);
-    });
-  });
-
-  return allowedWorkflowLabels.filter((status) => labels.includes(status) || !labels.length);
-}
-
-function buildWorkflowNodes(workflow) {
-  const labels = uniqueWorkflowLabels(workflow);
-
-  return workflowNodeLayout.filter((node) => labels.includes(node.status)).map((node) => ({
-    ...node,
-    label: node.status
-  }));
-}
-
-function WorkflowPanel({ workflow }) {
-  const workflowNodes = buildWorkflowNodes(workflow);
-  const workflowDescription = `${workflowNodes.map((node) => node.label).join(" to ")} invoice status workflow`;
-
-  return (
-    <SettingsCard title="Invoice Status Workflow" icon={Circle}>
-      <div className="rounded-lg border border-[#eef0f4] bg-white px-2 py-3">
-        <svg viewBox="0 0 320 150" role="img" aria-label={workflowDescription} className="h-auto w-full">
-          <defs>
-            <marker id="workflow-arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L8,4 L0,8 Z" fill="#9AA5B1" />
-            </marker>
-            <marker id="workflow-loop-arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L8,4 L0,8 Z" fill="#B5BDC8" />
-            </marker>
-          </defs>
-
-          <path
-            d="M104 136 H42 Q24 136 24 118 V59 Q24 43 42 43 H108"
-            fill="none"
-            stroke="#B5BDC8"
-            strokeDasharray="4 4"
-            strokeLinecap="round"
-            strokeWidth="1.6"
-            markerEnd="url(#workflow-loop-arrow)"
-          />
-
-          {workflowNodes.map((node) => (
-            <g key={node.label}>
-              <rect x={node.x} y={node.y} width="94" height="30" rx="5" fill={node.fill} stroke={node.stroke} />
-              <text
-                x={node.x + 47}
-                y={node.y + 15}
-                dominantBaseline="middle"
-                textAnchor="middle"
-                fill={node.text}
-                fontFamily="Inter, ui-sans-serif, system-ui, sans-serif"
-                fontSize="10"
-                fontWeight="700"
-              >
-                {node.label}
-              </text>
-            </g>
-          ))}
-
-          {workflowConnectors.map((connector) => (
-            <line
-              key={`${connector.x1}-${connector.y1}-${connector.x2}-${connector.y2}`}
-              x1={connector.x1}
-              y1={connector.y1}
-              x2={connector.x2}
-              y2={connector.y2}
-              stroke="#9AA5B1"
-              strokeLinecap="round"
-              strokeWidth="1.8"
-              markerEnd="url(#workflow-arrow)"
-            />
-          ))}
-        </svg>
-      </div>
-    </SettingsCard>
-  );
-}
-
 function NumberingPreviewPanel({ form, previewNumbers }) {
   return (
     <SettingsCard title="Numbering Preview" icon={Hash}>
@@ -785,7 +680,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
   const [options, setOptions] = useState(emptyOptions);
   const [configurationStatus, setConfigurationStatus] = useState(null);
   const [numberingActivity, setNumberingActivity] = useState([]);
-  const [workflow, setWorkflow] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -822,7 +716,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
       setOptions({ ...emptyOptions, ...(data.options || {}) });
       setConfigurationStatus(data.configurationStatus || null);
       setNumberingActivity(data.numberingActivity || []);
-      setWorkflow(data.invoiceStatusWorkflow || []);
     } catch (error) {
       setErrors([error.message]);
     } finally {
@@ -920,7 +813,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
       setSavedForm(cloneSettings(savedSettings));
       setConfigurationStatus(data.configurationStatus || null);
       setNumberingActivity(data.numberingActivity || []);
-      setWorkflow(data.invoiceStatusWorkflow || workflow);
       setMessage(data.message || "Invoice settings saved.");
     } catch (error) {
       setErrors([error.message]);
@@ -1104,7 +996,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
 
             <aside className="space-y-5">
               <ConfigurationStatusPanel status={configurationStatus} />
-              <WorkflowPanel workflow={workflow} />
               <ActionPanel saving={saving} onCancel={handleCancel} />
             </aside>
           </div>

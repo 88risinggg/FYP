@@ -14,6 +14,7 @@ import AdminInvoicePerformancePage from "./AdminInvoicePerformancePage.jsx";
 import AdminInvoiceListPage from "./AdminInvoiceListPage.jsx";
 import AdminInvoiceSettingsPage from "./AdminInvoiceSettingsPage.jsx";
 import AdminPaymentReminderSummaryPage from "./AdminPaymentReminderSummaryPage.jsx";
+import AdminReportsPage from "./AdminReportsPage.jsx";
 import AdminReminderSettingsPage from "./AdminReminderSettingsPage.jsx";
 import AdminValidationSummaryPage from "./AdminValidationSummaryPage.jsx";
 import AdminTemplatePreviewPage from "./AdminTemplatePreviewPage.jsx";
@@ -70,11 +71,6 @@ const invoicingSidebarSections = [
         ]
       },
       {
-        label: "Vaniday Mapping",
-        icon: Settings,
-        path: "/dashboard/invoicing/admin/vaniday-mapping"
-      },
-      {
         label: "Reminder Settings",
         icon: Bell,
         path: "/dashboard/invoicing/admin/reminder-settings"
@@ -124,7 +120,6 @@ const routeHeadings = {
   "/dashboard/invoicing/admin/invoice-settings/payments": "Invoice Settings",
   "/dashboard/invoicing/admin/reminder-settings": "Reminder Settings",
   "/dashboard/invoicing/admin/template-preview": "Template Preview",
-  "/dashboard/invoicing/admin/vaniday-mapping": "Vaniday Data Mapping",
   "/dashboard/invoicing/admin/audit-logs": "Audit Logs",
   "/dashboard/invoicing/admin/reports": "Reports"
 };
@@ -137,7 +132,8 @@ export default function AdminInvoicingDashboard() {
     : location.pathname;
   const removedAdminAccessPath =
     normalizedPath.startsWith("/dashboard/invoicing/admin/users") ||
-    normalizedPath.startsWith("/dashboard/invoicing/admin/roles");
+    normalizedPath.startsWith("/dashboard/invoicing/admin/roles") ||
+    normalizedPath.startsWith("/dashboard/invoicing/admin/vaniday-mapping");
   const heading = routeHeadings[normalizedPath] ||
     (normalizedPath.startsWith("/dashboard/invoicing/admin/invoices")
       ? "Invoices"
@@ -154,12 +150,12 @@ export default function AdminInvoicingDashboard() {
   const isInvoiceSettings = Boolean(invoiceSettingsMatch);
   const isReminderSettings = normalizedPath === "/dashboard/invoicing/admin/reminder-settings";
   const isTemplatePreview = normalizedPath === "/dashboard/invoicing/admin/template-preview";
-  const isVanidayMapping = normalizedPath === "/dashboard/invoicing/admin/vaniday-mapping";
   const isAuditLogs = normalizedPath === "/dashboard/invoicing/admin/audit-logs";
   const isInvoicePerformance = normalizedPath === "/dashboard/invoicing/admin/dashboard/invoice-performance";
   const isInvoiceList = normalizedPath === "/dashboard/invoicing/admin/invoices";
   const isPaymentReminderSummary = normalizedPath === "/dashboard/invoicing/admin/dashboard/payment-reminder-summary";
   const isValidationSummary = normalizedPath === "/dashboard/invoicing/admin/dashboard/validation-summary";
+  const isReports = normalizedPath === "/dashboard/invoicing/admin/reports";
   const currentPageTitle = isInvoicePerformance
       ? "Automated Invoicing System - Invoice Performance"
     : isPaymentReminderSummary
@@ -170,6 +166,8 @@ export default function AdminInvoicingDashboard() {
       ? "Automated Invoicing System - Invoice Settings"
     : isReminderSettings
       ? "Automated Invoicing System - Reminder Settings"
+    : isReports
+      ? "Automated Invoicing System - Reports"
       : isAuditLogs
         ? "Automated Invoicing System - Audit Logs"
       : pageTitle;
@@ -203,16 +201,10 @@ export default function AdminInvoicingDashboard() {
         <AdminReminderSettingsPage />
       ) : isTemplatePreview ? (
         <AdminTemplatePreviewPage />
-      ) : isVanidayMapping ? (
-        <section className="p-6">
-          <h2 className="text-2xl font-semibold text-[#251E1F] mb-4">Vaniday Data Mapping</h2>
-          <p className="text-sm text-[#7B6660] mb-6">Configure how Vaniday CSV columns map to invoice system fields. Finance users will use these mappings during import.</p>
-          <div className="bg-white border rounded-xl p-6">
-            <p className="text-sm text-[#7B6660]">Vaniday field mapping is configured here for Finance imports.</p>
-          </div>
-        </section>
       ) : isAuditLogs ? (
         <AdminAuditLogsPage />
+      ) : isReports ? (
+        <AdminReportsPage />
       ) : (
         <section>
           <h2 className="text-2xl font-semibold text-[#251E1F]">{heading}</h2>
