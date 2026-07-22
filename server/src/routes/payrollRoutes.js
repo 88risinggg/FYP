@@ -54,7 +54,7 @@ router.put("/rates", authenticateToken, allowRoles("Admin"), (req, res) => {
 // ----- Payslip Approval Workflow -----
 
 // Finance approval - transition finance_pending → finance_approved
-router.put("/payslips/:id/finance-approve", authenticateToken, allowRoles("Admin", "Finance"), async (req, res) => {
+router.put("/payslips/:id/finance-approve", authenticateToken, allowRoles("Finance"), async (req, res) => {
   try {
     const payslipId = req.params.id;
 
@@ -81,7 +81,7 @@ router.put("/payslips/:id/finance-approve", authenticateToken, allowRoles("Admin
 });
 
 // HR -> Finance: send payslip for finance review (draft -> finance_pending)
-router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR"), async (req, res) => {
   try {
     const payslipId = req.params.id;
 
@@ -108,7 +108,7 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("Admin
 });
 
 // Bulk send payslips to Finance (accepts { payslip_ids: [...]} or { allDrafts: true })
-router.put("/payslips/bulk-send-to-finance", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+router.put("/payslips/bulk-send-to-finance", authenticateToken, allowRoles("HR"), async (req, res) => {
   try {
     const { payslip_ids, allDrafts } = req.body || {};
 
@@ -149,7 +149,7 @@ router.put("/payslips/bulk-send-to-finance", authenticateToken, allowRoles("Admi
 });
 
 // Finance rejection
-router.put("/payslips/:id/finance-reject", authenticateToken, allowRoles("Admin", "Finance"), async (req, res) => {
+router.put("/payslips/:id/finance-reject", authenticateToken, allowRoles("Finance"), async (req, res) => {
   try {
     const { pool } = require("../config/db");
     const payslipId = req.params.id;
@@ -182,52 +182,4 @@ router.put("/payslips/:id/finance-reject", authenticateToken, allowRoles("Admin"
 });
 
 // Admin final approval - transition admin_pending → sent_to_staff
-router.put("/payslips/:id/admin-approve", authenticateToken, allowRoles("Admin"), async (req, res) => {
-  try {
-    const [result] = await pool.query(
-      `UPDATE payroll
-       SET payslip_status = 'sent_to_staff', payslip_sent_at = NOW()
-       WHERE payroll_id = ? AND LOWER(payslip_status) IN ('admin_pending', 'finance_approved')`,
-      [req.params.id]
-    );
-    if (!result.affectedRows) {
-      return res.status(409).json({ message: "Payslip not found or not ready for Admin approval" });
-    }
-    addAudit(req.user.email, `Admin approved payslip ${req.params.id} and sent to staff`, "Payroll");
-    const [[payslip]] = await pool.query(
-      "SELECT *, payroll_id AS payslip_id, payslip_status AS status FROM payroll WHERE payroll_id = ?",
-      [req.params.id]
-    );
-    return res.json({ message: "Payslip approved by Admin and sent to staff", payslip });
-  } catch (error) {
-    return res.status(500).json({ message: "Failed to approve payslip", error: error.message });
-  }
-});
-
-// Admin rejection
-router.put("/payslips/:id/admin-reject", authenticateToken, allowRoles("Admin"), async (req, res) => {
-  const { reason } = req.body;
-  if (!reason) {
-    return res.status(400).json({ message: "Rejection reason is required" });
-  }
-  try {
-    const [result] = await pool.query(
-      `UPDATE payroll SET payslip_status = 'Draft'
-       WHERE payroll_id = ? AND LOWER(payslip_status) = 'admin_pending'`,
-      [req.params.id]
-    );
-    if (!result.affectedRows) {
-      return res.status(409).json({ message: "Payslip not found or not awaiting Admin approval" });
-    }
-    addAudit(req.user.email, `Admin rejected payslip ${req.params.id}: ${reason}`, "Payroll");
-    const [[payslip]] = await pool.query(
-      "SELECT *, payroll_id AS payslip_id, payslip_status AS status FROM payroll WHERE payroll_id = ?",
-      [req.params.id]
-    );
-    return res.json({ message: "Payslip rejected by Admin", payslip });
-  } catch (error) {
-    return res.status(500).json({ message: "Failed to reject payslip", error: error.message });
-  }
-});
-
 module.exports = router;

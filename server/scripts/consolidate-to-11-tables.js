@@ -1,16 +1,17 @@
 /**
- * Consolidate database to 11 tables:
+ * Consolidate database to 12 core tables:
  * 1. user (+ connected_accounts JSON, login sessions via audit_logs)
  * 2. staff (+ emergency_contact columns)
  * 3. customer
  * 4. invoice
  * 5. invoice_settings (global singleton)
  * 6. payment (+ payment_method name inline)
- * 7. payroll (+ payroll_run columns + payroll_configuration as JSON)
- * 8. notification
- * 9. public_holidays
- * 10. audit_logs (consolidated: all audit/settings audit/numbering activity)
- * 11. claims_and_loans (+ leave applications absorbed)
+ * 7. payroll (+ payroll_run columns)
+ * 8. payroll_configuration (organisation-wide calculation rules)
+ * 9. notification
+ * 10. public_holidays
+ * 11. audit_logs (consolidated: all audit/settings audit/numbering activity)
+ * 12. claims_and_loans (+ leave applications absorbed)
  */
 
 const mysql = require("mysql2/promise");
@@ -43,7 +44,7 @@ async function run() {
   });
 
   try {
-    console.log("=== Consolidating to 11 tables ===\n");
+    console.log("=== Consolidating to 12 core tables ===\n");
 
     // ─── 1. Merge connected_account into user (as JSON) ───
     console.log("1. Merging connected_account into user (JSON column)...");
@@ -139,7 +140,7 @@ async function run() {
     }
     console.log("   Done.");
 
-    // ─── 6. Merge payroll_configuration into payroll (or user) ───
+    // ─── 6. Move per-user payroll preferences; keep organisation rules ───
     console.log("6. Adding payroll_config_json to user for user preferences...");
     await addColumn(pool, "user", "payroll_config_json", "JSON NULL");
     if (await tableExists(pool, "payroll_configuration")) {
@@ -258,7 +259,6 @@ async function run() {
       "emergency_contact",
       "payment_method",
       "payroll_run",
-      "payroll_configuration",
       "leave_application",
       "leave_balance",
       "leave_type",

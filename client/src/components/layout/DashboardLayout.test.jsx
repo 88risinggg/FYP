@@ -5,7 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import DashboardLayout from "./DashboardLayout.jsx";
 import { apiRequest } from "../../services/apiClient.js";
 
-vi.mock("./Sidebar.jsx", () => ({ default: () => <aside data-testid="sidebar" /> }));
+vi.mock("./Sidebar.jsx", () => ({
+  default: ({ showModuleSelectorLink }) => (
+    <aside data-testid="sidebar" data-module-selector-link={String(showModuleSelectorLink)} />
+  )
+}));
 vi.mock("../../services/apiClient.js", () => ({ apiRequest: vi.fn() }));
 
 function LocationProbe() {
@@ -28,7 +32,7 @@ afterEach(() => {
 });
 
 describe("DashboardLayout search", () => {
-  it("uses the Vaniday logo as a module dashboard link when a home path is provided", () => {
+  it("uses the PayNivo logo as a module dashboard link when a home path is provided", () => {
     renderLayout({ homePath: "/dashboard/payroll/admin" });
 
     fireEvent.click(screen.getByRole("link", { name: "Go to dashboard" }));
@@ -58,5 +62,38 @@ describe("DashboardLayout search", () => {
     await waitFor(() => expect(apiRequest).toHaveBeenCalledWith("/api/hr/search?q=Aisha"));
     fireEvent.click(await screen.findByRole("button", { name: /Aisha Tan/i }));
     expect(screen.getByTestId("location").textContent).toBe("/dashboard/payroll/hr/staff?highlight=STF-12");
+  });
+});
+
+describe("DashboardLayout account menu", () => {
+  it("shows the signed-in account details and opens settings", () => {
+    renderLayout({
+      user: {
+        name: "Tan Ray Young",
+        email: "24026513@myrp.edu.sg",
+        role: "Staff"
+      }
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open account menu" }));
+
+    expect(screen.getByRole("menu", { name: "Account menu" })).toBeTruthy();
+    expect(screen.getByText("24026513@myrp.edu.sg")).toBeTruthy();
+    expect(screen.getAllByText("Tan Ray Young")).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("button", { name: /Settings/i }));
+    expect(screen.getByTestId("location").textContent).toBe("/dashboard/settings");
+  });
+});
+
+describe("DashboardLayout sidebar module navigation", () => {
+  it("shows module navigation for users assigned to multiple modules", () => {
+    renderLayout({ user: { role: "Admin", allowedModules: ["invoicing", "payroll"] } });
+    expect(screen.getByTestId("sidebar").dataset.moduleSelectorLink).toBe("true");
+  });
+
+  it("leaves module navigation hidden for a single-module role", () => {
+    renderLayout({ user: { role: "Staff", allowedModules: ["payroll"] } });
+    expect(screen.getByTestId("sidebar").dataset.moduleSelectorLink).toBe("false");
   });
 });

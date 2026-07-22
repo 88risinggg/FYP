@@ -50,6 +50,7 @@ import {
   deductionComponentRows,
   earningComponentRows,
   employerContributionRows,
+  resolveFinancePayrollConfig,
   slugify,
 } from "../../utils/payrollRules.js";
 import { createPayrollReportPdf } from "../../utils/payrollReportPdf.js";
@@ -59,24 +60,38 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 const payrollSidebarSections = [
   {
-    label: "ADMIN",
+    label: "MAIN",
     items: [
       {
         label: "Dashboard",
         icon: LayoutDashboard,
         path: "/dashboard/payroll/admin",
-        end: true
-      },
-      {
-        label: "Payslips Approval",
-        icon: CheckCircle2,
-        path: "/dashboard/payroll/admin/payslips-approval"
+        end: true,
+        children: [
+          { label: "Overview", path: "/dashboard/payroll/admin", end: true },
+          { label: "Configure Payroll Rules", path: "/dashboard/payroll/admin/settings" },
+          { label: "Import Payslip Layout", path: "/dashboard/payroll/admin/payslip-layouts" },
+          { label: "Staff Management", path: "/dashboard/payroll/admin/staff-management" },
+          { label: "User Accounts", path: "/dashboard/payroll/admin/user-accounts" },
+          { label: "Monitor Payroll Status", path: "/dashboard/payroll/admin/payroll-monitor" },
+          { label: "Audit & Reports", path: "/dashboard/payroll/admin/audit-logs" }
+        ]
       },
       {
         label: "Staff Management",
         icon: Users,
         path: "/dashboard/payroll/admin/staff-management"
       },
+      {
+        label: "User Accounts",
+        icon: UserCog,
+        path: "/dashboard/payroll/admin/user-accounts"
+      }
+    ]
+  },
+  {
+    label: "CONFIGURATION",
+    items: [
       {
         label: "System Settings",
         icon: Settings,
@@ -91,17 +106,22 @@ const payrollSidebarSections = [
         label: "Payslip Layouts",
         icon: Palette,
         path: "/dashboard/payroll/admin/payslip-layouts"
-      },
-      {
-        label: "Payroll Monitor",
-        icon: UserCog,
-        path: "/dashboard/payroll/admin/payroll-monitor"
-      },
+      }
+    ]
+  },
+  {
+    label: "MONITORING",
+    items: [
       {
         label: "Audit Logs",
         icon: History,
         path: "/dashboard/payroll/admin/audit-logs"
-      },
+      }
+    ]
+  },
+  {
+    label: "REPORTS",
+    items: [
       {
         label: "Reports",
         icon: FileBarChart,
@@ -130,7 +150,7 @@ const workflowSteps = [
     updatedKey: "users",
     details: ["Admin, HR and Finance access", "Payroll module permissions", "Active and inactive user accounts"],
     action: "Manage Access",
-    path: "/dashboard/payroll/admin/users-roles"
+    path: "/dashboard/payroll/admin/user-accounts"
   },
   {
     title: "Import Payslip Layout",
@@ -150,7 +170,7 @@ const workflowSteps = [
     updatedKey: "users",
     details: ["Department assignment", "Base salary reference", "Employee account link"],
     action: "View Staff Setup",
-    path: "/dashboard/payroll/admin/users-roles"
+    path: "/dashboard/payroll/admin/staff-setup"
   },
   {
     title: "Monitor Payroll Status",
@@ -687,6 +707,129 @@ function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout })
   );
 }
 
+function StaffManagementView() {
+  const session = getStoredSession();
+  const [staff, setStaff] = useState([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const loadStaff = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/hr/staff`, { headers: getAuthHeaders(session?.token) });
+      const body = await response.json().catch(() => ([]));
+      if (!response.ok) throw new Error(body.message || "Failed to load staff records");
+      setStaff(Array.isArray(body) ? body : []);
+      setError("");
+    } catch (loadError) {
+      setError(loadError.message || "Failed to load staff records");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadStaff(); }, []);
+
+  const filteredStaff = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return staff;
+    return staff.filter((record) => [record.employee_id, record.employee_code, record.name, record.email, record.department_name]
+      .some((value) => String(value || "").toLowerCase().includes(query)));
+  }, [search, staff]);
+
+  const openEditor = (record) => {
+    setEditing(record);
+    setForm({
+      employee_code: record.employee_code || "",
+      name: record.name || "",
+      email: record.email || "",
+      phone: record.phone || "",
+      department_name: record.department_name || "",
+      base_salary: record.base_salary ?? "",
+      status: Number(record.status) === 1 ? "Active" : "Inactive"
+    });
+  };
+
+  const saveStaff = async () => {
+    if (!editing) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/hr/staff/${editing.employee_id}`, {
+        method: "PUT",
+        headers: { ...getAuthHeaders(session?.token), "Content-Type": "application/json" },
+        body: JSON.stringify(form)
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || "Failed to update staff record");
+      setEditing(null);
+      setSuccess(`${body.staff?.name || form.name} updated successfully.`);
+      setError("");
+      await loadStaff();
+    } catch (saveError) {
+      setError(saveError.message || "Failed to update staff record");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <PageShell
+      heading="Staff Management"
+      updatedAt={getLatestTimestamp(staff)}
+      actions={<ActionButton icon={Search} variant="secondary" onClick={loadStaff}>Refresh Staff</ActionButton>}
+    >
+      <div className="mb-5 rounded-xl border border-[#f0d2ca] bg-[#FFF6F2] p-4 text-sm text-[#7b6660]">
+        Manage employee identity, department, salary reference, employment status and account linkage. Login roles and account access are managed under <strong>User Accounts</strong>.
+      </div>
+      {error ? <div className="mb-4 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {success ? <div className="mb-4 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-700">{success}</div> : null}
+      <div className="app-panel rounded-2xl p-6">
+        <label className="flex max-w-xl items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5">
+          <Search size={16} className="text-[#F38978]" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search employee ID, name, email or department" className="w-full bg-transparent text-sm outline-none" />
+        </label>
+        {loading ? <p className="py-10 text-center text-sm text-[#7b6660]">Loading staff records...</p> : (
+          <div className="mt-5 overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="text-xs uppercase tracking-wide text-[#F38978]/80"><tr>
+                <th className="border-b border-[#f0d2ca] px-3 py-3">Employee</th><th className="border-b border-[#f0d2ca] px-3 py-3">Department</th><th className="border-b border-[#f0d2ca] px-3 py-3">Base salary</th><th className="border-b border-[#f0d2ca] px-3 py-3">Account link</th><th className="border-b border-[#f0d2ca] px-3 py-3">Employment</th><th className="border-b border-[#f0d2ca] px-3 py-3">Action</th>
+              </tr></thead>
+              <tbody>{filteredStaff.map((record) => (
+                <tr key={record.employee_id} className="text-[#7b6660] hover:bg-[#FDD9CD]/30">
+                  <td className="border-b border-[#f0d2ca] px-3 py-4"><p className="font-semibold text-[#251E1F]">{record.name}</p><p className="text-xs">{record.employee_code || record.employee_id} · {record.email || "No email"}</p></td>
+                  <td className="border-b border-[#f0d2ca] px-3 py-4">{record.department_name || "Not assigned"}</td>
+                  <td className="border-b border-[#f0d2ca] px-3 py-4">{formatMoney(record.base_salary)}</td>
+                  <td className="border-b border-[#f0d2ca] px-3 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${record.user_user_id ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{record.user_user_id ? "Linked" : "Not linked"}</span></td>
+                  <td className="border-b border-[#f0d2ca] px-3 py-4">{Number(record.status) === 1 ? "Active" : "Inactive"}</td>
+                  <td className="border-b border-[#f0d2ca] px-3 py-4"><button type="button" onClick={() => openEditor(record)} className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/40">Edit staff</button></td>
+                </tr>
+              ))}</tbody>
+            </table>
+            {!filteredStaff.length ? <EmptyState message="No staff records match your search." /> : null}
+          </div>
+        )}
+      </div>
+      {editing ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4" onMouseDown={() => setEditing(null)}>
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between"><div><h3 className="text-xl font-semibold text-[#251E1F]">Edit staff record</h3><p className="text-sm text-[#7b6660]">Employee ID: {editing.employee_id}</p></div><button type="button" onClick={() => setEditing(null)}><X size={20} /></button></div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              {[['name','Name','text'],['employee_code','Employee code','text'],['email','Email','email'],['phone','Phone','text'],['department_name','Department','text'],['base_salary','Base salary','number']].map(([key,label,type]) => <label key={key} className="text-sm font-medium text-[#7b6660]">{label}<input type={type} value={form[key] ?? ""} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))} className="mt-1 w-full rounded-xl border border-[#f0d2ca] px-3 py-2.5 text-[#251E1F] outline-none focus:border-[#F38978]" /></label>)}
+              <label className="text-sm font-medium text-[#7b6660]">Employment status<select value={form.status || "Active"} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))} className="mt-1 w-full rounded-xl border border-[#f0d2ca] px-3 py-2.5 text-[#251E1F]"><option>Active</option><option>Inactive</option></select></label>
+            </div>
+            <div className="mt-6 flex justify-end gap-3"><button type="button" onClick={() => setEditing(null)} className="rounded-xl border border-[#f0d2ca] px-4 py-2.5 font-semibold">Cancel</button><button type="button" disabled={saving} onClick={saveStaff} className="rounded-xl bg-[#F38978] px-4 py-2.5 font-semibold text-white disabled:opacity-50">{saving ? "Saving..." : "Save staff"}</button></div>
+          </div>
+        </div>
+      ) : null}
+    </PageShell>
+  );
+}
+
 function UsersRolesView({
   availableStaff = [],
   onCreateUser,
@@ -748,7 +891,7 @@ function UsersRolesView({
   };
   return (
     <PageShell
-      heading="Users & Roles"
+      heading="User Accounts & Access"
       updatedAt={getLatestTimestamp(users)}
       actions={
         <>
@@ -758,6 +901,9 @@ function UsersRolesView({
       }
     >
       <div className="space-y-5">
+        <div className="rounded-xl border border-[#f0d2ca] bg-[#FFF6F2] p-4 text-sm text-[#7b6660]">
+          Manage login roles, account activation, password resets and staff-account links. Salary and employment details are managed under <strong>Staff Management</strong>.
+        </div>
         <div className="grid gap-4 md:grid-cols-4">
           {roleSummary.map((role) => (
             <div key={role.role_id} className="app-panel rounded-2xl p-5">
@@ -771,7 +917,7 @@ function UsersRolesView({
         <div className="app-panel rounded-2xl p-6">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-[#251E1F]">User & Staff Directory</h3>
+              <h3 className="text-lg font-semibold text-[#251E1F]">User Account Directory</h3>
               <p className="mt-1 text-sm text-[#7b6660]">
                 {filteredUsers.length} of {users.length} user(s) shown
               </p>
@@ -825,9 +971,7 @@ function UsersRolesView({
                   </th>
                   <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">User</th>
                   <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Role</th>
-                  <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Employee Code</th>
-                  <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Department</th>
-                  <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Base Salary</th>
+                  <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Staff Link</th>
                   <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Status</th>
                   <th className="border-b border-[#f0d2ca] px-4 py-3 font-semibold">Action</th>
                 </tr>
@@ -857,9 +1001,7 @@ function UsersRolesView({
                         <p className="mt-1 text-xs text-[#7b6660]/75">{user.email}</p>
                       </td>
                       <td className="border-b border-[#f0d2ca] px-4 py-4">{user.role_name}</td>
-                      <td className="border-b border-[#f0d2ca] px-4 py-4">{user.employee_code || "Not linked"}</td>
-                      <td className="border-b border-[#f0d2ca] px-4 py-4">{user.department_name || "Not linked"}</td>
-                      <td className="border-b border-[#f0d2ca] px-4 py-4">{formatMoney(user.base_salary)}</td>
+                      <td className="border-b border-[#f0d2ca] px-4 py-4">{user.employee_code ? `${user.employee_code} · ${user.department_name || "No department"}` : "Not linked"}</td>
                       <td className="border-b border-[#f0d2ca] px-4 py-4">
                         <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isActive ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]"}`}>
                           {isActive ? "Active" : "Inactive"}
@@ -1473,6 +1615,27 @@ function UserManagementModal({
 
 function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }) {
   const defaultLayout = layouts.find((layout) => Number(layout.is_default) === 1) || layouts[0];
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+
+  const selectLayoutFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.type !== "application/pdf" || !file.name.toLowerCase().endsWith(".pdf")) {
+      setUploadError("Select a PDF payslip layout.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError("The PDF must not exceed 10MB.");
+      return;
+    }
+    setIsUploading(true);
+    setUploadError("");
+    const uploaded = await onImportLayout(file);
+    if (!uploaded) setUploadError("The payslip layout could not be uploaded.");
+    setIsUploading(false);
+  };
 
   return (
     <PageShell
@@ -1480,7 +1643,9 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
       updatedAt={getLatestTimestamp(layouts)}
       actions={
         <>
-          <ActionButton icon={Upload} onClick={onImportLayout}>Import Layout</ActionButton>
+          <ActionButton icon={Upload} disabled={isUploading} onClick={() => document.getElementById("payslip-layout-file")?.click()}>
+            {isUploading ? "Uploading..." : "Upload PDF Layout"}
+          </ActionButton>
           <ActionButton
             icon={Eye}
             variant="secondary"
@@ -1492,20 +1657,44 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
         </>
       }
     >
+      <input
+        id="payslip-layout-file"
+        type="file"
+        accept="application/pdf,.pdf"
+        className="sr-only"
+        onChange={selectLayoutFile}
+      />
+      <div className="mb-5 rounded-2xl border border-dashed border-[#F38978]/45 bg-[#FFF6F2] p-6 text-center">
+        <Upload size={30} className="mx-auto text-[#F38978]" />
+        <h3 className="mt-3 font-semibold text-[#251E1F]">Upload a payslip layout</h3>
+        <p className="mt-1 text-sm text-[#7b6660]">Choose a PDF file. Its filename will automatically become the layout name.</p>
+        <button
+          type="button"
+          disabled={isUploading}
+          onClick={() => document.getElementById("payslip-layout-file")?.click()}
+          className="mt-4 rounded-xl bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#df7565] disabled:opacity-50"
+        >
+          {isUploading ? "Uploading PDF..." : "Choose PDF File"}
+        </button>
+        {uploadError ? <p className="mt-3 text-sm font-medium text-red-600">{uploadError}</p> : null}
+      </div>
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="app-panel rounded-2xl p-6 lg:col-span-2">
           {layouts.length ? (
             <div className="grid gap-4 md:grid-cols-3">
               {layouts.map((layout) => (
-              <article key={layout.layout_id} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
+              <article
+                key={layout.layout_id}
+                className={`rounded-xl border p-5 transition ${Number(layout.is_default) === 1 ? "border-[#2f8758]/45 bg-[#2f8758]/5 ring-2 ring-[#2f8758]/10" : "border-[#f0d2ca] bg-white/80"}`}
+              >
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978] ring-1 ring-[#F38978]/25">
                   <FileText size={22} />
                 </div>
                 <h3 className="mt-4 font-semibold text-[#251E1F]">{layout.layout_name}</h3>
                 <p className="mt-2 text-sm text-[#7b6660]">{layout.file_type} template</p>
                 <div className="mt-4 flex items-center justify-between gap-3 text-xs">
-                  <span className="rounded-full border border-[#f0d2ca] bg-white/80 px-3 py-1 font-semibold text-[#7b6660]">
-                    {Number(layout.is_default) === 1 ? "Default" : layout.status}
+                  <span className={`rounded-full border px-3 py-1 font-semibold ${Number(layout.is_default) === 1 ? "border-[#2f8758]/30 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"}`}>
+                    {Number(layout.is_default) === 1 ? "Default selected" : layout.status}
                   </span>
                   <span className="text-[#7b6660]/80">{formatDate(layout.updated_at)}</span>
                 </div>
@@ -1513,8 +1702,14 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
                   <button type="button" className="rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45" onClick={() => window.open(layout.file_path, "_blank")}>
                     Preview
                   </button>
-                  <button type="button" className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/20" onClick={() => onSetDefaultLayout(layout.layout_id)}>
-                    Set Default
+                  <button
+                    type="button"
+                    disabled={Number(layout.is_default) === 1}
+                    className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold ${Number(layout.is_default) === 1 ? "cursor-default border-[#2f8758]/30 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#F38978]/25 bg-[#F38978]/10 text-[#251E1F] hover:bg-[#F38978]/20"}`}
+                    onClick={() => onSetDefaultLayout(layout.layout_id)}
+                  >
+                    {Number(layout.is_default) === 1 ? <CheckCircle2 size={15} /> : null}
+                    {Number(layout.is_default) === 1 ? "Default selected" : "Set Default"}
                   </button>
                 </div>
               </article>
@@ -1531,15 +1726,15 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
           <ul className="mt-4 space-y-3 text-sm text-[#7b6660]">
             <li className="flex gap-2">
               <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#F38978]" />
-              <span>Template name and version</span>
+              <span>The layout name is taken from the PDF filename</span>
             </li>
             <li className="flex gap-2">
               <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#F38978]" />
-              <span>PDF or HTML layout file</span>
+              <span>PDF file up to 10MB</span>
             </li>
             <li className="flex gap-2">
               <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#F38978]" />
-              <span>Sample data preview before activation</span>
+              <span>Preview the uploaded PDF before setting it as default</span>
             </li>
           </ul>
         </aside>
@@ -2572,6 +2767,12 @@ function SettingsView({ mbmfEligibility, onUpdateSetting, settings = [], users =
     () => buildSettingsByKey(settings),
     [settings]
   );
+  const testAppliedRules = () => {
+    const config = resolveFinancePayrollConfig(settings);
+    window.alert(
+      `Applied payroll rules check\n\nCPF wage ceiling: SGD ${config.monthlyWageCeiling.toFixed(2)}\nCPF age tiers: ${config.rateTiers.length}\nBank details required: ${config.compliance.bankAccountEnabled ? "Yes" : "No"}\nDepartment required: ${config.compliance.departmentEnabled ? "Yes" : "No"}\nMaximum other deductions: ${config.compliance.maxOtherDeductionPercent}%\n\nThese settings will be applied to newly generated payroll runs.`
+    );
+  };
 
   return (
     <PageShell
@@ -2580,7 +2781,7 @@ function SettingsView({ mbmfEligibility, onUpdateSetting, settings = [], users =
       actions={
         <>
           <ActionButton icon={Settings} onClick={() => document.getElementById("payroll-settings-start")?.scrollIntoView({ behavior: "smooth" })}>Payroll Configurations</ActionButton>
-          <ActionButton icon={PlayCircle} variant="secondary" onClick={() => window.alert(`${settings.length} payroll setting(s) loaded for rule testing.`)}>Test Rules</ActionButton>
+          <ActionButton icon={PlayCircle} variant="secondary" onClick={testAppliedRules}>Test Applied Rules</ActionButton>
         </>
       }
     >
@@ -2647,6 +2848,15 @@ function ComplianceRulesView({ mbmfEligibility, onUpdateSetting, settings = [], 
       updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.startsWith("iras_") || setting.setting_key.startsWith("ir21_")))
     }
   ];
+  const testAppliedRules = () => {
+    const config = resolveFinancePayrollConfig(settings);
+    const tierSummary = config.rateTiers
+      .map((tier) => `${tier.ageGroup}: ${tier.employeeOrdinaryRate}% employee / ${tier.employerOrdinaryRate}% employer`)
+      .join("\n");
+    window.alert(
+      `Applied Singapore payroll rules\n\n${tierSummary}\n\nCPF ceiling: SGD ${config.monthlyWageCeiling.toFixed(2)} from ${config.effectiveFrom}\nSDL: ${config.compliance.sdlEnabled ? "Enabled" : "Disabled"}\nMBMF: ${config.mbmf.enabled ? "Enabled" : "Disabled"}\n\nThe active values are used for new payroll calculations.`
+    );
+  };
 
   return (
     <PageShell
@@ -2654,12 +2864,12 @@ function ComplianceRulesView({ mbmfEligibility, onUpdateSetting, settings = [], 
       updatedAt={getLatestTimestamp(settings)}
       actions={
         <>
-          <ActionButton icon={ShieldCheck}>Singapore Rules</ActionButton>
-          <ActionButton icon={PlayCircle} variant="secondary">Test Rules</ActionButton>
+          <ActionButton icon={ShieldCheck} onClick={() => document.getElementById("compliance-rules-start")?.scrollIntoView({ behavior: "smooth" })}>Singapore Rules</ActionButton>
+          <ActionButton icon={PlayCircle} variant="secondary" onClick={testAppliedRules}>Test Applied Rules</ActionButton>
         </>
       }
     >
-      <div className="space-y-8">
+      <div id="compliance-rules-start" className="space-y-8">
         <section className="app-panel rounded-2xl p-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -3736,7 +3946,10 @@ function AdminPayrollContent({
   onUpdateStatus,
   pathname
 }) {
-  if (pathname.endsWith("/users-roles")) {
+  if (
+    pathname.endsWith("/users-roles")
+    || pathname.endsWith("/user-accounts")
+  ) {
     return (
       <UsersRolesView
         availableStaff={data?.availableStaff}
@@ -3749,6 +3962,9 @@ function AdminPayrollContent({
         onUpdateStatus={onUpdateStatus}
       />
     );
+  }
+  if (pathname.endsWith("/staff-setup") || pathname.endsWith("/staff-management")) {
+    return <StaffManagementView />;
   }
   if (pathname.endsWith("/settings")) {
     return (
@@ -3800,10 +4016,12 @@ export default function AdminPayrollPage() {
   const [dashboardData, setDashboardData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const loadDashboard = async () => {
     try {
       setErrorMessage("");
+      setSuccessMessage("");
       setIsLoading(true);
       const data = location.pathname.endsWith("/reports")
         ? await getAdminPayrollReports()
@@ -3820,21 +4038,9 @@ export default function AdminPayrollPage() {
     loadDashboard();
   }, [location.pathname]);
 
-  const handleImportLayout = async () => {
-    const layoutName = window.prompt("Payslip layout name");
-
-    if (!layoutName) return;
-
-    const filePath = window.prompt("Template file path or URL");
-
-    if (!filePath) return;
-
-    const fileType = window.prompt("File type: PDF or HTML", "PDF");
-
-    if (!fileType) return;
-
+  const handleImportLayout = async (file) => {
     try {
-      const result = await addPayslipLayout({ layoutName, filePath, fileType });
+      const result = await addPayslipLayout(file);
       setDashboardData((current) => ({
         ...current,
         layouts: result.layouts,
@@ -3843,19 +4049,26 @@ export default function AdminPayrollPage() {
           payslipLayouts: result.layouts.filter((layout) => layout.status === "Active").length
         }
       }));
+      setErrorMessage("");
+      return true;
     } catch (error) {
       setErrorMessage(error.message);
+      return false;
     }
   };
 
   const handleSetDefaultLayout = async (layoutId) => {
     try {
+      const selectedLayout = dashboardData?.layouts?.find((layout) => Number(layout.layout_id) === Number(layoutId));
       const result = await setDefaultPayslipLayout(layoutId);
       setDashboardData((current) => ({
         ...current,
         layouts: result.layouts
       }));
+      setErrorMessage("");
+      setSuccessMessage(`${selectedLayout?.layout_name || "Payslip layout"} is now the default layout.`);
     } catch (error) {
+      setSuccessMessage("");
       setErrorMessage(error.message);
     }
   };
@@ -3923,35 +4136,31 @@ export default function AdminPayrollPage() {
         ...current,
         auditLogs: result.auditLogs,
         mbmfEligibility: result.mbmfEligibility || current?.mbmfEligibility,
-        settings: result.settings,
+        settings: (() => {
+          const savedSetting = result.settings?.find((setting) => setting.setting_key === settingKey) || {
+            setting_key: settingKey,
+            setting_value: payload.settingValue,
+            description: payload.description,
+            updated_at: new Date().toISOString()
+          };
+          const currentSettings = current?.settings || [];
+          return currentSettings.some((setting) => setting.setting_key === settingKey)
+            ? currentSettings.map((setting) => setting.setting_key === settingKey ? savedSetting : setting)
+            : [...currentSettings, savedSetting];
+        })(),
         stats: {
           ...(current?.stats || {}),
           ...result.stats
         }
       }));
+      setErrorMessage("");
+      setSuccessMessage(`${settingKey.replaceAll("_", " ")} saved and will apply to new payroll runs.`);
     } catch (error) {
+      setSuccessMessage("");
       setErrorMessage(error.message);
       throw error;
     }
   };
-
-  // Show payslips approval view for the specific route
-  if (location.pathname === "/dashboard/payroll/admin/payslips-approval") {
-    return (
-      <DashboardLayout
-        pageTitle={pageTitle}
-        user={session?.user}
-        sidebarSections={payrollSidebarSections}
-        sidebarTitle="Automated Invoicing & Payroll System"
-        homePath="/dashboard/payroll/admin"
-        searchPlaceholder="Search payroll, staff, approvals..."
-      >
-        <section>
-          <PayslipsApprovalView />
-        </section>
-      </DashboardLayout>
-    );
-  }
 
   return (
     <DashboardLayout
@@ -3970,6 +4179,11 @@ export default function AdminPayrollPage() {
       {errorMessage ? (
         <div className="mb-4 rounded-xl border border-[#D97706]/25 bg-[#D97706]/10 p-4 text-sm text-[#9A6412]">
           {errorMessage}
+        </div>
+      ) : null}
+      {successMessage ? (
+        <div className="mb-4 rounded-xl border border-[#2f8758]/25 bg-[#2f8758]/10 p-4 text-sm font-semibold text-[#2f8758]">
+          {successMessage}
         </div>
       ) : null}
       {!isLoading ? (

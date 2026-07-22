@@ -1,5 +1,7 @@
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 
 const {
   createUserAccount,
@@ -97,29 +99,36 @@ async function getPayrollRuleConfig(req, res) {
 }
 
 async function addPayslipLayout(req, res) {
+  const uploadedFile = req.file;
   try {
-    const layoutName = String(req.body.layoutName || "").trim();
-    const filePath = String(req.body.filePath || "").trim();
-    const fileType = normalizeFileType(req.body.fileType);
-
-    if (!layoutName || !filePath || !fileType) {
+    if (!uploadedFile) {
       return res.status(400).json({
-        message: "Layout name, file path and file type are required."
+        message: "Select a PDF payslip layout to upload."
+      });
+    }
+    const descriptor = fs.openSync(uploadedFile.path, "r");
+    const signature = Buffer.alloc(4);
+    try {
+      fs.readSync(descriptor, signature, 0, 4, 0);
+    } finally {
+      fs.closeSync(descriptor);
+    }
+    if (signature.toString() !== "%PDF") {
+      fs.unlinkSync(uploadedFile.path);
+      return res.status(400).json({
+        message: "The selected file is not a valid PDF."
       });
     }
 
-    const allowedTypes = ["PDF", "HTML"];
-
-    if (!allowedTypes.includes(fileType)) {
-      return res.status(400).json({
-        message: "File type must be PDF or HTML."
-      });
-    }
+    const layoutName = String(req.body.layoutName || path.parse(uploadedFile.originalname).name).trim();
+    const filePath = `/uploads/payslip-layouts/${uploadedFile.filename}`;
 
     const layoutId = await createPayslipLayout({
       layoutName,
       filePath,
-      fileType,
+      fileType: "PDF",
+      originalFileName: uploadedFile.originalname,
+      fileSize: uploadedFile.size,
       createdBy: req.user?.userId
     });
     const layouts = await listPayslipLayouts();
@@ -129,6 +138,10 @@ async function addPayslipLayout(req, res) {
       layouts
     });
   } catch (error) {
+    if (uploadedFile?.path && fs.existsSync(uploadedFile.path)) {
+      fs.unlinkSync(uploadedFile.path);
+    }
+    console.error("Payslip layout upload error:", error.message);
     res.status(500).json({
       message: "Failed to add payslip layout."
     });
@@ -381,10 +394,26 @@ async function updatePayrollSetting(req, res) {
     const settingValue = String(req.body.settingValue ?? "").trim();
     const description = String(req.body.description || "").trim();
 
-    if (!settingKey || !settingValue) {
+    if (!settingKey || !settingValue || !/^[a-z0-9_]+$/i.test(settingKey) || settingKey.length > 191) {
       return res.status(400).json({
-        message: "Setting key and value are required."
+        message: "A valid setting key and value are required."
       });
+    }
+    if (settingValue.length > 10000 || description.length > 500) {
+      return res.status(400).json({ message: "Payroll setting value is too long." });
+    }
+    if (/^cpf_rate_.*_(employee|employer)_percent$/.test(settingKey)) {
+      const rate = Number(settingValue);
+      if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+        return res.status(400).json({ message: "CPF rates must be between 0 and 100 percent." });
+      }
+    }
+    if (settingKey === "cpf_monthly_wage_ceiling" && (!Number.isFinite(Number(settingValue)) || Number(settingValue) <= 0)) {
+      return res.status(400).json({ message: "CPF monthly wage ceiling must be greater than zero." });
+    }
+    if (settingKey === "compliance_max_other_deduction_percent"
+      && (!Number.isFinite(Number(settingValue)) || Number(settingValue) < 0 || Number(settingValue) > 100)) {
+      return res.status(400).json({ message: "Maximum other deduction percentage must be between 0 and 100." });
     }
 
     await upsertPayrollSetting({

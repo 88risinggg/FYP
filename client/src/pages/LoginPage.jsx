@@ -217,7 +217,7 @@ export default function LoginPage() {
 
         <header className="relative z-20 border-b border-[#f0d2ca] bg-white/80 backdrop-blur-xl">
           <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
-            <a href="#top" className="flex min-w-0 items-center" aria-label="Vaniday home">
+            <a href="#top" className="flex min-w-0 items-center" aria-label="PayNivo home">
               <VanidayLogo />
             </a>
 

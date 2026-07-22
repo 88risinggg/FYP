@@ -22,7 +22,6 @@ async function run() {
     "leave_application",
     "leave_balance",
     "leave_type",
-    "payroll_configuration",
     "payroll_run",
     "payslip",
     "payslip_layout",

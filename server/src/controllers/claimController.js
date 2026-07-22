@@ -182,7 +182,7 @@ async function submitClaim(req, res) {
 
   try {
     await notifyRoles(
-      ["HR", "Admin"],
+      ["HR"],
       "New expense claim awaiting HR review",
       `${claim_type} claim ${claimId} for $${numericAmount.toFixed(2)} requires review.`,
       req.user.userId
@@ -250,13 +250,13 @@ async function reviewByHr(req, res) {
     await notifyClaimOwner(
       req.params.id,
       action === "approve" ? "Claim approved by HR" : "Claim rejected by HR",
-      action === "approve" ? "Your claim has been sent to Finance for reimbursement." : comments
+      action === "approve" ? "Your claim has been sent to Finance for approval and reimbursement." : comments
     );
     if (action === "approve") {
       await notifyRoles(
-        ["Finance", "Admin"],
-        "Expense claim awaiting Finance",
-        `Claim ${req.params.id} was approved by HR and is ready for Finance processing.`,
+        ["Finance"],
+        "Expense claim awaiting Finance approval",
+        `Claim ${req.params.id} was reviewed by HR and is ready for Finance approval.`,
         req.user.userId
       );
     }

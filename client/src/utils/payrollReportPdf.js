@@ -1,3 +1,5 @@
+import payNivoReportLogo from "../assets/paynivo-logo-report-dark.jpg?inline";
+
 const COLORS = {
   charcoal: "0.12 0.12 0.12",
   coral: "0.95 0.35 0.31",
@@ -7,6 +9,10 @@ const COLORS = {
   soft: "0.96 0.96 0.96",
   white: "1 1 1"
 };
+
+const PAYNIVO_LOGO_HEX = Array.from(atob(payNivoReportLogo.split(",")[1] || ""), (character) =>
+  character.charCodeAt(0).toString(16).padStart(2, "0")
+).join("");
 
 function cleanText(value) {
   return String(value ?? "")
@@ -103,6 +109,9 @@ export function buildPayrollReportPdf({
   const text = (value, x, textY, size = 8, color = COLORS.ink, font = "F1") => {
     commands.push("BT", `${color} rg`, `/${font} ${size} Tf`, `${x.toFixed(2)} ${textY.toFixed(2)} Td`, `(${cleanText(value)}) Tj`, "ET");
   };
+  const logo = (x, logoY, size) => {
+    commands.push("q", `${size} 0 0 ${size} ${x.toFixed(2)} ${logoY.toFixed(2)} cm`, "/Logo Do", "Q");
+  };
 
   const addPage = (continuation = false) => {
     commands = [];
@@ -112,8 +121,7 @@ export function buildPayrollReportPdf({
     rect(0, page.height - 86, page.width, 4, COLORS.coral);
     text(category.toUpperCase(), page.margin, page.height - 34, 10, COLORS.white, "F2");
     text(categorySubtitle, page.margin, page.height - 51, 8, "0.78 0.78 0.78");
-    text("VANIDAY", page.width - page.margin - 108, page.height - 48, 22, COLORS.white, "F3");
-    text(".", page.width - page.margin - 13, page.height - 48, 22, COLORS.coral, "F2");
+    logo(page.width - page.margin - 66, page.height - 78, 64);
     line(page.margin, 38, page.width - page.margin, 38, "0.75 0.75 0.75", 0.6);
     text(footer, page.margin, 23, 7, COLORS.muted);
     text(`Page ${pages.length} of {{PAGE_COUNT}}`, page.width - page.margin - 72, 23, 7, COLORS.muted);
@@ -229,17 +237,17 @@ export function buildPayrollReportPdf({
   const contentIds = contents.map((_, index) => 3 + pageCount + index);
   const regularFontId = 3 + pageCount * 2;
   const boldFontId = regularFontId + 1;
-  const logoFontId = regularFontId + 2;
+  const logoImageId = boldFontId + 1;
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageCount} >>`,
     ...pageIds.map((_, index) =>
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${page.width} ${page.height}] /Resources << /Font << /F1 ${regularFontId} 0 R /F2 ${boldFontId} 0 R /F3 ${logoFontId} 0 R >> >> /Contents ${contentIds[index]} 0 R >>`
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${page.width} ${page.height}] /Resources << /Font << /F1 ${regularFontId} 0 R /F2 ${boldFontId} 0 R >> /XObject << /Logo ${logoImageId} 0 R >> >> /Contents ${contentIds[index]} 0 R >>`
     ),
     ...contents.map((content) => `<< /Length ${content.length} >>\nstream\n${content}\nendstream`),
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>"
+    `<< /Type /XObject /Subtype /Image /Width 420 /Height 420 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${PAYNIVO_LOGO_HEX.length + 1} >>\nstream\n${PAYNIVO_LOGO_HEX}>\nendstream`
   ];
   const offsets = [0];
   let pdf = "%PDF-1.4\n";

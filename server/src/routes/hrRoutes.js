@@ -10,6 +10,7 @@ const { addAudit } = require("../services/audit");
 const { pool } = require("../config/db");
 const { parseFile, extractStaffNames, titleCase } = require("../services/importParser");
 const { calculatePayslipsFromRows } = require("../services/payrollCalculation");
+const { getActivePayrollRules } = require("../services/payrollRuleConfigService");
 const { DEFAULT_PAYROLL_RULES_2026 } = require("../services/statutoryPayrollEngine");
 const { authenticateToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/rolesMiddleware");
@@ -17,6 +18,7 @@ const { validateUpload } = require("../services/uploadValidationService");
 const { commitUpload } = require("../services/uploadCommitService");
 require("../models/advanceModel");
 const { createNotificationInternal } = require("../controllers/notificationController");
+const { generateAndSendPayslip } = require("../services/payslipDeliveryService");
 const {
   createFinancePayrollRunFromStaff,
   listFinancePayrollRuns
@@ -215,7 +217,7 @@ router.put("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res
         hire_date:     'hire_date',
         base_salary:   'base_salary',
         status:        'status',
-        department_id: 'department_id',
+        department_name: 'department_name',
         user_user_id:  'user_user_id',
         race:          'race',
         religion:      'religion',
@@ -1007,7 +1009,8 @@ router.post(
       // Get active staff from DB
       const [staffFromDb] = await pool.query("SELECT * FROM staff WHERE status = 1 OR status = 'Active'");
 
-      // Use payroll calculation service to generate payslips
+      // Resolve the current Admin rules once and use the same snapshot for every payslip.
+      const activeRules = await getActivePayrollRules();
       const { created: generatedPayslips, skipped } = calculatePayslipsFromRows(
         rows.map((row) => ({
           ...row,
@@ -1015,7 +1018,7 @@ router.post(
           payroll_year: payrollRun.payroll_year
         })),
         staffFromDb,
-        payrollRateConfig,
+        activeRules,
         String(payroll_run_id),
         req.user.email
       );
@@ -1301,7 +1304,7 @@ router.post("/legacy-payslips/quick-generate", authenticateToken, allowRoles("Ad
 });
 
 // ----- Payslip Retrieval -----
-router.get("/payslips", authenticateToken, allowRoles("Admin", "HR", "Finance", "Staff"), async (req, res, next) => {
+router.get("/payslips", authenticateToken, allowRoles("HR", "Finance", "Staff"), async (req, res, next) => {
   try {
     const conditions = [];
     const params = [];
@@ -1334,7 +1337,7 @@ router.get("/payslips", authenticateToken, allowRoles("Admin", "HR", "Finance", 
   }
 });
 
-router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR"), async (req, res) => {
   const [result] = await pool.query(
     `UPDATE payroll SET payslip_status = 'finance_pending'
      WHERE payroll_id = ? AND payslip_status = 'Draft'`,
@@ -1344,20 +1347,21 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("Admin
   return res.json({ message: "Payslip sent to Finance" });
 });
 
-router.put("/payslips/:id/send-to-staff", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
-  const [result] = await pool.query(
-    `UPDATE payroll SET payslip_status = 'sent_to_staff', payslip_sent_at = NOW()
-     WHERE payroll_id = ? AND payslip_status IN ('Approved','finance_approved')`,
-    [req.params.id]
-  );
-  if (!result.affectedRows) return res.status(409).json({ message: "Finance approval is required before sending the payslip" });
-  return res.json({ message: "Payslip sent to staff" });
+router.put("/payslips/:id/send-to-staff", authenticateToken, allowRoles("HR"), async (req, res) => {
+  try {
+    const result = await generateAndSendPayslip(req.params.id);
+    if (result.status !== 200) return res.status(result.status).json({ message: result.message });
+    addAudit(req.user.email, `Generated and sent payslip ${req.params.id} to employee ${result.payslip.employee_id}`, "HR");
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to generate and send payslip", error: error.message });
+  }
 });
 
 // Legacy table-based retrieval remains below under a non-public path while
 // other HR branch screens are migrated to the consolidated payroll table.
-router.get("/legacy-payslips", authenticateToken, allowRoles("Admin", "HR", "Finance", "Staff"), async (req, res) => {
-  // HR/Admin sees all payslips, Finance sees only pending/approved ones, Staff sees only their sent payslips
+router.get("/legacy-payslips", authenticateToken, allowRoles("HR", "Finance", "Staff"), async (req, res) => {
+  // HR sees all payslips, Finance sees only pending/approved ones, Staff sees only their sent payslips
   // Optional query params: ?month=7&year=2026 to filter by period
   try {
     let sql = `
@@ -2117,7 +2121,7 @@ router.put("/loan-requests/:id/installments/:installmentId/pay", authenticateTok
   }
 });
 
-router.get("/payslips/:id", authenticateToken, allowRoles("Admin", "HR", "Finance", "Staff"), async (req, res) => {
+router.get("/payslips/:id", authenticateToken, allowRoles("HR", "Finance", "Staff"), async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT p.*, p.payroll_id AS payslip_id, p.payslip_status AS status,
@@ -2146,7 +2150,7 @@ router.get("/payslips/:id", authenticateToken, allowRoles("Admin", "HR", "Financ
   }
 });
 
-router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR", "Admin"), async (req, res) => {
+router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR"), async (req, res) => {
   try {
     const [rows] = await pool.query(
       'SELECT payroll_id AS payslip_id, payslip_status AS status FROM payroll WHERE payroll_id = ? LIMIT 1',
@@ -2173,31 +2177,12 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR", 
   }
 });
 
-router.put("/payslips/:id/send-to-staff", authenticateToken, allowRoles("HR", "Admin"), async (req, res) => {
+router.put("/payslips/:id/send-to-staff", authenticateToken, allowRoles("HR"), async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      'SELECT payroll_id AS payslip_id, payslip_status AS status FROM payroll WHERE payroll_id = ? LIMIT 1',
-      [req.params.id]
-    );
-    if (!rows.length) return res.status(404).json({ message: "Payslip not found" });
-    const payslip = rows[0];
-    if (payslip.status !== 'finance_approved') {
-      return res.status(400).json({ message: "Payslip must be approved by Finance before sending to staff" });
-    }
-    await pool.query(
-      'UPDATE payroll SET payslip_status = ?, payslip_sent_at = NOW() WHERE payroll_id = ?',
-      ['sent_to_staff', req.params.id]
-    );
-    try {
-      await pool.query(
-        `INSERT INTO audit_logs
-           (module, action_description, activity_type, affected_record, user_id, status)
-         VALUES ('Payroll', ?, 'Payroll', ?, ?, 'Success')`,
-        [`Sent payslip ${req.params.id} to staff`, String(req.params.id), req.user.userId || null]
-      );
-    } catch(e) {}
-    addAudit(req.user.email, `Sent payslip ${req.params.id} to staff`, "HR");
-    return res.json({ message: "Payslip sent to staff successfully" });
+    const result = await generateAndSendPayslip(req.params.id);
+    if (result.status !== 200) return res.status(result.status).json({ message: result.message });
+    addAudit(req.user.email, `Generated and sent payslip ${req.params.id} to employee ${result.payslip.employee_id}`, "HR");
+    return res.json(result);
   } catch (err) {
     return res.status(500).json({ message: "Server error", error: err.message });
   }

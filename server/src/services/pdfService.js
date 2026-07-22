@@ -84,9 +84,15 @@ function formatMoney(value, settings = {}) {
 }
 
 async function resolveLogoDataUri(logoUrl) {
+  const bundledLogo = async () => {
+    try {
+      const content = await fs.readFile(path.join(__dirname, "..", "assets", "paynivo-logo.png"));
+      return `data:image/png;base64,${content.toString("base64")}`;
+    } catch { return ""; }
+  };
   const directUrl = safeUrl(logoUrl);
   if (directUrl) return directUrl;
-  if (!String(logoUrl || "").startsWith("/uploads/invoice-logos/")) return "";
+  if (!String(logoUrl || "").startsWith("/uploads/invoice-logos/")) return bundledLogo();
   try {
     const fileName = path.basename(logoUrl);
     const filePath = path.join(__dirname, "..", "..", "uploads", "invoice-logos", fileName);
@@ -94,7 +100,7 @@ async function resolveLogoDataUri(logoUrl) {
     const ext = path.extname(fileName).toLowerCase();
     const mimeType = ext === ".png" ? "image/png" : ext === ".svg" ? "image/svg+xml" : "image/jpeg";
     return `data:${mimeType};base64,${content.toString("base64")}`;
-  } catch { return ""; }
+  } catch { return bundledLogo(); }
 }
 
 async function resolveImageDataUri(imageUrl) {
@@ -227,15 +233,14 @@ function buildWatermark(invoice, settings) {
 // =====================================================
 
 function buildHeader(invoice, settings, options) {
-  const primary = settings.primaryColor || "#061e4b";
   const secondary = settings.secondaryColor || "#ff5a52";
-  const brandName = settings.companyName || "Vaniday";
+  const brandName = settings.companyName || "PayNivo";
   const logo = safeUrl(options.logoDataUri)
     ? `<img class="logo-image" src="${escapeHtml(options.logoDataUri)}" alt="Company logo">`
     : `<div class="wordmark">${escapeHtml(brandName)}<span style="color:${secondary}">.</span></div>`;
 
-  return `<header style="display:flex;align-items:flex-start;height:20mm;border-bottom:.35mm solid #7f8ba2;padding-bottom:3mm;">
-    <div style="width:2.1mm;height:16.5mm;margin-right:7mm;background:${secondary};flex-shrink:0;"></div>
+  return `<header style="display:flex;align-items:flex-start;height:24mm;border-bottom:.35mm solid #7f8ba2;padding-bottom:3mm;">
+    <div style="width:2.1mm;height:20mm;margin-right:7mm;background:${secondary};flex-shrink:0;"></div>
     ${logo}
   </header>`;
 }
@@ -250,7 +255,7 @@ function buildHeroSection(invoice, settings) {
   const dateStr = formatDate(invoice.issue_date, settings.displayDateFormat);
 
   const companyCard = `<div style="padding:5mm 5.5mm;background:${primary};color:white;min-width:0;">
-    <strong style="display:block;margin-bottom:1.2mm;font-size:7.5pt;">${escapeHtml(settings.companyName || "Vaniday")}</strong>
+    <strong style="display:block;margin-bottom:1.2mm;font-size:7.5pt;">${escapeHtml(settings.companyName || "PayNivo")}</strong>
     ${settings.companyRegistrationNumber ? `<p style="margin:.55mm 0;font-size:6.8pt;">Reg. No. ${escapeHtml(settings.companyRegistrationNumber)}</p>` : ""}
     ${settings.uenNumber ? `<p style="margin:.55mm 0;font-size:6.8pt;">UEN: ${escapeHtml(settings.uenNumber)}</p>` : ""}
     ${settings.gstRegistrationNumber ? `<p style="margin:.55mm 0;font-size:6.8pt;">GST Reg: ${escapeHtml(settings.gstRegistrationNumber)}</p>` : ""}
@@ -547,7 +552,7 @@ function buildInvoiceHtml(invoice, settings = defaultSettings, options = {}) {
   <style>
     @page { size: ${settings.pdfPageSize || "A4"} ${settings.pdfOrientation || "portrait"}; margin: 0; }
     ${dynamicStyles}
-    .logo-image { max-width: 62mm; max-height: 16.5mm; object-fit: contain; object-position: left top; }
+    .logo-image { max-width: 70mm; max-height: 20mm; object-fit: contain; object-position: left top; }
     .wordmark { color: ${settings.primaryColor || "#07132f"}; font-family: Georgia, "Times New Roman", serif; font-size: 25pt; line-height: 1; font-weight: 700; letter-spacing: .8px; white-space: nowrap; }
     .summary { display: grid; grid-template-columns: 56% 44%; break-inside: avoid; border-bottom: .35mm solid var(--primary); }
     .due-panel { display: grid; grid-template-columns: 13mm 1fr; align-items: center; align-self: end; min-height: 18mm; padding-bottom: 2mm; }

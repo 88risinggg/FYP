@@ -67,4 +67,48 @@ describe("2026 statutory payroll engine", () => {
     const result = calculateEmployeePayroll({ staff: staff({ base_salary: 700 }), month: 7, year: 2026 });
     expect(result.complianceExceptions).toContain("CPF scheme or wage band requires manual review");
   });
+
+  test("applies configured CPF rates, wage ceiling and earning classifications", () => {
+    const result = calculateEmployeePayroll({
+      staff: staff({ base_salary: 4000 }),
+      month: 7,
+      year: 2026,
+      allowances: [{ label: "Allowance", amount: 1000 }],
+      configuration: {
+        cpfOrdinaryWageCeiling: 3000,
+        cpfRateTiers: [
+          { maximumAge: Infinity, label: "Configured", employeeRate: 10, employerRate: 8 }
+        ],
+        componentCpfApplicable: { allowance: false }
+      }
+    });
+
+    expect(result.grossSalary).toBe(5000);
+    expect(result.cpfWageBase).toBe(3000);
+    expect(result.cpfEmployee).toBe(300);
+    expect(result.cpfEmployer).toBe(240);
+  });
+
+  test("honours disabled compliance and statutory rules", () => {
+    const result = calculateEmployeePayroll({
+      staff: staff({ bank: "", account_no: "", department_name: "", race: "Indian", religion: "Islam" }),
+      month: 7,
+      year: 2026,
+      configuration: {
+        cpfEnabled: false,
+        sdlEnabled: false,
+        bankAccountRequired: false,
+        departmentRequired: false,
+        selfHelpGroupRules: {
+          MBMF: { enabled: false },
+          SINDA: { enabled: false }
+        }
+      }
+    });
+
+    expect(result.cpfEmployee).toBe(0);
+    expect(result.selfHelpGroups).toEqual([]);
+    expect(result.sdl).toBe(0);
+    expect(result.complianceExceptions).toEqual([]);
+  });
 });

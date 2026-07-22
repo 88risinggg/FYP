@@ -6,6 +6,9 @@ const {
 } = require("../models/financePayrollModel");
 const { logAuditEvent, getClientIp } = require("../models/auditLogModel");
 const { validateFinancePayrollRun } = require("../services/financePayrollWorkflow");
+const { generateAndSendPayslip } = require("../services/payslipDeliveryService");
+const { launchPayslipBrowser } = require("../services/payslipPdfService");
+const { pool } = require("../config/db");
 
 async function getFinancePayrollRuns(req, res) {
   try {
@@ -89,6 +92,37 @@ async function saveFinancePayrollRun(req, res) {
       run,
       userId: req.user?.userId
     });
+
+    if (run.payslipsSentAt) {
+      const [payslips] = await pool.query(
+        `SELECT payroll_id
+         FROM payroll
+         WHERE payroll_month = ? AND payroll_year = ?
+         ORDER BY staff_employee_id, payroll_id`,
+        [Number(run.month), Number(run.year)]
+      );
+      const deliveryErrors = [];
+      const browser = payslips.length ? await launchPayslipBrowser() : null;
+      try {
+        for (const payslip of payslips) {
+          try {
+            const delivery = await generateAndSendPayslip(payslip.payroll_id, { browser });
+            if (delivery.status !== 200) deliveryErrors.push(`Payslip ${payslip.payroll_id}: ${delivery.message}`);
+          } catch (error) {
+            deliveryErrors.push(`Payslip ${payslip.payroll_id}: ${error.message}`);
+          }
+        }
+      } finally {
+        if (browser) await browser.close();
+      }
+      if (deliveryErrors.length) {
+        return res.status(409).json({
+          code: "PAYSLIP_DELIVERY_INCOMPLETE",
+          message: "Some employee payslips could not be generated or delivered.",
+          errors: deliveryErrors
+        });
+      }
+    }
 
     await logAuditEvent({
       userId: req.user?.userId || null,

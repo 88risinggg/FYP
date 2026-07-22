@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
   Check,
+  ChevronRight,
+  ExternalLink,
   FileBarChart,
   LayoutDashboard,
   Loader2,
@@ -12,14 +14,13 @@ import {
   Search,
   Settings,
   Shield,
-  User,
-  UserCog,
   Users,
   X
 } from "lucide-react";
 
 import Sidebar from "./Sidebar.jsx";
 import VanidayLogo from "../branding/VanidayLogo.jsx";
+import payNivoLogo from "../../assets/paynivo-logo.png";
 import { clearSession, getStoredSession } from "../../services/sessionService.js";
 import { apiRequest } from "../../services/apiClient.js";
 
@@ -105,6 +106,17 @@ export default function DashboardLayout({
   const roleProfile = roleProfiles[user?.role];
   const displayName = profileName || user?.name || roleProfile?.name || "User";
   const displayRole = profileRole || roleProfile?.role || user?.role || "User";
+  const displayEmail = user?.email || "No email available";
+  const avatarUrl = user?.avatarUrl || user?.avatar_url || user?.profilePhoto || "";
+  const showModuleSelectorLink = Array.isArray(user?.allowedModules)
+    ? user.allowedModules.length > 1
+    : ["Admin", "Finance"].includes(user?.role);
+  const displayInitials = displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "U";
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -127,7 +139,7 @@ export default function DashboardLayout({
     mutedButton: "text-[#6f4f47] hover:text-[#F38978]",
     badge: "absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#F38978] text-[9px] font-bold text-white ring-2 ring-[#fff8f5]",
     dropdown: "absolute right-0 top-12 z-30 w-80 rounded-xl border border-[#f0d2ca] bg-white shadow-2xl shadow-[#f2b5a9]/30",
-    dropdownWide: "absolute right-0 top-14 z-30 w-56 rounded-xl border border-[#f0d2ca] bg-white shadow-2xl shadow-[#f2b5a9]/30",
+    dropdownWide: "absolute right-0 top-14 z-30 w-[min(23rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#f0d2ca] bg-white shadow-2xl shadow-[#f2b5a9]/35",
     dropdownBorder: "border-[#f0d2ca]",
     dropdownTitle: "text-[#251E1F]",
     dropdownMuted: "text-[#7b6660]",
@@ -141,8 +153,7 @@ export default function DashboardLayout({
     profileButton: "flex items-center gap-3 rounded-lg transition hover:bg-[#FDD9CD]/45",
     avatar: "flex h-10 w-10 items-center justify-center rounded-full bg-[#F38978]/15 text-[#F38978] ring-1 ring-[#F38978]/25",
     profileText: "text-[#251E1F]",
-    profileSubtext: "text-[#7b6660]",
-    menuItem: "flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#6f4f47] transition hover:bg-[#FDD9CD]/45 hover:text-[#251E1F]"
+    profileSubtext: "text-[#7b6660]"
   };
 
   function openSettings(section = "") {
@@ -279,6 +290,7 @@ export default function DashboardLayout({
   // Fetch notifications from API when dropdown is opened
   async function handleBellClick() {
     const newShow = !showNotifications;
+    setShowProfileMenu(false);
     setShowNotifications(newShow);
 
     // If notifications are provided via props (e.g. Finance polling), skip API fetch
@@ -397,7 +409,7 @@ export default function DashboardLayout({
           onClose={() => setMobileSidebarOpen(false)}
           desktopCollapsed={sidebarCollapsed}
           onToggleDesktop={toggleDesktopSidebar}
-          homePath={homePath}
+          showModuleSelectorLink={showModuleSelectorLink}
         />
       ) : null}
 
@@ -579,12 +591,20 @@ export default function DashboardLayout({
           <div className="relative flex items-center gap-3 rounded-lg px-2 py-1.5">
             <button
               type="button"
-              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              onClick={() => {
+                setShowNotifications(false);
+                setShowProfileMenu(!showProfileMenu);
+              }}
               className={classes.profileButton}
+              aria-label="Open account menu"
+              aria-haspopup="menu"
+              aria-expanded={showProfileMenu}
             >
-              <div className={classes.avatar}>
-                <UserCog size={20} />
-              </div>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover ring-2 ring-[#F38978]/20" />
+              ) : (
+                <div className={`${classes.avatar} text-sm font-bold`} aria-hidden="true">{displayInitials}</div>
+              )}
               <div className="hidden leading-tight sm:block">
                 <p className={`text-sm font-semibold ${classes.profileText}`}>{displayName}</p>
                 <p className={`text-xs ${classes.profileSubtext}`}>{displayRole}</p>
@@ -595,45 +615,83 @@ export default function DashboardLayout({
             {showProfileMenu && (
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setShowProfileMenu(false)} />
-                <div className={classes.dropdownWide}>
-                  <div className={`border-b px-4 py-3 ${classes.dropdownBorder}`}>
-                    <p className={`text-sm font-semibold ${classes.profileText}`}>{displayName}</p>
-                    <p className={`text-xs ${classes.dropdownMuted}`}>{displayRole}</p>
-                  </div>
-                  <div className="py-1.5">
+                <div className={classes.dropdownWide} role="menu" aria-label="Account menu">
+                  <div className="relative flex items-center justify-between overflow-hidden bg-gradient-to-br from-[#251E1F] to-[#3a2d2f] px-5 py-4 text-white">
+                    <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full border border-white/10 bg-white/[0.03]" />
+                    <div className="relative flex min-w-0 items-center gap-3">
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white shadow-lg shadow-black/20">
+                        <img src={payNivoLogo} alt="" className="h-10 w-10 object-contain" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold tracking-wide">PayNivo</p>
+                        <p className="mt-0.5 truncate text-[11px] text-white/60">Business workspace</p>
+                      </div>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => { setShowProfileMenu(false); openSettings("profile"); }}
-                      className={classes.menuItem}
+                      onClick={() => { setShowProfileMenu(false); handleLogout(); }}
+                      className="relative ml-3 inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                     >
-                      <User size={15} />
-                      My Profile
+                      <LogOut size={13} aria-hidden="true" />
+                      Sign out
                     </button>
+                  </div>
+
+                  <div className="border-b border-[#f0d2ca] bg-gradient-to-br from-white via-white to-[#fff8f5] px-5 py-5">
+                    <div className="flex items-start gap-4">
+                      <div className="relative shrink-0">
+                        {avatarUrl ? (
+                          <img src={avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover ring-4 ring-[#FDD9CD]/65" />
+                        ) : (
+                          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#F38978] to-[#C55245] text-xl font-bold text-white shadow-lg shadow-[#F38978]/25" aria-hidden="true">
+                            {displayInitials}
+                          </div>
+                        )}
+                        <span className="absolute bottom-0 right-0 h-4 w-4 rounded-full border-[3px] border-white bg-emerald-500" aria-label="Account active" title="Account active" />
+                      </div>
+                      <div className="min-w-0 flex-1 pt-0.5">
+                        <p className="truncate text-lg font-bold leading-6 text-[#251E1F]">{displayName}</p>
+                        <p className="mt-0.5 truncate text-sm text-[#7b6660]">{displayEmail}</p>
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <span className="inline-flex rounded-full bg-[#FDD9CD]/70 px-2.5 py-1 text-[11px] font-semibold text-[#6f4f47]">
+                            {displayRole}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => { setShowProfileMenu(false); openSettings("profile"); }}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-[#C55245] transition hover:text-[#F38978] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]/35"
+                          >
+                            View account
+                            <ExternalLink size={12} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 p-3">
                     <button
                       type="button"
                       onClick={() => { setShowProfileMenu(false); openSettings(); }}
-                      className={classes.menuItem}
+                      className="group flex w-full items-center gap-3 rounded-xl border border-[#f0d2ca] bg-[#fff8f5] px-3.5 py-3 text-left text-sm font-semibold text-[#251E1F] shadow-sm transition hover:-translate-y-0.5 hover:border-[#F38978]/45 hover:bg-[#FDD9CD]/45 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]/35"
                     >
-                      <Settings size={15} />
-                      Settings
+                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-[#F38978] shadow-sm">
+                        <Settings size={18} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block">Settings</span>
+                        <span className="block truncate text-xs font-normal text-[#7b6660]">Manage your account and preferences</span>
+                      </span>
+                      <ChevronRight size={17} className="text-[#9c7b72] transition-transform group-hover:translate-x-0.5" />
                     </button>
                     <button
                       type="button"
                       onClick={() => { setShowProfileMenu(false); openSettings("security"); }}
-                      className={classes.menuItem}
+                      className="group flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm text-[#6f4f47] transition hover:bg-[#fff3ee] hover:text-[#251E1F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]/35"
                     >
-                      <Shield size={15} />
-                      Security
-                    </button>
-                  </div>
-                  <div className={`border-t py-1.5 ${classes.dropdownBorder}`}>
-                    <button
-                      type="button"
-                      onClick={() => { setShowProfileMenu(false); handleLogout(); }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-rose-400 transition hover:bg-rose-500/10 hover:text-rose-400"
-                    >
-                      <LogOut size={15} />
-                      Logout
+                      <Shield size={17} className="text-[#F38978]" />
+                      <span className="flex-1">Security &amp; privacy</span>
+                      <ChevronRight size={16} className="text-[#9c7b72] transition-transform group-hover:translate-x-0.5" />
                     </button>
                   </div>
                 </div>

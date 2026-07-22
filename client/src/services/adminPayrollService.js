@@ -19,10 +19,13 @@ export function createUser(user) {
   });
 }
 
-export function addPayslipLayout(layout) {
+export function addPayslipLayout(file) {
+  const formData = new FormData();
+  formData.append("layoutFile", file);
   return apiRequest("/api/payroll/admin/payslip-layouts", {
     method: "POST",
-    body: JSON.stringify(layout)
+    headers: { "Content-Type": undefined },
+    body: formData
   });
 }
 

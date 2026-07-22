@@ -21,7 +21,7 @@ export default function ClaimManagementPage({ role }) {
   }
   useEffect(() => { load(); }, [role]);
 
-  const pendingCount = useMemo(() => claims.filter((c) => c.status === (isFinance ? "hr_approved" : "pending_hr")).length, [claims, isFinance]);
+  const pendingCount = useMemo(() => claims.filter((claim) => claim.status === (isFinance ? "hr_approved" : "pending_hr")).length, [claims, isFinance]);
 
   async function act(claim, action) {
     if (!canRoleActOnClaim(role, claim.status)) {
@@ -48,8 +48,12 @@ export default function ClaimManagementPage({ role }) {
           <div className="flex items-center gap-3">
             <ReceiptText className="text-[#F38978]" size={22} />
             <div>
-              <h3 className="font-semibold text-[#251E1F]">{isFinance ? "Claim reimbursement queue" : "Employee claim review"}</h3>
-              <p className="text-sm text-[#7b6660]">{isFinance ? "Verify HR-approved claims and record the fund release." : "Check the supporting proof before approving a claim for Finance."}</p>
+              <h3 className="font-semibold text-[#251E1F]">{isFinance ? "Claim approval & reimbursement" : "Employee claim review"}</h3>
+              <p className="text-sm text-[#7b6660]">
+                {isFinance
+                  ? "Approve HR-reviewed claims and record the reimbursement."
+                  : "Check the supporting proof before sending a claim to Finance for approval."}
+              </p>
             </div>
           </div>
           <span className="rounded-full border border-[#F38978]/30 bg-[#F38978]/10 px-3 py-1 text-sm font-medium text-[#F38978]">
@@ -135,7 +139,7 @@ export default function ClaimManagementPage({ role }) {
                         className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 disabled:opacity-50"
                       >
                         {busyId === claim.claim_id ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
-                        {isFinance ? "Release funds" : "Approve for Finance"}
+                        {isFinance ? "Approve & release" : "Send to Finance"}
                       </button>
                       <button
                         disabled={busyId === claim.claim_id}

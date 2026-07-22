@@ -12,6 +12,7 @@ const {
   DEFAULT_PAYROLL_RULES_2026,
   calculateEmployeePayroll
 } = require("../services/statutoryPayrollEngine");
+const { getActivePayrollRules } = require("../services/payrollRuleConfigService");
 
 const WORKFLOW_FIELDS = [
   "reviewedAt",
@@ -193,6 +194,7 @@ async function getApprovedRecoveries(connection) {
 
 async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail }) {
   await ensureFinancePayrollTables();
+  const activeRules = await getActivePayrollRules();
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -220,7 +222,7 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
 
     const now = new Date().toISOString();
     const configuration = {
-      rules: DEFAULT_PAYROLL_RULES_2026,
+      rules: activeRules,
       submittedBy: userEmail || "Finance",
       submittedAt: now,
       workflow: {
@@ -238,7 +240,13 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
           label: item.type === "loan" ? `Loan repayment ${item.record_id}` : `Salary advance ${item.record_id}`,
           amount: Math.min(Number(item.monthly_installment), Number(item.outstanding_balance))
         }));
-      const calculation = calculateEmployeePayroll({ staff, month, year, otherDeductions });
+      const calculation = calculateEmployeePayroll({
+        staff,
+        month,
+        year,
+        otherDeductions,
+        configuration: activeRules
+      });
       const breakdown = {
         ...calculation.deductionBreakdown,
         complianceExceptions: calculation.complianceExceptions,
@@ -311,12 +319,21 @@ async function upsertFinancePayrollRun({ run, userId }) {
     );
 
     for (const employee of run.employees || []) {
-      const payslipStatus = run.payslipsSentAt ? "Sent" : employee.financeStatus || "Draft";
+      // PDF generation and employee delivery are handled after this save.
+      // Keep the approved status until each employee-specific PDF is safely created.
+      const payslipStatus = employee.financeStatus || "Draft";
       await connection.execute(
         `UPDATE payroll
-         SET payslip_status = ?, payslip_sent_at = ?
+         SET payslip_status = CASE
+               WHEN payslip_status IN ('Sent', 'sent_to_staff') AND payslip_file_path IS NOT NULL THEN payslip_status
+               ELSE ?
+             END,
+             payslip_sent_at = CASE
+               WHEN payslip_status IN ('Sent', 'sent_to_staff') AND payslip_file_path IS NOT NULL THEN payslip_sent_at
+               ELSE NULL
+             END
          WHERE payroll_month = ? AND payroll_year = ? AND staff_employee_id = ?`,
-        [payslipStatus, run.payslipsSentAt || null, month, year, employee.staffEmployeeId]
+        [payslipStatus, month, year, employee.staffEmployeeId]
       );
     }
     await connection.commit();

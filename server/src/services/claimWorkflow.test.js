@@ -6,7 +6,7 @@ describe("claim approval workflow", () => {
     expect(canActOnClaim("HR", "approve", CLAIM_STATUSES.HR_APPROVED)).toBe(false);
   });
 
-  test("Finance can process only an HR-approved claim", () => {
+  test("Finance can process only an HR-reviewed claim", () => {
     expect(canActOnClaim("Finance", "release", CLAIM_STATUSES.PENDING_HR)).toBe(false);
     expect(canActOnClaim("Finance", "release", CLAIM_STATUSES.HR_APPROVED)).toBe(true);
   });

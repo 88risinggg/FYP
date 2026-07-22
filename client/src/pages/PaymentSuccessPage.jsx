@@ -92,7 +92,7 @@ export default function PaymentSuccessPage() {
               View Invoice
             </Link>
           </div>
-          <p className="mt-6 text-xs text-[#7b6660]/50">Powered by Stripe • Vaniday Invoicing</p>
+          <p className="mt-6 text-xs text-[#7b6660]/50">Powered by Stripe • PayNivo Invoicing</p>
         </div>
       </div>
     );
@@ -119,7 +119,7 @@ export default function PaymentSuccessPage() {
             Return to Invoice
           </Link>
         )}
-        <p className="mt-6 text-xs text-[#7b6660]/50">Powered by Stripe • Vaniday Invoicing</p>
+        <p className="mt-6 text-xs text-[#7b6660]/50">Powered by Stripe • PayNivo Invoicing</p>
       </div>
     </div>
   );

@@ -33,8 +33,8 @@ function proofUpload(req, res, next) {
 }
 
 router.post("/", authenticateToken, allowRoles("Staff"), proofUpload, submitClaim);
-router.get("/", authenticateToken, allowRoles("Staff", "HR", "Finance", "Admin"), listClaims);
-router.get("/:id/proof", authenticateToken, allowRoles("Staff", "HR", "Finance", "Admin"), downloadProof);
+router.get("/", authenticateToken, allowRoles("Staff", "HR", "Finance"), listClaims);
+router.get("/:id/proof", authenticateToken, allowRoles("Staff", "HR", "Finance"), downloadProof);
 router.put("/:id/hr/:action", authenticateToken, allowRoles("HR"), reviewByHr);
 router.put("/:id/finance/:action", authenticateToken, allowRoles("Finance"), processByFinance);
 

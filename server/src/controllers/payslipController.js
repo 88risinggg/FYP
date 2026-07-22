@@ -3,8 +3,6 @@
 const { pool } = require("../config/db");
 const { createNotificationInternal } = require("./notificationController");
 
-const VISIBLE_RUN_STATUS = "Closed";
-
 async function getEmployeeIdFromUserId(userId) {
   const [rows] = await pool.query(
     "SELECT employee_id FROM staff WHERE user_user_id = ? LIMIT 1",
@@ -73,7 +71,11 @@ async function getPayslipsByUserId(req, res) {
         p.payroll_year,
         p.gross_salary,
         p.total_allowances,
+        p.allowance_breakdown,
         p.total_deductions,
+        p.employee_cpf,
+        p.employer_cpf,
+        p.deduction_breakdown,
         p.net_salary,
         p.payslip_status,
         p.payslip_file_path AS file_path,
@@ -82,12 +84,12 @@ async function getPayslipsByUserId(req, res) {
         s.base_salary,
         s.name AS employee_name,
         s.employee_code,
-        pr.status AS run_status
+        s.department_name,
+        p.run_status
       FROM payroll p
       JOIN staff s ON p.staff_employee_id = s.employee_id
-      JOIN payroll_run pr ON p.payroll_run_id = pr.payroll_run_id
-      WHERE s.employee_id = ? AND pr.status = ?`;
-    const params = [employeeId, VISIBLE_RUN_STATUS];
+      WHERE s.employee_id = ?`;
+    const params = [employeeId];
 
     if (req.query.year) {
       sql += " AND p.payroll_year = ?";
@@ -96,6 +98,9 @@ async function getPayslipsByUserId(req, res) {
     if (req.query.month) {
       sql += " AND p.payroll_month = ?";
       params.push(Number(req.query.month));
+    }
+    if (req.user.role === "Staff") {
+      sql += " AND p.payslip_status IN ('Sent', 'sent_to_staff')";
     }
     sql += " ORDER BY p.payroll_year DESC, p.payroll_month DESC";
 
@@ -123,18 +128,20 @@ async function getPayslipById(req, res) {
         s.employee_code,
         s.user_user_id,
         s.department_name,
-        pr.status AS run_status
+        p.run_status
        FROM payroll p
        JOIN staff s ON p.staff_employee_id = s.employee_id
-       JOIN payroll_run pr ON p.payroll_run_id = pr.payroll_run_id
-       WHERE p.payroll_id = ? AND pr.status = ?`,
-      [payslipId, VISIBLE_RUN_STATUS]
+       WHERE p.payroll_id = ?`,
+      [payslipId]
     );
     if (!rows.length) return res.status(404).json({ message: "Payslip not found" });
 
     const payslip = rows[0];
     if (req.user.role === "Staff" && String(req.user.userId) !== String(payslip.user_user_id)) {
       return res.status(403).json({ message: "Access denied" });
+    }
+    if (req.user.role === "Staff" && !["Sent", "sent_to_staff"].includes(payslip.payslip_status)) {
+      return res.status(403).json({ message: "This payslip has not been sent to you yet" });
     }
     return res.json({
       ...payslip,
@@ -165,19 +172,18 @@ async function getPayrollSummary(req, res) {
               COALESCE(SUM(p.total_allowances), 0) AS ytd_allowances,
               COALESCE(SUM(p.total_deductions), 0) AS ytd_deductions
        FROM payroll p
-       JOIN payroll_run pr ON p.payroll_run_id = pr.payroll_run_id
-       WHERE p.staff_employee_id = ? AND p.payroll_year = ? AND pr.status = ?`,
-      [employeeId, currentYear, VISIBLE_RUN_STATUS]
+       WHERE p.staff_employee_id = ? AND p.payroll_year = ?
+         AND p.payslip_status IN ('Sent', 'sent_to_staff')`,
+      [employeeId, currentYear]
     );
     const [latestRows] = await pool.query(
       `SELECT p.*, p.payroll_id AS payslip_id,
-              p.payslip_file_path AS file_path, pr.status AS run_status
+              p.payslip_file_path AS file_path, p.run_status
        FROM payroll p
-       JOIN payroll_run pr ON p.payroll_run_id = pr.payroll_run_id
-       WHERE p.staff_employee_id = ? AND pr.status = ?
+       WHERE p.staff_employee_id = ? AND p.payslip_status IN ('Sent', 'sent_to_staff')
        ORDER BY p.payroll_year DESC, p.payroll_month DESC
        LIMIT 1`,
-      [employeeId, VISIBLE_RUN_STATUS]
+      [employeeId]
     );
     return res.json({ ytd: ytdRows[0] || null, latest: latestRows[0] || null });
   } catch (error) {
@@ -197,9 +203,9 @@ async function getUnreadPayslipCount(req, res) {
     const [[row]] = await pool.query(
       `SELECT COUNT(*) AS unread_count
        FROM payroll p
-       JOIN payroll_run pr ON p.payroll_run_id = pr.payroll_run_id
-       WHERE p.staff_employee_id = ? AND p.payslip_is_read = 0 AND pr.status = ?`,
-      [employeeId, VISIBLE_RUN_STATUS]
+       WHERE p.staff_employee_id = ? AND p.payslip_is_read = 0
+         AND p.payslip_status IN ('Sent', 'sent_to_staff')`,
+      [employeeId]
     );
     return res.json({ unread_count: row.unread_count });
   } catch (error) {
@@ -212,16 +218,18 @@ async function markPayslipAsRead(req, res) {
   const { payslipId } = req.params;
   try {
     const [rows] = await pool.query(
-      `SELECT p.payroll_id AS payslip_id, s.user_user_id
+      `SELECT p.payroll_id AS payslip_id, p.payslip_status, s.user_user_id
        FROM payroll p
        JOIN staff s ON p.staff_employee_id = s.employee_id
-       JOIN payroll_run pr ON p.payroll_run_id = pr.payroll_run_id
-       WHERE p.payroll_id = ? AND pr.status = ?`,
-      [payslipId, VISIBLE_RUN_STATUS]
+       WHERE p.payroll_id = ?`,
+      [payslipId]
     );
     if (!rows.length) return res.status(404).json({ message: "Payslip not found" });
     if (req.user.role === "Staff" && String(req.user.userId) !== String(rows[0].user_user_id)) {
       return res.status(403).json({ message: "Access denied" });
+    }
+    if (req.user.role === "Staff" && !["Sent", "sent_to_staff"].includes(rows[0].payslip_status)) {
+      return res.status(403).json({ message: "This payslip has not been sent to you yet" });
     }
     await pool.query(
       "UPDATE payroll SET payslip_is_read = 1, payslip_read_at = NOW() WHERE payroll_id = ?",

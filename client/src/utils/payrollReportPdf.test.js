@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildPayrollReportPdf } from "./payrollReportPdf.js";
 
 describe("payroll report PDF generator", () => {
-  it("uses the Vaniday header and includes every row across multiple pages", () => {
+  it("uses the PayNivo logo and includes every row across multiple pages", () => {
     const rows = [
       ["Employee", "Location", "Bank", "Earnings", "Deductions", "Net Pay", "Status"],
       ...Array.from({ length: 80 }, (_, index) => [
@@ -23,7 +23,9 @@ describe("payroll report PDF generator", () => {
       tableRows: rows
     });
 
-    expect(pdf).toContain("VANIDAY");
+    expect(pdf).toContain("/Subtype /Image");
+    expect(pdf).toContain("/Logo Do");
+    expect(pdf).not.toContain("VANIDAY");
     expect(pdf).toContain("FINANCE PAYROLL");
     expect(pdf).toContain("Employee 001");
     expect(pdf).toContain("Employee 080");

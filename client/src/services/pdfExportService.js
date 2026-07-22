@@ -8,6 +8,8 @@
  * Preserves the same API surface so existing code does not need changes.
  */
 
+import payNivoLogoDataUrl from "../assets/paynivo-logo.png?inline";
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 // Constants
@@ -275,9 +277,9 @@ export function addCoverPage(doc, config) {
     `<div style="position:absolute;top:0;left:0;width:100%;height:6mm;background:${rgbStr(BRAND_COLOR)};"></div>`
   );
 
-  // Brand name
+  // Brand logo
   doc.pages[doc.currentPage].push(
-    `<div style="position:absolute;top:70mm;left:0;width:100%;text-align:center;font-size:42pt;font-weight:900;color:${rgbStr(BRAND_COLOR)};">Vaniday</div>`
+    `<img src="${payNivoLogoDataUrl}" alt="PayNivo" style="position:absolute;top:34mm;left:50%;transform:translateX(-50%);width:54mm;height:54mm;object-fit:contain;" />`
   );
 
   // Title
@@ -338,7 +340,7 @@ export function addPageFooter(doc, pageNum, totalPages, timestamp) {
 
   // Brand
   doc.pages[doc.currentPage].push(
-    `<div style="position:absolute;top:${bottomY}mm;right:${PAGE_MARGIN}mm;font-size:8pt;color:${rgbStr(GRAY_COLOR)};">Vaniday</div>`
+    `<div style="position:absolute;top:${bottomY}mm;right:${PAGE_MARGIN}mm;font-size:8pt;font-weight:700;color:${rgbStr(GRAY_COLOR)};">PayNivo</div>`
   );
 }
 

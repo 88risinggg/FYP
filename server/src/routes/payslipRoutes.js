@@ -11,6 +11,7 @@ const {
   deletePayslip
 } = require("../controllers/payslipController");
 const { generatePayslipPDF } = require("../services/payslipPdfService");
+const { getPayslipDataset } = require("../services/payslipDeliveryService");
 const { pool } = require("../config/db");
 
 const router = express.Router();
@@ -32,31 +33,17 @@ router.get("/:payslipId/pdf", authenticateToken, async (req, res) => {
     const payslipId = Number(req.params.payslipId);
     const userId = req.user.userId;
 
-    // Get payslip with employee and payroll data
-    const [rows] = await pool.query(
-      `SELECT
-        p.payroll_id AS payslip_id, p.payslip_file_path AS file_path,
-        p.payroll_month, p.payroll_year, p.net_salary, p.total_allowances, p.total_deductions,
-        p.employee_cpf, p.employer_cpf,
-        s.name AS employee_name, s.employee_code, s.department_name AS department,
-        NULL AS designation, s.base_salary,
-        s.user_user_id
-      FROM payroll p
-      INNER JOIN staff s ON p.staff_employee_id = s.employee_id
-      WHERE p.payroll_id = ?
-      LIMIT 1`,
-      [payslipId]
-    );
-
-    if (rows.length === 0) {
+    const payslip = await getPayslipDataset(payslipId);
+    if (!payslip) {
       return res.status(404).json({ message: "Payslip not found." });
     }
-
-    const payslip = rows[0];
 
     // Staff can only download their own payslips
     if (req.user.role === "Staff" && String(payslip.user_user_id) !== String(userId)) {
       return res.status(403).json({ message: "Access denied." });
+    }
+    if (req.user.role === "Staff" && !["Sent", "sent_to_staff"].includes(payslip.payslip_status)) {
+      return res.status(403).json({ message: "This payslip has not been sent to you yet." });
     }
 
     const pdfBuffer = await generatePayslipPDF(payslip);

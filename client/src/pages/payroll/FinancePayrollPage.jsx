@@ -84,14 +84,23 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 const payrollSidebarSections = [
   {
-    label: "FINANCE",
+    label: "MAIN",
     items: [
       {
         label: "Dashboard",
         icon: LayoutDashboard,
         path: "/dashboard/payroll/finance",
-        end: true
+        end: true,
+        children: [
+          { label: "Overview", path: "/dashboard/payroll/finance", end: true },
+          { label: "Finance Summary", path: "/dashboard/payroll/finance/payroll-summaries" }
+        ]
       },
+    ]
+  },
+  {
+    label: "PAYROLL",
+    items: [
       {
         label: "Payroll Runs",
         icon: ClipboardList,
@@ -103,29 +112,39 @@ const payrollSidebarSections = [
         path: "/dashboard/payroll/finance/payslips-approval"
       },
       {
-        label: "Employee Requests",
-        icon: ReceiptText,
-        path: "/dashboard/payroll/finance/employee-requests"
-      },
-      {
         label: "Staff Payroll Details",
         icon: Users,
         path: "/dashboard/payroll/finance/staff-payroll-details"
-      },
+      }
+    ]
+  },
+  {
+    label: "REQUESTS",
+    items: [
+      {
+        label: "Employee Requests",
+        icon: ReceiptText,
+        path: "/dashboard/payroll/finance/employee-requests"
+      }
+    ]
+  },
+  {
+    label: "MONITORING",
+    items: [
       {
         label: "Payslip Notifications",
         icon: Bell,
         path: "/dashboard/payroll/finance/notification-records"
-      },
+      }
+    ]
+  },
+  {
+    label: "REPORTS",
+    items: [
       {
         label: "Finance Reports",
         icon: FileBarChart,
         path: "/dashboard/payroll/finance/payroll-reports"
-      },
-      {
-        label: "Finance Summary",
-        icon: ListChecks,
-        path: "/dashboard/payroll/finance/payroll-summaries"
       }
     ]
   }
@@ -2457,7 +2476,7 @@ function PayslipsApprovalView() {
         <StatCard label="Pending Review" value={payslips.length} tone="text-[#D97706]" />
         <StatCard label="Total Gross" value={formatPayslipMoney(payslips.reduce((sum, payslip) => sum + Number(payslip.gross_salary || 0), 0))} />
         <StatCard label="Net Pay" value={formatPayslipMoney(payslips.reduce((sum, payslip) => sum + Number(payslip.net_pay || 0), 0))} tone="text-[#2f8758]" />
-        <StatCard label="Next Approval" value="Admin" detail="After finance approval" tone="text-[#F38978]" />
+        <StatCard label="Next Step" value="HR sends" detail="Finance approval completes review" tone="text-[#F38978]" />
       </div>
 
       {error ? (

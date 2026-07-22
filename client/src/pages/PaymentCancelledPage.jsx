@@ -31,7 +31,7 @@ export default function PaymentCancelledPage() {
           )}
           <p className="text-xs text-[#7b6660]/60">Your invoice link remains active until the due date.</p>
         </div>
-        <p className="mt-6 text-xs text-[#7b6660]/50">Powered by Stripe • Vaniday Invoicing</p>
+        <p className="mt-6 text-xs text-[#7b6660]/50">Powered by Stripe • PayNivo Invoicing</p>
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ describe("claim approval workflow", () => {
     expect(canRoleActOnClaim("Finance", "pending_hr")).toBe(false);
   });
 
-  it("allows Finance only after HR approval", () => {
+  it("allows Finance only after HR review", () => {
     expect(canRoleActOnClaim("HR", "hr_approved")).toBe(false);
     expect(canRoleActOnClaim("Finance", "hr_approved")).toBe(true);
   });

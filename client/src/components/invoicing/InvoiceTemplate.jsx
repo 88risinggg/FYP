@@ -1,5 +1,6 @@
 
 import { useMemo } from "react";
+import payNivoLogoDataUrl from "../../assets/paynivo-logo.png?inline";
 
 /**
  * InvoiceTemplate - Shared Invoice Rendering Component
@@ -77,25 +78,18 @@ function Watermark({ invoice, settings }) {
 }
 
 function Header({ settings, logoUrl }) {
-  const primary = settings.primaryColor || "#251E1F";
   const secondary = settings.secondaryColor || "#F38978";
-  const brandName = settings.companyName || "Vaniday";
+  const resolvedLogoUrl = logoUrl || payNivoLogoDataUrl;
 
   return (
     <header
       style={{
-        display: "flex", alignItems: "flex-start", height: "20mm",
+        display: "flex", alignItems: "flex-start", height: "24mm",
         borderBottom: `0.35mm solid #7B6660`, paddingBottom: "3mm",
       }}
     >
-      <div style={{ width: "2.1mm", height: "16.5mm", marginRight: "7mm", background: secondary, flexShrink: 0 }} />
-      {logoUrl ? (
-        <img src={logoUrl} alt="Company logo" style={{ maxWidth: "62mm", maxHeight: "16.5mm", objectFit: "contain", objectPosition: "left top" }} />
-      ) : (
-        <div style={{ color: primary, fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "25pt", lineHeight: 1, fontWeight: 700, letterSpacing: "0.8px", whiteSpace: "nowrap" }}>
-          {brandName}<span style={{ color: secondary }}>.</span>
-        </div>
-      )}
+      <div style={{ width: "2.1mm", height: "20mm", marginRight: "7mm", background: secondary, flexShrink: 0 }} />
+      <img src={resolvedLogoUrl} alt="PayNivo logo" style={{ maxWidth: "70mm", maxHeight: "20mm", objectFit: "contain", objectPosition: "left top" }} />
     </header>
   );
 }

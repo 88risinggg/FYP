@@ -54,8 +54,8 @@ function getAgeAtPeriodEnd(dateOfBirth, month, year) {
   return age;
 }
 
-function getCpfTier(age) {
-  return CPF_FULL_RATE_TIERS_2026.find((tier) => age <= tier.maximumAge) || CPF_FULL_RATE_TIERS_2026.at(-1);
+function getCpfTier(age, tiers = CPF_FULL_RATE_TIERS_2026) {
+  return tiers.find((tier) => age <= tier.maximumAge) || tiers.at(-1);
 }
 
 function getBandAmount(fund, wages) {
@@ -63,21 +63,41 @@ function getBandAmount(fund, wages) {
   return Number(band?.[1] || 0);
 }
 
-function getSelfHelpGroupDeductions({ race, religion, totalWages }) {
+function isEffective(effectiveFrom, month, year) {
+  if (!effectiveFrom || !month || !year) return true;
+  const effectiveDate = new Date(`${String(effectiveFrom).slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(effectiveDate.getTime())) return true;
+  return new Date(Date.UTC(year, month - 1, 1)) >= effectiveDate;
+}
+
+function getSelfHelpGroupDeductions({ race, religion, totalWages, month, year, rules = {} }) {
   const normalizedRace = normalize(race).split(/[-/]/)[0].trim();
   const normalizedReligion = normalize(religion);
   const funds = [];
+  const configuredRules = rules.selfHelpGroupRules || {};
+  const eligible = (fund, defaultEligible) => {
+    const rule = configuredRules[fund];
+    if (!rule) return defaultEligible;
+    if (!rule.enabled || !isEffective(rule.effectiveFrom, month, year)) return false;
+    const actual = rule.eligibilityField === "religion" ? normalizedReligion : normalizedRace;
+    const expected = normalize(rule.eligibilityValue);
+    if (["muslim", "islam"].includes(expected)) return ["muslim", "islam"].includes(actual);
+    if (fund === "SINDA" && expected === "indian") {
+      return ["indian", "bangladeshi", "bengali", "pakistani", "sri lankan"].includes(actual);
+    }
+    return actual === expected;
+  };
 
-  if (["islam", "muslim"].includes(normalizedReligion)) {
+  if (eligible("MBMF", ["islam", "muslim"].includes(normalizedReligion))) {
     funds.push({ fund: "MBMF", amount: getBandAmount("MBMF", totalWages), basis: "religion" });
   }
-  if (normalizedRace === "chinese") {
+  if (eligible("CDAC", normalizedRace === "chinese")) {
     funds.push({ fund: "CDAC", amount: getBandAmount("CDAC", totalWages), basis: "race" });
   }
-  if (["indian", "bangladeshi", "bengali", "pakistani", "sri lankan"].includes(normalizedRace)) {
+  if (eligible("SINDA", ["indian", "bangladeshi", "bengali", "pakistani", "sri lankan"].includes(normalizedRace))) {
     funds.push({ fund: "SINDA", amount: getBandAmount("SINDA", totalWages), basis: "race" });
   }
-  if (normalizedRace === "eurasian") {
+  if (eligible("ECF", normalizedRace === "eurasian")) {
     funds.push({ fund: "ECF", amount: getBandAmount("ECF", totalWages), basis: "race" });
   }
 
@@ -85,11 +105,14 @@ function getSelfHelpGroupDeductions({ race, religion, totalWages }) {
 }
 
 function calculateCpf({ wages, age, rules }) {
+  if (rules.cpfEnabled === false) {
+    return { employee: 0, employer: 0, tier: null, wageBase: 0, unsupported: false };
+  }
   if (rules.cpfScheme !== "FULL_RATE_SC_SPR3") {
     return { employee: 0, employer: 0, tier: null, wageBase: 0, unsupported: true };
   }
 
-  const tier = getCpfTier(age);
+  const tier = getCpfTier(age, rules.cpfRateTiers || CPF_FULL_RATE_TIERS_2026);
   const wageBase = Math.min(Number(wages || 0), Number(rules.cpfOrdinaryWageCeiling));
   if (wageBase <= 50) return { employee: 0, employer: 0, tier, wageBase, unsupported: false };
   if (wageBase <= 750) return { employee: 0, employer: 0, tier, wageBase, unsupported: true };
@@ -110,17 +133,40 @@ function calculateEmployeePayroll({ staff, month, year, allowances = [], otherDe
   const basicSalary = roundMoney(staff.base_salary);
   const allowanceTotal = roundMoney(allowances.reduce((sum, item) => sum + Number(item.amount || 0), 0));
   const grossSalary = roundMoney(basicSalary + allowanceTotal);
+  const componentRules = rules.componentCpfApplicable || {};
+  const componentKey = (label) => {
+    const normalized = normalize(label).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+    if (normalized.includes("commission")) return "commission";
+    if (normalized.startsWith("loan")) return "loan";
+    if (normalized.startsWith("salary_advance")) return "salary_advance";
+    return normalized;
+  };
+  const defaultCpfApplicability = { reimbursement: false, tips: false };
+  const basicCpfApplicable = componentRules.basic_salary ?? true;
+  const cpfApplicableAllowances = allowances.filter((item) => {
+    const key = componentKey(item.label);
+    return componentRules[key] ?? defaultCpfApplicability[key] ?? true;
+  });
+  const cpfApplicableWages = roundMoney(
+    (basicCpfApplicable ? basicSalary : 0)
+    + cpfApplicableAllowances.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+  );
   const age = getAgeAtPeriodEnd(staff.date_of_birth, month, year);
   const complianceExceptions = [];
 
-  if (age === null) complianceExceptions.push("Date of birth is required for CPF calculation");
-  if (!staff.bank || !staff.account_no) complianceExceptions.push("Bank account details are incomplete");
-  if (!staff.department_name) complianceExceptions.push("Department is required");
+  if (rules.cpfEnabled !== false && age === null) complianceExceptions.push("Date of birth is required for CPF calculation");
+  if (rules.bankAccountRequired !== false && (!staff.bank || !staff.account_no)) complianceExceptions.push("Bank account details are incomplete");
+  if (rules.departmentRequired !== false && !staff.department_name) complianceExceptions.push("Department is required");
   if (basicSalary <= 0) complianceExceptions.push("Base salary must be positive");
 
-  const cpf = age === null
+  const configuredCeiling = rules.cpfOrdinaryWageCeiling;
+  if (!isEffective(rules.cpfWageCeilingEffectiveFrom, month, year)) {
+    rules.cpfOrdinaryWageCeiling = DEFAULT_PAYROLL_RULES_2026.cpfOrdinaryWageCeiling;
+  }
+  const cpf = age === null && rules.cpfEnabled !== false
     ? { employee: 0, employer: 0, tier: null, wageBase: 0, unsupported: true }
-    : calculateCpf({ wages: grossSalary, age, rules });
+    : calculateCpf({ wages: cpfApplicableWages, age, rules });
+  rules.cpfOrdinaryWageCeiling = configuredCeiling;
   if (cpf.unsupported) {
     complianceExceptions.push("CPF scheme or wage band requires manual review");
   }
@@ -128,20 +174,30 @@ function calculateEmployeePayroll({ staff, month, year, allowances = [], otherDe
   const selfHelpGroups = getSelfHelpGroupDeductions({
     race: staff.race,
     religion: staff.religion,
-    totalWages: grossSalary
+    totalWages: grossSalary,
+    month,
+    year,
+    rules
   });
   const shgTotal = roundMoney(selfHelpGroups.reduce((sum, item) => sum + item.amount, 0));
   const mbmfAmount = roundMoney(selfHelpGroups.find((item) => item.fund === "MBMF")?.amount || 0);
-  const otherDeductionTotal = roundMoney(otherDeductions.reduce((sum, item) => sum + Number(item.amount || 0), 0));
+  const deductionRules = rules.deductionAffectsNetPay || {};
+  const appliedOtherDeductions = otherDeductions.filter((item) => deductionRules[componentKey(item.label)] !== false);
+  const otherDeductionTotal = roundMoney(appliedOtherDeductions.reduce((sum, item) => sum + Number(item.amount || 0), 0));
   if (grossSalary > 0 && otherDeductionTotal > grossSalary * (Number(rules.maxOtherDeductionPercent) / 100)) {
     complianceExceptions.push(`Other deductions exceed ${rules.maxOtherDeductionPercent}% of gross salary`);
   }
 
-  const totalDeductions = roundMoney(cpf.employee + shgTotal + otherDeductionTotal);
+  const employeeCpfDeduction = deductionRules.employee_cpf === false ? 0 : cpf.employee;
+  const appliedSelfHelpTotal = roundMoney(selfHelpGroups.reduce(
+    (sum, item) => sum + (deductionRules[item.fund.toLowerCase()] === false ? 0 : item.amount),
+    0
+  ));
+  const totalDeductions = roundMoney(employeeCpfDeduction + appliedSelfHelpTotal + otherDeductionTotal);
   const netSalary = roundMoney(grossSalary - totalDeductions);
-  if (netSalary <= 0) complianceExceptions.push("Net salary must be positive");
+  if (rules.positiveNetPayRequired !== false && netSalary <= 0) complianceExceptions.push("Net salary must be positive");
 
-  const sdl = grossSalary <= 0
+  const sdl = grossSalary <= 0 || rules.sdlEnabled === false
     ? 0
     : roundMoney(Math.max(rules.sdlMinimum, Math.min(rules.sdlMaximum, grossSalary * rules.sdlRate)));
 
@@ -164,7 +220,7 @@ function calculateEmployeePayroll({ staff, month, year, allowances = [], otherDe
     deductionBreakdown: {
       employeeCpf: roundMoney(cpf.employee),
       selfHelpGroups,
-      otherDeductions: otherDeductions.map((item) => ({
+      otherDeductions: appliedOtherDeductions.map((item) => ({
         label: item.label || "Other deduction",
         amount: roundMoney(item.amount)
       }))

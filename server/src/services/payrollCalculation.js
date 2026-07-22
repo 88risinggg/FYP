@@ -13,7 +13,7 @@ function money(value) {
   return Math.round(Number(value || 0) * 100) / 100;
 }
 
-function calculatePayslipFromRow(row, staffProfile, _rateConfig, payrollRunId, createdBy) {
+function calculatePayslipFromRow(row, staffProfile, ruleConfig, payrollRunId, createdBy) {
   const month = resolveMonth(row.payroll_month || row.period_month);
   const year = Number(row.payroll_year || row.period_year || new Date().getFullYear());
   const basicSalary = Number(row.basic_salary || staffProfile.base_salary || 0);
@@ -32,7 +32,8 @@ function calculatePayslipFromRow(row, staffProfile, _rateConfig, payrollRunId, c
     month,
     year,
     allowances,
-    otherDeductions
+    otherDeductions,
+    configuration: ruleConfig || {}
   });
   const now = new Date().toISOString();
   const donationAmount = calculation.selfHelpGroups.reduce((sum, item) => sum + item.amount, 0);

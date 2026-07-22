@@ -28,7 +28,7 @@ const payrollRateConfig = {
 // Note: audit logs and payroll records are handled by Admin/Finance modules
 // via the real `audit_log` and payroll tables. Removed in-memory copies from HR.
 
-// Payslip status workflow: draft → finance_pending → finance_approved → admin_pending → admin_approved → sent_to_staff
+// Payslip status workflow: draft → finance_pending → finance_approved → sent_to_staff
 const PAYSLIP_STATUSES = {
   DRAFT: 'draft',
   FINANCE_PENDING: 'finance_pending',

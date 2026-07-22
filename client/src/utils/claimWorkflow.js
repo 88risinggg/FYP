@@ -1,6 +1,6 @@
 export const CLAIM_STATUS_LABELS = Object.freeze({
   pending_hr: "Pending HR review",
-  hr_approved: "Awaiting Finance payment",
+  hr_approved: "Awaiting Finance approval",
   hr_rejected: "Rejected by HR",
   released: "Reimbursed",
   finance_rejected: "Rejected by Finance"

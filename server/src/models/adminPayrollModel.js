@@ -1,5 +1,9 @@
 const { pool } = require("../config/db");
-const { DEFAULT_PAYROLL_RULES_2026 } = require("../services/statutoryPayrollEngine");
+const {
+  ensurePayrollConfigurationTable,
+  listStoredPayrollSettings,
+  upsertStoredPayrollSetting
+} = require("../services/payrollRuleConfigService");
 const ROLE_NAMES = Object.freeze({ 1: "Admin", 2: "Finance", 3: "HR", 4: "Staff" });
 
 function parseJson(value, fallback = {}) {
@@ -70,11 +74,7 @@ async function getAdminPayrollReportData() {
     }),
     { grossPay: 0, deductions: 0, netPay: 0, employeeCpf: 0, employerCpf: 0 }
   );
-  const settings = Object.entries(DEFAULT_PAYROLL_RULES_2026).map(([key, value]) => ({
-    setting_key: `statutory_${key}`,
-    setting_value: String(value),
-    description: "Rules snapshot used by automated payroll runs"
-  }));
+  const settings = await listPayrollSettings();
 
   return {
     stats: {
@@ -105,46 +105,118 @@ async function logAdminAction({ action, entityType, entityId, userId }) {
 }
 
 async function getDashboardStats() {
+  await ensurePayrollConfigurationTable(pool);
   const [[users]] = await pool.execute(
     "SELECT COUNT(*) AS total FROM user WHERE status = 1"
   );
   const [[logs]] = await pool.execute(
     "SELECT COUNT(*) AS total FROM audit_logs"
   );
+  const [[layouts]] = await pool.execute(
+    "SELECT COUNT(*) AS total FROM payroll_configuration WHERE configuration_type = 'payslip_layout'"
+  );
 
+  const settings = await listPayrollSettings();
   return {
     activeUsers: users.total,
-    payrollRules: Object.keys(DEFAULT_PAYROLL_RULES_2026).length,
-    payslipLayouts: 0,
+    payrollRules: settings.length,
+    payslipLayouts: Number(layouts.total || 0),
     adminLogs: logs.total
   };
 }
 
 async function listPayslipLayouts() {
-  // Payslip layouts are no longer stored in a separate table
-  return [];
+  await ensurePayrollConfigurationTable(pool);
+  const [rows] = await pool.execute(
+    `SELECT configuration_id, configuration_value, created_at, updated_at
+     FROM payroll_configuration
+     WHERE configuration_type = 'payslip_layout'
+     ORDER BY updated_at DESC, configuration_id DESC`
+  );
+
+  return rows.map((row) => {
+    const layout = parseJson(row.configuration_value, {});
+    return {
+      layout_id: row.configuration_id,
+      layout_name: layout.layout_name || "Payslip layout",
+      file_path: layout.file_path || "",
+      file_type: layout.file_type || "PDF",
+      original_file_name: layout.original_file_name || "",
+      file_size: Number(layout.file_size || 0),
+      status: layout.status || "Active",
+      is_default: layout.is_default ? 1 : 0,
+      created_at: row.created_at,
+      updated_at: row.updated_at
+    };
+  });
 }
 
-async function createPayslipLayout({ layoutName, filePath, fileType, createdBy }) {
-  // No-op: payslip layouts are handled in-memory
-  return 0;
+async function createPayslipLayout({ layoutName, filePath, fileType, originalFileName, fileSize, createdBy }) {
+  await ensurePayrollConfigurationTable(pool);
+  const [[countRow]] = await pool.execute(
+    "SELECT COUNT(*) AS total FROM payroll_configuration WHERE configuration_type = 'payslip_layout'"
+  );
+  const metadata = JSON.stringify({
+    layout_name: layoutName,
+    file_path: filePath,
+    file_type: fileType,
+    original_file_name: originalFileName,
+    file_size: fileSize,
+    status: "Active",
+    is_default: Number(countRow.total || 0) === 0
+  });
+  const [result] = await pool.execute(
+    `INSERT INTO payroll_configuration
+       (configuration_type, configuration_key, configuration_value, description, updated_by)
+     VALUES ('payslip_layout', ?, ?, ?, ?)`,
+    [`layout_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`, metadata, `Uploaded payslip layout: ${layoutName}`, createdBy || null]
+  );
+  await logAdminAction({
+    action: `Uploaded payslip layout ${layoutName}`,
+    entityType: "payslip_layout",
+    entityId: result.insertId,
+    userId: createdBy
+  });
+  return result.insertId;
 }
 
 async function setDefaultPayslipLayout(layoutId) {
-  // No-op
-  return true;
+  await ensurePayrollConfigurationTable(pool);
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.execute(
+      `SELECT configuration_id, configuration_value
+       FROM payroll_configuration
+       WHERE configuration_type = 'payslip_layout'
+       FOR UPDATE`
+    );
+    if (!rows.some((row) => Number(row.configuration_id) === Number(layoutId))) {
+      await connection.rollback();
+      return false;
+    }
+    for (const row of rows) {
+      const metadata = parseJson(row.configuration_value, {});
+      metadata.is_default = Number(row.configuration_id) === Number(layoutId);
+      await connection.execute(
+        `UPDATE payroll_configuration
+         SET configuration_value = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE configuration_id = ?`,
+        [JSON.stringify(metadata), row.configuration_id]
+      );
+    }
+    await connection.commit();
+    return true;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 async function listPayrollSettings() {
-  // Return statutory rules as settings
-  return Object.entries(DEFAULT_PAYROLL_RULES_2026).map(([key, value]) => ({
-    setting_id: key,
-    setting_key: `statutory_${key}`,
-    setting_value: String(value),
-    description: "Statutory payroll rule",
-    updated_at: null,
-    updated_by_name: "System"
-  }));
+  return listStoredPayrollSettings();
 }
 
 async function listMbmfEligibilitySummary() {
@@ -200,7 +272,7 @@ async function listMbmfEligibilitySummary() {
 }
 
 async function upsertPayrollSetting({ settingKey, settingValue, description, updatedBy }) {
-  // Payroll settings are now managed via statutory engine defaults
+  await upsertStoredPayrollSetting({ settingKey, settingValue, description, updatedBy });
   await logAdminAction({
     action: `Updated payroll setting: ${settingKey}`,
     entityType: "payroll_setting",
