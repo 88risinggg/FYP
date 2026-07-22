@@ -17,7 +17,7 @@ const {
 } = require("../models/invoiceSettingsModel");
 
 /** Set of valid invoice statuses used throughout the application. */
-const VALID_STATUSES = new Set(["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdue"]);
+const VALID_STATUSES = new Set(["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdue", "Pending Review", "Void", "Cancelled", "Refunded"]);
 
 /** Prefix used in audit_log entries for status change tracking. */
 const STATUS_AUDIT_PREFIX = "invoice_status:";
@@ -94,8 +94,8 @@ function toOperationalInvoiceStatus(rowStatus, auditStatus) {
 async function writeAuditLog(connection, action, entityType, entityId, userId, extra = {}) {
   try {
     await connection.query(
-      `INSERT INTO audit_logs (user_id, activity_type, action_description, affected_record, status, created_at, previous_value, new_value, ip_address, device_info)
-       VALUES (?, ?, ?, ?, 'Success', NOW(), ?, ?, ?, ?)`,
+      `INSERT INTO audit_logs (user_id, module, activity_type, action_description, affected_record, status, created_at, previous_value, new_value, ip_address, device_info)
+       VALUES (?, 'Invoice', ?, ?, ?, 'Success', NOW(), ?, ?, ?, ?)`,
       [
         userId || null,
         entityType,
@@ -222,6 +222,7 @@ async function getInvoices(req, res) {
         c.address AS customer_address
       FROM invoice i
       INNER JOIN customer c ON c.customer_id = i.customer_id
+      WHERE i.invoiceId <> '__SETTINGS__'
       ORDER BY i.created_at DESC, i.invoice_id DESC
     `);
 
@@ -243,6 +244,7 @@ async function getInvoices(req, res) {
     const invoiceIds = rows.map((row) => row.invoice_id);
     let itemsByInvoiceId = {};
     let statusByInvoiceId = {};
+    let sentAtByInvoiceId = {};
 
     if (invoiceIds.length > 0) {
       // Try loading items - attempt invoice_item table first, then items_json column
@@ -257,26 +259,33 @@ async function getInvoices(req, res) {
           return acc;
         }, {});
       } catch {
-        // invoice_item table doesn't exist, try items_json column on invoice table
+        // invoice_item table doesn't exist — skip
+      }
+
+      // For invoices without items from invoice_item, try items_json column
+      const missingItemIds = invoiceIds.filter(id => !itemsByInvoiceId[id] || itemsByInvoiceId[id].length === 0);
+      if (missingItemIds.length > 0) {
         try {
           const [itemRows] = await pool.query(
             "SELECT invoice_id, items_json FROM invoice WHERE invoice_id IN (?) AND items_json IS NOT NULL",
-            [invoiceIds]
+            [missingItemIds]
           );
           itemRows.forEach((row) => {
             try {
               const items = typeof row.items_json === "string" ? JSON.parse(row.items_json) : (row.items_json || []);
-              itemsByInvoiceId[row.invoice_id] = items.map((item, idx) => ({
-                item_id: idx + 1,
-                description: item.description,
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                amount: item.amount,
-                invoice_invoice_id: row.invoice_id
-              }));
+              if (items.length > 0) {
+                itemsByInvoiceId[row.invoice_id] = items.map((item, idx) => ({
+                  item_id: idx + 1,
+                  description: item.description,
+                  quantity: item.quantity,
+                  unit_price: item.unit_price,
+                  amount: item.amount,
+                  invoice_invoice_id: row.invoice_id
+                }));
+              }
             } catch { itemsByInvoiceId[row.invoice_id] = []; }
           });
-        } catch { /* no items available from either source */ }
+        } catch { /* items_json column may not exist */ }
       }
 
       // Resolve the latest operational status from audit_logs (note: table is audit_logs not audit_log)
@@ -300,6 +309,23 @@ async function getInvoices(req, res) {
       } catch {
         // audit_logs schema may differ — skip status resolution, use row.status directly
       }
+
+      try {
+        const [sentRows] = await pool.query(
+          `SELECT CAST(affected_record AS UNSIGNED) AS invoice_id, MIN(created_at) AS sent_at
+           FROM audit_logs
+           WHERE action_description IN ('invoice_sent', 'scheduled_invoice_sent')
+             AND CAST(affected_record AS UNSIGNED) IN (?)
+           GROUP BY CAST(affected_record AS UNSIGNED)`,
+          [invoiceIds]
+        );
+        sentAtByInvoiceId = sentRows.reduce((items, sentRow) => {
+          items[Number(sentRow.invoice_id)] = sentRow.sent_at;
+          return items;
+        }, {});
+      } catch {
+        // Older audit schemas may not expose invoice send events.
+      }
     }
 
     // Map results with resolved status and attached items
@@ -319,7 +345,8 @@ async function getInvoices(req, res) {
           payment_status: payment.payment_status || null,
           payment_method: payment.payment_method || null,
           payment_date: payment.payment_date || null,
-          transaction_id: payment.transaction_id || null
+          transaction_id: payment.transaction_id || null,
+          sent_at: sentAtByInvoiceId[row.invoice_id] || row.created_at || null
         };
       })
     });
@@ -541,16 +568,20 @@ async function sendInvoice(req, res) {
       return res.status(404).json({ message: "Invoice not found." });
     }
 
-    if (invoice.status === "Paid") {
+    if (["Paid", "Void", "Cancelled", "Refunded"].includes(invoice.status)) {
       await connection.rollback();
-      return res.status(400).json({ message: "Paid invoices cannot be sent again." });
+      return res.status(400).json({ message: `${invoice.status} invoices cannot be sent.` });
     }
 
     // Fetch line items for PDF
-    const [items] = await connection.query(
-      "SELECT description, quantity, unit_price, amount FROM invoice_item WHERE invoice_invoice_id = ?",
-      [invoiceId]
-    );
+    let items = [];
+    try {
+      const [itemRows] = await connection.query(
+        "SELECT description, quantity, unit_price, amount FROM invoice_item WHERE invoice_invoice_id = ?",
+        [invoiceId]
+      );
+      items = itemRows;
+    } catch { /* invoice_item table may not exist */ }
     invoice.items = items;
 
     // If no items from invoice_item, try items_json
@@ -607,7 +638,7 @@ async function sendInvoice(req, res) {
     }
 
     // Send invoice via email service with PDF attachment
-    await sendInvoiceEmail(invoice, {
+    const delivery = await sendInvoiceEmail(invoice, {
       pdfBuffer,
       paymentUrl,
       qrCodeDataUri
@@ -619,7 +650,9 @@ async function sendInvoice(req, res) {
       [invoiceId]
     );
     await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}Sent`, "invoice", invoiceId, req.user?.userId);
-    await writeAuditLog(connection, "invoice_sent", "invoice", invoiceId, req.user?.userId);
+    await writeAuditLog(connection, "invoice_sent", "invoice", invoiceId, req.user?.userId, {
+      newValue: JSON.stringify({ ...delivery, emailType: "Invoice Issued", triggerSource: "Finance" })
+    });
 
     await connection.commit();
 
@@ -636,10 +669,66 @@ async function sendInvoice(req, res) {
     });
   } catch (error) {
     await connection.rollback();
+    console.error("[SEND INVOICE] Error:", error.message, error.code, error.type);
+    // Attempt audit log — may fail if connection is in a bad state
+    try {
+      await writeAuditLog(connection, "invoice_email_failed", "invoice", invoiceId, req.user?.userId, {
+        newValue: JSON.stringify({ emailType: "Invoice Issued", message: error.message, errorCode: error.code, triggerSource: "Finance" })
+      });
+    } catch { /* non-critical */ }
     res.status(500).json({
       message: "Failed to send invoice.",
       detail: error.message
     });
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * PATCH /api/invoices/:id/void
+ * Retains an officially-created invoice for audit while removing it from active totals.
+ */
+async function voidInvoice(req, res) {
+  const invoiceId = Number(req.params.id);
+  const reason = String(req.body?.reason || "").trim();
+  if (!invoiceId) return res.status(400).json({ message: "Invalid invoice id." });
+  if (!reason) return res.status(400).json({ message: "A void reason is required." });
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query(
+      "SELECT status, invoiceId FROM invoice WHERE invoice_id = ? LIMIT 1 FOR UPDATE",
+      [invoiceId]
+    );
+    if (!rows.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Invoice not found." });
+    }
+    if (rows[0].status === "Void") {
+      await connection.rollback();
+      return res.status(400).json({ message: "Invoice is already void." });
+    }
+
+    await connection.query(
+      `UPDATE invoice
+       SET status = 'Void', void_reason = ?, voided_by = ?, voided_at = NOW()
+       WHERE invoice_id = ?`,
+      [reason, req.user?.userId || null, invoiceId]
+    );
+    await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}Void`, "invoice", invoiceId, req.user?.userId, {
+      previousValue: rows[0].status,
+      newValue: JSON.stringify({ status: "Void", reason })
+    });
+    await writeAuditLog(connection, "invoice_voided", "invoice", invoiceId, req.user?.userId, {
+      newValue: JSON.stringify({ reason })
+    });
+    await connection.commit();
+    res.json({ message: "Invoice voided and retained for audit.", invoice_id: invoiceId, status: "Void" });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ message: "Failed to void invoice.", detail: error.message });
   } finally {
     connection.release();
   }
@@ -763,6 +852,7 @@ module.exports = {
   getNextInvoiceNumber,
   scheduleInvoices,
   sendInvoice,
+  voidInvoice,
   toCurrencyNumber,
   STATUS_AUDIT_PREFIX,
   toDatabaseInvoiceStatus,

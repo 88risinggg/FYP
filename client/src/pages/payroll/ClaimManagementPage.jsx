@@ -60,9 +60,9 @@ export default function ClaimManagementPage({ role }) {
 
       {/* Error */}
       {error && (
-        <div className="rounded-xl border border-red-300/40 bg-red-50 p-4 text-sm text-red-700">
+        <div className="rounded-xl border border-red-300/40 bg-[#FDD9CD] p-4 text-sm text-red-700">
           {error}
-          <button onClick={() => setError("")} className="ml-3 font-medium text-red-500 hover:text-red-800">✕</button>
+          <button onClick={() => setError("")} className="ml-3 font-medium text-red-500 hover:text-red-500">✕</button>
         </div>
       )}
 
@@ -132,7 +132,7 @@ export default function ClaimManagementPage({ role }) {
                       <button
                         disabled={busyId === claim.claim_id}
                         onClick={() => act(claim, isFinance ? "release" : "approve")}
-                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-600 disabled:opacity-50"
+                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 disabled:opacity-50"
                       >
                         {busyId === claim.claim_id ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
                         {isFinance ? "Release funds" : "Approve for Finance"}
@@ -140,7 +140,7 @@ export default function ClaimManagementPage({ role }) {
                       <button
                         disabled={busyId === claim.claim_id}
                         onClick={() => act(claim, "reject")}
-                        className="inline-flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-600 disabled:opacity-50"
+                        className="inline-flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-50"
                       >
                         <XCircle size={15} />Reject
                       </button>

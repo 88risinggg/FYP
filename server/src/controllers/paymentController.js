@@ -6,6 +6,7 @@
  */
 
 const { pool } = require("../config/db");
+const { settleInvoiceFromConfirmedPayments } = require("../services/invoicePaymentSettlementService");
 
 function toCurrencyNumber(value) {
   const n = Number(value);
@@ -17,10 +18,13 @@ function toCurrencyNumber(value) {
  */
 async function ensureInvoiceCanBePaid(connection, invoiceId) {
   const [rows] = await connection.query(
-    "SELECT risk_level, review_status FROM invoice WHERE invoice_id = ? LIMIT 1",
+    "SELECT risk_level, review_status, status FROM invoice WHERE invoice_id = ? LIMIT 1",
     [invoiceId]
   );
   const invoice = rows[0];
+  if (!invoice || ["Paid", "Void", "Cancelled", "Refunded"].includes(invoice.status)) {
+    return { allowed: false, message: "This invoice is not available for payment." };
+  }
   if (invoice?.risk_level === "High" && invoice.review_status !== "Approved") {
     return { allowed: false, message: "High-risk invoices require manual fraud review before payment processing." };
   }
@@ -37,7 +41,7 @@ async function getPaymentsWorkspace(req, res) {
              i.status AS database_status, c.name AS customer_name, c.email AS customer_email
       FROM invoice i
       INNER JOIN customer c ON c.customer_id = i.customer_id
-      WHERE i.status NOT IN ('Paid', 'Cancelled', 'Refunded')
+      WHERE i.status NOT IN ('Paid', 'Void', 'Cancelled', 'Refunded')
       ORDER BY i.due_date ASC, i.invoice_id DESC
     `);
 
@@ -92,10 +96,19 @@ async function recordManualPayment(req, res) {
       [String(amount), transactionId, invoiceId]
     );
 
-    await connection.query("UPDATE invoice SET status = 'Paid', payment_date = NOW(), transaction_id = ? WHERE invoice_id = ?", [transactionId, invoiceId]);
+    const settlement = await settleInvoiceFromConfirmedPayments(connection, invoiceId, "Sent");
+    await connection.query(
+      "UPDATE invoice SET payment_date = NOW(), transaction_id = ? WHERE invoice_id = ?",
+      [transactionId, invoiceId]
+    );
     await connection.commit();
 
-    res.status(201).json({ message: "Manual payment recorded." });
+    res.status(201).json({
+      message: settlement.status === "Paid" ? "Manual payment recorded. Invoice paid in full." : "Partial payment recorded.",
+      invoice_status: settlement.status,
+      amount_paid: settlement.confirmedPaid,
+      outstanding_amount: settlement.outstandingAmount
+    });
   } catch (error) {
     await connection.rollback();
     res.status(500).json({ message: "Failed to record manual payment.", detail: error.message });
@@ -113,7 +126,7 @@ async function createStripePaymentLink(req, res) {
 
   try {
     const [rows] = await pool.query(
-      `SELECT i.invoice_id, i.invoiceId, i.total_amount, c.email
+      `SELECT i.invoice_id, i.invoiceId, i.total_amount, i.status, i.payment_url, c.email
        FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id
        WHERE i.invoice_id = ? LIMIT 1`,
       [invoiceId]
@@ -123,6 +136,19 @@ async function createStripePaymentLink(req, res) {
     const invoice = rows[0];
     const paymentCheck = await ensureInvoiceCanBePaid(pool, invoiceId);
     if (!paymentCheck.allowed) return res.status(400).json({ message: paymentCheck.message });
+
+    // Reuse existing real Stripe URL — avoid creating a new session unnecessarily
+    const existingUrl = invoice.payment_url;
+    const isRealUrl = existingUrl && existingUrl.startsWith("https://checkout.stripe.com/c/pay/");
+    if (isRealUrl) {
+      return res.json({
+        message: "Existing Stripe payment link returned.",
+        invoice_id: invoice.invoice_id,
+        invoiceId: invoice.invoiceId,
+        paymentUrl: existingUrl,
+        provider: "stripe"
+      });
+    }
 
     const { createCheckoutSession } = require("../services/stripeService");
     const result = await createCheckoutSession({
@@ -148,6 +174,124 @@ async function createStripePaymentLink(req, res) {
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to create payment link.", detail: error.message });
+  }
+}
+
+/**
+ * POST /api/payments/stripe/confirm
+ *
+ * Called by the client success page to confirm a Stripe checkout session
+ * and mark the invoice as Paid. This is a fallback for when the webhook
+ * hasn't fired yet (e.g. local dev, demo mode, or webhook delay).
+ *
+ * Body: { invoiceId (string like "INV-000001"), session_id }
+ */
+async function confirmStripePayment(req, res) {
+  const { invoiceId, session_id: sessionId } = req.body || {};
+
+  if (!invoiceId) {
+    return res.status(400).json({ message: "invoiceId is required." });
+  }
+
+  try {
+    // Look up the invoice by string invoiceId
+    const [rows] = await pool.query(
+      `SELECT i.invoice_id, i.status, i.total_amount, i.stripe_session_id
+       FROM invoice i WHERE i.invoiceId = ? LIMIT 1`,
+      [invoiceId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Invoice not found." });
+    }
+
+    const invoice = rows[0];
+
+    // Already paid — nothing to do
+    if (invoice.status === "Paid") {
+      return res.json({ status: "Paid", message: "Invoice is already marked as paid." });
+    }
+
+    // Try to verify with Stripe if we have a real key
+    const { retrieveSession } = require("../services/stripeService");
+    const sid = sessionId || invoice.stripe_session_id;
+    let confirmedByStripe = false;
+    let transactionId = `STRIPE-CONFIRM-${Date.now()}`;
+    let payAmount = Number(invoice.total_amount);
+
+    if (sid && process.env.STRIPE_SECRET_KEY) {
+      try {
+        const session = await retrieveSession(sid);
+        if (session && session.payment_status === "paid") {
+          confirmedByStripe = true;
+          transactionId = session.payment_intent || sid;
+          payAmount = session.amount_total ? session.amount_total / 100 : payAmount;
+        } else if (session && session.payment_status !== "paid") {
+          // Stripe says not paid
+          return res.json({ status: invoice.status, message: "Payment not yet confirmed by Stripe." });
+        }
+      } catch (stripeErr) {
+        console.error("[CONFIRM] Stripe session retrieval failed:", stripeErr.message);
+        // Fall through — mark paid anyway based on success page redirect
+      }
+    } else {
+      // No Stripe key (demo mode) or no session ID — trust the success redirect
+      confirmedByStripe = true;
+    }
+
+    if (!confirmedByStripe) {
+      return res.json({ status: invoice.status, message: "Unable to confirm payment." });
+    }
+
+    // Mark invoice as Paid
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // Prevent double-processing
+      const [lockRows] = await connection.query(
+        "SELECT status FROM invoice WHERE invoice_id = ? FOR UPDATE",
+        [invoice.invoice_id]
+      );
+      if (lockRows[0]?.status === "Paid") {
+        await connection.rollback();
+        return res.json({ status: "Paid", message: "Invoice already paid." });
+      }
+
+      // Insert payment record
+      await connection.query(
+        `INSERT INTO payment (payment_date, amount, status, transaction_id, invoice_invoice_id, payment_method_name)
+         VALUES (NOW(), ?, 'Completed', ?, ?, 'Stripe')`,
+        [String(payAmount), transactionId, invoice.invoice_id]
+      );
+
+      // Update invoice status
+      await connection.query(
+        `UPDATE invoice
+         SET status = 'Paid', payment_status = 'paid', payment_method = 'card',
+             payment_date = NOW(), transaction_id = ?
+         WHERE invoice_id = ?`,
+        [transactionId, invoice.invoice_id]
+      );
+
+      await connection.commit();
+
+      // Notify Finance (non-blocking)
+      try {
+        const { notifyPaymentSuccess } = require("../services/invoiceNotificationService");
+        notifyPaymentSuccess(invoiceId, null, payAmount).catch(() => {});
+      } catch { /* non-blocking */ }
+
+      res.json({ status: "Paid", message: "Invoice marked as paid.", amount: payAmount });
+    } catch (dbErr) {
+      await connection.rollback();
+      throw dbErr;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error("[CONFIRM PAYMENT]", error.message);
+    res.status(500).json({ message: "Failed to confirm payment.", detail: error.message });
   }
 }
 
@@ -239,6 +383,7 @@ async function getPaymentHistory(req, res) {
 }
 
 module.exports = {
+  confirmStripePayment,
   createStripePaymentLink,
   getPaymentHistory,
   getPaymentsWorkspace,

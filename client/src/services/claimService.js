@@ -1,7 +1,7 @@
 import { apiRequest } from "./apiClient.js";
 import { getStoredSession } from "./sessionService.js";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 export const CLAIM_TYPES = ["Medical", "Transport", "Meal", "Internet", "Office Purchase", "Business Travel", "Other"];
 

@@ -26,6 +26,7 @@ const adminUserRoutes = require("./routes/adminUserRoutes");
 const adminRoleRoutes = require("./routes/adminRoleRoutes");
 const adminReminderRoutes = require("./routes/adminReminderRoutes");
 const adminAuditLogRoutes = require("./routes/adminAuditLogRoutes");
+const auditLogRoutes = require("./routes/auditLogRoutes");
 const googleAuthRoutes = require("./routes/googleAuthRoutes");
 const otpAuthRoutes = require("./routes/otpAuthRoutes");
 const publicRoutes = require("./routes/publicRoutes");
@@ -41,7 +42,11 @@ const app = express();
 const allowedOrigins = [
   process.env.CLIENT_URL,
   "http://localhost:5173",
+  "http://localhost:5174",
+  "http://localhost:5175",
   "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+  "http://127.0.0.1:5175",
   "http://127.0.0.1.nip.io:5173"
 ].filter(Boolean);
 
@@ -96,6 +101,7 @@ app.use("/api/admin/users", adminUserRoutes);
 app.use("/api/admin/roles", adminRoleRoutes);
 app.use("/api/admin/invoicing", adminReminderRoutes);
 app.use("/api/admin/invoicing/audit-logs", adminAuditLogRoutes);
+app.use("/api/audit-logs", auditLogRoutes);
 app.use("/api/auth/google", googleAuthRoutes);
 app.use("/api/auth/otp", otpAuthRoutes);
 

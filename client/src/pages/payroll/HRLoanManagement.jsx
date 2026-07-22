@@ -44,7 +44,7 @@ function formatDate(dateStr) {
 }
 
 const SkeletonBar = ({ width = "100%", height = "h-4" }) => (
-  <div className={`${height} rounded-lg bg-white/800 animate-pulse`} style={{ width }} />
+  <div className={`${height} rounded-lg bg-white/80 animate-pulse`} style={{ width }} />
 );
 
 export default function HRLoanManagement() {
@@ -179,8 +179,8 @@ export default function HRLoanManagement() {
           <div
             className={`fixed top-24 left-1/2 -translate-x-1/2 z-[70] w-full max-w-md rounded-xl border px-5 py-4 shadow-2xl backdrop-blur-sm animate-[slideDown_0.3s_ease-out] ${
               toast.type === "error"
-                ? "border-red-400/30 bg-red-50 text-red-700"
-                : "border-emerald-400/30 bg-emerald-50 text-emerald-700"
+                ? "border-red-400/30 bg-[#FDD9CD] text-red-700"
+                : "border-emerald-400/30 bg-[#FFF6F2] text-emerald-700"
             }`}
           >
             <div className="flex items-center gap-3">
@@ -209,8 +209,8 @@ export default function HRLoanManagement() {
                 onClick={() => setFilterStatus(status)}
                 className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
                   filterStatus === status
-                    ? "bg-[#F38978] text-[#251E1F]"
-                    : "border border-[#f0d2ca] bg-white/800 text-[#251E1F]/60 hover:bg-[#FDD9CD]/45 hover:text-[#251E1F]"
+                    ? "bg-[#F38978] text-white"
+                    : "border border-[#f0d2ca] bg-white/80 text-[#251E1F]/60 hover:bg-[#FDD9CD]/45 hover:text-[#251E1F]"
                 }`}
               >
                 {status === "all" ? "All" : statusLabels[status]}
@@ -221,7 +221,7 @@ export default function HRLoanManagement() {
 
         {/* Loan Table */}
         {loading ? (
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
             <div className="space-y-3">
               {[1, 2, 3, 4].map((i) => (
                 <SkeletonBar key={i} height="h-14" />
@@ -229,7 +229,7 @@ export default function HRLoanManagement() {
             </div>
           </div>
         ) : filteredLoans.length === 0 ? (
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Landmark size={48} className="text-[#F38978]/30" />
               <p className="mt-4 text-sm text-[#7b6660]">No loan requests found</p>
@@ -241,7 +241,7 @@ export default function HRLoanManagement() {
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
             {/* Table Header */}
             <div className="hidden sm:grid sm:grid-cols-[1.5fr_1fr_0.8fr_0.8fr_1fr_0.5fr] gap-4 pb-3 border-b border-[#f0d2ca]">
               <span className="text-[#7b6660]/70 font-medium text-xs">Staff Name</span>
@@ -274,7 +274,7 @@ export default function HRLoanManagement() {
                       <span>
                         <span
                           className={`rounded-full border px-3 py-0.5 text-xs font-semibold whitespace-nowrap ${
-                            loanStatusStyles[loan.status] || "border-gray-300/30 bg-gray-300/10 text-gray-200"
+                            loanStatusStyles[loan.status] || "border-[#F0D2CA]/30 bg-[#FFF6F2]/10 text-[#7B6660]"
                           }`}
                         >
                           {statusLabels[loan.status] || loan.status}
@@ -287,7 +287,7 @@ export default function HRLoanManagement() {
                         <button
                           type="button"
                           onClick={() => toggleExpand(loanId)}
-                          className="flex items-center gap-1 rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-1.5 text-xs text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                          className="flex items-center gap-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-1.5 text-xs text-[#251E1F] hover:bg-[#FDD9CD]/45"
                           aria-label={isExpanded ? "Collapse details" : "Expand details"}
                         >
                           {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -297,7 +297,7 @@ export default function HRLoanManagement() {
 
                     {/* Expanded Detail View */}
                     {isExpanded && (
-                      <div className="mt-3 rounded-lg border border-[#f0d2ca] bg-black/20 p-4">
+                      <div className="mt-3 rounded-lg border border-[#f0d2ca] bg-[#251E1F]/20 p-4">
                         {/* Pending: Approve/Reject + Comments */}
                         {loan.status === "pending" && (
                           <div className="space-y-4">
@@ -404,7 +404,7 @@ export default function HRLoanManagement() {
                                                 handleMarkPaid(loanId, inst.installment_id)
                                               }
                                               disabled={payingInstallment === inst.installment_id}
-                                              className="flex items-center gap-1 rounded-lg bg-[#F38978] px-3 py-1.5 text-xs font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-60"
+                                              className="flex items-center gap-1 rounded-lg bg-[#F38978] px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110 disabled:opacity-60"
                                             >
                                               <Check size={12} />
                                               {payingInstallment === inst.installment_id

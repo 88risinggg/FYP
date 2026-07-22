@@ -1,7 +1,7 @@
 import { apiRequest } from "./apiClient.js";
 import { getStoredSession } from "./sessionService.js";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 function authHeaders() {
   const session = getStoredSession();
@@ -28,14 +28,27 @@ export function fetchAdminInvoicingDashboard() {
   });
 }
 
-export function fetchInvoicePerformance(range = "last-30-days", filters = {}) {
+export function fetchInvoicePerformance(range = "last-30-days", filters = {}, requestOptions = {}) {
   return apiRequest(`/api/admin/invoicing/dashboard/invoice-performance${toQueryString({ range, ...filters })}`, {
-    headers: authHeaders()
+    ...requestOptions,
+    headers: { ...authHeaders(), ...requestOptions.headers }
   });
 }
 
 export function fetchPaymentReminderSummary(range = "today") {
   return apiRequest(`/api/admin/invoicing/dashboard/payment-reminder-summary${toQueryString({ range })}`, {
+    headers: authHeaders()
+  });
+}
+
+export function fetchAdminEmailDelivery(filters = {}) {
+  return apiRequest(`/api/admin/invoicing/dashboard/email-delivery${toQueryString(filters)}`, {
+    headers: authHeaders()
+  });
+}
+
+export function fetchAdminPaymentUpdates(filters = {}) {
+  return apiRequest(`/api/admin/invoicing/dashboard/payment-updates${toQueryString(filters)}`, {
     headers: authHeaders()
   });
 }
@@ -46,8 +59,14 @@ export function fetchInvoiceValidationSummary() {
   });
 }
 
-export function fetchInvoiceValidationErrors() {
-  return apiRequest("/api/admin/invoicing/dashboard/validation-errors", {
+export function fetchInvoiceUploadHistory(filters = {}) {
+  return apiRequest(`/api/admin/invoicing/dashboard/validation-summary/uploads${toQueryString(filters)}`, {
+    headers: authHeaders()
+  });
+}
+
+export function fetchInvoiceValidationErrors(filters = {}) {
+  return apiRequest(`/api/admin/invoicing/dashboard/validation-errors${toQueryString(filters)}`, {
     headers: authHeaders()
   });
 }

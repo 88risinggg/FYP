@@ -315,7 +315,7 @@ async function getAuditLogs(req, res) {
 async function getAppearance(req, res) {
   try {
     const settings = await settingsModel.getAppearanceSettings(req.user.userId);
-    res.json(settings || { theme: "system", accent_color: "#7B2FF7", compact_mode: false, font_size: "medium", language: "en" });
+    res.json(settings || { theme: "system", accent_color: "#F38978", compact_mode: false, font_size: "medium", language: "en" });
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch appearance settings" });
   }
@@ -411,11 +411,116 @@ async function deleteAccount(req, res) {
       return res.status(401).json({ message: "Incorrect password" });
     }
 
-    const { pool } = require("../config/db");
-    await pool.query("DELETE FROM user WHERE user_id = ?", [req.user.userId]);
-    res.json({ message: "Account deleted permanently" });
+    const request = await settingsModel.createAccountActionRequest(req.user.userId, "account_deletion");
+    await settingsModel.notifyAdminsOfDeletionRequest(request);
+    await settingsModel.createSettingsAuditLog(req.user.userId, {
+      action: "Account deletion requested for admin approval",
+      module: "danger_zone",
+      ip_address: req.ip
+    });
+    res.status(request.alreadyPending ? 200 : 202).json({
+      message: request.alreadyPending
+        ? "Your account deletion request is already awaiting admin approval"
+        : "Account deletion request submitted for admin approval",
+      request
+    });
   } catch (error) {
     res.status(500).json({ message: "Failed to delete account" });
+  }
+}
+
+async function getPrivacy(req, res) {
+  try {
+    res.json(await settingsModel.getPrivacySettings(req.user.userId));
+  } catch (error) {
+    res.status(500).json({ message: "Failed to load privacy preferences" });
+  }
+}
+
+async function updatePrivacy(req, res) {
+  try {
+    const preferences = await settingsModel.upsertPrivacySettings(req.user.userId, req.body);
+    await settingsModel.createSettingsAuditLog(req.user.userId, {
+      action: "Privacy preferences updated",
+      module: "privacy",
+      ip_address: req.ip
+    });
+    res.json({ message: "Privacy preferences saved", preferences });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to save privacy preferences" });
+  }
+}
+
+async function exportPersonalData(req, res) {
+  try {
+    res.json(await settingsModel.getPersonalDataExport(req.user.userId));
+  } catch (error) {
+    res.status(500).json({ message: "Failed to prepare your data export" });
+  }
+}
+
+async function requestAccountData(req, res) {
+  try {
+    const request = await settingsModel.createAccountActionRequest(req.user.userId, "data_access");
+    await settingsModel.createSettingsAuditLog(req.user.userId, {
+      action: "Formal account data request submitted",
+      module: "privacy",
+      ip_address: req.ip
+    });
+    res.status(request.alreadyPending ? 200 : 202).json({
+      message: request.alreadyPending ? "A data request is already pending" : "Data request submitted",
+      request
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to submit data request" });
+  }
+}
+
+async function resetSettings(req, res) {
+  try {
+    await settingsModel.resetUserSettings(req.user.userId);
+    await settingsModel.createSettingsAuditLog(req.user.userId, {
+      action: "Personal settings reset to defaults",
+      module: "danger_zone",
+      ip_address: req.ip
+    });
+    res.json({ message: "Settings reset to defaults" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to reset settings" });
+  }
+}
+
+async function getDeletionRequests(req, res) {
+  try {
+    res.json({ requests: await settingsModel.listDeletionRequests() });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to load deletion requests" });
+  }
+}
+
+async function reviewDeletionRequest(req, res) {
+  try {
+    const decision = req.body.decision;
+    if (!["approved", "rejected"].includes(decision)) {
+      return res.status(400).json({ message: "Decision must be approved or rejected" });
+    }
+    const requests = await settingsModel.listDeletionRequests();
+    const pending = requests.find((item) => Number(item.request_id) === Number(req.params.id));
+    if (pending && Number(pending.user_id) === Number(req.user.userId)) {
+      return res.status(409).json({ message: "An admin cannot review their own deletion request" });
+    }
+    const request = await settingsModel.reviewDeletionRequest(
+      Number(req.params.id), req.user.userId, decision, String(req.body.note || "").trim()
+    );
+    if (!request) return res.status(404).json({ message: "Pending deletion request not found" });
+    await settingsModel.createSettingsAuditLog(req.user.userId, {
+      action: `${decision === "approved" ? "Approved" : "Rejected"} account deletion request ${req.params.id}`,
+      module: "danger_zone",
+      ip_address: req.ip
+    });
+    res.json({ message: `Deletion request ${decision}`, request });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to review deletion request" });
   }
 }
 
@@ -492,5 +597,12 @@ module.exports = {
   deactivateAccount,
   deleteAccount,
   sendOtp,
-  verifyOtp
+  verifyOtp,
+  getPrivacy,
+  updatePrivacy,
+  exportPersonalData,
+  requestAccountData,
+  resetSettings,
+  getDeletionRequests,
+  reviewDeletionRequest
 };

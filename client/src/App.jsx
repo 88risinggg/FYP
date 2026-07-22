@@ -4,7 +4,17 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import LoginPage from "./pages/LoginPage.jsx";
 import ModuleSelectionPage from "./pages/ModuleSelectionPage.jsx";
 import PublicInvoiceViewPage from "./pages/PublicInvoiceViewPage.jsx";
+import PaymentSuccessPage from "./pages/PaymentSuccessPage.jsx";
+import PaymentCancelledPage from "./pages/PaymentCancelledPage.jsx";
 import AdminInvoicingDashboard from "./pages/invoicing/AdminInvoicingDashboard.jsx";
+import AdminReminderCategoryPage from "./pages/invoicing/AdminReminderCategoryPage.jsx";
+import AdminEmailDeliveryPage from "./pages/invoicing/AdminEmailDeliveryPage.jsx";
+import AdminPaymentUpdatesPage from "./pages/invoicing/AdminPaymentUpdatesPage.jsx";
+import AdminInvoiceUploadHistoryPage from "./pages/invoicing/AdminInvoiceUploadHistoryPage.jsx";
+import AdminValidationErrorsPage from "./pages/invoicing/AdminValidationErrorsPage.jsx";
+import AdminRecentStatusChangesPage from "./pages/invoicing/AdminRecentStatusChangesPage.jsx";
+import AdminInvoicingRecordPage from "./pages/invoicing/AdminInvoicingRecordPage.jsx";
+import AdminInvoiceAuditTrailPage from "./pages/invoicing/AdminInvoiceAuditTrailPage.jsx";
 import FinanceInvoicingPage from "./pages/invoicing/FinanceInvoicingPage.jsx";
 import AdminPayrollPage from "./pages/payroll/AdminPayrollPage.jsx";
 import FinancePayrollPage from "./pages/payroll/FinancePayrollPage.jsx";
@@ -12,6 +22,8 @@ import HRPayrollPage from "./pages/payroll/HRPayrollPage.jsx";
 import StaffPayrollPage from "./pages/payroll/StaffPayrollPage.jsx";
 import SettingsPage from "./pages/settings/SettingsPage.jsx";
 import { startHealthCheck, stopHealthCheck } from "./services/apiClient.js";
+import { applyAppearance, readCachedAppearance } from "./services/appearanceService.js";
+import { fetchAppearance } from "./services/settingsService.js";
 import { getStoredSession } from "./services/sessionService.js";
 
 function ProtectedRoute({ children }) {
@@ -139,10 +151,33 @@ function StaffOrHRPayrollRoute({ children }) {
 
 export default function App() {
   useEffect(() => {
-    if (getStoredSession()) {
+    const session = getStoredSession();
+    let active = true;
+    const systemTheme = window.matchMedia?.("(prefers-color-scheme: dark)");
+    const handleSystemThemeChange = () => {
+      const cached = readCachedAppearance();
+      if (cached.theme === "system") applyAppearance(cached, { persist: false });
+    };
+
+    applyAppearance(readCachedAppearance(), { persist: false });
+
+    if (session) {
       startHealthCheck();
+      fetchAppearance()
+        .then((appearance) => {
+          if (active) applyAppearance(appearance);
+        })
+        .catch(() => {
+          // Cached settings remain active when the API is temporarily unavailable.
+        });
     }
-    return () => stopHealthCheck();
+
+    systemTheme?.addEventListener?.("change", handleSystemThemeChange);
+    return () => {
+      active = false;
+      systemTheme?.removeEventListener?.("change", handleSystemThemeChange);
+      stopHealthCheck();
+    };
   }, []);
 
   return (
@@ -150,12 +185,94 @@ export default function App() {
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/invoice/view/:invoiceId" element={<PublicInvoiceViewPage />} />
+      <Route path="/payment/success" element={<PaymentSuccessPage />} />
+      <Route path="/payment/cancelled" element={<PaymentCancelledPage />} />
       <Route
         path="/module-selection"
         element={
           <ProtectedRoute>
             <ModuleSelectionPage />
           </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/reminder-summary/:category"
+        element={
+          <AdminInvoicingRoute>
+            <AdminReminderCategoryPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/email-delivery/:category"
+        element={
+          <AdminInvoicingRoute>
+            <AdminEmailDeliveryPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/payment-updates"
+        element={
+          <AdminInvoicingRoute>
+            <AdminPaymentUpdatesPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/payment-updates/:recordId"
+        element={
+          <AdminInvoicingRoute>
+            <AdminInvoicingRecordPage mode="payment" />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/invoice-records/:recordId"
+        element={
+          <AdminInvoicingRoute>
+            <AdminInvoicingRecordPage mode="invoice" />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/audit-trail"
+        element={
+          <AdminInvoicingRoute>
+            <AdminInvoiceAuditTrailPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/dashboard/validation-summary/upload-history"
+        element={
+          <AdminInvoicingRoute>
+            <AdminInvoiceUploadHistoryPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/dashboard/validation-errors"
+        element={
+          <AdminInvoicingRoute>
+            <AdminValidationErrorsPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/dashboard/validation-errors/:uploadId"
+        element={
+          <AdminInvoicingRoute>
+            <AdminValidationErrorsPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/dashboard/invoice-performance/status-changes"
+        element={
+          <AdminInvoicingRoute>
+            <AdminRecentStatusChangesPage />
+          </AdminInvoicingRoute>
         }
       />
       <Route

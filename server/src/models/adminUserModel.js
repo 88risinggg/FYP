@@ -1,5 +1,7 @@
 const { pool } = require("../config/db");
 
+const allowedRoleNames = ["Admin", "Finance", "HR", "Staff"];
+
 const userSelect = `
   SELECT
     user.user_id AS userId,
@@ -8,32 +10,29 @@ const userSelect = `
     user.status,
     user.created_at AS createdAt,
     user.updated_at AS updatedAt,
-    role.role_id AS roleId,
-    role.role_name AS roleName
+    user.role_name AS roleName
   FROM user
-  JOIN role ON user.role_id = role.role_id
 `;
 
 async function getRoles() {
-  const [rows] = await pool.execute(
-    "SELECT role_id AS roleId, role_name AS roleName FROM role ORDER BY role_id"
-  );
-
-  return rows;
+  // Return static role list since roles are stored inline in user.role_name
+  return allowedRoleNames.map((name, idx) => ({ roleId: idx + 1, roleName: name }));
 }
 
 async function findRoleById(roleId) {
-  const [rows] = await pool.execute(
-    "SELECT role_id AS roleId, role_name AS roleName FROM role WHERE role_id = ?",
-    [roleId]
-  );
+  const roleName = allowedRoleNames[roleId - 1];
+  if (!roleName) return null;
+  return { roleId, roleName };
+}
 
-  return rows[0] || null;
+async function findRoleByName(roleName) {
+  const idx = allowedRoleNames.indexOf(roleName);
+  if (idx === -1) return null;
+  return { roleId: idx + 1, roleName };
 }
 
 async function findUserById(userId) {
   const [rows] = await pool.execute(`${userSelect} WHERE user.user_id = ?`, [userId]);
-
   return rows[0] || null;
 }
 
@@ -42,7 +41,6 @@ async function findUserByEmail(email) {
     `${userSelect} WHERE LOWER(user.email) = LOWER(?)`,
     [email]
   );
-
   return rows[0] || null;
 }
 
@@ -52,13 +50,17 @@ async function listUsers({ search, roleId, status }) {
   const hasSearch = Boolean(search);
 
   if (hasSearch) {
-    where.push("LOWER(user.email) LIKE LOWER(?)");
-    params.push(`${search}%`);
+    where.push("(LOWER(user.name) LIKE LOWER(?) OR LOWER(user.email) LIKE LOWER(?))");
+    params.push(`%${search}%`, `%${search}%`);
   }
 
   if (roleId) {
-    where.push("user.role_id = ?");
-    params.push(roleId);
+    // Map roleId to role_name
+    const roleName = allowedRoleNames[roleId - 1];
+    if (roleName) {
+      where.push("user.role_name = ?");
+      params.push(roleName);
+    }
   }
 
   if (status === "0" || status === "1") {
@@ -79,21 +81,23 @@ async function listUsers({ search, roleId, status }) {
 }
 
 async function createUser({ name, email, passwordHash, roleId, status }) {
+  const roleName = allowedRoleNames[roleId - 1] || "Staff";
   const [result] = await pool.execute(
-    `INSERT INTO user (name, email, password, role_id, status)
+    `INSERT INTO user (name, email, password, role_name, status)
      VALUES (?, ?, ?, ?, ?)`,
-    [name, email, passwordHash, roleId, status]
+    [name, email, passwordHash, roleName, status]
   );
 
   return findUserById(result.insertId);
 }
 
 async function updateUser(userId, { name, email, roleId, status }) {
+  const roleName = allowedRoleNames[roleId - 1] || "Staff";
   await pool.execute(
     `UPDATE user
-     SET name = ?, email = ?, role_id = ?, status = ?
+     SET name = ?, email = ?, role_name = ?, status = ?
      WHERE user_id = ?`,
-    [name, email, roleId, status, userId]
+    [name, email, roleName, status, userId]
   );
 
   return findUserById(userId);
@@ -101,19 +105,19 @@ async function updateUser(userId, { name, email, roleId, status }) {
 
 async function updateUserStatus(userId, status) {
   await pool.execute("UPDATE user SET status = ? WHERE user_id = ?", [status, userId]);
-
   return findUserById(userId);
 }
 
 async function updateUserPassword(userId, passwordHash) {
   await pool.execute("UPDATE user SET password = ? WHERE user_id = ?", [passwordHash, userId]);
-
   return findUserById(userId);
 }
 
 module.exports = {
+  allowedRoleNames,
   createUser,
   findRoleById,
+  findRoleByName,
   findUserByEmail,
   findUserById,
   getRoles,

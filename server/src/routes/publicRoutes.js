@@ -2,12 +2,38 @@
  * Public Routes
  *
  * Customer-facing endpoints that do NOT require authentication.
- * Used for invoice viewing, payment landing pages, and receipt downloads.
+ * Used for invoice viewing, payment landing pages, receipt downloads,
+ * and manual payment proof submission.
  */
 
 const express = require("express");
+const multer = require("multer");
+const path = require("path");
 const { viewInvoice } = require("../controllers/publicInvoiceController");
+const { submitManualPayment } = require("../controllers/manualPaymentController");
 const { pool } = require("../config/db");
+
+// Configure multer for payment proof uploads
+const proofStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, "../../uploads/payment-proofs");
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = `proof_${Date.now()}_${Math.round(Math.random() * 1e6)}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  }
+});
+const proofUpload = multer({
+  storage: proofStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    const allowed = /jpeg|jpg|png|pdf|gif|webp/;
+    const ext = allowed.test(path.extname(file.originalname).toLowerCase());
+    const mime = allowed.test(file.mimetype);
+    cb(null, ext && mime);
+  }
+});
 
 const router = express.Router();
 
@@ -16,6 +42,14 @@ const router = express.Router();
  * Customer views their invoice (marks as "Viewed" if status is "Sent").
  */
 router.get("/invoice/:invoiceId", viewInvoice);
+
+/**
+ * POST /api/public/invoice/:invoiceId/submit-payment
+ * Customer submits manual payment proof (PayNow, Bank Transfer).
+ * Body: { amount, payment_date, reference_number, payment_method, notes }
+ * Optional file: payment proof screenshot
+ */
+router.post("/invoice/:invoiceId/submit-payment", proofUpload.single("proof"), submitManualPayment);
 
 /**
  * GET /api/public/invoice/:invoiceId/receipt

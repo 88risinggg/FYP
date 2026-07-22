@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
   Check,
   FileBarChart,
   LayoutDashboard,
+  Loader2,
   LogOut,
   Menu,
+  PanelLeftOpen,
   Search,
   Settings,
   Shield,
@@ -17,6 +19,7 @@ import {
 } from "lucide-react";
 
 import Sidebar from "./Sidebar.jsx";
+import VanidayLogo from "../branding/VanidayLogo.jsx";
 import { clearSession, getStoredSession } from "../../services/sessionService.js";
 import { apiRequest } from "../../services/apiClient.js";
 
@@ -65,40 +68,60 @@ const roleProfiles = {
   }
 };
 
+const SIDEBAR_COLLAPSED_KEY = "admin-sidebar-collapsed";
+
+function readStoredSidebarCollapsed() {
+  try {
+    const value = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    return value === "true";
+  } catch {
+    return false;
+  }
+}
+
 export default function DashboardLayout({
   children,
   pageTitle,
   user,
   sidebarSections = defaultSidebarSections,
   sidebarTitle,
+  homePath,
   searchPlaceholder = "Search invoices, users, settings...",
   profileName,
   profileRole,
   onSearch,
+  searchEndpoint,
   notifications = [],
   notificationBadgeCount,
   notificationsPath,
   profilePath,
   onMarkNotificationRead,
   onMarkAllRead,
-  theme
+  theme,
+  hideSidebar = false
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const roleProfile = roleProfiles[user?.role];
   const displayName = profileName || user?.name || roleProfile?.name || "User";
   const displayRole = profileRole || roleProfile?.role || user?.role || "User";
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [fetchedNotifications, setFetchedNotifications] = useState(null);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readStoredSidebarCollapsed);
   const classes = {
     page: "relative min-h-screen overflow-hidden bg-[#fff8f5] text-[#251E1F]",
     grid: "pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(243,137,120,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(243,137,120,0.08)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20",
     header: "sticky top-0 z-10 flex h-20 items-center gap-4 border-b border-[#f2d5cc] bg-[#fff8f5]/85 px-4 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur-2xl sm:px-6",
-    iconButton: "flex h-10 w-10 items-center justify-center rounded-lg text-[#6f4f47] hover:bg-[#FDD9CD]/45 hover:text-[#F38978]",
+    iconButton: "flex h-10 w-10 items-center justify-center rounded-lg text-[#6f4f47] transition hover:bg-[#FDD9CD]/45 hover:text-[#F38978] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]/45",
     title: "min-w-0 flex-1 truncate text-base font-semibold text-[#251E1F] sm:text-lg",
-    searchWrap: "hidden w-full max-w-sm items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 shadow-lg shadow-[#F38978]/10 backdrop-blur lg:flex",
+    searchWrap: "hidden w-full max-w-sm items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 shadow-lg shadow-[#F38978]/10 backdrop-blur lg:flex",
     searchIcon: "text-[#F38978]",
     searchInput: "w-full bg-transparent text-sm text-[#251E1F] outline-none placeholder:text-[#9c7b72]",
     mutedButton: "text-[#6f4f47] hover:text-[#F38978]",
@@ -122,6 +145,16 @@ export default function DashboardLayout({
     menuItem: "flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#6f4f47] transition hover:bg-[#FDD9CD]/45 hover:text-[#251E1F]"
   };
 
+  function openSettings(section = "") {
+    const currentLocation = `${location.pathname}${location.search}`;
+    const previousLocation = location.pathname === "/dashboard/settings"
+      ? location.state?.from
+      : currentLocation;
+    navigate(`/dashboard/settings${section ? `?section=${section}` : ""}`, {
+      state: { from: previousLocation || "/module-selection" }
+    });
+  }
+
   const usesManagedNotifications = notifications.length > 0 || typeof notificationBadgeCount === "number";
   const displayNotifications = fetchedNotifications || notifications;
   const unreadCount = typeof notificationBadgeCount === "number"
@@ -129,6 +162,89 @@ export default function DashboardLayout({
     : displayNotifications.filter((notification) => !(
         notification.is_read === 1 || notification.is_read === true || notification.read
       )).length;
+  const searchEnabled = typeof onSearch === "function" || Boolean(searchEndpoint);
+
+  useEffect(() => {
+    if (!searchEndpoint || !searchQuery.trim()) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    setSearchLoading(true);
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const separator = searchEndpoint.includes("?") ? "&" : "?";
+        const data = await apiRequest(`${searchEndpoint}${separator}q=${encodeURIComponent(searchQuery.trim())}`);
+        if (active) {
+          setSearchResults(Array.isArray(data) ? data : data?.results || []);
+          setSearchOpen(true);
+        }
+      } catch {
+        if (active) {
+          setSearchResults([]);
+          setSearchOpen(true);
+        }
+      } finally {
+        if (active) setSearchLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [searchEndpoint, searchQuery]);
+
+  function getSearchResultDetails(result) {
+    const employeeId = result.employee_id || result.employee_code || result.staff_id;
+    const title = result.title || result.name || result.staff_name || employeeId || result.id || "Search result";
+    const subtitle = result.subtitle || [result.email, result.department_name, result.status]
+      .filter(Boolean)
+      .join(" • ");
+    const href = result.href || (employeeId
+      ? `/dashboard/payroll/hr/staff?highlight=${encodeURIComponent(employeeId)}`
+      : "");
+    return { href, subtitle, title };
+  }
+
+  function selectSearchResult(result) {
+    const { href } = getSearchResultDetails(result);
+    setSearchOpen(false);
+    if (href) navigate(href);
+  }
+
+  function toggleDesktopSidebar() {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+      } catch {
+        // Ignore storage failures; the in-memory toggle still works.
+      }
+      return next;
+    });
+  }
+
+  useEffect(() => {
+    if (!mobileSidebarOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setMobileSidebarOpen(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [mobileSidebarOpen]);
 
   // Admin, HR and payroll Finance pages use the shared notification API.
   // Pages with their own polling service can continue supplying notification props.
@@ -236,6 +352,13 @@ export default function DashboardLayout({
   function handleNotificationClick(notification) {
     const notificationId = notification.notification_id || notification.id;
     const isRead = notification.is_read === 1 || notification.is_read === true || notification.read;
+    const isDeletionRequest = notification.type === "account_deletion_request";
+
+    if (isDeletionRequest) {
+      setShowNotifications(false);
+      navigate("/dashboard/settings?section=danger");
+    }
+
     if (isRead || !notificationId) return;
 
     if (onMarkNotificationRead) {
@@ -257,42 +380,123 @@ export default function DashboardLayout({
   return (
     <div className={classes.page}>
       <div className={classes.grid} />
-      <Sidebar sections={sidebarSections} title={sidebarTitle} theme={theme} />
+      {!hideSidebar && mobileSidebarOpen ? (
+        <button
+          type="button"
+          aria-label="Close sidebar"
+          className="fixed inset-0 z-20 bg-[#251E1F]/35 backdrop-blur-[2px] lg:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      ) : null}
+      {!hideSidebar ? (
+        <Sidebar
+          sections={sidebarSections}
+          title={sidebarTitle}
+          theme={theme}
+          mobileOpen={mobileSidebarOpen}
+          onClose={() => setMobileSidebarOpen(false)}
+          desktopCollapsed={sidebarCollapsed}
+          onToggleDesktop={toggleDesktopSidebar}
+          homePath={homePath}
+        />
+      ) : null}
 
-      <div className="relative z-10 lg:pl-64">
+      <div className={`relative z-10 transition-[padding-left] duration-200 ease-out ${hideSidebar || sidebarCollapsed ? "lg:pl-0" : "lg:pl-64"}`}>
         <header className={classes.header}>
-          <button
-            type="button"
-            className={classes.iconButton}
-            aria-label="Open menu"
-          >
-            <Menu size={21} />
-          </button>
+          {!hideSidebar ? (
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(true)}
+              className={`${classes.iconButton} lg:hidden`}
+              aria-label="Open menu"
+            >
+              <Menu size={21} />
+            </button>
+          ) : null}
+          {!hideSidebar && sidebarCollapsed ? (
+            <button
+              type="button"
+              onClick={toggleDesktopSidebar}
+              className="hidden h-10 w-10 items-center justify-center rounded-lg text-[#6f4f47] transition hover:bg-[#FDD9CD]/45 hover:text-[#F38978] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]/45 lg:flex"
+              aria-label="Show sidebar"
+              aria-expanded={!sidebarCollapsed}
+              title="Show sidebar"
+            >
+              <PanelLeftOpen size={21} aria-hidden="true" />
+            </button>
+          ) : null}
+
+          {homePath ? (
+            <Link
+              to={homePath}
+              aria-label="Go to dashboard"
+              title="Go to dashboard"
+              className="shrink-0 rounded-md outline-none transition-opacity hover:opacity-75 focus-visible:ring-2 focus-visible:ring-[#F38978]/45"
+            >
+              <VanidayLogo
+                compact
+                className="border-r border-[#f0d2ca] pr-4"
+              />
+            </Link>
+          ) : (
+            <VanidayLogo
+              compact
+              className="shrink-0 border-r border-[#f0d2ca] pr-4"
+            />
+          )}
 
           <h1 className={classes.title}>
             {pageTitle}
           </h1>
 
           {/* Search */}
-          <div className={classes.searchWrap}>
+          {searchEnabled ? <div className={`${classes.searchWrap} relative`}>
             <Search size={16} className={classes.searchIcon} />
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
+                setSearchOpen(Boolean(e.target.value.trim()));
                 if (onSearch) onSearch(e.target.value);
               }}
+              onFocus={() => { if (searchQuery.trim()) setSearchOpen(true); }}
               onKeyDown={handleSearchKeyDown}
               placeholder={searchPlaceholder}
               className={classes.searchInput}
             />
             {searchQuery && (
-              <button type="button" onClick={() => { setSearchQuery(""); if (onSearch) onSearch(""); }} className={classes.mutedButton}>
+              <button type="button" aria-label="Clear search" onClick={() => { setSearchQuery(""); setSearchResults([]); setSearchOpen(false); if (onSearch) onSearch(""); }} className={classes.mutedButton}>
                 <X size={14} />
               </button>
             )}
-          </div>
+            {searchEndpoint && searchOpen ? (
+              <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-40 overflow-hidden rounded-xl border border-[#f0d2ca] bg-white shadow-2xl shadow-[#f2b5a9]/30">
+                {searchLoading ? (
+                  <div className="flex items-center justify-center gap-2 px-4 py-5 text-sm text-[#7b6660]"><Loader2 size={16} className="animate-spin" /> Searching...</div>
+                ) : searchResults.length ? (
+                  <div className="max-h-72 overflow-y-auto py-1">
+                    {searchResults.map((result, index) => {
+                      const details = getSearchResultDetails(result);
+                      return (
+                        <button
+                          key={`${result.type || "result"}-${result.id || result.employee_id || index}`}
+                          type="button"
+                          onClick={() => selectSearchResult(result)}
+                          className="block w-full px-4 py-3 text-left hover:bg-[#fff3ee]"
+                        >
+                          <span className="block truncate text-sm font-semibold text-[#251E1F]">{details.title}</span>
+                          {details.subtitle ? <span className="mt-0.5 block truncate text-xs text-[#7b6660]">{details.subtitle}</span> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="px-4 py-5 text-center text-sm text-[#7b6660]">No matching records found.</div>
+                )}
+              </div>
+            ) : null}
+          </div> : null}
 
           {/* Notifications */}
           <div className="relative">
@@ -399,7 +603,7 @@ export default function DashboardLayout({
                   <div className="py-1.5">
                     <button
                       type="button"
-                      onClick={() => { setShowProfileMenu(false); navigate("/dashboard/settings"); }}
+                      onClick={() => { setShowProfileMenu(false); openSettings("profile"); }}
                       className={classes.menuItem}
                     >
                       <User size={15} />
@@ -407,7 +611,7 @@ export default function DashboardLayout({
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setShowProfileMenu(false); navigate("/dashboard/settings"); }}
+                      onClick={() => { setShowProfileMenu(false); openSettings(); }}
                       className={classes.menuItem}
                     >
                       <Settings size={15} />
@@ -415,7 +619,7 @@ export default function DashboardLayout({
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setShowProfileMenu(false); navigate("/dashboard/settings"); }}
+                      onClick={() => { setShowProfileMenu(false); openSettings("security"); }}
                       className={classes.menuItem}
                     >
                       <Shield size={15} />
@@ -426,7 +630,7 @@ export default function DashboardLayout({
                     <button
                       type="button"
                       onClick={() => { setShowProfileMenu(false); handleLogout(); }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-rose-400 transition hover:bg-rose-500/10 hover:text-rose-700"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-rose-400 transition hover:bg-rose-500/10 hover:text-rose-400"
                     >
                       <LogOut size={15} />
                       Logout

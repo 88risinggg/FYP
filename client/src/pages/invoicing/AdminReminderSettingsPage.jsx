@@ -80,7 +80,7 @@ function renderPreview(text, form) {
     .replaceAll("{{amount_due}}", "$1,280.00")
     .replaceAll("{{due_date}}", "15 May 2026")
     .replaceAll("{{overdue_days}}", String(form.firstReminderDays || 1))
-    .replaceAll("{{company_name}}", "PayNivo")
+    .replaceAll("{{company_name}}", "Vaniday")
     .replaceAll("{{payment_link}}", "https://pay.example.com/INV-2026-001");
 }
 
@@ -385,7 +385,7 @@ export default function AdminReminderSettingsPage() {
             <div className="mb-5 flex items-center justify-between gap-4">
               <h3 className="text-lg font-semibold text-[#251E1F]">Email Template</h3>
               <div className="flex gap-2">
-                <button type="button" onClick={() => setShowPreview((current) => !current)} className="inline-flex items-center gap-2 rounded-lg border border-[#f0d2ca] px-3 py-2 text-sm font-semibold text-[#7b6660] hover:bg-white/800 hover:text-[#251E1F]">
+                <button type="button" onClick={() => setShowPreview((current) => !current)} className="inline-flex items-center gap-2 rounded-lg border border-[#f0d2ca] px-3 py-2 text-sm font-semibold text-[#7b6660] hover:bg-white/80 hover:text-[#251E1F]">
                   <Eye size={15} />
                   Preview
                 </button>
@@ -415,7 +415,7 @@ export default function AdminReminderSettingsPage() {
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               {placeholders.map((placeholder) => (
-                <button key={placeholder} type="button" onClick={() => setField("emailBody", `${form.emailBody} ${placeholder}`)} className="rounded-full border border-[#f0d2ca] bg-[#fff8f5] px-3 py-1 text-xs font-semibold text-[#7b6660] hover:bg-white/800 hover:text-[#251E1F]">
+                <button key={placeholder} type="button" onClick={() => setField("emailBody", `${form.emailBody} ${placeholder}`)} className="rounded-full border border-[#f0d2ca] bg-[#fff8f5] px-3 py-1 text-xs font-semibold text-[#7b6660] hover:bg-white/80 hover:text-[#251E1F]">
                   {placeholder}
                 </button>
               ))}
@@ -491,8 +491,8 @@ export default function AdminReminderSettingsPage() {
                   <td className="px-4 py-4"><span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusPill(setting.enabled)}`}>{setting.enabled ? "Active" : "Disabled"}</span></td>
                   <td className="px-4 py-4">
                     <div className="flex gap-1">
-                      <button type="button" onClick={() => handleEdit(setting)} className="rounded-lg p-2 text-[#7b6660] hover:bg-white/800 hover:text-[#251E1F]" title="Edit rule"><Pencil size={16} /></button>
-                      <button type="button" onClick={() => handleStatus(setting)} className="rounded-lg p-2 text-[#7b6660] hover:bg-white/800 hover:text-[#251E1F]" title="Enable or disable rule">{setting.enabled ? <XCircle size={16} /> : <CheckCircle2 size={16} />}</button>
+                      <button type="button" onClick={() => handleEdit(setting)} className="rounded-lg p-2 text-[#7b6660] hover:bg-white/80 hover:text-[#251E1F]" title="Edit rule"><Pencil size={16} /></button>
+                      <button type="button" onClick={() => handleStatus(setting)} className="rounded-lg p-2 text-[#7b6660] hover:bg-white/80 hover:text-[#251E1F]" title="Enable or disable rule">{setting.enabled ? <XCircle size={16} /> : <CheckCircle2 size={16} />}</button>
                       <button type="button" onClick={() => handleDelete(setting)} className="rounded-lg p-2 text-[#c55245] hover:bg-[#fff0eb]" title="Delete rule"><Trash2 size={16} /></button>
                     </div>
                   </td>
@@ -541,4 +541,3 @@ export default function AdminReminderSettingsPage() {
     </section>
   );
 }
-

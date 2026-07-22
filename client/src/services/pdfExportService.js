@@ -8,7 +8,7 @@
  * Preserves the same API surface so existing code does not need changes.
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 // Constants
 export const PAGE_MARGIN = 20;
@@ -277,7 +277,7 @@ export function addCoverPage(doc, config) {
 
   // Brand name
   doc.pages[doc.currentPage].push(
-    `<div style="position:absolute;top:70mm;left:0;width:100%;text-align:center;font-size:42pt;font-weight:900;color:${rgbStr(BRAND_COLOR)};">PayNivo</div>`
+    `<div style="position:absolute;top:70mm;left:0;width:100%;text-align:center;font-size:42pt;font-weight:900;color:${rgbStr(BRAND_COLOR)};">Vaniday</div>`
   );
 
   // Title
@@ -338,7 +338,7 @@ export function addPageFooter(doc, pageNum, totalPages, timestamp) {
 
   // Brand
   doc.pages[doc.currentPage].push(
-    `<div style="position:absolute;top:${bottomY}mm;right:${PAGE_MARGIN}mm;font-size:8pt;color:${rgbStr(GRAY_COLOR)};">PayNivo</div>`
+    `<div style="position:absolute;top:${bottomY}mm;right:${PAGE_MARGIN}mm;font-size:8pt;color:${rgbStr(GRAY_COLOR)};">Vaniday</div>`
   );
 }
 

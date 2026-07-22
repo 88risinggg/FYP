@@ -36,14 +36,55 @@ function renderTemplate(template, values) {
 function buildInvoiceEmailHtml(invoice, settings, options = {}) {
   const values = templateValues(invoice, settings, options);
   const body = renderTemplate(settings.emailBodyTemplate || defaultSettings.emailBodyTemplate, values);
-  const link = /^https?:\/\//i.test(String(options.paymentUrl || ""))
+
+  const stripeUrl = /^https?:\/\//i.test(String(options.paymentUrl || ""))
     ? options.paymentUrl
-    : values.online_view_url;
+    : null;
+  const viewUrl = values.online_view_url;
+  const primaryCta = stripeUrl || viewUrl;
+
+  const secondary = "#ff5a52";
+  const primary = "#061e4b";
+
+  // QR code block — uses CID inline image if available
+  const qrBlock = (stripeUrl && options.qrCodeDataUri)
+    ? `<div style="margin:20px 0;padding:20px;border:1px solid #e8ddd9;border-radius:8px;background:#fafafa;text-align:center">
+        <p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:${primary}">Scan to Pay</p>
+        <p style="margin:0 0 12px;font-size:11px;color:#7b6660">Point your phone camera at the QR code below</p>
+        <img src="cid:qrcode@invoice" alt="Scan to pay" width="140" height="140"
+          style="display:block;margin:0 auto;border:4px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.12)" />
+        <p style="margin:12px 0 0;font-size:10px;color:#9e8e89;word-break:break-all">${escapeHtml(stripeUrl)}</p>
+      </div>`
+    : stripeUrl
+      ? `<div style="margin:16px 0;padding:14px 16px;border:1px solid #e8ddd9;border-radius:6px;background:#fafafa">
+          <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:${primary}">Payment Link</p>
+          <p style="margin:0;font-size:10px;color:#7b6660;word-break:break-all">${escapeHtml(stripeUrl)}</p>
+        </div>`
+      : "";
+
   return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:32px;color:#251E1F">
-    <h1 style="margin:0 0 24px;color:#061e4b">${escapeHtml(values.company_name)}</h1>
-    <div style="white-space:pre-line;line-height:1.65">${escapeHtml(body)}</div>
-    <div style="margin:28px 0"><a href="${escapeHtml(link)}" style="display:inline-block;background:#061e4b;color:#fff;padding:13px 28px;text-decoration:none;font-weight:bold">View &amp; Pay Invoice</a></div>
-    <p style="font-size:12px;color:#7b6660">${escapeHtml(settings.supportEmail || settings.financeEmail || "")}</p>
+    <h1 style="margin:0 0 4px;font-size:22px;color:${primary}">${escapeHtml(values.company_name)}</h1>
+    <div style="width:36px;height:3px;background:${secondary};margin-bottom:24px"></div>
+
+    <div style="white-space:pre-line;line-height:1.65;margin-bottom:20px">${escapeHtml(body)}</div>
+
+    ${qrBlock}
+
+    <div style="margin:24px 0">
+      <a href="${escapeHtml(primaryCta)}"
+        style="display:inline-block;background:${secondary};color:#fff;padding:14px 32px;
+               text-decoration:none;font-weight:700;font-size:15px;border-radius:4px;letter-spacing:0.3px">
+        ${stripeUrl ? "Pay Invoice Now →" : "View &amp; Pay Invoice"}
+      </a>
+    </div>
+
+    ${stripeUrl ? `<p style="font-size:12px;color:#7b6660;margin:0 0 4px">
+      Or copy this link into your browser:
+    </p>
+    <p style="font-size:11px;color:#9e8e89;word-break:break-all;margin:0 0 20px">${escapeHtml(stripeUrl)}</p>` : ""}
+
+    <hr style="border:none;border-top:1px solid #f0e8e5;margin:20px 0" />
+    <p style="font-size:12px;color:#7b6660;margin:0">${escapeHtml(settings.supportEmail || settings.financeEmail || "")}</p>
   </div>`;
 }
 
@@ -63,6 +104,8 @@ async function sendInvoiceEmail(invoice, options = {}) {
     return {
       provider: "console",
       deliveredAt: new Date().toISOString(),
+      recipientEmail: hydratedInvoice.customer_email,
+      subject: renderTemplate(settings.emailSubjectTemplate, templateValues(hydratedInvoice, settings, options)),
       message: "SMTP not configured. Email logged to console."
     };
   }
@@ -101,7 +144,13 @@ async function sendInvoiceEmail(invoice, options = {}) {
     attachments
   });
 
-  return { provider: "smtp", messageId: info.messageId, deliveredAt: new Date().toISOString() };
+  return {
+    provider: "smtp",
+    messageId: info.messageId,
+    deliveredAt: new Date().toISOString(),
+    recipientEmail: hydratedInvoice.customer_email,
+    subject: renderTemplate(settings.emailSubjectTemplate, values)
+  };
 }
 
 async function sendInvoiceSettingsTestEmail(recipient) {
@@ -134,16 +183,53 @@ async function sendPaymentReceiptEmail(invoice, transactionId) {
     <p>Transaction ID: <strong>${escapeHtml(transactionId)}</strong></p>
   </div>`;
 
-  if (!transporter) return { provider: "console", deliveredAt: new Date().toISOString() };
+  const subject = `Payment Receipt - Invoice ${invoice.invoiceId}`;
+  if (!transporter) {
+    const result = { provider: "console", deliveredAt: new Date().toISOString(), recipientEmail: invoice.customer_email, subject };
+    await logPaymentReceiptDelivery(invoice, transactionId, "Sent", result);
+    return result;
+  }
   const smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER;
-  const info = await transporter.sendMail({
-    from: settings.senderName ? `"${String(settings.senderName).replaceAll('"', "")}" <${smtpFrom}>` : smtpFrom,
-    replyTo: settings.replyToEmail || settings.financeEmail || undefined,
-    to: invoice.customer_email,
-    subject: `Payment Receipt - Invoice ${invoice.invoiceId}`,
-    html
-  });
-  return { provider: "smtp", messageId: info.messageId, deliveredAt: new Date().toISOString() };
+  try {
+    const info = await transporter.sendMail({
+      from: settings.senderName ? `"${String(settings.senderName).replaceAll('"', "")}" <${smtpFrom}>` : smtpFrom,
+      replyTo: settings.replyToEmail || settings.financeEmail || undefined,
+      to: invoice.customer_email,
+      subject,
+      html
+    });
+    const result = { provider: "smtp", messageId: info.messageId, deliveredAt: new Date().toISOString(), recipientEmail: invoice.customer_email, subject };
+    await logPaymentReceiptDelivery(invoice, transactionId, "Sent", result);
+    return result;
+  } catch (error) {
+    await logPaymentReceiptDelivery(invoice, transactionId, "Failed", { subject, errorMessage: error.message, errorCode: error.code });
+    throw error;
+  }
+}
+
+async function logPaymentReceiptDelivery(invoice, transactionId, deliveryStatus, metadata) {
+  try {
+    const { pool } = require("../config/db");
+    const [invoices] = await pool.query("SELECT invoice_id FROM invoice WHERE invoiceId = ? LIMIT 1", [invoice.invoiceId]);
+    const invoiceId = invoices[0]?.invoice_id;
+    await pool.query(
+      `INSERT INTO audit_logs (
+         module, activity_type, action_description, affected_record, status, created_at, new_value,
+         invoice_id, delivery_status, customer_email
+       ) VALUES ('Invoice', 'email_delivery', ?, ?, ?, NOW(), ?, ?, ?, ?)`,
+      [
+        deliveryStatus === "Sent" ? "payment_receipt_sent" : "payment_receipt_email_failed",
+        invoiceId ? String(invoiceId) : null,
+        deliveryStatus === "Sent" ? "Success" : "Failed",
+        JSON.stringify({ ...metadata, emailType: "Payment Receipt", transactionId, triggerSource: "System" }),
+        invoiceId || null,
+        deliveryStatus,
+        invoice.customer_email || null
+      ]
+    );
+  } catch (error) {
+    console.error("[EMAIL LOG] Unable to record payment receipt delivery:", error.message);
+  }
 }
 
 module.exports = {

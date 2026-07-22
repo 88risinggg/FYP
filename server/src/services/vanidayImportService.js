@@ -17,6 +17,7 @@
 const { pool } = require("../config/db");
 const { getInvoiceSettings, defaultSettings } = require("../models/invoiceSettingsModel");
 const { reserveNextInvoiceNumber } = require("../models/invoiceSettingsModel");
+const { assessInvoiceRisk } = require("./fraudDetectionService");
 
 // =====================================================
 // Default Vaniday Field Mapping
@@ -52,12 +53,79 @@ const DEFAULT_VANIDAY_MAPPING = {
 // Field Extraction Helpers
 // =====================================================
 
+// Multi-alias lookup: each system field maps to a list of possible CSV column names
+// Listed in priority order (first match wins). Case-insensitive.
+const FIELD_ALIASES = {
+  orderId:         ["orderid", "order_id", "order id", "ordernumber", "order_number", "order number", "id"],
+  customerName:    ["customername", "customer_name", "customer name", "name", "client name", "clientname", "buyer"],
+  email:           ["email", "customer_email", "customeremail", "email address", "emailaddress"],
+  contactNo:       ["contactno", "contact_no", "contact no", "phone", "mobile", "phonenumber", "phone_number"],
+  customerId:      ["customerid", "customer_id", "client_id", "clientid"],
+  shopTitle:       ["shoptitle", "shop_title", "shop title", "shop", "merchant", "merchantname", "merchant_name", "salon", "salonname", "salon name", "venue", "location"],
+  sellerId:        ["sellerid", "seller_id", "providerid", "provider_id"],
+  serviceName:     ["servicename", "service_name", "service name", "service", "product", "item", "description", "booking", "treatment"],
+  bookedDate:      ["bookeddate", "booked_date", "booking_date", "bookingdate", "date", "appointment_date", "appointmentdate", "service_date", "servicedate", "invoice_date"],
+  serviceDuration: ["serviceduration", "service_duration", "duration", "minutes"],
+  staffName:       ["staffname", "staff_name", "staff", "therapist", "stylist", "provider", "employee"],
+  staffId:         ["staffid", "staff_id"],
+  quantity:        ["qty", "quantity", "count", "units"],
+  totalRevenue:    ["total_revenue", "totalrevenue", "total revenue", "revenue", "amount", "total", "total_amount", "totalamount", "price", "total price", "subtotal", "sub_total", "gross", "gross_revenue", "grossrevenue"],
+  creditCard:      ["credit_card", "creditcard", "credit card", "card_amount", "cardamount", "online_payment", "onlinepayment", "paid_amount", "paidamount", "stripe", "stripe_amount"],
+  paymentMethod:   ["paymentmethod", "payment_method", "payment method", "method", "pay_method"],
+  status:          ["status", "booking_status", "bookingstatus"],
+  orderStatus:     ["orderstatus", "order_status", "completion_status", "order_completion"],
+  vanidayCommission: ["vanidaycommission", "vaniday_commission", "commission", "platform_fee", "platformfee"],
+  vanidayShare:    ["vanidayshare", "vaniday_share", "platform_share", "platformshare", "net_revenue", "netrevenue"],
+  salonShare:      ["salonshare", "salon_share", "salon share", "merchant_share", "merchantshare", "payout"],
+  cashbackDiscount:["cashbackdiscount", "cashback_discount", "cashback", "discount"],
+  productType:     ["producttype", "product_type", "type", "category", "service_type", "servicetype"]
+};
+
 function getFieldValue(row, mapping, fieldName) {
-  const csvColumn = mapping[fieldName];
-  if (!csvColumn) return "";
-  // Case-insensitive header matching
-  const key = Object.keys(row).find(k => k.trim().toLowerCase() === csvColumn.trim().toLowerCase());
-  return key ? String(row[key] || "").trim() : "";
+  const rowKeys = Object.keys(row || {});
+  const rowKeysNormalized = rowKeys.map(k => k.replace(/^\uFEFF/, "").trim().toLowerCase());
+
+  const configuredColumn = mapping[fieldName];
+  if (configuredColumn) {
+    const normalized = configuredColumn.replace(/^\uFEFF/, "").trim().toLowerCase();
+    const idx = rowKeysNormalized.indexOf(normalized);
+    if (idx !== -1) {
+      return String(row[rowKeys[idx]] || "").trim();
+    }
+  }
+
+  const aliases = FIELD_ALIASES[fieldName] || [];
+  for (const alias of aliases) {
+    const idx = rowKeysNormalized.indexOf(alias.toLowerCase());
+    if (idx !== -1) {
+      return String(row[rowKeys[idx]] || "").trim();
+    }
+  }
+
+  for (const alias of aliases) {
+    const idx = rowKeysNormalized.findIndex(k => k.includes(alias.toLowerCase()));
+    if (idx !== -1) {
+      return String(row[rowKeys[idx]] || "").trim();
+    }
+  }
+
+  const fallbackMap = {
+    orderId: ["invoice_id", "invoiceid", "id"],
+    customerName: ["customer_name", "customername", "name"],
+    email: ["customer_email", "customeremail", "email"],
+    shopTitle: ["company_name", "company", "vendor_name"],
+    serviceName: ["invoice_number", "invoice_no", "invoice", "service"],
+    totalRevenue: ["amount", "total_amount", "totalamount", "amount_due", "grand_total"]
+  };
+
+  for (const fallback of fallbackMap[fieldName] || []) {
+    const idx = rowKeysNormalized.indexOf(fallback.toLowerCase());
+    if (idx !== -1) {
+      return String(row[rowKeys[idx]] || "").trim();
+    }
+  }
+
+  return "";
 }
 
 function parseAmount(value) {
@@ -117,17 +185,34 @@ function isValidEmail(email) {
 }
 
 function isCompletedOrder(status, orderStatus) {
-  const s = String(status || "").toLowerCase();
-  const os = String(orderStatus || "").toLowerCase();
-  return s === "complete" || s === "completed" || os === "completed" || os === "complete";
+  const s = String(status || "").toLowerCase().trim();
+  const os = String(orderStatus || "").toLowerCase().trim();
+  // If neither status field is provided, treat as completed
+  if (!s && !os) return true;
+  // Accept any of these as "completed"
+  const completedValues = ["complete", "completed", "done", "finish", "finished", "success",
+    "successful", "paid", "confirmed", "approved", "active", "1", "true", "yes"];
+  // Reject only explicitly failed/cancelled orders
+  const rejectedValues = ["cancelled", "canceled", "refunded", "failed", "rejected",
+    "void", "voided", "expired", "pending_cancel"];
+  const combined = [s, os].filter(Boolean);
+  // If any field has a rejected value, block it
+  if (combined.some(v => rejectedValues.includes(v))) return false;
+  // If any field has a completed value, allow it
+  if (combined.some(v => completedValues.includes(v))) return true;
+  // For any other non-empty status not in rejected list, allow it
+  // (e.g. custom statuses from Vaniday like "Complete" already handled above)
+  return true;
 }
 
 function isAlreadyPaidOnline(paymentMethod, creditCard, totalRevenue) {
-  const method = String(paymentMethod || "").toLowerCase();
+  const method = String(paymentMethod || "").toLowerCase().replace(/[\s_]/g, "");
   const paid = parseAmount(creditCard);
   const total = parseAmount(totalRevenue);
-  const onlineMethods = ["stripe_payments", "stripe", "credit_card", "creditcard", "apple_pay", "google_pay"];
-  return onlineMethods.includes(method) && paid > 0 && Math.abs(paid - total) < 0.01;
+  // Online methods that mean the customer already paid
+  const onlineMethods = ["stripepayments", "stripe", "creditcard", "credit", "applepay", "googlepay", "paynow", "grabpay", "visa", "mastercard", "amex"];
+  const isOnline = onlineMethods.some(m => method.includes(m));
+  return isOnline && paid > 0 && total > 0 && Math.abs(paid - total) < 0.01;
 }
 
 const SUPPORTED_PAYMENT_METHODS = [
@@ -150,13 +235,12 @@ function validateRecord(record, index, mapping, dateFormat) {
   else if (!isValidEmail(record.email)) errors.push("Invalid email format");
   if (!record.shopTitle) errors.push("Shop/service provider is required");
   if (!record.serviceName) errors.push("Service name is required");
-  if (!record.bookedDate) errors.push("Booking date is required");
-  else {
-    const parsed = parseDate(record.bookedDate, dateFormat);
-    if (!parsed) errors.push(`Invalid date format for booking date: ${record.bookedDate}`);
-  }
   if (!record.totalRevenue || parseAmount(record.totalRevenue) <= 0) {
-    errors.push("Total revenue must be a positive number");
+    // Only fail if the value is truly missing — zero-amount records might be valid (e.g. fully discounted)
+    if (!record.totalRevenue) {
+      errors.push("Total revenue is required");
+    }
+    // Note: zero-amount invoices are allowed (e.g. 100% cashback/discount)
   }
 
   // Format validation
@@ -164,16 +248,11 @@ function validateRecord(record, index, mapping, dateFormat) {
     errors.push("Contact number format is invalid");
   }
 
-  // Payment method validation
-  if (record.paymentMethod) {
-    const method = record.paymentMethod.toLowerCase().replace(/\s+/g, "_");
-    if (!SUPPORTED_PAYMENT_METHODS.includes(method)) {
-      errors.push(`Unsupported payment method: ${record.paymentMethod}`);
-    }
-  }
+  // Payment method validation — warn but don't block
+  // Any non-empty payment method is accepted; unsupported ones default to "cash"
 
-  // Order status validation
-  if (!isCompletedOrder(record.status, record.orderStatus)) {
+  // Order status validation (only fail if status is explicitly non-complete)
+  if ((record.status || record.orderStatus) && !isCompletedOrder(record.status, record.orderStatus)) {
     errors.push(`Order is not completed (status: ${record.status || "N/A"}, orderStatus: ${record.orderStatus || "N/A"}). Only completed orders can generate invoices.`);
   }
 
@@ -192,7 +271,8 @@ function detectDuplicatesAndConflicts(records) {
     if (!orderGroups.has(record.orderId)) {
       orderGroups.set(record.orderId, []);
     }
-    orderGroups.get(record.orderId).push({ ...record, _index: index });
+    // Preserve the source row number after invalid rows are filtered out.
+    orderGroups.get(record.orderId).push({ ...record, _index: record._sourceIndex ?? index });
   });
 
   const duplicates = []; // exact duplicate rows (skip)
@@ -310,7 +390,7 @@ async function validateVanidayImport(rows, options = {}) {
   }
 
   // Step 1: Extract and map fields
-  const mappedRecords = rows.map(row => ({
+  const mappedRecords = rows.map((row, sourceIndex) => ({
     orderId: getFieldValue(row, mapping, "orderId"),
     customerName: getFieldValue(row, mapping, "customerName"),
     email: getFieldValue(row, mapping, "email"),
@@ -333,8 +413,26 @@ async function validateVanidayImport(rows, options = {}) {
     salonShare: getFieldValue(row, mapping, "salonShare"),
     cashbackDiscount: getFieldValue(row, mapping, "cashbackDiscount"),
     productType: getFieldValue(row, mapping, "productType"),
-    _rawRow: row
+    _rawRow: row,
+    _sourceIndex: sourceIndex
   }));
+
+  // Debug: log the first mapped record so we can see what was extracted
+  if (mappedRecords.length > 0) {
+    const first = mappedRecords[0];
+    console.log("[VanidayImport] CSV headers detected:", Object.keys(rows[0]));
+    console.log("[VanidayImport] First row mapped:", {
+      orderId: first.orderId,
+      customerName: first.customerName,
+      email: first.email,
+      shopTitle: first.shopTitle,
+      serviceName: first.serviceName,
+      totalRevenue: first.totalRevenue,
+      status: first.status,
+      orderStatus: first.orderStatus,
+      paymentMethod: first.paymentMethod,
+    });
+  }
 
   // Step 2: Validate each record
   const validationResults = mappedRecords.map((record, index) =>
@@ -347,17 +445,21 @@ async function validateVanidayImport(rows, options = {}) {
   const validRecordsList = mappedRecords.filter((_, i) => validationResults[i].is_valid);
   const { duplicates, conflicts, validGroups } = detectDuplicatesAndConflicts(validRecordsList);
 
-  // Step 4: Check against existing OrderIDs in database
+  // Step 4: Check against existing OrderIDs in database (avoid duplicate imports)
+  // If allowReimport is set, skip this check
   const orderIds = [...validGroups.keys()];
   let existingOrderIds = new Set();
-  if (orderIds.length > 0) {
+  if (orderIds.length > 0 && !options.allowReimport) {
     try {
       const [existingRows] = await pool.query(
-        "SELECT DISTINCT vaniday_order_id FROM invoice WHERE vaniday_order_id IN (?)",
+        "SELECT DISTINCT vaniday_order_id FROM invoice WHERE vaniday_order_id IN (?) AND invoiceId <> '__SETTINGS__'",
         [orderIds]
       );
       existingOrderIds = new Set(existingRows.map(r => r.vaniday_order_id));
-    } catch { /* vaniday_order_id column may not exist yet */ }
+    } catch {
+      // vaniday_order_id column may not exist yet — skip duplicate check
+      existingOrderIds = new Set();
+    }
   }
 
   // Mark already-imported orders
@@ -386,13 +488,13 @@ async function validateVanidayImport(rows, options = {}) {
     duplicateRecords: duplicates.length,
     conflictRecords: conflicts.length,
     invalidRecords: invalidRecords.length,
-    alreadyImported: alreadyImported.length,
+    alreadyImportedCount: alreadyImported.length,
     readyForInvoice,
     records: mappedRecords,
     validationResults,
     duplicates,
     conflicts,
-    alreadyImported,
+    alreadyImportedList: alreadyImported,
     validGroups,
     errors: invalidRecords.map(r => ({
       row_number: r.row_number,
@@ -411,18 +513,43 @@ async function processVanidayImport(validationResult, userId) {
   const dateFormat = settings.displayDateFormat || "DD/MM/YYYY";
   const { validGroups } = validationResult;
 
-  if (!validGroups || validGroups.size === 0) {
+  // validGroups can be a Map (from validateVanidayImport) or an array (serialized from controller)
+  // Normalize to a Map
+  let groupsMap;
+  if (validGroups instanceof Map) {
+    groupsMap = validGroups;
+  } else if (Array.isArray(validGroups)) {
+    // Re-validate from records if validGroups was serialized (shouldn't happen, but just in case)
+    groupsMap = new Map();
+    validGroups.forEach(g => groupsMap.set(g.orderId, [g]));
+  } else {
+    return { success: false, message: "No valid groups to process.", invoices: [] };
+  }
+
+  if (!groupsMap || groupsMap.size === 0) {
     return { success: false, message: "No valid records to process.", invoices: [] };
   }
 
   const connection = await pool.getConnection();
   const createdInvoices = [];
+  const skippedAlreadyImported = [];
 
   try {
     await connection.beginTransaction();
 
-    for (const [orderId, records] of validGroups) {
+    for (const [orderId, records] of groupsMap) {
       const primaryRecord = records[0];
+
+      // Validation happens before this transaction, so re-check inside it.  This
+      // closes the race where two users submit the same file at the same time.
+      const [existingOrder] = await connection.query(
+        "SELECT invoice_id FROM invoice WHERE vaniday_order_id = ? LIMIT 1 FOR UPDATE",
+        [orderId]
+      );
+      if (existingOrder.length > 0) {
+        skippedAlreadyImported.push(orderId);
+        continue;
+      }
 
       // Step 1: Find or create customer by email
       const customerId = await findOrCreateCustomer(connection, primaryRecord);
@@ -464,38 +591,67 @@ async function processVanidayImport(validationResult, userId) {
       const bookedDate = parseDate(primaryRecord.bookedDate, dateFormat) || new Date().toISOString().slice(0, 10);
       const dueDate = new Date(new Date(bookedDate).getTime() + (settings.dueDays || 30) * 86400000).toISOString().slice(0, 10);
 
-      // Step 5: Insert invoice
-      const [invoiceResult] = await connection.query(
-        `INSERT INTO invoice
-          (status, issue_date, due_date, invoiceId, total_amount, customer_id, created_at,
-           vaniday_order_id, shop_title, seller_id, payment_method, service_provider,
-           vaniday_share, salon_share, vaniday_commission)
-         VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          invoiceStatus,
-          bookedDate,
-          dueDate,
-          invoiceId,
-          totalAmount,
-          customerId,
-          orderId,
-          primaryRecord.shopTitle || null,
-          primaryRecord.sellerId || null,
-          primaryRecord.paymentMethod || null,
-          primaryRecord.shopTitle || null,
-          parseAmount(primaryRecord.vanidayShare) || null,
-          parseAmount(primaryRecord.salonShare) || null,
-          parseAmount(primaryRecord.vanidayCommission) || null
-        ]
-      );
+      // Step 5: Insert invoice (use core columns first, then try extended columns)
+      let invoiceResult;
+      try {
+        [invoiceResult] = await connection.query(
+          `INSERT INTO invoice
+            (status, issue_date, due_date, invoiceId, total_amount, customer_id, created_at,
+             vaniday_order_id, shop_title, seller_id, payment_method, service_provider,
+             vaniday_share, salon_share, vaniday_commission)
+           VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            invoiceStatus,
+            bookedDate,
+            dueDate,
+            invoiceId,
+            totalAmount,
+            customerId,
+            orderId,
+            primaryRecord.shopTitle || null,
+            primaryRecord.sellerId || null,
+            primaryRecord.paymentMethod || null,
+            primaryRecord.shopTitle || null,
+            parseAmount(primaryRecord.vanidayShare) || null,
+            parseAmount(primaryRecord.salonShare) || null,
+            parseAmount(primaryRecord.vanidayCommission) || null
+          ]
+        );
+      } catch (extendedColError) {
+        // Fallback: insert with core columns only if extended columns don't exist
+        [invoiceResult] = await connection.query(
+          `INSERT INTO invoice
+            (status, issue_date, due_date, invoiceId, total_amount, customer_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, NOW())`,
+          [invoiceStatus, bookedDate, dueDate, invoiceId, totalAmount, customerId]
+        );
+        // Try updating extended columns one by one (best-effort)
+        const invPk = invoiceResult.insertId;
+        for (const [col, val] of [
+          ["vaniday_order_id", orderId],
+          ["shop_title", primaryRecord.shopTitle || null],
+          ["service_provider", primaryRecord.shopTitle || null],
+          ["payment_method", primaryRecord.paymentMethod || null],
+        ]) {
+          try {
+            await connection.query(`UPDATE invoice SET ${col} = ? WHERE invoice_id = ?`, [val, invPk]);
+          } catch { /* column doesn't exist — skip */ }
+        }
+      }
 
       const invoicePk = invoiceResult.insertId;
 
-      // Step 6: Store line items as JSON
-      await connection.query(
-        "UPDATE invoice SET items_json = ? WHERE invoice_id = ?",
-        [JSON.stringify(lineItems), invoicePk]
-      );
+      // Step 6: Store line items as JSON.  The workflow migration provides this
+      // column; retaining the guarded write lets older installations still
+      // complete the core invoice import rather than failing after insertion.
+      try {
+        await connection.query(
+          "UPDATE invoice SET items_json = ? WHERE invoice_id = ?",
+          [JSON.stringify(lineItems), invoicePk]
+        );
+      } catch (error) {
+        if (error.code !== "ER_BAD_FIELD_ERROR") throw error;
+      }
 
       // Step 7: Try to insert into invoice_item table too
       try {
@@ -523,11 +679,18 @@ async function processVanidayImport(validationResult, userId) {
         } catch { /* payment columns may not all exist */ }
       }
 
+      // Persist a fraud assessment with the newly-created invoice.  This is
+      // deliberately in the same transaction as the invoice and its customer.
+      await assessInvoiceRisk(connection, invoicePk, {
+        vendor_name: primaryRecord.shopTitle,
+        source: "vaniday_import"
+      });
+
       // Step 9: Audit log
       try {
         await connection.query(
-          `INSERT INTO audit_logs (user_id, activity_type, action_description, affected_record, status, created_at, previous_value, new_value)
-           VALUES (?, 'invoice', ?, ?, 'Success', NOW(), NULL, ?)`,
+          `INSERT INTO audit_logs (user_id, module, activity_type, action_description, affected_record, status, created_at, previous_value, new_value)
+           VALUES (?, 'Invoice', 'invoice', ?, ?, 'Success', NOW(), NULL, ?)`,
           [userId, `vaniday_import:${invoiceStatus}`, String(invoicePk), JSON.stringify({ orderId, shopTitle: primaryRecord.shopTitle, amount: totalAmount })]
         );
       } catch { /* audit_logs may have different schema */ }
@@ -537,6 +700,7 @@ async function processVanidayImport(validationResult, userId) {
         invoiceId,
         orderId,
         customerName: primaryRecord.customerName,
+        customerEmail: primaryRecord.customerEmail,
         shopTitle: primaryRecord.shopTitle,
         totalAmount,
         status: invoiceStatus,
@@ -546,13 +710,31 @@ async function processVanidayImport(validationResult, userId) {
 
     await connection.commit();
 
+    // Completed Vaniday payments are official paid invoices. Send the customer
+    // a payment confirmation after the database transaction is safely committed.
+    const paidInvoices = createdInvoices.filter((invoice) => invoice.status === "Paid" && invoice.customerEmail);
+    if (paidInvoices.length > 0) {
+      try {
+        const { sendPaymentReceiptEmail } = require("./invoiceDeliveryService");
+        await Promise.allSettled(paidInvoices.map((invoice) => sendPaymentReceiptEmail(
+          {
+            invoiceId: invoice.invoiceId,
+            total_amount: invoice.totalAmount,
+            customer_email: invoice.customerEmail
+          },
+          `VANIDAY-${invoice.orderId}`
+        )));
+      } catch { /* invoice creation remains committed if notification setup is unavailable */ }
+    }
+
     return {
       success: true,
       message: `Successfully created ${createdInvoices.length} invoice(s) from Vaniday data.`,
       invoices: createdInvoices,
       totalCreated: createdInvoices.length,
       paidCount: createdInvoices.filter(i => i.status === "Paid").length,
-      unpaidCount: createdInvoices.filter(i => i.status === "Draft").length
+      unpaidCount: createdInvoices.filter(i => i.status === "Draft").length,
+      skippedAlreadyImported
     };
   } catch (error) {
     await connection.rollback();

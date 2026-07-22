@@ -39,6 +39,7 @@ import {
 } from "../../services/adminPayrollService.js";
 
 import { getStoredSession } from "../../services/sessionService.js";
+import PayrollAuditLogPage from "./PayrollAuditLogPage.jsx";
 
 import {
   buildSettingsByKey,
@@ -51,9 +52,10 @@ import {
   employerContributionRows,
   slugify,
 } from "../../utils/payrollRules.js";
+import { createPayrollReportPdf } from "../../utils/payrollReportPdf.js";
 
 const pageTitle = "Automated Payroll System – Admin Payroll Dashboard";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 const payrollSidebarSections = [
   {
@@ -313,7 +315,7 @@ const statutorySchemeSettings = [
 function ActionButton({ icon: Icon, children, variant = "primary", onClick, disabled = false }) {
   const className =
     variant === "secondary"
-      ? "inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
+      ? "inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
       : "primary-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold";
 
   return (
@@ -367,7 +369,7 @@ function formatMoney(value) {
 
 function EmptyState({ message }) {
   return (
-    <div className="rounded-xl border border-dashed border-[#f0d2ca] bg-white/800 p-6 text-sm text-[#7b6660]">
+    <div className="rounded-xl border border-dashed border-[#f0d2ca] bg-white/80 p-6 text-sm text-[#7b6660]">
       {message}
     </div>
   );
@@ -535,10 +537,10 @@ function getStatusBadgeClass(status) {
   }
 
   if (normalizedStatus === "view only") {
-    return "border-[#7DD3FC]/25 bg-[#7DD3FC]/10 text-[#BAE6FD]";
+    return "border-[#2D7C83]/25 bg-[#2D7C83]/10 text-[#2D7C83]";
   }
 
-  return "border-[#f0d2ca] bg-white/800 text-[#7b6660]";
+  return "border-[#f0d2ca] bg-white/80 text-[#7b6660]";
 }
 
 function WorkflowCard({ data, onNavigate, step }) {
@@ -557,7 +559,7 @@ function WorkflowCard({ data, onNavigate, step }) {
         </span>
       </div>
       <h3 className="mt-5 text-base font-semibold text-[#251E1F]">{step.title}</h3>
-      <div className="mt-3 grid gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 p-3 text-xs text-[#7b6660]">
+      <div className="mt-3 grid gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 p-3 text-xs text-[#7b6660]">
         <div className="flex items-center justify-between gap-3">
           <span>Owner</span>
           <span className="font-semibold text-[#251E1F]">{step.owner}</span>
@@ -581,7 +583,7 @@ function WorkflowCard({ data, onNavigate, step }) {
       </ul>
       <button
         type="button"
-        className="mt-5 w-full rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#F38978]/18"
+        className="mt-5 w-full rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#F38978]/20"
         onClick={() => onNavigate(step.path)}
       >
         {step.action}
@@ -637,7 +639,7 @@ function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout })
         </div>
         <div className="mt-5 grid gap-3 md:grid-cols-5">
           {dashboardUpdates.map((item) => (
-            <div key={item.label} className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+            <div key={item.label} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
               <p className="text-sm font-semibold text-[#251E1F]">{item.label}</p>
               <p className="mt-1 text-xs text-[#7b6660]">{item.records}</p>
               <p className="mt-3 text-xs font-semibold text-[#F38978]">
@@ -776,7 +778,7 @@ function UsersRolesView({
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3 xl:w-[46rem]">
-              <label className="flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 px-3 py-2.5">
+              <label className="flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2.5">
                 <Search size={16} className="text-[#F38978]" />
                 <input
                   type="search"
@@ -866,7 +868,7 @@ function UsersRolesView({
                       <td className="border-b border-[#f0d2ca] px-4 py-4">
                         <button
                           type="button"
-                          className="rounded-xl border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                          className="rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
                           onClick={(event) => {
                             event.stopPropagation();
                             setManagedUser(user);
@@ -993,7 +995,7 @@ function BulkAccessModal({
           </div>
           <button
             type="button"
-            className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
             onClick={onClose}
           >
             Close
@@ -1001,18 +1003,18 @@ function BulkAccessModal({
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
             <p className="text-sm text-[#7b6660]">Selected Users</p>
             <p className="mt-2 text-3xl font-semibold text-[#251E1F]">{selectedCount}</p>
             <p className="mt-2 text-xs text-[#7b6660]/75">{activeCount} active / {inactiveCount} inactive</p>
           </div>
 
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4 md:col-span-2">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4 md:col-span-2">
             <p className="text-sm font-semibold text-[#251E1F]">Selection</p>
             <div className="mt-4 flex flex-wrap gap-3">
               <button
                 type="button"
-                className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
                 onClick={() => onSelectionChange(filteredIds)}
                 disabled={!filteredIds.length}
               >
@@ -1020,7 +1022,7 @@ function BulkAccessModal({
               </button>
               <button
                 type="button"
-                className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
                 onClick={() => onSelectionChange([])}
                 disabled={!selectedCount}
               >
@@ -1031,7 +1033,7 @@ function BulkAccessModal({
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
             <p className="text-sm font-semibold text-[#251E1F]">Apply Role</p>
             <p className="mt-2 text-sm text-[#7b6660]">Assign one role to every selected user.</p>
             <div className="mt-4 flex gap-2">
@@ -1047,7 +1049,7 @@ function BulkAccessModal({
               </select>
               <button
                 type="button"
-                className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/20 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={applyBulkRole}
                 disabled={isSubmitting || !selectedRoleId || !selectedCount}
               >
@@ -1056,13 +1058,13 @@ function BulkAccessModal({
             </div>
           </div>
 
-          <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+          <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
             <p className="text-sm font-semibold text-[#251E1F]">Account Status</p>
             <p className="mt-2 text-sm text-[#7b6660]">Activate or deactivate all selected user accounts.</p>
             <div className="mt-4 flex flex-wrap gap-3">
               <button
                 type="button"
-                className="rounded-xl border border-[#2f8758]/25 bg-[#2f8758]/10 px-4 py-2 text-sm font-semibold text-[#065F46] hover:bg-[#2f8758]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl border border-[#2f8758]/25 bg-[#2f8758]/10 px-4 py-2 text-sm font-semibold text-[#2D7C83] hover:bg-[#2f8758]/20 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => applyBulkStatus(1)}
                 disabled={isSubmitting || !selectedCount}
               >
@@ -1070,7 +1072,7 @@ function BulkAccessModal({
               </button>
               <button
                 type="button"
-                className="rounded-xl border border-[#D97706]/25 bg-[#D97706]/10 px-4 py-2 text-sm font-semibold text-[#9A6412] hover:bg-[#D97706]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl border border-[#D97706]/25 bg-[#D97706]/10 px-4 py-2 text-sm font-semibold text-[#9A6412] hover:bg-[#D97706]/20 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => applyBulkStatus(0)}
                 disabled={isSubmitting || !selectedCount}
               >
@@ -1080,7 +1082,7 @@ function BulkAccessModal({
           </div>
         </div>
 
-        <div className="mt-5 rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+        <div className="mt-5 rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
           <p className="text-sm font-semibold text-[#251E1F]">Selected Users Preview</p>
           <div className="mt-3 max-h-56 overflow-y-auto">
             {selectedUsers.length ? (
@@ -1107,7 +1109,7 @@ function BulkAccessModal({
 
 function ProfileField({ label, value }) {
   return (
-    <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+    <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/75">{label}</p>
       <p className="mt-2 text-sm font-semibold text-[#251E1F]">{value || "Not linked"}</p>
     </div>
@@ -1178,7 +1180,7 @@ function AddUserModal({ availableStaff = [], onClose, onCreateUser, roles = [] }
           </div>
           <button
             type="button"
-            className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
             onClick={onClose}
           >
             Close
@@ -1265,7 +1267,7 @@ function AddUserModal({ availableStaff = [], onClose, onCreateUser, roles = [] }
           <div className="flex flex-wrap justify-end gap-3 border-t border-[#f0d2ca] pt-5">
             <button
               type="button"
-              className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+              className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
               onClick={onClose}
             >
               Done
@@ -1346,7 +1348,7 @@ function UserManagementModal({
               <h3 className="text-xl font-semibold text-[#251E1F]">Manage {user.name}</h3>
               <p className="mt-1 text-sm text-[#7b6660]">{user.email}</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <span className="rounded-full border border-[#f0d2ca] bg-white/800 px-3 py-1 text-xs font-semibold text-[#7b6660]">
+                <span className="rounded-full border border-[#f0d2ca] bg-white/80 px-3 py-1 text-xs font-semibold text-[#7b6660]">
                   {user.role_name}
                 </span>
                 <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isActive ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]"}`}>
@@ -1360,7 +1362,7 @@ function UserManagementModal({
           </div>
           <button
             type="button"
-            className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
             onClick={onClose}
           >
             Close
@@ -1371,14 +1373,14 @@ function UserManagementModal({
           <div>
             <h4 className="font-semibold text-[#251E1F]">Admin Actions</h4>
             <div className="mt-4 grid gap-4 lg:grid-cols-3">
-              <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+              <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
                 <p className="text-sm font-semibold text-[#251E1F]">Reset Password</p>
                 <p className="mt-2 text-sm text-[#7b6660]">
                   Generates a temporary password for the user. Share it through a secure channel.
                 </p>
                 <button
                   type="button"
-                  className="mt-4 rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mt-4 rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/20 disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={handleResetPassword}
                   disabled={isSubmitting}
                 >
@@ -1392,14 +1394,14 @@ function UserManagementModal({
                 ) : null}
               </div>
 
-              <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+              <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
                 <p className="text-sm font-semibold text-[#251E1F]">Account Status</p>
                 <p className="mt-2 text-sm text-[#7b6660]">
                   Disable access for inactive users. Self-deactivation is blocked.
                 </p>
                 <button
                   type="button"
-                  className="mt-4 rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mt-4 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45 disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={handleStatusUpdate}
                   disabled={isSubmitting || isCurrentUser}
                 >
@@ -1407,7 +1409,7 @@ function UserManagementModal({
                 </button>
               </div>
 
-              <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+              <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
                 <p className="text-sm font-semibold text-[#251E1F]">Role Access</p>
                 <p className="mt-2 text-sm text-[#7b6660]">
                   Change module access by assigning a different role. Self-role changes are blocked.
@@ -1425,7 +1427,7 @@ function UserManagementModal({
                   </select>
                   <button
                     type="button"
-                    className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/20 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={handleRoleUpdate}
                     disabled={isSubmitting || isCurrentUser || Number(selectedRoleId) === Number(user.role_id)}
                   >
@@ -1495,23 +1497,23 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
           {layouts.length ? (
             <div className="grid gap-4 md:grid-cols-3">
               {layouts.map((layout) => (
-              <article key={layout.layout_id} className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
+              <article key={layout.layout_id} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978] ring-1 ring-[#F38978]/25">
                   <FileText size={22} />
                 </div>
                 <h3 className="mt-4 font-semibold text-[#251E1F]">{layout.layout_name}</h3>
                 <p className="mt-2 text-sm text-[#7b6660]">{layout.file_type} template</p>
                 <div className="mt-4 flex items-center justify-between gap-3 text-xs">
-                  <span className="rounded-full border border-[#f0d2ca] bg-white/800 px-3 py-1 font-semibold text-[#7b6660]">
+                  <span className="rounded-full border border-[#f0d2ca] bg-white/80 px-3 py-1 font-semibold text-[#7b6660]">
                     {Number(layout.is_default) === 1 ? "Default" : layout.status}
                   </span>
                   <span className="text-[#7b6660]/80">{formatDate(layout.updated_at)}</span>
                 </div>
                 <div className="mt-5 flex gap-2">
-                  <button type="button" className="rounded-xl border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45" onClick={() => window.open(layout.file_path, "_blank")}>
+                  <button type="button" className="rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45" onClick={() => window.open(layout.file_path, "_blank")}>
                     Preview
                   </button>
-                  <button type="button" className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18" onClick={() => onSetDefaultLayout(layout.layout_id)}>
+                  <button type="button" className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/20" onClick={() => onSetDefaultLayout(layout.layout_id)}>
                     Set Default
                   </button>
                 </div>
@@ -1584,7 +1586,7 @@ function SettingEditor({ definition, setting, onSave }) {
         value={value}
         onChange={(event) => setValue(event.target.value)}
         placeholder={definition.placeholder}
-        className="mt-5 w-full rounded-xl border border-[#f0d2ca] bg-white/800 px-3 py-2.5 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]/50"
+        className="mt-5 w-full rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2.5 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]/50"
       />
 
       <div className="mt-4 flex items-center justify-between gap-3">
@@ -1593,7 +1595,7 @@ function SettingEditor({ definition, setting, onSave }) {
         </p>
         <button
           type="button"
-          className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/20 disabled:cursor-not-allowed disabled:opacity-60"
           onClick={handleSave}
           disabled={isSaving || !value.trim()}
         >
@@ -1632,7 +1634,7 @@ function SettingInput({ value, onChange, placeholder }) {
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]/50"
+      className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]/50"
     />
   );
 }
@@ -1711,7 +1713,7 @@ function CpfRateTable({ onSave, settingsByKey }) {
                 <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <button
                     type="button"
-                    className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/20 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => saveRow(row)}
                     disabled={savingSlug === row.slug}
                   >
@@ -1826,7 +1828,7 @@ function WageComponentTable({ onSave, settingsByKey }) {
                 <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <button
                     type="button"
-                    className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/20 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => saveRow(row)}
                     disabled={savingSlug === row.slug}
                   >
@@ -1959,7 +1961,7 @@ function DeductionComponentTable({ onSave, settingsByKey }) {
                 <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <button
                     type="button"
-                    className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/20 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => saveRow(row)}
                     disabled={savingSlug === row.slug}
                   >
@@ -2066,7 +2068,7 @@ function EmployerContributionTable({ onSave, settingsByKey }) {
                 <td className="border-b border-[#f0d2ca] px-4 py-4">
                   <button
                     type="button"
-                    className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/20 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => saveRow(row)}
                     disabled={savingSlug === row.slug}
                   >
@@ -2228,7 +2230,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
                   <option value="Disabled">Disabled</option>
                 </select>
               </div>
-              <p className="mt-4 rounded-xl border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 p-3 text-sm text-[#BAE6FD]">
+              <p className="mt-4 rounded-xl border border-[#2D7C83]/25 bg-[#2D7C83]/10 p-3 text-sm text-[#2D7C83]">
                 MBMF is calculated only for employees with religion set to {form.applicableReligion}.
               </p>
             </section>
@@ -2247,7 +2249,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
                 </select>
                 <SettingInput value={form.employeeRate} onChange={(value) => updateForm("employeeRate", value)} placeholder="Employee rate %" />
                 <SettingInput value={form.employerRate} onChange={(value) => updateForm("employerRate", value)} placeholder="Employer rate %" />
-                <div className="rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#7b6660]">
+                <div className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#7b6660]">
                   Total Rate: <span className="font-semibold text-[#251E1F]">{(employeeRate + employerRate).toFixed(2)}%</span>
                 </div>
               </div>
@@ -2284,12 +2286,12 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
 
             <section className="app-panel rounded-2xl p-5">
               <h4 className="font-semibold text-[#251E1F]">5. Save & Apply</h4>
-              <div className="mt-4 rounded-xl border border-[#2f8758]/25 bg-[#2f8758]/10 p-4 text-sm text-[#065F46]">
+              <div className="mt-4 rounded-xl border border-[#2f8758]/25 bg-[#2f8758]/10 p-4 text-sm text-[#2D7C83]">
                 Saved MBMF settings are applied to eligible Muslim employees only.
               </div>
               <button
                 type="button"
-                className="mt-5 rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-5 rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/20 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={saveMbmfSettings}
                 disabled={isSaving}
               >
@@ -2339,15 +2341,15 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
               <p className="mt-1 text-sm text-[#7b6660]">All employees where staff.religion = {form.applicableReligion}</p>
             </div>
             <div className="mt-4 grid gap-3 text-sm">
-              <div className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-3">
+              <div className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3">
                 <span className="text-[#7b6660]">Total Staff</span>
                 <span className="font-semibold text-[#251E1F]">{eligibility?.totalStaff ?? 0}</span>
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-3">
+              <div className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3">
                 <span className="text-[#7b6660]">Eligible {form.applicableReligion} Staff</span>
                 <span className="font-semibold text-[#2f8758]">{eligibility?.eligibleMuslimEmployees ?? 0}</span>
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-3">
+              <div className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3">
                 <span className="text-[#7b6660]">Not Applied</span>
                 <span className="font-semibold text-[#251E1F]">{eligibility?.nonEligibleEmployees ?? 0}</span>
               </div>
@@ -2358,7 +2360,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
               </p>
             ) : null}
             {eligibility?.sampleEmployees?.length ? (
-              <div className="mt-4 rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+              <div className="mt-4 rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
                 <p className="text-sm font-semibold text-[#251E1F]">Eligible Staff Preview</p>
                 <div className="mt-3 space-y-2 text-sm text-[#7b6660]">
                   {eligibility.sampleEmployees.map((employee) => (
@@ -2402,7 +2404,7 @@ function CpfCeilingPanel({ onSave, settingsByKey }) {
         <h3 className="text-lg font-semibold text-[#251E1F]">Wage Ceiling History</h3>
         <div className="mt-4 space-y-3">
           {cpfCeilingHistory.map(([effectiveFrom, ceiling]) => (
-            <div key={effectiveFrom} className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-3 text-sm">
+            <div key={effectiveFrom} className="flex items-center justify-between rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3 text-sm">
               <span className="text-[#7b6660]">{effectiveFrom}</span>
               <span className="font-semibold text-[#251E1F]">SGD {ceiling}</span>
             </div>
@@ -2525,7 +2527,7 @@ function SelfHelpGroupRulesPanel({ onSave, settingsByKey, users = [] }) {
                       type="date"
                       value={row.effectiveFrom}
                       onChange={(event) => updateRow(row.key, "effectiveFrom", event.target.value)}
-                      className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#251E1F] outline-none"
+                      className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none"
                     />
                   </td>
                   <td className="border-b border-[#f0d2ca] px-4 py-4">
@@ -2548,7 +2550,7 @@ function SelfHelpGroupRulesPanel({ onSave, settingsByKey, users = [] }) {
                   <td className="border-b border-[#f0d2ca] px-4 py-4">
                     <button
                       type="button"
-                      className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/20 disabled:cursor-not-allowed disabled:opacity-60"
                       onClick={() => saveRow(row)}
                       disabled={savingKey === row.key}
                     >
@@ -2668,7 +2670,7 @@ function ComplianceRulesView({ mbmfEligibility, onUpdateSetting, settings = [], 
           </div>
           <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
             {complianceUpdates.map((item) => (
-              <div key={item.label} className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+              <div key={item.label} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
                 <p className="text-sm font-semibold text-[#251E1F]">{item.label}</p>
                 <p className="mt-2 text-xs leading-5 text-[#7b6660]">{item.value}</p>
                 <p className="mt-3 text-xs font-semibold text-[#F38978]">
@@ -2784,7 +2786,7 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
       </div>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-2xl border border-[#f0d2ca] bg-white/800 p-5">
+        <div className="rounded-2xl border border-[#f0d2ca] bg-white/80 p-5">
           <h4 className="font-semibold text-[#251E1F]">{editingKey ? "Edit Rule" : "Add Rule"}</h4>
           <div className="mt-4 grid gap-3">
             <SettingInput value={form.title} onChange={(value) => updateForm("title", value)} placeholder="Rule title" />
@@ -2794,7 +2796,7 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
                 type="date"
                 value={form.effectiveFrom}
                 onChange={(event) => updateForm("effectiveFrom", event.target.value)}
-                className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#F38978]/50"
+                className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#F38978]/50"
               />
             </div>
             <textarea
@@ -2802,7 +2804,7 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
               onChange={(event) => updateForm("ruleText", event.target.value)}
               placeholder="Rule details"
               rows={5}
-              className="w-full resize-y rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]/50"
+              className="w-full resize-y rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]/50"
             />
             <div className="grid gap-3 sm:grid-cols-2">
               <SettingInput value={form.source} onChange={(value) => updateForm("source", value)} placeholder="Source or reference" />
@@ -2819,7 +2821,7 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/18 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/20 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={saveRule}
                 disabled={isSaving || !form.title.trim() || !form.ruleText.trim()}
               >
@@ -2828,7 +2830,7 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
               {editingKey ? (
                 <button
                   type="button"
-                  className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                  className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
                   onClick={resetForm}
                 >
                   Cancel
@@ -2841,12 +2843,12 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
         <div className="space-y-3">
           {customRules.length ? (
             customRules.map((rule) => (
-              <article key={rule.settingKey} className="rounded-2xl border border-[#f0d2ca] bg-white/800 p-5">
+              <article key={rule.settingKey} className="rounded-2xl border border-[#f0d2ca] bg-white/80 p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h4 className="font-semibold text-[#251E1F]">{rule.title}</h4>
-                      <span className="rounded-full border border-[#f0d2ca] bg-white/800 px-3 py-1 text-xs font-semibold text-[#7b6660]">
+                      <span className="rounded-full border border-[#f0d2ca] bg-white/80 px-3 py-1 text-xs font-semibold text-[#7b6660]">
                         {rule.status}
                       </span>
                     </div>
@@ -2854,7 +2856,7 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
                   </div>
                   <button
                     type="button"
-                    className="shrink-0 rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                    className="shrink-0 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
                     onClick={() => startEdit(rule)}
                   >
                     Edit
@@ -2909,7 +2911,7 @@ function PayrollMonitorView({ payrollRuns = [] }) {
         </>
       }
     >
-      <div className="mb-5 grid gap-3 rounded-2xl border border-[#f0d2ca] bg-white/800 p-4 md:grid-cols-[1fr_1fr_1fr_auto]">
+      <div className="mb-5 grid gap-3 rounded-2xl border border-[#f0d2ca] bg-white/80 p-4 md:grid-cols-[1fr_1fr_1fr_auto]">
         <label className="space-y-2">
           <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
             <Filter size={14} />
@@ -2970,7 +2972,7 @@ function PayrollMonitorView({ payrollRuns = [] }) {
               <p className="text-[#7b6660]">{formatDateTime(run.updated_at || run.created_at)}</p>
               <p className="text-[#7b6660]">{run.employee_count}</p>
               <p className="text-[#251E1F]">{run.status}</p>
-              <button type="button" className="justify-self-start rounded-xl bg-white/800 px-4 py-2 font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45" onClick={() => setSelectedRun(run)}>
+              <button type="button" className="justify-self-start rounded-xl bg-white/80 px-4 py-2 font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45" onClick={() => setSelectedRun(run)}>
                 Review
               </button>
             </div>
@@ -2982,7 +2984,7 @@ function PayrollMonitorView({ payrollRuns = [] }) {
         )}
       </div>
       {selectedRun ? (
-        <div className="mt-5 rounded-2xl border border-[#f0d2ca] bg-white/800 p-5 text-sm text-[#7b6660]">
+        <div className="mt-5 rounded-2xl border border-[#f0d2ca] bg-white/80 p-5 text-sm text-[#7b6660]">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="font-semibold text-[#251E1F]">{formatPayrollPeriod(selectedRun)}</p>
@@ -2990,7 +2992,7 @@ function PayrollMonitorView({ payrollRuns = [] }) {
             </div>
             <button
               type="button"
-              className="w-fit rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+              className="w-fit rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
               onClick={() => setSelectedRun(null)}
             >
               Close
@@ -3088,7 +3090,7 @@ function AuditLogsView({ auditLogs = [] }) {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-[1fr_14rem] lg:w-[38rem]">
-            <label className="flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 px-3 py-2.5">
+            <label className="flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2.5">
               <Search size={16} className="text-[#F38978]" />
               <input
                 type="search"
@@ -3130,7 +3132,7 @@ function AuditLogsView({ auditLogs = [] }) {
                   </td>
                   <td className="border-b border-[#f0d2ca] px-4 py-4">{log.action || "System activity"}</td>
                   <td className="border-b border-[#f0d2ca] px-4 py-4">
-                    <span className="rounded-full border border-[#f0d2ca] bg-white/800 px-3 py-1 text-xs font-semibold text-[#7b6660]">
+                    <span className="rounded-full border border-[#f0d2ca] bg-white/80 px-3 py-1 text-xs font-semibold text-[#7b6660]">
                       {formatAuditArea(log.entity_type)}
                     </span>
                   </td>
@@ -3270,7 +3272,7 @@ function PayslipsApprovalView() {
           <button
             type="button"
             onClick={fetchPayslips}
-            className="rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+            className="rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
           >
             Refresh
           </button>
@@ -3305,7 +3307,7 @@ function PayslipsApprovalView() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[#f0d2ca] bg-white/800 text-[#7b6660]">
+              <thead className="border-b border-[#f0d2ca] bg-white/80 text-[#7b6660]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Payslip ID</th>
                   <th className="px-4 py-3 font-medium">Staff Name</th>
@@ -3339,7 +3341,7 @@ function PayslipsApprovalView() {
                           type="button"
                           onClick={() => handleApprove(payslip.payslip_id)}
                           disabled={actionInProgress === payslip.payslip_id}
-                          className="rounded-lg bg-cyan-500/20 px-3 py-1 text-xs text-cyan-700 hover:bg-cyan-500/30 disabled:opacity-50"
+                          className="rounded-lg bg-[#2D7C83]/20 px-3 py-1 text-xs text-[#2D7C83] hover:bg-[#2D7C83]/30 disabled:opacity-50"
                         >
                           {actionInProgress === payslip.payslip_id ? <Loader2 className="inline animate-spin" size={12} /> : "Send"}
                         </button>
@@ -3362,7 +3364,7 @@ function PayslipsApprovalView() {
       </div>
 
       {rejectingPayslipId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#251E1F]/50">
           <div className="app-panel m-4 w-full max-w-md rounded-2xl p-6">
             <div className="mb-4 flex items-center gap-3">
               <AlertCircle className="text-red-700" size={20} />
@@ -3375,7 +3377,7 @@ function PayslipsApprovalView() {
               value={rejectReason}
               onChange={(event) => setRejectReason(event.target.value)}
               placeholder="Enter rejection reason..."
-              className="w-full rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-2 text-sm text-[#251E1F] placeholder-white/30"
+              className="w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F] placeholder-white/30"
               rows={4}
             />
             <div className="mt-6 flex gap-3">
@@ -3393,7 +3395,7 @@ function PayslipsApprovalView() {
                   setRejectingPayslipId(null);
                   setRejectReason("");
                 }}
-                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                className="flex-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
               >
                 Cancel
               </button>
@@ -3404,132 +3406,33 @@ function PayslipsApprovalView() {
     </div>
   );
 }
-function escapePdfText(value) {
-  return String(value ?? "")
-    .replaceAll("\\", "\\\\")
-    .replaceAll("(", "\\(")
-    .replaceAll(")", "\\)");
-}
-
 function createPdfBlob(title, rows, periodLabel = "All available dates") {
-  const commands = [];
-  const text = (value, x, y, size = 10, color = "0.12 0.08 0.18") => {
-    commands.push(
-      "BT",
-      `${color} rg`,
-      `/F1 ${size} Tf`,
-      `${x} ${y} Td`,
-      `(${escapePdfText(value)}) Tj`,
-      "ET"
-    );
+  const brandedRows = rows.map((row) => (typeof row === "string" ? [row] : row.columns || [row.summary || ""]));
+  const reportHeaders = {
+    "Access Control Report": ["Employee", "Role", "Account / Department / Staff Link"],
+    "Audit Activity Report": ["Date / Time", "Action or Event", "Record / Module", "User / Role"],
+    "Audit Logs": ["Date / Time", "Action or Event", "Record / Module", "User / Role"],
+    "Compliance Configuration Report": ["Setting", "Configured Value", "Description"],
+    "Payroll Control Summary": ["Control Item", "Current Value"],
+    "Payroll Run Financial Report": ["Payroll Period", "Status", "Employees / Gross / Net"]
   };
-  const rect = (x, y, width, height, color) => {
-    commands.push("q", `${color} rg`, `${x} ${y} ${width} ${height} re`, "f", "Q");
-  };
-  const line = (x1, y1, x2, y2, color = "0.82 0.77 0.88") => {
-    commands.push("q", `${color} RG`, "1 w", `${x1} ${y1} m`, `${x2} ${y2} l`, "S", "Q");
-  };
-  const wrapText = (value, maxLength = 78) => {
-    const words = String(value).split(" ");
-    const rows = [];
-    let current = "";
+  const headers = reportHeaders[title] || Array.from(
+    { length: Math.max(1, ...brandedRows.map((row) => row.length)) },
+    (_, index) => `Detail ${index + 1}`
+  );
 
-    words.forEach((word) => {
-      const next = current ? `${current} ${word}` : word;
-
-      if (next.length > maxLength) {
-        rows.push(current);
-        current = word;
-      } else {
-        current = next;
-      }
-    });
-
-    if (current) rows.push(current);
-    return rows;
-  };
-  rect(0, 0, 612, 792, "0.98 0.97 1");
-  rect(0, 728, 612, 64, "0.20 0.04 0.36");
-  rect(0, 724, 612, 4, "0.78 0.30 1");
-  text("AUTOMATED PAYROLL SYSTEM", 42, 764, 10, "0.90 0.80 1");
-  text(title, 42, 742, 20, "1 1 1");
-  text(`Generated: ${formatDateTime(new Date())}`, 420, 746, 9, "0.90 0.80 1");
-  text(`Period: ${periodLabel}`, 42, 714, 9, "0.42 0.25 0.58");
-
-  const normalizedRows = rows.map((row) => (typeof row === "string" ? { columns: [row] } : row));
-
-  text("Report Details", 42, 670, 14, "0.12 0.08 0.18");
-  line(42, 662, 570, 662);
-
-  let y = 640;
-  normalizedRows.slice(0, 24).forEach((item, index) => {
-    const columns = item.columns || [item.summary || ""];
-    const rowLines = columns.map((column) => wrapText(column, columns.length === 4 ? 22 : columns.length === 3 ? 26 : columns.length === 2 ? 36 : 78));
-    const maxLines = Math.max(...rowLines.map((lines) => lines.length));
-    const rowHeight = Math.max(34, maxLines * 13 + 14);
-    rect(42, y - rowHeight + 8, 528, rowHeight, index % 2 === 0 ? "1 1 1" : "0.96 0.94 0.98");
-    text(String(index + 1).padStart(2, "0"), 54, y - 10, 8, "0.42 0.25 0.58");
-    const columnLayout =
-      columns.length === 4
-        ? [82, 228, 376, 482]
-        : columns.length === 3
-          ? [82, 260, 430]
-          : columns.length === 2
-            ? [82, 330]
-          : [82];
-    const labels =
-      columns.length === 4
-        ? ["Time", "Action", "Entity", "User"]
-        : columns.length === 3
-          ? ["Name", "Role", "Details"]
-          : columns.length === 2
-            ? ["Item", "Value"]
-          : [];
-
-    labels.forEach((label, columnIndex) => {
-      text(label, columnLayout[columnIndex], y - 4, 6, "0.42 0.25 0.58");
-    });
-    rowLines.forEach((lines, columnIndex) => {
-      lines.forEach((rowLine, rowIndex) => {
-        text(rowLine, columnLayout[columnIndex], y - 16 - rowIndex * 12, 8, "0.12 0.08 0.18");
-      });
-    });
-    y -= rowHeight + 4;
+  return createPayrollReportPdf({
+    category: "ADMIN PAYROLL",
+    categorySubtitle: "Governance, access, compliance and payroll oversight",
+    footer: "Prepared for Admin review. Generated by the Automated Payroll System.",
+    subtitle: `Reporting Period: ${periodLabel}`,
+    summaryRows: [
+      ["Report", title, "Admin review"],
+      ["Records", String(brandedRows.length), periodLabel]
+    ],
+    tableRows: [headers, ...brandedRows],
+    title
   });
-
-  if (normalizedRows.length > 24) {
-    text(`Showing first 24 of ${normalizedRows.length} records.`, 42, 58, 9, "0.42 0.25 0.58");
-  }
-
-  line(42, 42, 570, 42);
-  text("Prepared for Admin review. Downloaded from Automated Payroll System.", 42, 26, 8, "0.42 0.25 0.58");
-
-  const contentLines = commands;
-  const content = contentLines.join("\n");
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`
-  ];
-  let pdf = "%PDF-1.4\n";
-  const offsets = [0];
-
-  objects.forEach((object, index) => {
-    offsets.push(pdf.length);
-    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
-  });
-
-  const xrefOffset = pdf.length;
-  pdf += `xref\n0 ${objects.length + 1}\n`;
-  pdf += "0000000000 65535 f \n";
-  offsets.slice(1).forEach((offset) => {
-    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
-  });
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-
-  return new Blob([pdf], { type: "application/pdf" });
 }
 
 function isWithinReportPeriod(value, periodMode, fromDate, toDate) {
@@ -3668,14 +3571,14 @@ function ReportPreviewModal({ data, report, onClose }) {
             </a>
             <button
               type="button"
-              className="rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+              className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
               onClick={onClose}
             >
               Close
             </button>
           </div>
         </div>
-        <div className="mt-5 grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 md:grid-cols-3">
+        <div className="mt-5 grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 md:grid-cols-3">
           <label className="space-y-2">
             <span className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">Period Type</span>
             <select
@@ -3786,12 +3689,12 @@ function ReportsView({ data }) {
       }
     >
       {reportLoading ? (
-        <div className="mb-4 flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 p-4 text-sm text-[#7b6660]">
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm text-[#7b6660]">
           <Loader2 size={17} className="animate-spin" /> Loading consolidated payroll report data...
         </div>
       ) : null}
       {reportError ? (
-        <div className="mb-4 rounded-xl border border-red-300/40 bg-red-50 p-4 text-sm text-red-700">{reportError}</div>
+        <div className="mb-4 rounded-xl border border-red-300/40 bg-[#FDD9CD] p-4 text-sm text-red-700">{reportError}</div>
       ) : null}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {reportCards.map((report) => (
@@ -3801,7 +3704,7 @@ function ReportsView({ data }) {
             <p className="mt-2 text-sm text-[#7b6660]">{report.description}</p>
             <button
               type="button"
-              className="mt-5 rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+              className="mt-5 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
               onClick={() => setSelectedReport(report.title)}
             >
               Open
@@ -3877,7 +3780,7 @@ function AdminPayrollContent({
     );
   }
   if (pathname.endsWith("/payroll-monitor")) return <PayrollMonitorView payrollRuns={data?.payrollRuns} />;
-  if (pathname.endsWith("/audit-logs")) return <AuditLogsView auditLogs={data?.auditLogs} />;
+  if (pathname.endsWith("/audit-logs")) return <PayrollAuditLogPage />;
   if (pathname.endsWith("/reports")) return <ReportsView data={data} />;
 
   return (
@@ -4040,6 +3943,7 @@ export default function AdminPayrollPage() {
         user={session?.user}
         sidebarSections={payrollSidebarSections}
         sidebarTitle="Automated Invoicing & Payroll System"
+        homePath="/dashboard/payroll/admin"
         searchPlaceholder="Search payroll, staff, approvals..."
       >
         <section>
@@ -4055,6 +3959,7 @@ export default function AdminPayrollPage() {
       user={session?.user}
       sidebarSections={payrollSidebarSections}
       sidebarTitle="Automated Invoicing & Payroll System"
+      homePath="/dashboard/payroll/admin"
       searchPlaceholder="Search payroll, staff, approvals..."
     >
       {isLoading ? (

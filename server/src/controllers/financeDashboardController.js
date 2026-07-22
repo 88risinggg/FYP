@@ -39,10 +39,13 @@ const FINANCE_NOTIFICATION_TYPES = [
 /**
  * GET /api/finance/dashboard
  *
- * Returns dashboard metrics:
- * - Status counts (Draft, Sent, Viewed, Paid, Overdue)
+ * Returns comprehensive dashboard metrics:
+ * - Status counts (Draft, Scheduled, Sent, Viewed, Paid, Overdue, Pending Review)
  * - Today's invoices count
- * - Pending payment total
+ * - Pending payment total (outstanding)
+ * - Revenue (total paid)
+ * - Fraud alerts count
+ * - Validation errors count
  * - Recent invoices (10)
  * - Recent activity (10)
  */
@@ -56,10 +59,11 @@ async function getFinanceDashboard(req, res) {
     `);
 
     const statusCounts = {
-      Draft: 0, Sent: 0, Viewed: 0, Paid: 0, Overdue: 0, Cancelled: 0, Refunded: 0
+      Draft: 0, Scheduled: 0, Sent: 0, Viewed: 0, Paid: 0,
+      Overdue: 0, Cancelled: 0, Refunded: 0, "Pending Review": 0
     };
     statusRows.forEach((row) => {
-      if (statusCounts.hasOwnProperty(row.status)) {
+      if (Object.prototype.hasOwnProperty.call(statusCounts, row.status)) {
         statusCounts[row.status] = row.count;
       }
     });
@@ -71,13 +75,41 @@ async function getFinanceDashboard(req, res) {
     `);
     const todayCount = todayRows[0]?.count || 0;
 
-    // Pending payment total (Sent + Viewed + Overdue)
+    // Pending payment total (Sent + Viewed + Overdue + Pending Review)
     const [pendingRows] = await pool.query(`
       SELECT COALESCE(SUM(total_amount), 0) AS total
       FROM invoice
-      WHERE status IN ('Sent', 'Viewed', 'Overdue')
+      WHERE status IN ('Sent', 'Viewed', 'Overdue', 'Pending Review')
     `);
-    const pendingTotal = Number(pendingRows[0]?.total || 0);
+    const outstandingAmount = Number(pendingRows[0]?.total || 0);
+
+    // Total revenue (Paid invoices)
+    const [revenueRows] = await pool.query(`
+      SELECT COALESCE(SUM(total_amount), 0) AS total
+      FROM invoice
+      WHERE status = 'Paid'
+    `);
+    const revenue = Number(revenueRows[0]?.total || 0);
+
+    // Fraud alerts (High risk, unresolved)
+    let fraudAlerts = 0;
+    try {
+      const [fraudRows] = await pool.query(`
+        SELECT COUNT(*) AS count FROM invoice
+        WHERE risk_level = 'High' AND (review_status IS NULL OR review_status = 'Open')
+      `);
+      fraudAlerts = fraudRows[0]?.count || 0;
+    } catch { /* columns may not exist */ }
+
+    // Pending payment reviews (from payment table review_status column)
+    let pendingReviews = 0;
+    try {
+      const [reviewRows] = await pool.query(`
+        SELECT COUNT(*) AS count FROM payment
+        WHERE review_status = 'Pending Review'
+      `);
+      pendingReviews = reviewRows[0]?.count || 0;
+    } catch { /* column may not exist */ }
 
     // Recent invoices (last 10)
     const [recentInvoices] = await pool.query(`
@@ -103,26 +135,31 @@ async function getFinanceDashboard(req, res) {
       const [activityRows] = await pool.query(`
         SELECT
           al.log_id,
-          al.action,
-          al.entity_id,
-          al.entity_type,
+          al.action_description AS action,
+          al.affected_record AS entity_id,
+          al.activity_type AS entity_type,
           al.created_at AS timestamp,
+          al.ip_address,
+          al.device_info,
           u.email AS user_email
         FROM audit_logs al
-        LEFT JOIN user u ON u.user_id = al.user_user_id
-        WHERE al.entity_type = 'invoice'
-        ORDER BY al.log_id DESC
+        LEFT JOIN user u ON u.user_id = al.user_id
+        WHERE al.activity_type IN ('invoice', 'payment', 'vaniday_import')
+        ORDER BY al.created_at DESC
         LIMIT 10
       `);
       recentActivity = activityRows;
     } catch {
-      // audit_logs table may have different name or not exist
+      // audit_logs table may have different schema
     }
 
     res.json({
       statusCounts,
       todayCount,
-      pendingTotal,
+      outstandingAmount,
+      revenue,
+      fraudAlerts,
+      pendingReviews,
       recentInvoices,
       recentActivity
     });

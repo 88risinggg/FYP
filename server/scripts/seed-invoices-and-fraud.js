@@ -25,6 +25,7 @@ const customers = [
   { name: "Orchid Beauty Lounge", email: "bookings@orchidbeauty.sg" },
   { name: "The Waxing Boutique", email: "hello@waxingboutique.sg" },
   { name: "Radiance Medi-Spa", email: "info@radiancespa.sg" },
+  { name: "Arut", email: "arut1657@gmail.com" },
   { name: "Aura Hair & Beauty", email: "bookings@aurahairbeauty.sg" },
   { name: "Bliss Nail Studio", email: "hello@blissnails.sg" },
   { name: "Rejuve Wellness Clinic", email: "appointments@rejuveclinic.sg" }

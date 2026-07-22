@@ -12,9 +12,12 @@ const {
 const {
   exportInvoicePerformance,
   getAdminInvoicingDashboard,
+  getEmailDelivery,
   getInvoicePerformance,
   getPaymentReminderSummary,
+  getPaymentUpdates,
   getValidationErrors,
+  getValidationUploadHistory,
   getValidationSummary
 } = require("../controllers/adminDashboardController");
 const { getSettings, postInvoiceLogo, postInvoicePreview, postTestInvoiceEmail, putSettings } = require("../controllers/invoiceSettingsController");
@@ -29,7 +32,10 @@ router.get("/dashboard", getAdminInvoicingDashboard);
 router.get("/dashboard/invoice-performance", getInvoicePerformance);
 router.get("/dashboard/invoice-performance/export", exportInvoicePerformance);
 router.get("/dashboard/payment-reminder-summary", getPaymentReminderSummary);
+router.get("/dashboard/email-delivery", getEmailDelivery);
+router.get("/dashboard/payment-updates", getPaymentUpdates);
 router.get("/dashboard/validation-summary", getValidationSummary);
+router.get("/dashboard/validation-summary/uploads", getValidationUploadHistory);
 router.get("/dashboard/validation-errors", getValidationErrors);
 router.get("/invoice-settings", getSettings);
 router.put("/invoice-settings", putSettings);

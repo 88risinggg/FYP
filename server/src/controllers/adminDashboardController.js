@@ -1,10 +1,13 @@
 const {
   getAdminDashboardData,
+  getAdminPaymentUpdatesData,
   getInvoicePerformanceData,
   getPaymentReminderSummaryData
 } = require("../models/adminDashboardModel");
+const { getAdminEmailDeliveryData } = require("../models/adminEmailDeliveryModel");
 const {
   getAllInvoiceValidationErrors,
+  getInvoiceUploadHistory,
   getInvoiceValidationSummary
 } = require("../models/invoiceValidationSummaryModel");
 
@@ -13,8 +16,9 @@ async function getAdminInvoicingDashboard(req, res) {
     const dashboard = await getAdminDashboardData(req.user?.userId);
     res.json(dashboard);
   } catch (error) {
+    console.error("[Admin invoicing overview] Failed to load dashboard:", error);
     res.status(500).json({
-      message: "Unable to load Admin invoicing dashboard."
+      message: "Unable to load the invoicing overview."
     });
   }
 }
@@ -97,6 +101,7 @@ async function getInvoicePerformance(req, res) {
     const performance = await getInvoicePerformanceData(req.query.range, req.query);
     res.json(performance);
   } catch (error) {
+    console.error("[Admin invoice performance] Failed to load data:", error);
     res.status(500).json({
       message: "Unable to load invoice performance data."
     });
@@ -105,7 +110,10 @@ async function getInvoicePerformance(req, res) {
 
 async function exportInvoicePerformance(req, res) {
   try {
-    const performance = await getInvoicePerformanceData(req.query.range, req.query);
+    const performance = await getInvoicePerformanceData(req.query.range, {
+      ...req.query,
+      includeDocuments: true
+    });
     const csv = invoicePerformanceCsv(performance);
     const fileRange = performance.range || "last-30-days";
 
@@ -133,6 +141,24 @@ async function getPaymentReminderSummary(req, res) {
   }
 }
 
+async function getEmailDelivery(req, res) {
+  try {
+    res.json(await getAdminEmailDeliveryData(req.query));
+  } catch (error) {
+    console.error("[Admin email delivery] Failed to load records:", error);
+    res.status(500).json({ message: "Unable to load email delivery records." });
+  }
+}
+
+async function getPaymentUpdates(req, res) {
+  try {
+    res.json(await getAdminPaymentUpdatesData(req.query));
+  } catch (error) {
+    console.error("[Admin payment updates] Failed to load history:", error);
+    res.status(500).json({ message: "Unable to load payment update history." });
+  }
+}
+
 async function getValidationSummary(req, res) {
   try {
     const summary = await getInvoiceValidationSummary();
@@ -144,9 +170,23 @@ async function getValidationSummary(req, res) {
   }
 }
 
+async function getValidationUploadHistory(req, res) {
+  try {
+    res.json(await getInvoiceUploadHistory(req.query));
+  } catch (error) {
+    console.error("[Admin invoice upload history] Failed to load records:", error);
+    res.status(500).json({
+      message: "Unable to load invoice upload history."
+    });
+  }
+}
+
 async function getValidationErrors(req, res) {
   try {
-    const errors = await getAllInvoiceValidationErrors();
+    if (req.query.uploadId && !/^\d+$/.test(String(req.query.uploadId))) {
+      return res.status(400).json({ message: "A valid upload batch identifier is required." });
+    }
+    const errors = await getAllInvoiceValidationErrors(req.query);
     res.json(errors);
   } catch (error) {
     res.status(500).json({
@@ -158,8 +198,11 @@ async function getValidationErrors(req, res) {
 module.exports = {
   exportInvoicePerformance,
   getAdminInvoicingDashboard,
+  getEmailDelivery,
   getInvoicePerformance,
   getPaymentReminderSummary,
+  getPaymentUpdates,
   getValidationErrors,
+  getValidationUploadHistory,
   getValidationSummary
 };

@@ -265,7 +265,7 @@ async function exportFinancialReport(req, res) {
 
     res.json({
       generatedAt: new Date().toISOString(),
-      companyName: process.env.COMPANY_NAME || "PayNivo",
+      companyName: process.env.COMPANY_NAME || "Vaniday",
       summary: {
         totalInflow: toCurrency(s.total_revenue),
         salonPayouts: toCurrency(s.total_salon_payout),

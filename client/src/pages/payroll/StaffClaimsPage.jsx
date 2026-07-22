@@ -47,7 +47,7 @@ export default function StaffClaimsPage() {
   return (
     <div className="space-y-6">
       {message && (
-        <div className={`rounded-xl border p-4 text-sm ${message.type === "error" ? "border-red-300/40 bg-red-50 text-red-700" : "border-emerald-300/40 bg-emerald-50 text-emerald-700"}`}>
+        <div className={`rounded-xl border p-4 text-sm ${message.type === "error" ? "border-red-300/40 bg-[#FDD9CD] text-red-700" : "border-emerald-300/40 bg-[#FFF6F2] text-emerald-700"}`}>
           {message.text}
         </div>
       )}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, Key, Loader2, RefreshCw, X } from "lucide-react";
 import { fetchApiSettings, generateApiKey, updateApiSettings } from "../../../services/settingsService.js";
+import { reportSettingsSaveResult } from "../../../services/settingsEvents.js";
 
 export default function ApiIntegrationsSection() {
   const [settings, setSettings] = useState({ api_key: null, webhook_url: "", webhook_secret: "", webhooks_enabled: false });
@@ -40,7 +41,8 @@ export default function ApiIntegrationsSection() {
     try {
       await updateApiSettings({ webhook_url: settings.webhook_url, webhooks_enabled: settings.webhooks_enabled });
       showToast("Webhook settings saved");
-    } catch (err) { showToast(err.message, "error"); }
+      reportSettingsSaveResult(true);
+    } catch (err) { showToast(err.message, "error"); reportSettingsSaveResult(false); }
     finally { setSaving(false); }
   }
 
@@ -119,13 +121,13 @@ export default function ApiIntegrationsSection() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-[#251E1F]">Enable Webhooks</span>
-                <button type="button" onClick={() => setSettings((p) => ({ ...p, webhooks_enabled: !p.webhooks_enabled }))}
-                  className={`relative h-6 w-11 rounded-full transition ${settings.webhooks_enabled ? "bg-[#F38978]" : "bg-[#f0d2ca]"}`}>
-                  <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${settings.webhooks_enabled ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+                <button type="button" data-settings-control onClick={() => setSettings((p) => ({ ...p, webhooks_enabled: !p.webhooks_enabled }))}
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition ${settings.webhooks_enabled ? "bg-[#F38978]" : "bg-[#f0d2ca]"}`}>
+                  <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${settings.webhooks_enabled ? "translate-x-5" : "translate-x-0"}`} />
                 </button>
               </div>
             </div>
-            <button type="button" onClick={handleSave} disabled={saving}
+            <button type="button" data-settings-save onClick={handleSave} disabled={saving}
               className="mt-4 primary-button inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold disabled:opacity-50">
               {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
               Save Webhook Settings

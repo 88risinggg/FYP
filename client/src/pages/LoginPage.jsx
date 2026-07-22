@@ -22,6 +22,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { login } from "../services/authService.js";
 import { startHealthCheck } from "../services/apiClient.js";
 import { saveSession } from "../services/sessionService.js";
+import VanidayLogo from "../components/branding/VanidayLogo.jsx";
 
 const features = [
   {
@@ -88,7 +89,7 @@ export default function LoginPage() {
     setError("");
     setIsLoading(true);
     try {
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
       const response = await fetch(`${API_BASE}/api/auth/google/login`);
       const data = await response.json();
       if (data.redirectUrl) {
@@ -108,7 +109,7 @@ export default function LoginPage() {
     setError("");
     setIsLoading(true);
     try {
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
       const response = await fetch(`${API_BASE}/api/auth/otp/request`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -132,7 +133,7 @@ export default function LoginPage() {
     setError("");
     setIsLoading(true);
     try {
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
       const response = await fetch(`${API_BASE}/api/auth/otp/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -176,7 +177,7 @@ export default function LoginPage() {
       startHealthCheck();
       navigate("/module-selection", { replace: true });
     } catch (requestError) {
-      setError("Invalid email or password");
+      setError(requestError.message || "Invalid email or password");
     } finally {
       setIsLoading(false);
     }
@@ -205,7 +206,7 @@ export default function LoginPage() {
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(circle at 18% 22%, rgba(243,137,120,0.18), transparent 28%), radial-gradient(circle at 86% 18%, rgba(253,217,205,0.55), transparent 30%), radial-gradient(circle at 72% 72%, rgba(50,105,168,0.10), transparent 34%), linear-gradient(135deg, #fff8f5 0%, #fff3ee 46%, #FDD9CD 100%)",
+              "radial-gradient(circle at 18% 22%, rgba(243,137,120,0.18), transparent 28%), radial-gradient(circle at 86% 18%, rgba(253,217,205,0.55), transparent 30%), radial-gradient(circle at 72% 72%, rgba(45,124,131,0.10), transparent 34%), linear-gradient(135deg, #fff8f5 0%, #fff3ee 46%, #FDD9CD 100%)",
             backgroundSize: "130% 130%"
           }}
           animate={shouldReduceMotion ? undefined : { backgroundPosition: ["0% 45%", "100% 55%", "0% 45%"] }}
@@ -214,15 +215,10 @@ export default function LoginPage() {
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.045)_1px,transparent_1px)] bg-[size:64px_64px] opacity-30" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[#fff8f5] to-transparent" />
 
-        <header className="relative z-20 border-b border-[#f0d2ca] bg-white/800 backdrop-blur-xl">
+        <header className="relative z-20 border-b border-[#f0d2ca] bg-white/80 backdrop-blur-xl">
           <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
-            <a href="#top" className="flex min-w-0 items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#F38978]/30 bg-[#F38978]/10 text-sm font-bold text-[#6f5b55] shadow-lg shadow-[#F38978]/25">
-                AIP
-              </div>
-              <span className="truncate text-sm font-semibold text-[#251E1F] sm:text-base">
-                Automated Invoicing & Payroll System
-              </span>
+            <a href="#top" className="flex min-w-0 items-center" aria-label="Vaniday home">
+              <VanidayLogo />
             </a>
 
             <nav className="hidden items-center gap-7 text-sm font-medium text-[#6f5b55] lg:flex">
@@ -235,7 +231,7 @@ export default function LoginPage() {
             <div className="flex items-center gap-3">
               <motion.button
                 type="button"
-                className="flex h-10 items-center rounded-lg border border-[#F38978]/30 bg-white/800 px-4 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/20 transition hover:bg-[#FDD9CD]/60"
+                className="flex h-10 items-center rounded-lg border border-[#F38978]/30 bg-white/80 px-4 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/20 transition hover:bg-[#FDD9CD]/60"
                 onClick={openLogin}
                 whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
                 whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
@@ -244,7 +240,7 @@ export default function LoginPage() {
               </motion.button>
               <button
                 type="button"
-                className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/800 text-[#251E1F] ring-1 ring-[#ead3cc] lg:hidden"
+                className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/80 text-[#251E1F] ring-1 ring-[#ead3cc] lg:hidden"
                 aria-label="Open navigation"
               >
                 <Menu size={20} />
@@ -260,7 +256,7 @@ export default function LoginPage() {
             variants={heroVariant}
           >
             <motion.p
-              className="inline-flex items-center gap-2 rounded-full border border-[#F38978]/25 bg-white/800 px-4 py-2 text-sm font-medium text-[#6f5b55] shadow-lg shadow-[#f2b5a9]/20 backdrop-blur"
+              className="inline-flex items-center gap-2 rounded-full border border-[#F38978]/25 bg-white/80 px-4 py-2 text-sm font-medium text-[#6f5b55] shadow-lg shadow-[#f2b5a9]/20 backdrop-blur"
               variants={heroItem}
             >
               <Sparkles size={16} />
@@ -323,8 +319,8 @@ export default function LoginPage() {
               transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
             />
 
-            <div className="absolute inset-x-0 top-20 rounded-3xl border border-[#ead3cc] bg-white/800 p-5 shadow-2xl shadow-[#251E1F]/10 backdrop-blur-2xl lg:left-8">
-              <div className="rounded-2xl border border-[#f0d2ca] bg-white/800 p-5">
+            <div className="absolute inset-x-0 top-20 rounded-3xl border border-[#ead3cc] bg-white/80 p-5 shadow-2xl shadow-[#251E1F]/10 backdrop-blur-2xl lg:left-8">
+              <div className="rounded-2xl border border-[#f0d2ca] bg-white/80 p-5">
                 <div className="flex items-center justify-between gap-4 border-b border-[#f0d2ca] pb-4">
                   <div>
                     <p className="text-sm font-semibold text-[#251E1F]">Operations Overview</p>
@@ -341,7 +337,7 @@ export default function LoginPage() {
                     ["Payroll", "Ready", Wallet],
                     ["Reports", "Synced", BarChart3]
                   ].map(([label, value, Icon]) => (
-                    <div key={label} className="rounded-xl border border-[#f0d2ca] bg-white/800 p-4">
+                    <div key={label} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
                       <Icon className="text-[#F38978]" size={20} />
                       <p className="mt-4 text-xs text-[#7b6660]">{label}</p>
                       <p className="mt-1 text-sm font-semibold text-[#251E1F]">{value}</p>
@@ -349,7 +345,7 @@ export default function LoginPage() {
                   ))}
                 </div>
 
-                <div className="mt-5 rounded-2xl border border-[#f0d2ca] bg-white/800 p-4">
+                <div className="mt-5 rounded-2xl border border-[#f0d2ca] bg-white/80 p-4">
                   <div className="flex items-end gap-2">
                     {[48, 70, 54, 82, 62, 92, 76, 88].map((height, index) => (
                       <motion.div
@@ -422,7 +418,7 @@ export default function LoginPage() {
               return (
                 <motion.article
                   key={feature.title}
-                  className="rounded-2xl border border-[#f0d2ca] bg-white/800 p-6 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur transition-colors hover:border-[#F38978]/40"
+                  className="rounded-2xl border border-[#f0d2ca] bg-white/80 p-6 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur transition-colors hover:border-[#F38978]/40"
                   initial={sectionInitial}
                   whileInView={sectionVisible}
                   viewport={{ once: true, amount: 0.2 }}
@@ -451,7 +447,7 @@ export default function LoginPage() {
       >
         <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-2">
           <motion.article
-            className="rounded-2xl border border-[#F38978]/20 bg-white/800 p-7 shadow-xl shadow-[#f2b5a9]/20 backdrop-blur"
+            className="rounded-2xl border border-[#F38978]/20 bg-white/80 p-7 shadow-xl shadow-[#f2b5a9]/20 backdrop-blur"
             whileHover={shouldReduceMotion ? undefined : { y: -5 }}
           >
             <FileText className="text-[#F38978]" size={30} />
@@ -462,7 +458,7 @@ export default function LoginPage() {
             </p>
           </motion.article>
           <motion.article
-            className="rounded-2xl border border-[#F38978]/20 bg-white/800 p-7 shadow-xl shadow-[#F38978]/10 backdrop-blur"
+            className="rounded-2xl border border-[#F38978]/20 bg-white/80 p-7 shadow-xl shadow-[#F38978]/10 backdrop-blur"
             whileHover={shouldReduceMotion ? undefined : { y: -5 }}
           >
             <Wallet className="text-[#F38978]" size={30} />
@@ -500,7 +496,7 @@ export default function LoginPage() {
             {roleItems.map((role) => (
               <motion.div
                 key={role}
-                className="rounded-2xl border border-[#f0d2ca] bg-white/800 p-5 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur transition-colors hover:border-[#F38978]/40"
+                className="rounded-2xl border border-[#f0d2ca] bg-white/80 p-5 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur transition-colors hover:border-[#F38978]/40"
                 initial={sectionInitial}
                 whileInView={sectionVisible}
                 viewport={{ once: true, amount: 0.2 }}
@@ -533,7 +529,7 @@ export default function LoginPage() {
       <AnimatePresence>
         {isLoginOpen && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-md"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[#251E1F]/70 px-4 py-6 backdrop-blur-md"
             initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
             animate={{ opacity: 1, backdropFilter: "blur(12px)" }}
             exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
@@ -557,9 +553,7 @@ export default function LoginPage() {
               </button>
 
               <div className="pr-8">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#F38978] to-[#F38978] text-sm font-bold text-[#251E1F] shadow-lg shadow-[#F38978]/30">
-                  AIP
-                </div>
+                <VanidayLogo compact />
                 <h2 className="mt-6 text-2xl font-semibold tracking-normal text-[#251E1F]">
                   Login to System
                 </h2>
@@ -573,7 +567,7 @@ export default function LoginPage() {
                   <label className="block text-sm font-medium text-[#6f5b55]" htmlFor="email">
                     Email
                   </label>
-                  <div className="mt-2 flex transform-gpu rounded-xl border border-[#f0d2ca] bg-white/800 transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-[#F38978]/70 focus-within:ring-4 focus-within:ring-[#F38978]/15">
+                  <div className="mt-2 flex transform-gpu rounded-xl border border-[#f0d2ca] bg-white/80 transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-[#F38978]/70 focus-within:ring-4 focus-within:ring-[#F38978]/15">
                     <span className="flex items-center px-3 text-[#7b6660]">
                       <Mail size={18} />
                     </span>
@@ -595,7 +589,7 @@ export default function LoginPage() {
                   <label className="block text-sm font-medium text-[#6f5b55]" htmlFor="password">
                     Password
                   </label>
-                  <div className="mt-2 flex transform-gpu rounded-xl border border-[#f0d2ca] bg-white/800 transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-[#F38978]/70 focus-within:ring-4 focus-within:ring-[#F38978]/15">
+                  <div className="mt-2 flex transform-gpu rounded-xl border border-[#f0d2ca] bg-white/80 transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-[#F38978]/70 focus-within:ring-4 focus-within:ring-[#F38978]/15">
                     <span className="flex items-center px-3 text-[#7b6660]">
                       <Lock size={18} />
                     </span>
@@ -627,7 +621,7 @@ export default function LoginPage() {
                       type="checkbox"
                       checked={rememberMe}
                       onChange={(event) => setRememberMe(event.target.checked)}
-                      className="h-4 w-4 rounded border-slate-500 bg-transparent text-[#F38978] focus:ring-[#F38978]"
+                      className="h-4 w-4 rounded border-[#F0D2CA] bg-transparent text-[#F38978] focus:ring-[#F38978]"
                     />
                     Remember me
                   </label>
@@ -653,14 +647,14 @@ export default function LoginPage() {
                 <motion.button
                   type="submit"
                   disabled={isLoading}
-                  className="flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#F38978] via-[#F38978] to-[#F38978] px-4 py-3 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-slate-500 disabled:text-[#514440] disabled:shadow-none"
+                  className="flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#F38978] via-[#F38978] to-[#F38978] px-4 py-3 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-[#7B6660] disabled:text-[#7B6660] disabled:shadow-none"
                   whileHover={!isLoading && !shouldReduceMotion ? { scale: 1.02 } : undefined}
                   whileTap={!isLoading && !shouldReduceMotion ? { scale: 0.98 } : undefined}
                   animate={isLoading && !shouldReduceMotion ? { scale: 0.99 } : { scale: 1 }}
                 >
                   {isLoading ? (
                     <span className="flex items-center gap-2">
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950/30 border-t-slate-950" />
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#F0D2CA]/30 border-t-slate-950" />
                       Logging in
                     </span>
                   ) : (
@@ -669,24 +663,24 @@ export default function LoginPage() {
                 </motion.button>
 
                 <div className="relative my-4 flex items-center gap-3">
-                  <div className="h-px flex-1 bg-white/800" />
+                  <div className="h-px flex-1 bg-white/80" />
                   <span className="text-xs text-[#6f5b55]">or</span>
-                  <div className="h-px flex-1 bg-white/800" />
+                  <div className="h-px flex-1 bg-white/80" />
                 </div>
 
                 <motion.button
                   type="button"
                   onClick={handleGoogleLogin}
                   disabled={isLoading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#ead3cc] bg-white/800 px-4 py-3 text-sm font-semibold text-[#251E1F] transition hover:bg-white/[0.14] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#ead3cc] bg-white/80 px-4 py-3 text-sm font-semibold text-[#251E1F] transition hover:bg-white/[0.14] disabled:cursor-not-allowed disabled:opacity-50"
                   whileHover={!isLoading && !shouldReduceMotion ? { scale: 1.02 } : undefined}
                   whileTap={!isLoading && !shouldReduceMotion ? { scale: 0.98 } : undefined}
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#F38978"/>
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#2D7C83"/>
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FDD9CD"/>
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#C55245"/>
                   </svg>
                   Log in with Google
                 </motion.button>
@@ -704,7 +698,7 @@ export default function LoginPage() {
                 </motion.button>
               </form>
 
-              <div className="mt-5 flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-3 text-sm text-[#7b6660]">
+              <div className="mt-5 flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3 text-sm text-[#7b6660]">
                 <Bell size={16} className="shrink-0 text-[#F38978]" />
                 Role-based access is applied after successful login.
               </div>
@@ -717,7 +711,7 @@ export default function LoginPage() {
       <AnimatePresence>
         {showOtpForm && (
           <motion.div
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-[#251E1F]/60 backdrop-blur-sm p-4"
             initial={shouldReduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={shouldReduceMotion ? undefined : { opacity: 0 }}
@@ -743,7 +737,7 @@ export default function LoginPage() {
                 <form className="mt-5 space-y-4" onSubmit={handleOtpRequest}>
                   <div>
                     <label className="block text-sm font-medium text-[#6f5b55]" htmlFor="otp-email">Email</label>
-                    <div className="mt-2 flex rounded-xl border border-[#f0d2ca] bg-white/800 focus-within:border-[#F38978]/70 focus-within:ring-4 focus-within:ring-[#F38978]/15">
+                    <div className="mt-2 flex rounded-xl border border-[#f0d2ca] bg-white/80 focus-within:border-[#F38978]/70 focus-within:ring-4 focus-within:ring-[#F38978]/15">
                       <span className="flex items-center px-3 text-[#7b6660]"><Mail size={18} /></span>
                       <input
                         id="otp-email"
@@ -777,7 +771,7 @@ export default function LoginPage() {
                       required
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                      className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white/800 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-[#251E1F] outline-none focus:border-[#F38978]/70 focus:ring-4 focus:ring-[#F38978]/15"
+                      className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-[#251E1F] outline-none focus:border-[#F38978]/70 focus:ring-4 focus:ring-[#F38978]/15"
                       placeholder="000000"
                       autoFocus
                     />

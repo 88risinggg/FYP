@@ -1,7 +1,16 @@
+/**
+ * Invoice Settings Model
+ *
+ * Global invoice configuration stored as a JSON blob in the invoice table
+ * (special row with invoiceId = '__SETTINGS__').
+ */
+
 const { pool } = require("../config/db");
 
+const SETTINGS_ROW_ID = "__SETTINGS__";
+
 const missingInvoiceSettingsMessage =
-  "Invoice settings table is missing or cannot be updated. Check the invoice_settings schema in MySQL before using this feature.";
+  "Invoice settings row is missing from the invoice table. Run the setup script to create the __SETTINGS__ row.";
 
 const optionLists = {
   currencies: [
@@ -48,10 +57,17 @@ const optionLists = {
 
 const invoiceStatusWorkflow = [
   { from: "Draft", to: "Sent" },
+  { from: "Draft", to: "Scheduled" },
+  { from: "Scheduled", to: "Sent" },
   { from: "Sent", to: "Viewed" },
   { from: "Viewed", to: "Paid" },
   { from: "Sent", to: "Overdue" },
-  { from: "Viewed", to: "Overdue" }
+  { from: "Viewed", to: "Overdue" },
+  { from: "Sent", to: "Pending Review" },
+  { from: "Viewed", to: "Pending Review" },
+  { from: "Overdue", to: "Pending Review" },
+  { from: "Pending Review", to: "Paid" },
+  { from: "Pending Review", to: "Sent" }
 ];
 
 const defaultSettings = {
@@ -70,7 +86,7 @@ const defaultSettings = {
   dueDays: 30,
   lateFeePercent: 0,
   gracePeriodDays: 0,
-  companyName: "",
+  companyName: "Vaniday",
   companyRegistrationNumber: "",
   companyAddress: "",
   registeredOfficeAddress: "",
@@ -81,25 +97,22 @@ const defaultSettings = {
   bankAccountNumber: "",
   bicSwift: "",
   paynowIdentifier: "",
-  paymentReferenceInstruction: "Please include your invoice number as the payment reference.",
-  payoutStatement: "We will process payouts according to the agreed payment schedule.",
-  computerGeneratedStatement: "This is a computer-generated invoice and no signature is required.",
+  paymentReferenceInstruction: "Please include your invoice number and salon name as reference for electronic payments.",
+  payoutStatement: "We will payout within 10 days from Invoice Date.",
+  computerGeneratedStatement: "This is a computer generated invoice and therefore no signature is required.",
   senderName: "",
   replyToEmail: "",
   emailSubjectTemplate: "Invoice {{invoice_number}} from {{company_name}}",
   emailBodyTemplate: "Dear {{customer_name}},\n\nYour invoice {{invoice_number}} for {{amount_due}} is due on {{due_date}}.\n\nThank you,\n{{company_name}}",
   attachPdfInvoice: true,
   footerNote: "Thank you for your business.",
-  // Template identity
   templateName: "Default Template",
   templateDescription: "",
-  // Company extended details
   uenNumber: "",
   gstRegistrationNumber: "",
   companyPhone: "",
   companyEmail: "",
   companyWebsite: "",
-  // Theme & styling
   primaryColor: "#061e4b",
   secondaryColor: "#ff5a52",
   fontFamily: "Arial, Helvetica, sans-serif",
@@ -108,26 +121,21 @@ const defaultSettings = {
   headerStyle: "default",
   footerStyle: "default",
   itemTableStyle: "striped",
-  // Currency & formatting
   currencySymbol: "S$",
   currencyFormat: "symbol_before",
   displayDateFormat: "DD MMM YYYY",
   displayTimeFormat: "HH:mm",
   decimalPrecision: 2,
-  // Invoice number extended
   runningNumber: 1,
   resetNumberYearly: true,
   invoiceDateSource: "issue_date",
-  // Tax
   taxEnabled: true,
   taxName: "GST",
   taxPercentage: 9,
   taxInclusive: false,
-  // Defaults
   defaultDiscount: 0,
   defaultNotes: "",
   termsAndConditions: "",
-  // Display toggles
   qrCodeDisplay: true,
   bankDetailsDisplay: true,
   paynowDisplay: true,
@@ -136,10 +144,8 @@ const defaultSettings = {
   statusBadgeStyle: "ribbon",
   companyStampUrl: "",
   signatureUrl: "",
-  // PDF options
   pdfPageSize: "A4",
   pdfOrientation: "portrait",
-  // Vaniday field mapping
   vanidayFieldMapping: null,
   general: {
     defaultCurrency: "SGD",
@@ -171,101 +177,16 @@ const defaultSettings = {
   }
 };
 
-const schemaColumns = {
-  setting_id: "INT AUTO_INCREMENT PRIMARY KEY",
-  invoice_prefix: "VARCHAR(20) NOT NULL DEFAULT 'INV'",
-  invoice_year: "VARCHAR(4) NOT NULL DEFAULT ''",
-  separator_style: "VARCHAR(20) NOT NULL DEFAULT 'hyphen'",
-  invoice_format: "VARCHAR(60) NOT NULL DEFAULT '{PREFIX}-{YYYY}-{NNNN}'",
-  next_invoice_number: "INT NOT NULL DEFAULT 1",
-  numbering_style: "VARCHAR(40) NOT NULL DEFAULT 'PREFIX-DATE-NUMBER'",
-  date_format: "VARCHAR(20) NOT NULL DEFAULT 'YYYYMM'",
-  default_currency: "VARCHAR(12) NOT NULL DEFAULT 'SGD'",
-  default_language: "VARCHAR(12) NOT NULL DEFAULT 'en'",
-  tax_type: "VARCHAR(30) NOT NULL DEFAULT 'GST'",
-  default_tax: "VARCHAR(30) NOT NULL DEFAULT 'GST_9'",
-  default_tax_rate: "DECIMAL(8,2) NOT NULL DEFAULT 9.00",
-  prices_include_tax: "TINYINT(1) NOT NULL DEFAULT 0",
-  price_display: "VARCHAR(30) NOT NULL DEFAULT 'tax_exclusive'",
-  payment_terms: "VARCHAR(60) NOT NULL DEFAULT 'Net 30'",
-  due_days: "INT NOT NULL DEFAULT 30",
-  late_fee_percent: "DECIMAL(8,2) NOT NULL DEFAULT 0.00",
-  late_fee_type: "VARCHAR(20) NOT NULL DEFAULT 'percent'",
-  grace_period_days: "INT NOT NULL DEFAULT 0",
-  online_view_link_enabled: "TINYINT(1) NOT NULL DEFAULT 1",
-  whatsapp_notifications_enabled: "TINYINT(1) NOT NULL DEFAULT 0",
-  pdf_export_enabled: "TINYINT(1) NOT NULL DEFAULT 1",
-  excel_export_enabled: "TINYINT(1) NOT NULL DEFAULT 1",
-  pdf_paper_size: "VARCHAR(10) NOT NULL DEFAULT 'A4'",
-  excel_format: "VARCHAR(10) NOT NULL DEFAULT 'xlsx'",
-  company_logo_url: "VARCHAR(500) NULL",
-  brand_color: "VARCHAR(20) NOT NULL DEFAULT '#F38978'",
-  show_company_details_on_invoice: "TINYINT(1) NOT NULL DEFAULT 1",
-  yearly_reset_enabled: "TINYINT(1) NOT NULL DEFAULT 1",
-  manual_override_enabled: "TINYINT(1) NOT NULL DEFAULT 0",
-  lock_numbering_after_sent: "TINYINT(1) NOT NULL DEFAULT 1",
-  prevent_duplicate_numbers: "TINYINT(1) NOT NULL DEFAULT 1",
-  company_name: "VARCHAR(255) NOT NULL DEFAULT ''",
-  company_registration_number: "VARCHAR(100) NOT NULL DEFAULT ''",
-  company_address: "TEXT NULL",
-  registered_office_address: "TEXT NULL",
-  finance_email: "VARCHAR(255) NOT NULL DEFAULT ''",
-  support_email: "VARCHAR(255) NOT NULL DEFAULT ''",
-  bank_account_holder_name: "VARCHAR(255) NOT NULL DEFAULT ''",
-  bank_name: "VARCHAR(255) NOT NULL DEFAULT ''",
-  bank_account_number: "VARCHAR(100) NOT NULL DEFAULT ''",
-  bic_swift: "VARCHAR(50) NOT NULL DEFAULT ''",
-  paynow_identifier: "VARCHAR(100) NOT NULL DEFAULT ''",
-  payment_reference_instruction: "TEXT NULL",
-  payout_statement: "TEXT NULL",
-  computer_generated_statement: "TEXT NULL",
-  sender_name: "VARCHAR(255) NOT NULL DEFAULT ''",
-  reply_to_email: "VARCHAR(255) NOT NULL DEFAULT ''",
-  email_subject_template: "VARCHAR(500) NOT NULL DEFAULT 'Invoice {{invoice_number}} from {{company_name}}'",
-  email_body_template: "TEXT NULL",
-  attach_pdf_invoice: "TINYINT(1) NOT NULL DEFAULT 1",
-  footer_note: "TEXT NULL",
-  created_at: "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
-  updated_at: "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
-};
-
-function isMissingTableError(error) {
-  return error?.code === "ER_NO_SUCH_TABLE" || error?.code === "ER_BAD_FIELD_ERROR";
-}
-
-function handleDatabaseShapeError(error) {
-  if (isMissingTableError(error)) {
-    const wrapped = new Error(missingInvoiceSettingsMessage);
-    wrapped.statusCode = 501;
-    wrapped.cause = error;
-    throw wrapped;
-  }
-
-  throw error;
-}
-
-async function ensureInvoiceSettingsSchema() {
-  // Disabled - invoice_settings removed from 11-table schema
-}
-
-function boolValue(value, fallback = false) {
-  if (value === undefined || value === null) return fallback;
-  return value === true || value === 1 || value === "1";
-}
+// ─── Helper Functions ────────────────────────────────────────────────────────
 
 function numberValue(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
-function formatDatePart(date, dateFormat) {
-  const year = String(date.getFullYear());
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  if (dateFormat === "YYMM") return `${year.slice(-2)}${month}`;
-  if (dateFormat === "YYYYMMDD") return `${year}${month}${day}`;
-  return `${year}${month}`;
+function boolValue(value, fallback = false) {
+  if (value === undefined || value === null) return fallback;
+  return value === true || value === 1 || value === "1";
 }
 
 function normalizeInvoiceYear(value) {
@@ -279,25 +200,13 @@ function numberToken(value) {
 
 function invoiceYearTokens(settings, date = new Date()) {
   const fullYear = normalizeInvoiceYear(settings.invoiceYear || date.getFullYear());
-  return {
-    YYYY: fullYear,
-    YY: fullYear.slice(-2)
-  };
-}
-
-function legacyInvoiceFormat(settings) {
-  const numberingStyle = settings?.numberingStyle || settings?.numbering_style;
-  const dateFormat = settings?.dateFormat || settings?.date_format;
-
-  if (numberingStyle === "PREFIX-NUMBER") return "{PREFIX}-{NNNN}";
-  if (numberingStyle === "DATE-PREFIX-NUMBER") return "{YYYY}-{PREFIX}-{NNNN}";
-  return dateFormat === "YYMM" ? "{PREFIX}-{YY}-{NNNN}" : defaultSettings.invoiceFormat;
+  return { YYYY: fullYear, YY: fullYear.slice(-2) };
 }
 
 function buildInvoiceNumber(settings, date = new Date(), nextNumber = settings?.nextInvoiceNumber) {
   const prefix = settings.invoicePrefix || "INV";
   const { YYYY, YY } = invoiceYearTokens(settings, date);
-  const format = settings.invoiceFormat || legacyInvoiceFormat(settings);
+  const format = settings.invoiceFormat || defaultSettings.invoiceFormat;
   const invoiceNumber = numberToken(nextNumber);
 
   return format
@@ -313,150 +222,158 @@ function calculateDueDate(settings, issueDate = new Date()) {
   return dueDate.toISOString().slice(0, 10);
 }
 
-function mapSettings(row) {
-  // Parse Vaniday field mapping JSON
-  let vanidayFieldMapping = defaultSettings.vanidayFieldMapping;
-  try {
-    if (row.vaniday_field_mapping) {
-      vanidayFieldMapping = typeof row.vaniday_field_mapping === "string"
-        ? JSON.parse(row.vaniday_field_mapping)
-        : row.vaniday_field_mapping;
-    }
-  } catch { /* keep default */ }
-
-  const flatSettings = {
-    settingId: row.setting_id,
-    invoicePrefix: row.invoice_prefix || defaultSettings.invoicePrefix,
-    invoiceYear: normalizeInvoiceYear(row.invoice_year || defaultSettings.invoiceYear),
-    separatorStyle: row.separator_style || defaultSettings.separatorStyle,
-    invoiceFormat: row.invoice_format || legacyInvoiceFormat(row),
-    nextInvoiceNumber: numberValue(row.next_invoice_number, defaultSettings.nextInvoiceNumber),
-    numberingStyle: row.numbering_style || defaultSettings.numberingStyle,
-    dateFormat: row.date_format || defaultSettings.dateFormat,
-    defaultCurrency: row.default_currency || defaultSettings.defaultCurrency,
-    taxType: row.tax_type || defaultSettings.taxType,
-    defaultTaxRate: numberValue(row.default_tax_rate, defaultSettings.defaultTaxRate),
-    pricesIncludeTax: boolValue(row.prices_include_tax, defaultSettings.pricesIncludeTax),
-    paymentTerms: row.payment_terms || defaultSettings.paymentTerms,
-    dueDays: numberValue(row.due_days, defaultSettings.dueDays),
-    lateFeePercent: numberValue(row.late_fee_percent, defaultSettings.lateFeePercent),
-    gracePeriodDays: numberValue(row.grace_period_days, defaultSettings.gracePeriodDays),
-    companyName: row.company_name || "",
-    companyRegistrationNumber: row.company_registration_number || "",
-    companyAddress: row.company_address || "",
-    registeredOfficeAddress: row.registered_office_address || "",
-    financeEmail: row.finance_email || "",
-    supportEmail: row.support_email || "",
-    bankAccountHolderName: row.bank_account_holder_name || "",
-    bankName: row.bank_name || "",
-    bankAccountNumber: row.bank_account_number || "",
-    bicSwift: row.bic_swift || "",
-    paynowIdentifier: row.paynow_identifier || "",
-    paymentReferenceInstruction: row.payment_reference_instruction || defaultSettings.paymentReferenceInstruction,
-    payoutStatement: row.payout_statement || defaultSettings.payoutStatement,
-    computerGeneratedStatement: row.computer_generated_statement || defaultSettings.computerGeneratedStatement,
-    senderName: row.sender_name || "",
-    replyToEmail: row.reply_to_email || "",
-    emailSubjectTemplate: row.email_subject_template || defaultSettings.emailSubjectTemplate,
-    emailBodyTemplate: row.email_body_template || defaultSettings.emailBodyTemplate,
-    attachPdfInvoice: boolValue(row.attach_pdf_invoice, defaultSettings.attachPdfInvoice),
-    footerNote: row.footer_note || defaultSettings.footerNote,
-    // Template identity
-    templateName: row.template_name || defaultSettings.templateName,
-    templateDescription: row.template_description || defaultSettings.templateDescription,
-    // Company extended
-    uenNumber: row.uen_number || defaultSettings.uenNumber,
-    gstRegistrationNumber: row.gst_registration_number || defaultSettings.gstRegistrationNumber,
-    companyPhone: row.company_phone || defaultSettings.companyPhone,
-    companyEmail: row.company_email || defaultSettings.companyEmail,
-    companyWebsite: row.company_website || defaultSettings.companyWebsite,
-    // Theme & styling
-    primaryColor: row.primary_color || defaultSettings.primaryColor,
-    secondaryColor: row.secondary_color || defaultSettings.secondaryColor,
-    fontFamily: row.font_family || defaultSettings.fontFamily,
-    fontSizeBase: numberValue(row.font_size_base, defaultSettings.fontSizeBase),
-    invoiceBorderStyle: row.invoice_border_style || defaultSettings.invoiceBorderStyle,
-    headerStyle: row.header_style || defaultSettings.headerStyle,
-    footerStyle: row.footer_style || defaultSettings.footerStyle,
-    itemTableStyle: row.item_table_style || defaultSettings.itemTableStyle,
-    // Currency & formatting
-    currencySymbol: row.currency_symbol || defaultSettings.currencySymbol,
-    currencyFormat: row.currency_format || defaultSettings.currencyFormat,
-    displayDateFormat: row.display_date_format || defaultSettings.displayDateFormat,
-    displayTimeFormat: row.display_time_format || defaultSettings.displayTimeFormat,
-    decimalPrecision: numberValue(row.decimal_precision, defaultSettings.decimalPrecision),
-    // Invoice number extended
-    runningNumber: numberValue(row.running_number, defaultSettings.runningNumber),
-    resetNumberYearly: boolValue(row.reset_number_yearly, defaultSettings.resetNumberYearly),
-    invoiceDateSource: row.invoice_date_source || defaultSettings.invoiceDateSource,
-    // Tax
-    taxEnabled: boolValue(row.tax_enabled, defaultSettings.taxEnabled),
-    taxName: row.tax_name || defaultSettings.taxName,
-    taxPercentage: numberValue(row.tax_percentage, defaultSettings.taxPercentage),
-    taxInclusive: boolValue(row.tax_inclusive, defaultSettings.taxInclusive),
-    // Defaults
-    defaultDiscount: numberValue(row.default_discount, defaultSettings.defaultDiscount),
-    defaultNotes: row.default_notes || defaultSettings.defaultNotes,
-    termsAndConditions: row.terms_and_conditions || defaultSettings.termsAndConditions,
-    // Display toggles
-    qrCodeDisplay: boolValue(row.qr_code_display, defaultSettings.qrCodeDisplay),
-    bankDetailsDisplay: boolValue(row.bank_details_display, defaultSettings.bankDetailsDisplay),
-    paynowDisplay: boolValue(row.paynow_display, defaultSettings.paynowDisplay),
-    signatureDisplay: boolValue(row.signature_display, defaultSettings.signatureDisplay),
-    watermarkEnabled: boolValue(row.watermark_enabled, defaultSettings.watermarkEnabled),
-    statusBadgeStyle: row.status_badge_style || defaultSettings.statusBadgeStyle,
-    companyStampUrl: row.company_stamp_url || defaultSettings.companyStampUrl,
-    signatureUrl: row.signature_url || defaultSettings.signatureUrl,
-    // PDF options
-    pdfPageSize: row.pdf_page_size || defaultSettings.pdfPageSize,
-    pdfOrientation: row.pdf_orientation || defaultSettings.pdfOrientation,
-    // Vaniday field mapping
-    vanidayFieldMapping,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
+function calculateConfigurationStatus(settings) {
+  const status = {
+    general: settings?.general?.defaultCurrency && settings?.general?.defaultLanguage ? "completed" : "incomplete",
+    numbering: settings?.invoicePrefix && settings?.nextInvoiceNumber ? "completed" : "incomplete",
+    template: typeof settings?.branding?.showCompanyDetailsOnInvoice === "boolean" ? "completed" : "warning",
+    email: settings?.general?.onlineViewLinkEnabled ? "completed" : "warning",
+    reminders: settings?.general?.whatsappNotificationsEnabled ? "completed" : "warning",
+    payments: "warning",
+    automation: settings?.export?.pdfExportEnabled || settings?.export?.excelExportEnabled ? "completed" : "warning",
+    bulkUpload: "incomplete"
   };
+  const completedCount = Object.values(status).filter((v) => v === "completed").length;
+  return {
+    categories: status,
+    completionPercentage: Math.round((completedCount / Object.keys(status).length) * 100)
+  };
+}
 
+// ─── Read settings from __SETTINGS__ row ─────────────────────────────────────
+
+function parseSettingsJson(jsonValue) {
+  if (!jsonValue) return null;
+  let raw;
+  if (typeof jsonValue === "string") {
+    try { raw = JSON.parse(jsonValue); } catch { return null; }
+  } else {
+    raw = jsonValue;
+  }
+  // The raw object may be the old DB row format or the app format
+  // Map it to the app format
+  return mapRawToSettings(raw);
+}
+
+function mapRawToSettings(raw) {
+  if (!raw) return null;
+
+  // If it's already in app format (has invoicePrefix key), return enriched
+  if (raw.invoicePrefix !== undefined) {
+    const settings = { ...defaultSettings, ...raw };
+    return {
+      ...settings,
+      previewInvoiceNumber: buildInvoiceNumber(settings),
+      sampleDueDate: calculateDueDate(settings)
+    };
+  }
+
+  // Otherwise it's in old DB column format (snake_case), map it
   const settings = {
-    ...flatSettings,
+    settingId: raw.setting_id,
+    invoicePrefix: raw.invoice_prefix || defaultSettings.invoicePrefix,
+    invoiceYear: normalizeInvoiceYear(raw.invoice_year || defaultSettings.invoiceYear),
+    separatorStyle: raw.separator_style || defaultSettings.separatorStyle,
+    invoiceFormat: raw.invoice_format || defaultSettings.invoiceFormat,
+    nextInvoiceNumber: numberValue(raw.next_invoice_number, defaultSettings.nextInvoiceNumber),
+    numberingStyle: raw.numbering_style || defaultSettings.numberingStyle,
+    dateFormat: raw.date_format || defaultSettings.dateFormat,
+    defaultCurrency: raw.default_currency || defaultSettings.defaultCurrency,
+    taxType: raw.tax_type || defaultSettings.taxType,
+    defaultTaxRate: numberValue(raw.default_tax_rate, defaultSettings.defaultTaxRate),
+    pricesIncludeTax: boolValue(raw.prices_include_tax, defaultSettings.pricesIncludeTax),
+    paymentTerms: raw.payment_terms || defaultSettings.paymentTerms,
+    dueDays: numberValue(raw.due_days, defaultSettings.dueDays),
+    lateFeePercent: numberValue(raw.late_fee_percent, defaultSettings.lateFeePercent),
+    gracePeriodDays: numberValue(raw.grace_period_days, defaultSettings.gracePeriodDays),
+    companyName: raw.company_name || "",
+    companyRegistrationNumber: raw.company_registration_number || "",
+    companyAddress: raw.company_address || "",
+    registeredOfficeAddress: raw.registered_office_address || "",
+    financeEmail: raw.finance_email || "",
+    supportEmail: raw.support_email || "",
+    bankAccountHolderName: raw.bank_account_holder_name || "",
+    bankName: raw.bank_name || "",
+    bankAccountNumber: raw.bank_account_number || "",
+    bicSwift: raw.bic_swift || "",
+    paynowIdentifier: raw.paynow_identifier || "",
+    paymentReferenceInstruction: raw.payment_reference_instruction || defaultSettings.paymentReferenceInstruction,
+    payoutStatement: raw.payout_statement || defaultSettings.payoutStatement,
+    computerGeneratedStatement: raw.computer_generated_statement || defaultSettings.computerGeneratedStatement,
+    senderName: raw.sender_name || "",
+    replyToEmail: raw.reply_to_email || "",
+    emailSubjectTemplate: raw.email_subject_template || defaultSettings.emailSubjectTemplate,
+    emailBodyTemplate: raw.email_body_template || defaultSettings.emailBodyTemplate,
+    attachPdfInvoice: boolValue(raw.attach_pdf_invoice, defaultSettings.attachPdfInvoice),
+    footerNote: raw.footer_note || defaultSettings.footerNote,
+    templateName: raw.template_name || defaultSettings.templateName,
+    templateDescription: raw.template_description || defaultSettings.templateDescription,
+    uenNumber: raw.uen_number || defaultSettings.uenNumber,
+    gstRegistrationNumber: raw.gst_registration_number || defaultSettings.gstRegistrationNumber,
+    companyPhone: raw.company_phone || defaultSettings.companyPhone,
+    companyEmail: raw.company_email || defaultSettings.companyEmail,
+    companyWebsite: raw.company_website || defaultSettings.companyWebsite,
+    primaryColor: raw.primary_color || defaultSettings.primaryColor,
+    secondaryColor: raw.secondary_color || defaultSettings.secondaryColor,
+    fontFamily: raw.font_family || defaultSettings.fontFamily,
+    fontSizeBase: numberValue(raw.font_size_base, defaultSettings.fontSizeBase),
+    invoiceBorderStyle: raw.invoice_border_style || defaultSettings.invoiceBorderStyle,
+    headerStyle: raw.header_style || defaultSettings.headerStyle,
+    footerStyle: raw.footer_style || defaultSettings.footerStyle,
+    itemTableStyle: raw.item_table_style || defaultSettings.itemTableStyle,
+    currencySymbol: raw.currency_symbol || defaultSettings.currencySymbol,
+    currencyFormat: raw.currency_format || defaultSettings.currencyFormat,
+    displayDateFormat: raw.display_date_format || defaultSettings.displayDateFormat,
+    displayTimeFormat: raw.display_time_format || defaultSettings.displayTimeFormat,
+    decimalPrecision: numberValue(raw.decimal_precision, defaultSettings.decimalPrecision),
+    runningNumber: numberValue(raw.running_number, defaultSettings.runningNumber),
+    resetNumberYearly: boolValue(raw.reset_number_yearly, defaultSettings.resetNumberYearly),
+    invoiceDateSource: raw.invoice_date_source || defaultSettings.invoiceDateSource,
+    taxEnabled: boolValue(raw.tax_enabled, defaultSettings.taxEnabled),
+    taxName: raw.tax_name || defaultSettings.taxName,
+    taxPercentage: numberValue(raw.tax_percentage, defaultSettings.taxPercentage),
+    taxInclusive: boolValue(raw.tax_inclusive, defaultSettings.taxInclusive),
+    defaultDiscount: numberValue(raw.default_discount, defaultSettings.defaultDiscount),
+    defaultNotes: raw.default_notes || defaultSettings.defaultNotes,
+    termsAndConditions: raw.terms_and_conditions || defaultSettings.termsAndConditions,
+    qrCodeDisplay: boolValue(raw.qr_code_display, defaultSettings.qrCodeDisplay),
+    bankDetailsDisplay: boolValue(raw.bank_details_display, defaultSettings.bankDetailsDisplay),
+    paynowDisplay: boolValue(raw.paynow_display, defaultSettings.paynowDisplay),
+    signatureDisplay: boolValue(raw.signature_display, defaultSettings.signatureDisplay),
+    watermarkEnabled: boolValue(raw.watermark_enabled, defaultSettings.watermarkEnabled),
+    statusBadgeStyle: raw.status_badge_style || defaultSettings.statusBadgeStyle,
+    companyStampUrl: raw.company_stamp_url || defaultSettings.companyStampUrl,
+    signatureUrl: raw.signature_url || defaultSettings.signatureUrl,
+    pdfPageSize: raw.pdf_page_size || raw.pdf_paper_size || defaultSettings.pdfPageSize,
+    pdfOrientation: raw.pdf_orientation || defaultSettings.pdfOrientation,
+    vanidayFieldMapping: raw.vaniday_field_mapping || defaultSettings.vanidayFieldMapping,
     general: {
-      defaultCurrency: row.default_currency || defaultSettings.general.defaultCurrency,
-      defaultLanguage: row.default_language || defaultSettings.general.defaultLanguage,
-      defaultTax: row.default_tax || defaultSettings.general.defaultTax,
-      priceDisplay: row.price_display || defaultSettings.general.priceDisplay,
-      paymentTerms: row.payment_terms || defaultSettings.general.paymentTerms,
-      lateFeeValue: numberValue(row.late_fee_percent, defaultSettings.general.lateFeeValue),
-      lateFeeType: row.late_fee_type || defaultSettings.general.lateFeeType,
-      onlineViewLinkEnabled: boolValue(
-        row.online_view_link_enabled,
-        defaultSettings.general.onlineViewLinkEnabled
-      ),
-      whatsappNotificationsEnabled: boolValue(
-        row.whatsapp_notifications_enabled,
-        defaultSettings.general.whatsappNotificationsEnabled
-      )
+      defaultCurrency: raw.default_currency || defaultSettings.general.defaultCurrency,
+      defaultLanguage: raw.default_language || defaultSettings.general.defaultLanguage,
+      defaultTax: raw.default_tax || defaultSettings.general.defaultTax,
+      priceDisplay: raw.price_display || defaultSettings.general.priceDisplay,
+      paymentTerms: raw.payment_terms || defaultSettings.general.paymentTerms,
+      lateFeeValue: numberValue(raw.late_fee_percent, defaultSettings.general.lateFeeValue),
+      lateFeeType: raw.late_fee_type || defaultSettings.general.lateFeeType,
+      onlineViewLinkEnabled: boolValue(raw.online_view_link_enabled, defaultSettings.general.onlineViewLinkEnabled),
+      whatsappNotificationsEnabled: boolValue(raw.whatsapp_notifications_enabled, defaultSettings.general.whatsappNotificationsEnabled)
     },
     export: {
-      pdfExportEnabled: boolValue(row.pdf_export_enabled, defaultSettings.export.pdfExportEnabled),
-      excelExportEnabled: boolValue(row.excel_export_enabled, defaultSettings.export.excelExportEnabled),
+      pdfExportEnabled: boolValue(raw.pdf_export_enabled, defaultSettings.export.pdfExportEnabled),
+      excelExportEnabled: boolValue(raw.excel_export_enabled, defaultSettings.export.excelExportEnabled),
       pdfPaperSize: "A4",
-      excelFormat: row.excel_format || defaultSettings.export.excelFormat
+      excelFormat: raw.excel_format || defaultSettings.export.excelFormat
     },
     branding: {
-      companyLogoUrl: row.company_logo_url || "",
-      brandColor: defaultSettings.branding.brandColor,
+      companyLogoUrl: raw.company_logo_url || "",
+      brandColor: raw.brand_color || defaultSettings.branding.brandColor,
       showCompanyDetailsOnInvoice: true
     },
     sequenceRules: {
-      yearlyReset: boolValue(row.yearly_reset_enabled, defaultSettings.sequenceRules.yearlyReset),
-      allowManualOverride: boolValue(row.manual_override_enabled, defaultSettings.sequenceRules.allowManualOverride),
-      lockNumberingAfterSent: boolValue(
-        row.lock_numbering_after_sent,
-        defaultSettings.sequenceRules.lockNumberingAfterSent
-      ),
-      preventDuplicateNumbers: boolValue(
-        row.prevent_duplicate_numbers,
-        defaultSettings.sequenceRules.preventDuplicateNumbers
-      )
+      yearlyReset: boolValue(raw.yearly_reset_enabled, defaultSettings.sequenceRules.yearlyReset),
+      allowManualOverride: boolValue(raw.manual_override_enabled, defaultSettings.sequenceRules.allowManualOverride),
+      lockNumberingAfterSent: boolValue(raw.lock_numbering_after_sent, defaultSettings.sequenceRules.lockNumberingAfterSent),
+      preventDuplicateNumbers: boolValue(raw.prevent_duplicate_numbers, defaultSettings.sequenceRules.preventDuplicateNumbers)
     }
   };
 
@@ -467,173 +384,64 @@ function mapSettings(row) {
   };
 }
 
-function toDbRow(settings) {
-  const general = { ...defaultSettings.general, ...(settings.general || {}) };
-  const exportSettings = { ...defaultSettings.export, ...(settings.export || {}) };
-  const branding = { ...defaultSettings.branding, ...(settings.branding || {}) };
-  const sequenceRules = { ...defaultSettings.sequenceRules, ...(settings.sequenceRules || {}) };
-  const taxOption = optionLists.taxes.find((tax) => tax.value === general.defaultTax);
-  const paymentTerm = general.paymentTerms || settings.paymentTerms || defaultSettings.paymentTerms;
-  const lateFeeValue = numberValue(general.lateFeeValue, defaultSettings.general.lateFeeValue);
-
-  return {
-    invoice_prefix: settings.invoicePrefix || defaultSettings.invoicePrefix,
-    invoice_year: normalizeInvoiceYear(settings.invoiceYear || defaultSettings.invoiceYear),
-    separator_style: settings.separatorStyle || defaultSettings.separatorStyle,
-    invoice_format: settings.invoiceFormat || defaultSettings.invoiceFormat,
-    next_invoice_number: numberValue(settings.nextInvoiceNumber, defaultSettings.nextInvoiceNumber),
-    numbering_style: settings.numberingStyle || defaultSettings.numberingStyle,
-    date_format: settings.dateFormat || defaultSettings.dateFormat,
-    default_currency: general.defaultCurrency || defaultSettings.general.defaultCurrency,
-    default_language: general.defaultLanguage || defaultSettings.general.defaultLanguage,
-    tax_type: taxOption?.type || settings.taxType || defaultSettings.taxType,
-    default_tax: general.defaultTax || defaultSettings.general.defaultTax,
-    default_tax_rate: numberValue(taxOption?.rate ?? settings.defaultTaxRate, defaultSettings.defaultTaxRate),
-    prices_include_tax: general.priceDisplay === "tax_inclusive" ? 1 : 0,
-    price_display: general.priceDisplay || defaultSettings.general.priceDisplay,
-    payment_terms: paymentTerm,
-    due_days: paymentTerm.match(/\d+/) ? Number(paymentTerm.match(/\d+/)[0]) : defaultSettings.dueDays,
-    late_fee_percent: lateFeeValue,
-    late_fee_type: general.lateFeeType || defaultSettings.general.lateFeeType,
-    grace_period_days: numberValue(settings.gracePeriodDays, defaultSettings.gracePeriodDays),
-    online_view_link_enabled: general.onlineViewLinkEnabled ? 1 : 0,
-    whatsapp_notifications_enabled: general.whatsappNotificationsEnabled ? 1 : 0,
-    pdf_export_enabled: exportSettings.pdfExportEnabled ? 1 : 0,
-    excel_export_enabled: exportSettings.excelExportEnabled ? 1 : 0,
-    pdf_paper_size: settings.pdfPageSize || defaultSettings.pdfPageSize,
-    excel_format: exportSettings.excelFormat || defaultSettings.export.excelFormat,
-    company_logo_url: branding.companyLogoUrl || "",
-    brand_color: branding.brandColor || defaultSettings.branding.brandColor,
-    show_company_details_on_invoice: 1,
-    yearly_reset_enabled: sequenceRules.yearlyReset ? 1 : 0,
-    manual_override_enabled: sequenceRules.allowManualOverride ? 1 : 0,
-    lock_numbering_after_sent: sequenceRules.lockNumberingAfterSent ? 1 : 0,
-    prevent_duplicate_numbers: sequenceRules.preventDuplicateNumbers ? 1 : 0,
-    company_name: settings.companyName || defaultSettings.companyName,
-    company_registration_number: settings.companyRegistrationNumber || defaultSettings.companyRegistrationNumber,
-    company_address: settings.companyAddress || defaultSettings.companyAddress,
-    registered_office_address: settings.registeredOfficeAddress || defaultSettings.registeredOfficeAddress,
-    finance_email: settings.financeEmail || defaultSettings.financeEmail,
-    support_email: settings.supportEmail || defaultSettings.supportEmail,
-    bank_account_holder_name: settings.bankAccountHolderName || defaultSettings.bankAccountHolderName,
-    bank_name: settings.bankName || defaultSettings.bankName,
-    bank_account_number: settings.bankAccountNumber || defaultSettings.bankAccountNumber,
-    bic_swift: settings.bicSwift || defaultSettings.bicSwift,
-    paynow_identifier: settings.paynowIdentifier || defaultSettings.paynowIdentifier,
-    payment_reference_instruction: settings.paymentReferenceInstruction || defaultSettings.paymentReferenceInstruction,
-    payout_statement: settings.payoutStatement || defaultSettings.payoutStatement,
-    computer_generated_statement: settings.computerGeneratedStatement || defaultSettings.computerGeneratedStatement,
-    sender_name: settings.senderName || defaultSettings.senderName,
-    reply_to_email: settings.replyToEmail || defaultSettings.replyToEmail,
-    email_subject_template: settings.emailSubjectTemplate || defaultSettings.emailSubjectTemplate,
-    email_body_template: settings.emailBodyTemplate || defaultSettings.emailBodyTemplate,
-    attach_pdf_invoice: settings.attachPdfInvoice === false ? 0 : 1,
-    footer_note: settings.footerNote || defaultSettings.footerNote,
-    // New template fields
-    template_name: settings.templateName || defaultSettings.templateName,
-    template_description: settings.templateDescription || defaultSettings.templateDescription,
-    uen_number: settings.uenNumber || defaultSettings.uenNumber,
-    gst_registration_number: settings.gstRegistrationNumber || defaultSettings.gstRegistrationNumber,
-    company_phone: settings.companyPhone || defaultSettings.companyPhone,
-    company_email: settings.companyEmail || defaultSettings.companyEmail,
-    company_website: settings.companyWebsite || defaultSettings.companyWebsite,
-    primary_color: settings.primaryColor || defaultSettings.primaryColor,
-    secondary_color: settings.secondaryColor || defaultSettings.secondaryColor,
-    font_family: settings.fontFamily || defaultSettings.fontFamily,
-    font_size_base: numberValue(settings.fontSizeBase, defaultSettings.fontSizeBase),
-    invoice_border_style: settings.invoiceBorderStyle || defaultSettings.invoiceBorderStyle,
-    header_style: settings.headerStyle || defaultSettings.headerStyle,
-    footer_style: settings.footerStyle || defaultSettings.footerStyle,
-    item_table_style: settings.itemTableStyle || defaultSettings.itemTableStyle,
-    currency_symbol: settings.currencySymbol || defaultSettings.currencySymbol,
-    currency_format: settings.currencyFormat || defaultSettings.currencyFormat,
-    display_date_format: settings.displayDateFormat || defaultSettings.displayDateFormat,
-    display_time_format: settings.displayTimeFormat || defaultSettings.displayTimeFormat,
-    decimal_precision: numberValue(settings.decimalPrecision, defaultSettings.decimalPrecision),
-    running_number: numberValue(settings.runningNumber, defaultSettings.runningNumber),
-    reset_number_yearly: settings.resetNumberYearly === false ? 0 : 1,
-    invoice_date_source: settings.invoiceDateSource || defaultSettings.invoiceDateSource,
-    tax_enabled: settings.taxEnabled === false ? 0 : 1,
-    tax_name: settings.taxName || defaultSettings.taxName,
-    tax_percentage: numberValue(settings.taxPercentage, defaultSettings.taxPercentage),
-    tax_inclusive: settings.taxInclusive ? 1 : 0,
-    default_discount: numberValue(settings.defaultDiscount, defaultSettings.defaultDiscount),
-    default_notes: settings.defaultNotes || defaultSettings.defaultNotes,
-    terms_and_conditions: settings.termsAndConditions || defaultSettings.termsAndConditions,
-    qr_code_display: settings.qrCodeDisplay === false ? 0 : 1,
-    bank_details_display: settings.bankDetailsDisplay === false ? 0 : 1,
-    paynow_display: settings.paynowDisplay === false ? 0 : 1,
-    signature_display: settings.signatureDisplay ? 1 : 0,
-    watermark_enabled: settings.watermarkEnabled === false ? 0 : 1,
-    status_badge_style: settings.statusBadgeStyle || defaultSettings.statusBadgeStyle,
-    company_stamp_url: settings.companyStampUrl || defaultSettings.companyStampUrl,
-    signature_url: settings.signatureUrl || defaultSettings.signatureUrl,
-    pdf_orientation: settings.pdfOrientation || defaultSettings.pdfOrientation,
-    vaniday_field_mapping: settings.vanidayFieldMapping ? JSON.stringify(settings.vanidayFieldMapping) : null
-  };
-}
-
-function calculateConfigurationStatus(settings) {
-  const status = {
-    general: settings?.general?.defaultCurrency &&
-      settings?.general?.defaultLanguage &&
-      settings?.general?.defaultTax &&
-      settings?.general?.priceDisplay &&
-      settings?.general?.paymentTerms
-      ? "completed"
-      : "incomplete",
-    numbering: settings?.invoicePrefix && settings?.nextInvoiceNumber ? "completed" : "incomplete",
-    template: typeof settings?.branding?.showCompanyDetailsOnInvoice === "boolean" ? "completed" : "warning",
-    email: settings?.general?.onlineViewLinkEnabled ? "completed" : "warning",
-    reminders: settings?.general?.whatsappNotificationsEnabled ? "completed" : "warning",
-    payments: "warning",
-    automation: settings?.export?.pdfExportEnabled || settings?.export?.excelExportEnabled ? "completed" : "warning",
-    bulkUpload: "incomplete"
-  };
-
-  const completedCount = Object.values(status).filter((value) => value === "completed").length;
-
-  return {
-    categories: status,
-    completionPercentage: Math.round((completedCount / Object.keys(status).length) * 100)
-  };
-}
+// ─── DB Operations ───────────────────────────────────────────────────────────
 
 async function getInvoiceSettings() {
-  try {
-    await ensureInvoiceSettingsSchema();
-    const [rows] = await pool.execute(
-      `SELECT *
-       FROM invoice_settings
-       ORDER BY setting_id ASC
-       LIMIT 1`
-    );
+  const [rows] = await pool.execute(
+    "SELECT items_json FROM invoice WHERE invoiceId = ? LIMIT 1",
+    [SETTINGS_ROW_ID]
+  );
 
-    return rows[0] ? mapSettings(rows[0]) : null;
-  } catch (error) {
-    handleDatabaseShapeError(error);
-  }
+  if (!rows[0] || !rows[0].items_json) return { ...defaultSettings, previewInvoiceNumber: buildInvoiceNumber(defaultSettings), sampleDueDate: calculateDueDate(defaultSettings) };
+
+  return parseSettingsJson(rows[0].items_json);
 }
 
 async function getInvoiceSettingsForUpdate(connection) {
   const [rows] = await connection.execute(
-    "SELECT * FROM invoice_settings ORDER BY setting_id ASC LIMIT 1 FOR UPDATE"
+    "SELECT invoice_id, items_json FROM invoice WHERE invoiceId = ? LIMIT 1 FOR UPDATE",
+    [SETTINGS_ROW_ID]
   );
 
-  if (rows[0]) return mapSettings(rows[0]);
+  if (rows[0] && rows[0].items_json) {
+    return parseSettingsJson(rows[0].items_json);
+  }
 
-  const dbRow = toDbRow(defaultSettings);
-  const columns = Object.keys(dbRow);
-  const placeholders = columns.map(() => "?").join(", ");
-  const [result] = await connection.execute(
-    `INSERT INTO invoice_settings (${columns.join(", ")}) VALUES (${placeholders})`,
-    columns.map((column) => dbRow[column])
+  // Create the settings row if it doesn't exist
+  const settingsJson = JSON.stringify(defaultSettings);
+  await connection.execute(
+    "INSERT INTO invoice (invoiceId, status, issue_date, due_date, total_amount, customer_id, items_json, created_at) VALUES (?, 'Draft', '1970-01-01', '1970-01-01', 0, NULL, ?, NOW())",
+    [SETTINGS_ROW_ID, settingsJson]
   );
-  const [createdRows] = await connection.execute(
-    "SELECT * FROM invoice_settings WHERE setting_id = ? FOR UPDATE",
-    [result.insertId]
+  return { ...defaultSettings, previewInvoiceNumber: buildInvoiceNumber(defaultSettings), sampleDueDate: calculateDueDate(defaultSettings) };
+}
+
+async function saveInvoiceSettings(settings) {
+  const toSave = { ...defaultSettings, ...settings };
+  // Remove computed fields before saving
+  delete toSave.previewInvoiceNumber;
+  delete toSave.sampleDueDate;
+
+  const settingsJson = JSON.stringify(toSave);
+
+  const [existing] = await pool.execute(
+    "SELECT invoice_id FROM invoice WHERE invoiceId = ? LIMIT 1",
+    [SETTINGS_ROW_ID]
   );
-  return mapSettings(createdRows[0]);
+
+  if (existing.length > 0) {
+    await pool.execute(
+      "UPDATE invoice SET items_json = ? WHERE invoiceId = ?",
+      [settingsJson, SETTINGS_ROW_ID]
+    );
+  } else {
+    await pool.execute(
+      "INSERT INTO invoice (invoiceId, status, issue_date, due_date, total_amount, customer_id, items_json, created_at) VALUES (?, 'Draft', '1970-01-01', '1970-01-01', 0, NULL, ?, NOW())",
+      [SETTINGS_ROW_ID, settingsJson]
+    );
+  }
+
+  return getInvoiceSettings();
 }
 
 async function nextAvailableInvoiceNumber(connection, settings, date = new Date()) {
@@ -661,43 +469,18 @@ async function previewNextInvoiceNumber(date = new Date()) {
 async function reserveNextInvoiceNumber(connection, date = new Date()) {
   const settings = await getInvoiceSettingsForUpdate(connection);
   const result = await nextAvailableInvoiceNumber(connection, settings, date);
+
+  // Update nextInvoiceNumber in the settings JSON
+  const updatedSettings = { ...settings, nextInvoiceNumber: result.sequence + 1 };
+  delete updatedSettings.previewInvoiceNumber;
+  delete updatedSettings.sampleDueDate;
+
   await connection.execute(
-    "UPDATE invoice_settings SET next_invoice_number = ? WHERE setting_id = ?",
-    [result.sequence + 1, settings.settingId]
+    "UPDATE invoice SET items_json = ? WHERE invoiceId = ?",
+    [JSON.stringify(updatedSettings), SETTINGS_ROW_ID]
   );
+
   return { ...result, settings };
-}
-
-async function saveInvoiceSettings(settings) {
-  try {
-    await ensureInvoiceSettingsSchema();
-    const current = await getInvoiceSettings();
-    const dbRow = toDbRow(settings);
-    const columns = Object.keys(dbRow);
-
-    if (!current) {
-      const placeholders = columns.map(() => "?").join(", ");
-      const [result] = await pool.execute(
-        `INSERT INTO invoice_settings (${columns.join(", ")}) VALUES (${placeholders})`,
-        columns.map((column) => dbRow[column])
-      );
-      const [rows] = await pool.execute("SELECT * FROM invoice_settings WHERE setting_id = ?", [
-        result.insertId
-      ]);
-      return mapSettings(rows[0]);
-    }
-
-    await pool.execute(
-      `UPDATE invoice_settings
-       SET ${columns.map((column) => `${column} = ?`).join(", ")}
-       WHERE setting_id = ?`,
-      [...columns.map((column) => dbRow[column]), current.settingId]
-    );
-
-    return getInvoiceSettings();
-  } catch (error) {
-    handleDatabaseShapeError(error);
-  }
 }
 
 async function updateInvoiceLogo(companyLogoUrl) {
@@ -716,43 +499,34 @@ async function updateInvoiceLogo(companyLogoUrl) {
 async function addNumberingActivity(records = []) {
   if (!records.length) return [];
 
-  await ensureInvoiceSettingsSchema();
-
-  const values = records.map((record) => [
-    record.settingId || null,
-    record.action,
-    record.oldValue ?? "",
-    record.newValue ?? "",
-    record.changedBy || "Admin",
-    record.notes || ""
-  ]);
-
-  await pool.query(
-    `INSERT INTO invoice_numbering_activity (
-      setting_id, action, old_value, new_value, changed_by, notes
-    ) VALUES ?`,
-    [values]
-  );
+  // Store numbering activity in audit_logs
+  for (const record of records) {
+    await pool.query(
+      `INSERT INTO audit_logs (module, activity_type, action_description, affected_record, status, previous_value, new_value, user_name, created_at)
+       VALUES ('Invoice', 'invoice_numbering', ?, NULL, 'success', ?, ?, ?, NOW())`,
+      [record.action, record.oldValue ?? "", record.newValue ?? "", record.changedBy || "Admin"]
+    );
+  }
 
   return listNumberingActivity();
 }
 
 async function listNumberingActivity(limit = 20) {
-  await ensureInvoiceSettingsSchema();
   const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 100));
 
   const [rows] = await pool.execute(
     `SELECT
-      activity_id AS id,
-      setting_id AS settingId,
-      action,
-      old_value AS oldValue,
+      audit_log_id AS id,
+      NULL AS settingId,
+      action_description AS action,
+      previous_value AS oldValue,
       new_value AS newValue,
-      changed_by AS changedBy,
-      notes,
+      user_name AS changedBy,
+      NULL AS notes,
       created_at AS createdAt
-     FROM invoice_numbering_activity
-     ORDER BY created_at DESC, activity_id DESC
+     FROM audit_logs
+     WHERE activity_type = 'invoice_numbering'
+     ORDER BY created_at DESC, audit_log_id DESC
      LIMIT ${safeLimit}`
   );
 
@@ -774,5 +548,6 @@ module.exports = {
   previewNextInvoiceNumber,
   reserveNextInvoiceNumber,
   saveInvoiceSettings,
+  SETTINGS_ROW_ID,
   updateInvoiceLogo
 };

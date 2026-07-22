@@ -1,15 +1,15 @@
 /**
  * QR Code Service
  *
- * Generates QR codes for:
- * - Stripe payment URLs (clickable link to Stripe Checkout)
- * - PayNow QR codes (Singapore SGQR/EMVCo standard for direct bank transfers)
+ * Generates QR codes using the pure-JS `qrcode` npm package.
+ * No Puppeteer or Chrome required — works in any environment.
  *
- * Uses Puppeteer to render QR codes via a lightweight HTML page with inline
- * QR generation logic (no external library needed).
+ * Supports:
+ * - Stripe payment URLs  → base64 data URI PNG
+ * - PayNow EMVCo/SGQR strings → base64 data URI PNG
  */
 
-const puppeteer = require("puppeteer-core");
+const QRCode = require("qrcode");
 
 // =====================================================
 // PayNow Configuration (set in .env or defaults)
@@ -18,57 +18,25 @@ const PAYNOW_UEN = process.env.PAYNOW_UEN || "";
 const PAYNOW_MOBILE = process.env.PAYNOW_MOBILE || "";
 
 /**
- * Get Puppeteer executable path.
- */
-function getExecutablePath() {
-  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-    return process.env.PUPPETEER_EXECUTABLE_PATH;
-  }
-  if (process.platform === "win32") {
-    return "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-  }
-  if (process.platform === "darwin") {
-    return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-  }
-  return "/usr/bin/google-chrome";
-}
-
-/**
- * Generate a QR code as a base64 data URI from any string/URL.
- * Uses Google Charts API rendered via Puppeteer.
+ * Generate a QR code as a base64 PNG data URI from any string/URL.
  *
  * @param {string} data - The data to encode in the QR code.
- * @returns {Promise<string|null>} Base64 data URI of the QR code image.
+ * @returns {Promise<string|null>} Base64 data URI of the QR code image, or null.
  */
 async function generateQRCode(data) {
   if (!data) return null;
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
-    <img id="qr" src="https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=${encodeURIComponent(data)}&choe=UTF-8" />
-    <script>
-      document.getElementById('qr').onload = () => { window._qrReady = true; };
-      document.getElementById('qr').onerror = () => { window._qrReady = true; };
-    </script>
-  </body></html>`;
-
-  const browser = await puppeteer.launch({
-    headless: true,
-    executablePath: getExecutablePath(),
-    args: ["--no-sandbox", "--disable-setuid-sandbox"]
-  });
-
   try {
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
-
-    // Wait for image to load
-    await page.waitForFunction(() => window._qrReady === true, { timeout: 10000 }).catch(() => {});
-
-    const imgElement = await page.$("#qr");
-    const screenshot = await imgElement.screenshot({ encoding: "base64", type: "png" });
-    return `data:image/png;base64,${screenshot}`;
-  } finally {
-    await browser.close();
+    const dataUri = await QRCode.toDataURL(data, {
+      errorCorrectionLevel: "M",
+      width: 200,
+      margin: 2,
+      color: { dark: "#000000", light: "#ffffff" }
+    });
+    return dataUri;
+  } catch (err) {
+    console.error("[QR CODE] Generation failed:", err.message);
+    return null;
   }
 }
 
@@ -81,11 +49,16 @@ async function generateQRCode(data) {
 async function generateQRCodeBuffer(data) {
   if (!data) return null;
 
-  const dataUri = await generateQRCode(data);
-  if (!dataUri) return null;
-
-  const base64 = dataUri.replace(/^data:image\/png;base64,/, "");
-  return Buffer.from(base64, "base64");
+  try {
+    return await QRCode.toBuffer(data, {
+      errorCorrectionLevel: "M",
+      width: 200,
+      margin: 2
+    });
+  } catch (err) {
+    console.error("[QR CODE] Buffer generation failed:", err.message);
+    return null;
+  }
 }
 
 /**
@@ -97,7 +70,7 @@ function buildPayNowQRString(options) {
     proxyValue,
     amount,
     referenceNumber = "",
-    merchantName = process.env.COMPANY_NAME || "PayNivo",
+    merchantName = process.env.COMPANY_NAME || "Vaniday",
     editable = false,
     expiryDate = ""
   } = options;

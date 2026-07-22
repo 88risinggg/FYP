@@ -7,7 +7,7 @@ function authHeaders() {
   return session?.token ? { Authorization: `Bearer ${session.token}` } : {};
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 export function getInvoiceSettings() {
   return apiRequest("/api/admin/invoicing/invoice-settings", {

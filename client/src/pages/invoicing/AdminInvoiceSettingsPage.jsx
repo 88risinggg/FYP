@@ -4,13 +4,11 @@ import {
   ChevronDown,
   Circle,
   Clock3,
-  Eye,
   FileSpreadsheet,
   FileText,
   Hash,
   Info,
   ListChecks,
-  LockKeyhole,
   Loader2,
   Mail,
   Landmark,
@@ -25,7 +23,6 @@ import { Link, useLocation } from "react-router-dom";
 
 import {
   getInvoiceSettings,
-  previewInvoiceTemplate,
   sendInvoiceSettingsTestEmail,
   updateInvoiceSettings
 } from "../../services/adminInvoiceSettingsService.js";
@@ -33,11 +30,8 @@ import {
 const tabs = [
   { label: "General", slug: "general" },
   { label: "Numbering", slug: "numbering" },
-  { label: "Template", slug: "template" },
   { label: "Email", slug: "email" },
-  { label: "Payments", slug: "payments" },
-  { label: "Bulk Upload", slug: "bulk-upload" },
-  { label: "Automation", slug: "automation" }
+  { label: "Payments", slug: "payments" }
 ];
 
 const emptyOptions = {
@@ -696,130 +690,6 @@ function TabSaveButton({ saving }) {
   );
 }
 
-function FixedTemplateTab({ form, saving }) {
-  const [previewUrl, setPreviewUrl] = useState("");
-  const [previewing, setPreviewing] = useState(false);
-  const [previewError, setPreviewError] = useState("");
-
-  useEffect(() => () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-  }, [previewUrl]);
-
-  useEffect(() => {
-    if (!previewUrl) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") closePreview();
-    };
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [previewUrl]);
-
-  async function showPreview() {
-    setPreviewing(true);
-    setPreviewError("");
-    try {
-      const blob = await previewInvoiceTemplate(form);
-      setPreviewUrl((current) => {
-        if (current) URL.revokeObjectURL(current);
-        return URL.createObjectURL(blob);
-      });
-    } catch (error) {
-      setPreviewError(error.message);
-    } finally {
-      setPreviewing(false);
-    }
-  }
-
-  function closePreview() {
-    setPreviewUrl((current) => {
-      if (current) URL.revokeObjectURL(current);
-      return "";
-    });
-  }
-
-  return (
-    <div className="space-y-5">
-      <SettingsCard title="Approved Invoice Design" icon={LockKeyhole}>
-        <div className="rounded-xl border border-[#cfe8d9] bg-[#f5fbf7] p-5">
-          <p className="font-bold text-[#251E1F]">The invoice layout is fixed and approved.</p>
-          <p className="mt-2 text-sm leading-6 text-[#527260]">
-            PDFs always use the approved A4 design. Section positions, typography, navy and coral colours, item table, totals, payment information, and footer cannot be rearranged or replaced.
-          </p>
-        </div>
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
-          {["A4 portrait", "Fixed colours and font", "Required fields always shown"].map((value) => (
-            <div key={value} className="rounded-lg border border-[#ead3cc] bg-[#fff8f5] px-4 py-3 text-sm font-bold text-[#251E1F]">{value}</div>
-          ))}
-        </div>
-        <p className="mt-4 text-xs text-[#7b6660]">Company logo and company values remain dynamic; the HTML/CSS structure does not.</p>
-        <div className="mt-5 flex flex-wrap gap-3">
-          <button type="button" onClick={showPreview} disabled={previewing} className="primary-button inline-flex items-center gap-2 px-5 py-3 text-sm font-bold disabled:opacity-60">
-            {previewing ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
-            {previewing ? "Generating Preview..." : "Preview Invoice"}
-          </button>
-        </div>
-        {previewError ? <p className="mt-3 text-sm font-semibold text-rose-700">{previewError}</p> : null}
-      </SettingsCard>
-      <TabSaveButton saving={saving} />
-
-      {previewUrl ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-[#251E1F]/35 p-3 backdrop-blur-[2px] sm:p-6 lg:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="invoice-preview-title"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closePreview();
-          }}
-        >
-          <div className="flex h-[min(82vh,780px)] min-h-[520px] w-full max-w-[820px] flex-col overflow-hidden rounded-2xl border border-[#ead3cc] bg-[#fffaf8] shadow-[0_24px_70px_rgba(37,30,31,0.28)]">
-            <div className="h-1.5 shrink-0 bg-[#F38978]" />
-            <div className="flex items-center justify-between gap-4 border-b border-[#ead3cc] bg-white px-4 py-3 sm:px-5">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#fff1ed] text-[#F38978]">
-                  <FileText size={20} />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 id="invoice-preview-title" className="truncate text-base font-bold text-[#251E1F] sm:text-lg">Invoice Preview</h3>
-                    <span className="hidden rounded-full bg-[#f5fbf7] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#527260] sm:inline">Draft</span>
-                  </div>
-                  <p className="truncate text-xs text-[#7b6660]">Approved A4 template · Preview only</p>
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <a href={previewUrl} target="_blank" rel="noreferrer" className="hidden rounded-lg border border-[#ead3cc] bg-white px-3 py-2 text-xs font-bold text-[#251E1F] transition-colors hover:border-[#F38978] hover:bg-[#fff8f5] sm:inline-flex">
-                  Open in new tab
-                </a>
-                <button type="button" onClick={closePreview} autoFocus aria-label="Close invoice preview" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#ead3cc] bg-white text-[#7b6660] transition-colors hover:border-[#F38978] hover:bg-[#fff1ed] hover:text-[#F38978]">
-                  <XCircle size={19} />
-                </button>
-              </div>
-            </div>
-            <div className="min-h-0 flex-1 bg-[#eee9e7] p-2 sm:p-4">
-              <iframe title="Invoice PDF preview" src={previewUrl} className="h-full w-full rounded-lg border border-[#d9cfcb] bg-white shadow-sm" />
-            </div>
-            <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[#ead3cc] bg-white px-4 py-3 sm:px-5">
-              <div className="flex items-start gap-2 text-xs text-[#7b6660]">
-                <Info size={14} className="mt-0.5 shrink-0 text-[#F38978]" />
-                <span>No invoice is created and the invoice number is not used.</span>
-              </div>
-              <button type="button" onClick={closePreview} className="shrink-0 rounded-lg bg-[#F38978] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#e87562]">
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function PaymentSettingsTab({ form, onChange, saving }) {
   return (
     <div className="space-y-5">
@@ -1137,8 +1007,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
             onFormatChange={handleFormatChange}
             onSequenceRuleChange={setSequenceRule}
           />
-        ) : currentTab === "template" ? (
-          <FixedTemplateTab form={form} saving={saving} />
         ) : currentTab === "email" ? (
           <EmailSettingsTab form={form} onChange={setRootField} saving={saving} />
         ) : currentTab === "payments" ? (

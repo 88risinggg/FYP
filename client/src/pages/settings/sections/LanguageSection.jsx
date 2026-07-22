@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Globe, X } from "lucide-react";
 import { fetchAppearance, updateAppearance } from "../../../services/settingsService.js";
+import { reportSettingsSaveResult } from "../../../services/settingsEvents.js";
 
 const languages = [
   { value: "en", label: "English", native: "English", flag: "🇬🇧" },
@@ -12,6 +13,7 @@ const languages = [
 export default function LanguageSection() {
   const [selected, setSelected] = useState("en");
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
 
   useEffect(() => { loadSettings(); }, []);
@@ -29,12 +31,14 @@ export default function LanguageSection() {
     setTimeout(() => setToast(null), 4000);
   }
 
-  async function handleSelect(lang) {
-    setSelected(lang);
+  async function handleSave() {
+    setSaving(true);
     try {
-      await updateAppearance({ language: lang });
+      await updateAppearance({ language: selected });
       showToast("Language updated");
-    } catch (err) { showToast(err.message, "error"); }
+      reportSettingsSaveResult(true);
+    } catch (err) { showToast(err.message, "error"); reportSettingsSaveResult(false); }
+    finally { setSaving(false); }
   }
 
   if (loading) {
@@ -56,7 +60,7 @@ export default function LanguageSection() {
           {languages.map((lang) => {
             const isActive = selected === lang.value;
             return (
-              <button key={lang.value} type="button" onClick={() => handleSelect(lang.value)}
+              <button key={lang.value} type="button" data-settings-control onClick={() => setSelected(lang.value)}
                 className={`flex items-center gap-4 rounded-xl border p-4 text-left transition ${
                   isActive
                     ? "border-[#F38978]/50 bg-[#F38978]/10 shadow-lg shadow-[#E77463]/15"
@@ -72,6 +76,7 @@ export default function LanguageSection() {
             );
           })}
         </div>
+        <button type="button" data-settings-save onClick={handleSave} disabled={saving}>Save language</button>
       </div>
     </div>
   );

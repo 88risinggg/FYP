@@ -6,6 +6,7 @@
  */
 
 const { pool } = require("../config/db");
+const { assessInvoiceRisk } = require("../services/fraudDetectionService");
 
 function parseDate(value) {
   if (!value || Number.isNaN(Date.parse(value))) return null;
@@ -132,26 +133,21 @@ async function reassessInvoice(req, res) {
     );
     if (rows.length === 0) return res.status(404).json({ message: "Invoice not found." });
 
-    // Simple rule-based reassessment
-    const invoice = rows[0];
-    const indicators = [];
-    let score = 0;
-    const amount = Number(invoice.total_amount || 0);
-
-    if (amount > 15000) { indicators.push({ code: "AMOUNT_OUTLIER", label: "Amount is unusually high.", severity: 25 }); score += 25; }
-    if (invoice.vendor_name && invoice.vendor_name.toLowerCase().includes("unknown")) {
-      indicators.push({ code: "UNKNOWN_VENDOR", label: "Unknown or unregistered vendor.", severity: 25 }); score += 25;
+    const connection = await pool.getConnection();
+    let assessment;
+    try {
+      await connection.beginTransaction();
+      assessment = await assessInvoiceRisk(connection, invoiceId, req.body.metadata || {});
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
     }
 
-    const level = score >= 71 ? "High" : score >= 31 ? "Medium" : "Low";
-
-    await pool.query(
-      `UPDATE invoice SET risk_score = ?, risk_level = ?, fraud_indicators_json = ?, assessed_at = NOW() WHERE invoice_id = ?`,
-      [score, level, JSON.stringify(indicators), invoiceId]
-    );
-
     // Notify Finance if fraud score exceeds threshold (High risk)
-    if (level === "High") {
+    if (assessment.riskLevel === "High") {
       try {
         const { createNotification } = require("../services/invoiceNotificationService");
         const [invInfo] = await pool.query(
@@ -162,13 +158,16 @@ async function reassessInvoice(req, res) {
         await createNotification({
           type: "fraud_alert",
           title: "Fraud Alert",
-          message: `Invoice ${invNum} flagged as High Risk (score: ${score}). Immediate review required.`,
+          message: `Invoice ${invNum} flagged as High Risk (score: ${assessment.riskScore}). Immediate review required.`,
           invoiceId
         });
       } catch { /* non-blocking */ }
     }
 
-    res.json({ message: "Invoice fraud risk reassessed.", assessment: { risk_score: score, risk_level: level, indicators } });
+    res.json({
+      message: "Invoice fraud risk reassessed.",
+      assessment: { risk_score: assessment.riskScore, risk_level: assessment.riskLevel, indicators: assessment.indicators }
+    });
   } catch (error) {
     res.status(500).json({ message: "Failed to reassess invoice.", detail: error.message });
   }

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+import InvoiceTemplate from "../components/invoicing/InvoiceTemplate.jsx";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-SG", { style: "currency", currency: "SGD" }).format(Number(value || 0));
@@ -14,17 +16,47 @@ function formatDate(value) {
 
 export default function PublicInvoiceViewPage() {
   const { invoiceId } = useParams();
+  const [searchParams] = useSearchParams();
+  const sessionId = searchParams.get("session_id");
+
   const [invoice, setInvoice] = useState(null);
+  const [settings, setSettings] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({
+    amount: "",
+    payment_date: new Date().toISOString().slice(0, 10),
+    reference_number: "",
+    payment_method: "Bank Transfer",
+    notes: ""
+  });
+  const [proofFile, setProofFile] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitResult, setSubmitResult] = useState(null);
 
   useEffect(() => {
     async function loadInvoice() {
       try {
+        // If returning from Stripe checkout, confirm payment first
+        if (sessionId) {
+          try {
+            await fetch(`${API_BASE}/api/payments/stripe/confirm`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ invoiceId, session_id: sessionId })
+            });
+          } catch { /* non-critical — continue loading invoice */ }
+        }
+
         const res = await fetch(`${API_BASE}/api/public/invoice/${invoiceId}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || "Invoice not found");
         setInvoice(data.invoice);
+        if (data.settings) setSettings(data.settings);
+        if (data.invoice?.total_amount) {
+          setPaymentForm(prev => ({ ...prev, amount: String(data.invoice.total_amount) }));
+        }
       } catch (err) {
         setError(err.message);
       } finally {
@@ -32,7 +64,39 @@ export default function PublicInvoiceViewPage() {
       }
     }
     loadInvoice();
-  }, [invoiceId]);
+  }, [invoiceId, sessionId]);
+
+  async function handleSubmitPayment(e) {
+    e.preventDefault();
+    setSubmitting(true);
+    setSubmitResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("amount", paymentForm.amount);
+      formData.append("payment_date", paymentForm.payment_date);
+      if (paymentForm.reference_number) formData.append("reference_number", paymentForm.reference_number);
+      if (paymentForm.payment_method) formData.append("payment_method", paymentForm.payment_method);
+      if (paymentForm.notes) formData.append("notes", paymentForm.notes);
+      if (proofFile) formData.append("proof", proofFile);
+
+      const res = await fetch(`${API_BASE}/api/public/invoice/${invoiceId}/submit-payment`, {
+        method: "POST",
+        body: formData
+      });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.message || "Submission failed");
+
+      setSubmitResult({ success: true, message: data.message });
+      setShowPaymentForm(false);
+      setInvoice(prev => ({ ...prev, status: "Pending Review", is_pending_review: true }));
+    } catch (err) {
+      setSubmitResult({ success: false, message: err.message });
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -53,113 +117,190 @@ export default function PublicInvoiceViewPage() {
     );
   }
 
-  const statusColor = {
-    Draft: "bg-slate-500",
-    Scheduled: "bg-[#F38978]",
-    Sent: "bg-blue-500",
-    Viewed: "bg-cyan-500",
-    Paid: "bg-emerald-500",
-    Overdue: "bg-rose-500",
-    Cancelled: "bg-gray-500",
-    Refunded: "bg-amber-500",
-    "Failed_Payment": "bg-red-500"
-  };
+  const isPayable = !["Paid", "Cancelled", "Refunded", "Pending Review"].includes(invoice.status);
 
   return (
-    <div className="min-h-screen bg-[#fff8f5] px-4 py-12">
-      <div className="mx-auto max-w-3xl">
-        {/* Header */}
-        <div className="rounded-t-2xl border border-[#f0d2ca] bg-white/800 p-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-[#F38978]">PayNivo</h1>
-              <p className="mt-1 text-sm text-[#7b6660]/70">Automated Invoicing System</p>
-            </div>
-            <div className="text-right">
-              <h2 className="text-xl font-semibold text-[#251E1F]">{invoice.invoiceId}</h2>
-              <div className="mt-2 inline-flex items-center gap-2">
-                <span className={`h-2.5 w-2.5 rounded-full ${statusColor[invoice.status] || "bg-white"}`} />
-                <span className="text-sm font-medium text-[#7b6660]">{invoice.status}</span>
-              </div>
-            </div>
-          </div>
+    <div className="min-h-screen bg-[#FFF8F5] px-4 py-8">
+      <div className="mx-auto max-w-[900px]">
+        {/* Invoice Template — same component used for PDF and Admin Preview */}
+        <div
+          style={{
+            boxShadow: "0 4px 25px rgba(37,30,31,0.1)",
+            borderRadius: "4px",
+            overflow: "visible",
+            marginBottom: "2rem",
+          }}
+        >
+          <InvoiceTemplate
+            invoice={{
+              ...invoice,
+              invoiceId: invoice.invoiceId || invoice.invoice_number || invoiceId,
+            }}
+            settings={settings || {}}
+            options={{
+              logoUrl: settings?.companyLogoUrl || settings?.branding?.companyLogoUrl || "",
+              // qrCodeUrl is for the static PayNow QR in PaymentSection — we don't have one here
+              qrCodeUrl: null,
+              // stripeQrCodeUrl is for the Stripe payment QR — only show if invoice is not paid
+              stripeQrCodeUrl: invoice.is_paid ? "" : (invoice.qr_code || invoice.qr_code_url || ""),
+              paymentUrl: invoice.is_paid ? "" : (invoice.payment_url ? String(invoice.payment_url) : ""),
+              signatureUrl: settings?.signatureUrl || "",
+              stampUrl: settings?.companyStampUrl || settings?.branding?.companyStampUrl || "",
+            }}
+          />
         </div>
 
-        {/* Invoice Details */}
-        <div className="border-x border-[#f0d2ca] bg-[#fff3ee]/50 p-8">
-          <div className="grid gap-6 sm:grid-cols-2">
-            <div>
-              <p className="text-xs font-semibold uppercase text-[#F38978]/70">Bill To</p>
-              <p className="mt-2 text-lg font-semibold text-[#251E1F]">{invoice.customer_name}</p>
-              <p className="text-sm text-[#7b6660]/70">{invoice.customer_email}</p>
-              {invoice.customer_address ? (
-                <p className="mt-1 text-sm text-[#7b6660]/70">{invoice.customer_address}</p>
-              ) : null}
+        {/* Payment Actions Section */}
+        <div className="mx-auto max-w-3xl">
+          {/* Success/Error Message */}
+          {submitResult && (
+            <div className={`mb-4 rounded-xl border p-4 text-center text-sm ${
+              submitResult.success
+                ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-700"
+                : "border-rose-400/30 bg-rose-500/10 text-rose-700"
+            }`}>
+              {submitResult.message}
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-[#7b6660]/60">Issue Date</p>
-                <p className="mt-1 text-sm font-medium text-[#251E1F]">{formatDate(invoice.issue_date)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-[#7b6660]/60">Due Date</p>
-                <p className="mt-1 text-sm font-medium text-[#251E1F]">{formatDate(invoice.due_date)}</p>
-              </div>
-            </div>
-          </div>
+          )}
 
-          {/* Line Items */}
-          {invoice.items && invoice.items.length > 0 ? (
-            <div className="mt-8 overflow-hidden rounded-xl border border-[#f0d2ca]">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-white/800 text-xs uppercase text-[#7b6660]/70">
-                  <tr>
-                    <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3 text-right">Qty</th>
-                    <th className="px-4 py-3 text-right">Unit Price</th>
-                    <th className="px-4 py-3 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#ead3cc]">
-                  {invoice.items.map((item, idx) => (
-                    <tr key={idx} className="text-[#251E1F]">
-                      <td className="px-4 py-3">{item.description}</td>
-                      <td className="px-4 py-3 text-right">{item.quantity}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrency(item.unit_price)}</td>
-                      <td className="px-4 py-3 text-right font-medium">{formatCurrency(item.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-        </div>
-
-        {/* Total & Payment */}
-        <div className="rounded-b-2xl border border-[#f0d2ca] bg-white/800 p-8">
-          <div className="flex items-center justify-between">
-            <span className="text-lg text-[#7b6660]">Total Amount</span>
-            <span className="text-3xl font-bold text-[#251E1F]">{formatCurrency(invoice.total_amount)}</span>
-          </div>
-
-          {invoice.status !== "Paid" ? (
-            <div className="mt-6 rounded-xl border border-[#F38978]/30 bg-[#F38978]/10 p-4 text-center">
-              <p className="text-sm text-[#7b6660]">
-                Payment is due by <strong className="text-white">{formatDate(invoice.due_date)}</strong>.
-                Please contact the sender for payment instructions.
-              </p>
-            </div>
-          ) : (
-            <div className="mt-6 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-center">
+          {invoice.status === "Paid" ? (
+            /* ── PAID ── */
+            <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-center">
               <p className="text-sm font-semibold text-emerald-700">
                 ✅ This invoice has been paid{invoice.paid_date ? ` on ${formatDate(invoice.paid_date)}` : ""}. Thank you!
               </p>
+            </div>
+
+          ) : invoice.payment_url ? (
+            /* ── STRIPE PAYMENT AVAILABLE ── show Pay Now button only, no manual form */
+            <div className="space-y-4">
+              <a
+                href={invoice.payment_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full rounded-xl bg-[#F38978] px-6 py-4 text-center text-sm font-semibold text-white transition hover:bg-[#E87562]"
+              >
+                Pay Now with Card / PayNow — {formatCurrency(invoice.total_amount)}
+              </a>
+              <p className="text-center text-xs text-[#7b6660]">
+                Payment is due by <strong className="text-[#251E1F]">{formatDate(invoice.due_date)}</strong>.
+                Powered by Stripe — secure card, Apple Pay, Google Pay & PayNow.
+              </p>
+            </div>
+
+          ) : invoice.status === "Pending Review" || invoice.is_pending_review ? (
+            /* ── MANUAL PROOF PENDING REVIEW ── */
+            <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 text-center">
+              <p className="text-sm font-semibold text-amber-700">
+                ⏳ Your payment proof is being reviewed. You will be notified once it is confirmed.
+              </p>
+            </div>
+
+          ) : (
+            /* ── NO STRIPE URL: MANUAL BANK TRANSFER / PAYNOW ONLY ── */
+            <div className="space-y-4">
+              <div className="rounded-xl border border-[#f0d2ca] bg-white p-4">
+                <p className="text-sm font-semibold text-[#251E1F] mb-1">Pay via Bank Transfer or PayNow</p>
+                <p className="text-sm text-[#7b6660] mb-3">
+                  Transfer the payment using the bank details on the invoice, then submit your proof below.
+                </p>
+                <button
+                  onClick={() => setShowPaymentForm(!showPaymentForm)}
+                  className="rounded-lg bg-[#F38978] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#E87562]"
+                >
+                  {showPaymentForm ? "Cancel" : "Submit Payment Proof"}
+                </button>
+
+                {showPaymentForm && (
+                  <form onSubmit={handleSubmitPayment} className="mt-4 space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="block text-xs font-medium text-[#7b6660]">Payment Amount (SGD) *</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={paymentForm.amount}
+                          onChange={(e) => setPaymentForm(prev => ({ ...prev, amount: e.target.value }))}
+                          className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#F38978]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[#7b6660]">Payment Date *</label>
+                        <input
+                          type="date"
+                          required
+                          value={paymentForm.payment_date}
+                          onChange={(e) => setPaymentForm(prev => ({ ...prev, payment_date: e.target.value }))}
+                          className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#F38978]"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="block text-xs font-medium text-[#7b6660]">Reference Number</label>
+                        <input
+                          type="text"
+                          value={paymentForm.reference_number}
+                          onChange={(e) => setPaymentForm(prev => ({ ...prev, reference_number: e.target.value }))}
+                          placeholder="e.g. TXN123456"
+                          className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#F38978]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[#7b6660]">Payment Method</label>
+                        <select
+                          value={paymentForm.payment_method}
+                          onChange={(e) => setPaymentForm(prev => ({ ...prev, payment_method: e.target.value }))}
+                          className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#F38978]"
+                        >
+                          <option value="Bank Transfer">Bank Transfer</option>
+                          <option value="PayNow">PayNow</option>
+                          <option value="Cash">Cash</option>
+                          <option value="Credit Card">Credit Card</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[#7b6660]">Payment Proof (Screenshot)</label>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={(e) => setProofFile(e.target.files[0] || null)}
+                        className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[#7b6660]">Notes (optional)</label>
+                      <textarea
+                        value={paymentForm.notes}
+                        onChange={(e) => setPaymentForm(prev => ({ ...prev, notes: e.target.value }))}
+                        rows={2}
+                        className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F] outline-none focus:border-[#F38978]"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-50"
+                    >
+                      {submitting ? "Submitting..." : "Submit Payment for Review"}
+                    </button>
+                  </form>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-[#F38978]/30 bg-[#F38978]/10 p-4 text-center">
+                <p className="text-sm text-[#7b6660]">
+                  Payment is due by <strong className="text-[#251E1F]">{formatDate(invoice.due_date)}</strong>.
+                </p>
+              </div>
             </div>
           )}
         </div>
 
         <p className="mt-6 text-center text-xs text-[#7b6660]/50">
-          Generated by PayNivo • Automated Invoicing & Payroll System
+          Generated by Vaniday • Automated Invoicing & Payroll System
         </p>
       </div>
     </div>

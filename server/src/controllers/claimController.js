@@ -97,8 +97,8 @@ async function notifyRoles(roleNames, title, message, excludedUserId = null) {
 async function logClaimAudit(connection, req, claimId, description) {
   await connection.query(
     `INSERT INTO audit_logs
-      (user_id, user_name, activity_type, action_description, affected_record, status, created_at)
-     VALUES (?, ?, 'Payroll Claim', ?, ?, 'Success', NOW())`,
+      (user_id, user_name, module, activity_type, action_description, affected_record, status, created_at)
+     VALUES (?, ?, 'Claims', 'Payroll Claim', ?, ?, 'Success', NOW())`,
     [
       req.user?.userId || null,
       req.user?.name || req.user?.email || req.user?.role || "System",

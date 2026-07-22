@@ -71,18 +71,18 @@ function statusBadgeClass(label = "") {
   const normalized = label.toLowerCase();
 
   if (normalized === "active") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    return "border-emerald-200 bg-[#FFF6F2] text-emerald-700";
   }
 
   if (normalized === "pending") {
-    return "border-amber-200 bg-amber-50 text-amber-700";
+    return "border-[#FDD9CD] bg-[#FDD9CD] text-amber-700";
   }
 
   if (normalized === "disabled" || normalized === "suspended") {
-    return "border-rose-200 bg-rose-50 text-rose-700";
+    return "border-[#FDD9CD] bg-[#FDD9CD] text-rose-700";
   }
 
-  return "border-stone-200 bg-stone-100 text-stone-600";
+  return "border-[#F0D2CA] bg-[#FFF6F2] text-[#7B6660]";
 }
 
 function EmptyState({ children }) {
@@ -167,7 +167,7 @@ function UserFormModal({
         </div>
 
         {error ? (
-          <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+          <div className="mb-4 rounded-lg border border-[#FDD9CD] bg-[#FDD9CD] px-3 py-2 text-sm font-medium text-rose-700">
             {error}
           </div>
         ) : null}
@@ -302,7 +302,7 @@ function PasswordModal({ user, onClose, onSaved }) {
         <h3 className="text-lg font-bold text-[#251E1F]">Reset Password</h3>
         <p className="mt-1 text-sm text-[#7b6660]">{user.email}</p>
         {error ? (
-          <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+          <div className="mt-4 rounded-lg border border-[#FDD9CD] bg-[#FDD9CD] px-3 py-2 text-sm font-medium text-rose-700">
             {error}
           </div>
         ) : null}
@@ -566,7 +566,7 @@ export default function AdminUserManagementPage() {
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+        <div className="rounded-lg border border-[#FDD9CD] bg-[#FDD9CD] px-4 py-3 text-sm font-medium text-rose-700">
           {error}
         </div>
       ) : null}
@@ -672,7 +672,7 @@ export default function AdminUserManagementPage() {
                           <button
                             type="button"
                             onClick={() => deactivateUser(user)}
-                            className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-[#d84e40] hover:bg-rose-50"
+                            className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-[#C55245] hover:bg-[#FDD9CD]"
                           >
                             Deactivate User
                           </button>

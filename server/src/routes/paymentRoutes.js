@@ -1,11 +1,16 @@
 const express = require("express");
 const {
+  confirmStripePayment,
   createStripePaymentLink,
   getPaymentsWorkspace,
   getPaymentHistory,
   recordManualPayment,
   stripeWebhook
 } = require("../controllers/paymentController");
+const {
+  getPendingReviews,
+  reviewPaymentSubmission
+} = require("../controllers/manualPaymentController");
 const { addAudit } = require("../services/audit");
 const {
   setupModernTreasuryRecipients,
@@ -104,15 +109,19 @@ async function submitModernTreasuryTransfer(req, res) {
 
 // Webhook must be before auth middleware for raw body access
 router.post("/stripe/webhook", stripeWebhook);
+// Confirm endpoint is also pre-auth — called from the public success page
+router.post("/stripe/confirm", confirmStripePayment);
 
 router.use(authenticateToken);
 router.get("/", getPaymentsWorkspace);
 router.get("/history/:invoiceId", getPaymentHistory);
+router.get("/pending-reviews", getPendingReviews);
 router.get("/stripe-config", (req, res) => {
   res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null });
 });
 router.post("/manual", recordManualPayment);
 router.post("/stripe-link", createStripePaymentLink);
+router.post("/review/:submissionId", allowRoles("Admin", "Finance"), reviewPaymentSubmission);
 router.post("/modern-treasury-recipients", allowRoles("Admin", "Finance"), setupModernTreasuryRecipientAccounts);
 router.post("/modern-treasury-transfer", allowRoles("Admin", "Finance"), submitModernTreasuryTransfer);
 router.post("/demo-bank-transfer", allowRoles("Admin", "Finance"), submitModernTreasuryTransfer);

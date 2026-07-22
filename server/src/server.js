@@ -1,5 +1,12 @@
+require("dotenv").config();
+
 const port = process.env.PORT || 5000;
+const host = process.env.HOST || "0.0.0.0";
 const { waitForDatabase } = require("./config/db");
+
+function schedulersEnabled() {
+  return process.env.SCHEDULERS_ENABLED !== "false";
+}
 
 async function startServer() {
   try {
@@ -18,8 +25,14 @@ async function startServer() {
   const { startOverdueScheduler } = require("./workers/overdueScheduler");
   const { startReminderNotificationScheduler } = require("./workers/reminderNotificationScheduler");
 
-  const server = app.listen(port, async () => {
-    console.log(`Server running on http://localhost:${port}`);
+  const server = app.listen(port, host, async () => {
+    console.log(`Server listening on ${host}:${port}`);
+
+    if (!schedulersEnabled()) {
+      console.log("Background schedulers disabled.");
+      return;
+    }
+
     startInvoiceScheduler();
     await startReminderScheduler();
     startOverdueScheduler();

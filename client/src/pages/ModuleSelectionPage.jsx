@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
+import VanidayLogo from "../components/branding/VanidayLogo.jsx";
 import { clearSession, getStoredSession } from "../services/sessionService.js";
 
 const moduleDetails = {
@@ -96,22 +97,14 @@ export default function ModuleSelectionPage() {
 
       <div className="relative z-10 mx-auto flex min-h-[calc(100vh-3rem)] max-w-6xl flex-col">
         <header className="flex items-center justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#ead3cc] bg-white/800 text-sm font-bold shadow-lg shadow-[#251E1F]/10 backdrop-blur">
-              AIP
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-[#251E1F]">
-                Automated Invoicing & Payroll System
-              </p>
-              <p className="text-xs text-[#7b6660]/70">Secure module launcher</p>
-            </div>
+          <div className="rounded-xl border border-[#ead3cc] bg-white/80 px-4 py-3 shadow-lg shadow-[#251E1F]/10 backdrop-blur">
+            <VanidayLogo />
           </div>
 
           <button
             type="button"
             onClick={handleLogout}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#F38978]/25 bg-white/800 px-4 py-2 text-sm font-medium text-[#251E1F] shadow-lg shadow-[#F38978]/10 backdrop-blur transition hover:bg-[#FDD9CD]/60"
+            className="inline-flex items-center gap-2 rounded-lg border border-[#F38978]/25 bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] shadow-lg shadow-[#F38978]/10 backdrop-blur transition hover:bg-[#FDD9CD]/60"
           >
             <LogOut size={16} />
             Logout
@@ -125,7 +118,7 @@ export default function ModuleSelectionPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: shouldReduceMotion ? 0 : 0.55, ease: "easeOut" }}
           >
-            <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[#F38978]/25 bg-white/800 px-4 py-2 text-sm font-medium text-[#6f5b55] shadow-lg shadow-[#f2b5a9]/20 backdrop-blur">
+            <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[#F38978]/25 bg-white/80 px-4 py-2 text-sm font-medium text-[#6f5b55] shadow-lg shadow-[#f2b5a9]/20 backdrop-blur">
               <BadgeCheck size={16} />
               Signed in as {user?.name || "User"}
             </div>
@@ -135,7 +128,7 @@ export default function ModuleSelectionPage() {
             <p className="mt-4 text-base leading-7 text-[#7b6660]">
               Launch the modules assigned to your account and continue your role-based workflow.
             </p>
-            <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-[#ead3cc] bg-white/800 px-4 py-2 text-sm text-[#514440] backdrop-blur">
+            <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-[#ead3cc] bg-white/80 px-4 py-2 text-sm text-[#514440] backdrop-blur">
               <Sparkles size={16} className="text-[#F38978]" />
               <span className="font-medium text-[#251E1F]">{user?.role}</span>
               <span className="text-[#7b6660]/70">role access enabled</span>
@@ -167,7 +160,7 @@ export default function ModuleSelectionPage() {
                   whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
                 >
                   <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${module.accentClass}`} />
-                  <div className="absolute right-5 top-5 rounded-full border border-[#ead3cc] bg-white/800 px-3 py-1 text-xs font-semibold text-[#6f5b55] shadow-sm backdrop-blur">
+                  <div className="absolute right-5 top-5 rounded-full border border-[#ead3cc] bg-white/80 px-3 py-1 text-xs font-semibold text-[#6f5b55] shadow-sm backdrop-blur">
                     {module.badge}
                   </div>
 

@@ -2,15 +2,172 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Core application theme */
+  --color-primary: #F38978;
+  --color-primary-hover: #E87562;
+  --color-primary-hover-alt: #E77463;
+  --color-primary-dark: #C55245;
+  --color-background: #FFF8F5;
+  --color-background-secondary: #FFF3EE;
+  --color-panel: #FFF0EB;
+  --color-highlight: #FFF6F2;
+  --color-highlight-light: #FFFAF8;
+  --color-coral-light: #FDD9CD;
+  --color-surface: #FFFFFF;
+  --color-text: #251E1F;
+  --color-text-strong-secondary: #514440;
+  --color-text-navigation: #6F4F47;
+  --color-text-secondary: #6F5B55;
+  --color-text-muted: #7B6660;
+  --color-text-placeholder: #9C7B72;
+  --color-border: #F0D2CA;
+  --color-border-control: #EAD3CC;
+  --color-border-control-alt: #EAD6CF;
+  --color-border-structure: #F2D5CC;
+  --color-border-dashed: #F0C9BF;
+  --color-secondary-teal: #2D7C83;
+
+  /* Interaction */
+  --color-nav-active-bg: #FDD9CD;
+  --color-control-hover-bg: #FFF3EF;
+  --color-disabled-bg: #DCC8C1;
+  --color-disabled-text: #514440;
+  --color-overlay: rgb(37 30 31 / 35%);
+
+  /* Semantic invoice, payment, and status colours */
+  --status-draft-bg: #F2EEE9;
+  --status-draft-text: #6F5B55;
+  --status-info-bg: #EAF2FF;
+  --status-info-border: #D6E4FF;
+  --status-info-text: #3269A8;
+  --status-viewed-bg: #E7F7F5;
+  --status-viewed-text: #218178;
+  --status-success-bg: #E9F7EF;
+  --status-success-border: #B8D9C6;
+  --status-success-text: #2F8758;
+  --status-warning-bg: #FFF4D8;
+  --status-warning-border: #F4D59A;
+  --status-warning-text: #9A6412;
+  --status-error-bg: #FFF0EB;
+  --status-error-border: #F3C6BC;
+  --status-error-text: #C94C3A;
+  --status-danger-text: #D84E40;
+
+  /* Geometry and elevation */
+  --radius-sm: 6px;
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-large: 16px;
+  --radius-modal-large: 24px;
+  --radius-pill: 9999px;
+  --shadow-card: 0 10px 28px rgb(37 30 31 / 6%);
+  --shadow-dropdown: 0 18px 45px rgb(37 30 31 / 16%);
+  --shadow-modal: 0 24px 70px rgb(37 30 31 / 18%);
+  --shadow-primary: 0 12px 25px rgb(243 137 120 / 25%);
+  --shadow-glass: 0 18px 48px rgb(37 30 31 / 8%), 0 0 28px rgb(243 137 120 / 8%);
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --app-accent: #F38978;
+  color-scheme: light;
+}
+
+html[data-font-size="small"] { font-size: 14px; }
+html[data-font-size="medium"] { font-size: 16px; }
+html[data-font-size="large"] { font-size: 18px; }
+
 * {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  background: #fff8f5;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  transition: background-color 180ms ease, color 180ms ease;
 }
+
+/* Runtime accent colour. Exact class-token selectors avoid activating hover-only utilities. */
+[class~="text-[#F38978]"] { color: var(--app-accent) !important; }
+[class~="bg-[#F38978]"] { background-color: var(--app-accent) !important; }
+[class~="border-[#F38978]"] { border-color: var(--app-accent) !important; }
+[class~="border-[#F38978]/20"] { border-color: color-mix(in srgb, var(--app-accent) 20%, transparent) !important; }
+[class~="border-[#F38978]/25"] { border-color: color-mix(in srgb, var(--app-accent) 25%, transparent) !important; }
+[class~="border-[#F38978]/30"] { border-color: color-mix(in srgb, var(--app-accent) 30%, transparent) !important; }
+[class~="border-[#F38978]/35"] { border-color: color-mix(in srgb, var(--app-accent) 35%, transparent) !important; }
+[class~="border-[#F38978]/40"] { border-color: color-mix(in srgb, var(--app-accent) 40%, transparent) !important; }
+[class~="border-[#F38978]/50"] { border-color: color-mix(in srgb, var(--app-accent) 50%, transparent) !important; }
+[class~="border-[#F38978]/70"] { border-color: color-mix(in srgb, var(--app-accent) 70%, transparent) !important; }
+[class~="bg-[#F38978]/5"] { background-color: color-mix(in srgb, var(--app-accent) 5%, transparent) !important; }
+[class~="bg-[#F38978]/10"] { background-color: color-mix(in srgb, var(--app-accent) 10%, transparent) !important; }
+[class~="bg-[#F38978]/12"] { background-color: color-mix(in srgb, var(--app-accent) 12%, transparent) !important; }
+[class~="bg-[#F38978]/15"] { background-color: color-mix(in srgb, var(--app-accent) 15%, transparent) !important; }
+[class~="bg-[#F38978]/20"] { background-color: color-mix(in srgb, var(--app-accent) 20%, transparent) !important; }
+[class~="bg-[#F38978]/25"] { background-color: color-mix(in srgb, var(--app-accent) 25%, transparent) !important; }
+[class~="bg-[#F38978]/30"] { background-color: color-mix(in srgb, var(--app-accent) 30%, transparent) !important; }
+[class~="bg-[#F38978]/40"] { background-color: color-mix(in srgb, var(--app-accent) 40%, transparent) !important; }
+[class~="ring-[#F38978]"] { --tw-ring-color: var(--app-accent) !important; }
+[class~="ring-[#F38978]/25"] { --tw-ring-color: color-mix(in srgb, var(--app-accent) 25%, transparent) !important; }
+[class~="ring-[#F38978]/45"] { --tw-ring-color: color-mix(in srgb, var(--app-accent) 45%, transparent) !important; }
+[class~="from-[#F38978]"] { --tw-gradient-from: var(--app-accent) var(--tw-gradient-from-position) !important; --tw-gradient-to: color-mix(in srgb, var(--app-accent) 0%, transparent) var(--tw-gradient-to-position) !important; }
+[class~="to-[#F38978]"] { --tw-gradient-to: var(--app-accent) var(--tw-gradient-to-position) !important; }
+.primary-button { background-color: var(--app-accent) !important; }
+
+/* Compact density applies to shared panels and navigation without shrinking controls below touch targets. */
+html[data-compact="true"] .app-panel.p-6 { padding: 1rem !important; }
+html[data-compact="true"] .app-panel.p-5 { padding: 0.875rem !important; }
+html[data-compact="true"] main { --compact-section-gap: 1rem; }
+html[data-compact="true"] header.h-20,
+html[data-compact="true"] aside > div.h-20 { height: 4rem !important; }
+
+/* Dark theme overrides the shared hard-coded light palette used by existing screens. */
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] [class~="bg-[#fff8f5]"] {
+  background-color: #251E1F !important;
+  color: #FFF8F5;
+}
+
+html[data-theme="dark"] .app-page {
+  background-color: #251E1F !important;
+  background-image: radial-gradient(circle at 15% 15%, #251E1F 0%, transparent 34%), linear-gradient(135deg, #251E1F, #251E1F 55%, #251E1F) !important;
+}
+
+html[data-theme="dark"] .app-panel,
+html[data-theme="dark"] [class~="bg-white"],
+html[data-theme="dark"] [class~="bg-white/95"],
+html[data-theme="dark"] [class~="bg-white/80"],
+html[data-theme="dark"] [class~="bg-[#fff3ee]/70"] {
+  background-color: rgba(37, 30, 31, 0.96) !important;
+  border-color: rgba(255, 255, 255, 0.11) !important;
+}
+
+html[data-theme="dark"] [class~="bg-[#FDD9CD]"],
+html[data-theme="dark"] [class~="bg-[#FDD9CD]/45"],
+html[data-theme="dark"] [class~="bg-[#FDD9CD]/55"],
+html[data-theme="dark"] [class~="bg-[#FDD9CD]/80"] {
+  background-color: color-mix(in srgb, var(--app-accent) 18%, #251E1F) !important;
+}
+
+html[data-theme="dark"] [class~="text-[#251E1F]"] {
+  color: #FFF8F5 !important;
+}
+
+html[data-theme="dark"] [class~="text-[#7B6660]"] {
+  color: #7B6660 !important;
+}
+
+html[data-theme="dark"] [class~="border-[#F0D2CA]"] {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+html[data-theme="dark"] [class~="from-[#fff8f5]"] { --tw-gradient-from: #251E1F var(--tw-gradient-from-position) !important; }
+html[data-theme="dark"] [class~="via-[#fff3ee]"] { --tw-gradient-to: rgba(37, 30, 31, 0) var(--tw-gradient-to-position) !important; --tw-gradient-stops: var(--tw-gradient-from), #251E1F var(--tw-gradient-via-position), var(--tw-gradient-to) !important; }
+html[data-theme="dark"] [class~="to-[#FDD9CD]"] { --tw-gradient-to: #251E1F var(--tw-gradient-to-position) !important; }
 
 * {
   scrollbar-width: thin;
@@ -32,6 +189,32 @@ body {
 }
 
 @layer components {
+  .theme-card {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: rgb(255 255 255 / 95%);
+    box-shadow: var(--shadow-card);
+  }
+
+  .theme-primary-button {
+    border-radius: var(--radius-control);
+    background: var(--color-primary);
+    color: #FFFFFF;
+    box-shadow: var(--shadow-primary);
+    transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  }
+
+  .theme-primary-button:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+  }
+
+  .theme-primary-button:focus-visible,
+  .theme-control:focus-visible {
+    border-color: var(--color-primary);
+    outline: 2px solid rgb(243 137 120 / 20%);
+    outline-offset: 2px;
+  }
+
   .app-page {
     @apply min-h-screen bg-[#fff8f5] text-[#251E1F];
     background-image:
@@ -49,7 +232,7 @@ body {
   }
 
   .primary-button {
-    @apply rounded-xl bg-[#F38978] text-[#251E1F] shadow-lg transition hover:bg-[#e87562];
+    @apply rounded-lg bg-[#F38978] text-white shadow-lg transition hover:bg-[#e87562];
     box-shadow: 0 12px 25px rgba(243, 137, 120, 0.25);
   }
 }
@@ -79,4 +262,21 @@ body {
 @keyframes pulse {
   0%, 100% { opacity: 0.65; }
   50% { opacity: 1; }
+}
+/* Settings pages use the shared floating action bar instead of local form actions. */
+[data-settings-save],
+[data-settings-local-cancel] {
+  display: none !important;
+}
+
+.settings-save-button {
+  background: #F38978 !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 12px 30px rgb(243 137 120 / 24%);
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.settings-save-button:hover:not(:disabled) {
+  background: #E87562 !important;
+  transform: translateY(-1px);
 }

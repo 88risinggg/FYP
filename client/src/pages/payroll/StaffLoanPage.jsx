@@ -81,7 +81,7 @@ function formatDate(dateStr) {
 /* ─── Shared Components ─── */
 function Panel({ title, children }) {
   return (
-    <div className="rounded-xl border border-[#f0d2ca] bg-white/800 p-5">
+    <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
       <h3 className="mb-3 text-lg font-semibold text-[#251E1F]">{title}</h3>
       {children}
     </div>
@@ -89,7 +89,7 @@ function Panel({ title, children }) {
 }
 
 const SkeletonBar = ({ width = "100%", height = "h-4" }) => (
-  <div className={`${height} rounded-lg bg-white/800 animate-pulse`} style={{ width }} />
+  <div className={`${height} rounded-lg bg-white/80 animate-pulse`} style={{ width }} />
 );
 
 export default function StaffLoanPage({ embedded = false }) {
@@ -204,8 +204,8 @@ function LoanRequestForm() {
       {toast && (
         <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[70] w-full max-w-md rounded-xl border px-5 py-4 shadow-2xl backdrop-blur-sm animate-[slideDown_0.3s_ease-out] ${
           toast.type === "error"
-            ? "border-red-400/30 bg-red-50 text-red-700"
-            : "border-emerald-400/30 bg-emerald-50 text-emerald-700"
+            ? "border-red-400/30 bg-[#FDD9CD] text-red-700"
+            : "border-emerald-400/30 bg-[#FFF6F2] text-emerald-700"
         }`}>
           <div className="flex items-center gap-3">
             <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
@@ -266,7 +266,7 @@ function LoanRequestForm() {
             >
               <option value="" disabled>Select repayment period</option>
               {Array.from({ length: 36 }, (_, i) => i + 1).map((m) => (
-                <option key={m} value={m} style={{ backgroundColor: "#fff3ee", color: "#fff" }}>
+                <option key={m} value={m} style={{ backgroundColor: "#fff3ee", color: "#FFFFFF" }}>
                   {m} {m === 1 ? "month" : "months"}
                 </option>
               ))}
@@ -279,7 +279,7 @@ function LoanRequestForm() {
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-[#251E1F] hover:brightness-110 disabled:opacity-60"
+            className="rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
           >
             {submitting ? "Submitting…" : "Submit Loan Request"}
           </button>
@@ -369,12 +369,12 @@ function LoanRequestList() {
             const isApproved = loan.status === "approved";
 
             return (
-              <div key={loanId} className="rounded-xl border border-[#f0d2ca] bg-black/10 p-4">
+              <div key={loanId} className="rounded-xl border border-[#f0d2ca] bg-[#251E1F]/10 p-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-3">
                       <p className="text-sm font-semibold text-[#251E1F]">{formatCurrency(loan.requested_amount)}</p>
-                      <span className={`rounded-full border px-3 py-0.5 text-xs font-semibold whitespace-nowrap ${loanStatusStyles[loan.status] || "border-gray-300/30 bg-gray-300/10 text-gray-200"}`}>
+                      <span className={`rounded-full border px-3 py-0.5 text-xs font-semibold whitespace-nowrap ${loanStatusStyles[loan.status] || "border-[#F0D2CA]/30 bg-[#FFF6F2]/10 text-[#7B6660]"}`}>
                         {statusLabels[loan.status] || loan.status}
                       </span>
                     </div>
@@ -393,7 +393,7 @@ function LoanRequestList() {
                       <button
                         type="button"
                         onClick={() => toggleExpand(loanId)}
-                        className="flex items-center gap-1 rounded-lg border border-[#f0d2ca] bg-white/800 px-3 py-1.5 text-xs text-[#251E1F] hover:bg-[#FDD9CD]/45"
+                        className="flex items-center gap-1 rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-1.5 text-xs text-[#251E1F] hover:bg-[#FDD9CD]/45"
                         aria-label={isExpanded ? "Collapse installments" : "Expand installments"}
                       >
                         Installments
@@ -412,7 +412,7 @@ function LoanRequestList() {
 
                 {/* Expandable Installment Schedule */}
                 {isApproved && isExpanded && (
-                  <div className="mt-3 rounded-lg border border-[#f0d2ca] bg-black/20 p-3">
+                  <div className="mt-3 rounded-lg border border-[#f0d2ca] bg-[#251E1F]/20 p-3">
                     {loadingInstallments[loanId] ? (
                       <div className="space-y-2">
                         {[1, 2, 3].map(i => <SkeletonBar key={i} height="h-8" />)}

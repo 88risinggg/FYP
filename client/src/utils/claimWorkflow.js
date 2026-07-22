@@ -7,11 +7,11 @@ export const CLAIM_STATUS_LABELS = Object.freeze({
 });
 
 export const CLAIM_STATUS_STYLES = Object.freeze({
-  pending_hr: "border-amber-400/40 bg-amber-50 text-amber-700",
-  hr_approved: "border-cyan-400/40 bg-cyan-50 text-cyan-700",
-  hr_rejected: "border-red-400/40 bg-red-50 text-red-700",
-  released: "border-emerald-400/40 bg-emerald-50 text-emerald-700",
-  finance_rejected: "border-red-400/40 bg-red-50 text-red-700"
+  pending_hr: "border-amber-400/40 bg-[#FDD9CD] text-amber-700",
+  hr_approved: "border-[#2D7C83]/40 bg-[#FFF6F2] text-[#2D7C83]",
+  hr_rejected: "border-red-400/40 bg-[#FDD9CD] text-red-700",
+  released: "border-emerald-400/40 bg-[#FFF6F2] text-emerald-700",
+  finance_rejected: "border-red-400/40 bg-[#FDD9CD] text-red-700"
 });
 
 export function canRoleActOnClaim(role, status) {
