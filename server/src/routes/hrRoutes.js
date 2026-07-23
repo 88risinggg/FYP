@@ -1030,13 +1030,13 @@ router.post(
         await conn.beginTransaction();
 
         for (const slip of generatedPayslips) {
-          // Check for duplicate (same employee + same run)
+          // Check for duplicate (same employee + same payroll period)
           const [dupCheck] = await conn.query(
-            'SELECT payroll_id FROM payroll WHERE staff_employee_id = ? AND payroll_run_id = ? LIMIT 1',
-            [slip.employee_id, payroll_run_id]
+            'SELECT payroll_id FROM payroll WHERE staff_employee_id = ? AND payroll_month = ? AND payroll_year = ? LIMIT 1',
+            [slip.employee_id, payrollRun.payroll_month, payrollRun.payroll_year]
           );
           if (dupCheck.length > 0) {
-            skipped.push({ row_identifier: slip.employee_id, reason: 'Duplicate payslip for run' });
+            skipped.push({ row_identifier: slip.employee_id, reason: 'Duplicate payslip for payroll period' });
             continue;
           }
 
@@ -1240,6 +1240,19 @@ router.post("/legacy-payslips/quick-generate", authenticateToken, allowRoles("Ad
         const totalDeductions = parseFloat((cpfEmployee + donationAmount).toFixed(2));
         const netSalary = parseFloat((baseSalary - totalDeductions).toFixed(2));
 
+        // Prevent duplicate payslips for the same employee and payroll period
+        const [existingPayslip] = await conn.query(
+          'SELECT payroll_id FROM payroll WHERE staff_employee_id = ? AND payroll_month = ? AND payroll_year = ? LIMIT 1',
+          [staff.employee_id, numMonth, numYear]
+        );
+        if (existingPayslip.length > 0) {
+          skipped.push({
+            employee_id: staff.employee_id,
+            reason: 'Duplicate payslip for payroll period'
+          });
+          continue;
+        }
+
         // Insert payroll record
         const deductionBreakdown = {
           employeeCpf: parseFloat(cpfEmployee.toFixed(2)),
@@ -1323,7 +1336,8 @@ router.get("/payslips", authenticateToken, allowRoles("HR", "Finance", "Staff"),
         p.payroll_month AS period_month, p.payroll_year AS period_year,
         p.gross_salary, p.net_salary AS net_pay, p.total_allowances,
         p.total_deductions, p.employee_cpf, p.employer_cpf, p.mbmf_amount,
-        p.deduction_breakdown, s.name AS staff_name, s.employee_id,
+        p.deduction_breakdown,
+        s.name AS staff_name, s.employee_id,
         s.email AS staff_email, s.base_salary, s.department_name
        FROM payroll p
        JOIN staff s ON s.employee_id = p.staff_employee_id

@@ -254,6 +254,16 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
         cpfWageBase: calculation.cpfWageBase,
         sdl: calculation.sdl
       };
+      const [existingPayslip] = await connection.execute(
+        `SELECT payroll_id
+         FROM payroll
+         WHERE staff_employee_id = ? AND payroll_month = ? AND payroll_year = ?
+         LIMIT 1`,
+        [staff.employee_id, month, year]
+      );
+      if (existingPayslip.length > 0) {
+        continue;
+      }
       await connection.execute(
         `INSERT INTO payroll (
           staff_employee_id, payroll_month, payroll_year, gross_salary,

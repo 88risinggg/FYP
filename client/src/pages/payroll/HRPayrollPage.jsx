@@ -2040,7 +2040,7 @@ function PayrollRunsView() {
   );
 }
 
-function PayslipsView() {
+function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldTooltipData }) {
   const session = getStoredSession();
   const navigate = useNavigate();
   const location = useLocation();
@@ -2300,6 +2300,52 @@ function PayslipsView() {
 
   const getStatusLabel = (status) => {
     return status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  };
+
+  const getHoldReasons = (payslip) => {
+    const reasons = Array.isArray(payslip.compliance_exceptions)
+      ? payslip.compliance_exceptions
+      : Array.isArray(payslip.complianceExceptions)
+        ? payslip.complianceExceptions
+        : [];
+
+    if (!reasons.length && payslip.deduction_breakdown) {
+      try {
+        const breakdown = typeof payslip.deduction_breakdown === "string"
+          ? JSON.parse(payslip.deduction_breakdown)
+          : payslip.deduction_breakdown;
+        if (Array.isArray(breakdown?.complianceExceptions)) {
+          reasons.push(...breakdown.complianceExceptions);
+        }
+      } catch {
+        // Ignore malformed JSON and fall back to no tooltip.
+      }
+    }
+
+    return [...new Set(reasons.map((reason) => String(reason).trim()).filter(Boolean))];
+  };
+
+  const buildHoldTooltipText = (reason) => {
+    const lower = String(reason || "").toLowerCase();
+    let recommendation = "Review the payroll details to verify the information. If the payroll details are correct, refer this payslip to Finance for further review before continuing the payroll process.";
+
+    if (lower.includes("bank account")) {
+      recommendation = "Review the payroll details to verify the information. If the payroll details are correct, refer this payslip to Finance for further review before continuing the payroll process.";
+    } else if (lower.includes("cpf")) {
+      recommendation = "Review the payroll details to verify the information. If the payroll details are correct, refer this payslip to Finance for further review before continuing the payroll process.";
+    } else if (lower.includes("department")) {
+      recommendation = "Review the payroll details to verify the information. If the payroll details are correct, refer this payslip to Finance for further review before continuing the payroll process.";
+    } else if (lower.includes("net salary")) {
+      recommendation = "Review the payroll details to verify the information. If the payroll details are correct, refer this payslip to Finance for further review before continuing the payroll process.";
+    } else if (lower.includes("deduction")) {
+      recommendation = "Review the payroll details to verify the information. If the payroll details are correct, refer this payslip to Finance for further review before continuing the payroll process.";
+    } else if (lower.includes("earnings")) {
+      recommendation = "Review the payroll details to verify the information. If the payroll details are correct, refer this payslip to Finance for further review before continuing the payroll process.";
+    } else if (lower.includes("salary")) {
+      recommendation = "Review the payroll details to verify the information. If the payroll details are correct, refer this payslip to Finance for further review before continuing the payroll process.";
+    }
+
+    return `Payroll placed on hold.\n\nReason:\n${reason}\n\nRecommended action:\n${recommendation}\n\nNote:\nOnly this payslip is on hold.\nThe Payroll Run completed successfully.`;
   };
 
   const getRejectionReason = (payslip) => {
@@ -2653,8 +2699,28 @@ function PayslipsView() {
                         ${Number(payslip.net_pay || 0).toFixed(2)}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap ${getStatusColor(payslip.status)}`}>
-                          {getStatusLabel(payslip.status)}
+                        <span className="inline-flex items-center gap-1">
+                          <span className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap ${getStatusColor(payslip.status)}`}>
+                            {getStatusLabel(payslip.status)}
+                          </span>
+                          {String(payslip.status || "").toLowerCase() === "hold" && getHoldReasons(payslip).length > 0 ? (
+                            <button
+                              type="button"
+                              onMouseEnter={(event) => openHoldTooltip(event, payslip)}
+                              onMouseLeave={() => setHoldTooltip(null)}
+                              onFocus={(event) => openHoldTooltip(event, payslip)}
+                              onBlur={() => setHoldTooltip(null)}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                setHoldTooltip((current) => (current ? null : (getHoldTooltipData(event, payslip) || null)));
+                              }}
+                              className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#D97706]/25 bg-[#D97706]/10 text-[10px] font-bold leading-none text-[#9A6412] outline-none transition hover:bg-[#D97706]/20 focus:bg-[#D97706]/20"
+                              aria-label="View hold reason"
+                              title={buildHoldTooltipText(getHoldReasons(payslip)[0])}
+                            >
+                              ?
+                            </button>
+                          ) : null}
                         </span>
                         {getRejectionReason(payslip) ? (
                           <div className="mt-2 max-w-xs rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-700">
@@ -2681,6 +2747,22 @@ function PayslipsView() {
           </div>
         )}
       </div>
+
+      {holdTooltip ? (
+        <div
+          className="pointer-events-none fixed z-[90] max-w-[280px] rounded-lg border border-[#f0d2ca] bg-[#fff3ee] px-3 py-2 text-left text-xs text-[#251E1F] shadow-xl"
+          style={{
+            left: holdTooltip.x,
+            top: holdTooltip.y,
+            transform: holdTooltip.placeAbove ? "translate(-50%, -100%) translateY(-10px)" : "translate(-50%, 0)",
+            width: `min(${holdTooltip.width}px, calc(100vw - 24px))`
+          }}
+          role="tooltip"
+        >
+          <span className="block font-semibold text-[#7b6660]">On Hold reason</span>
+          <span className="mt-1 block whitespace-pre-line leading-5">{holdTooltip.text}</span>
+        </div>
+      ) : null}
 
       {/* Payslip Preview Modal */}
       {previewPayslip && (
@@ -2912,6 +2994,52 @@ export default function HRPayrollPage() {
   const heading = routeHeadings[location.pathname] || "Dashboard";
   const activePath = location.pathname.replace(/\/+$/, "") || "/";
   const headerSearchEndpoint = "/api/hr/search";
+  const [holdTooltip, setHoldTooltip] = useState(null);
+
+  useEffect(() => {
+    function closeHoldTooltip() {
+      setHoldTooltip(null);
+    }
+
+    window.addEventListener("scroll", closeHoldTooltip, true);
+    window.addEventListener("resize", closeHoldTooltip);
+    return () => {
+      window.removeEventListener("scroll", closeHoldTooltip, true);
+      window.removeEventListener("resize", closeHoldTooltip);
+    };
+  }, []);
+
+  const getHoldTooltipData = (event, payslip) => {
+    const reasons = Array.isArray(payslip?.compliance_exceptions)
+      ? payslip.compliance_exceptions
+      : Array.isArray(payslip?.complianceExceptions)
+        ? payslip.complianceExceptions
+        : [];
+    if (!reasons.length) return null;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const maxWidth = Math.min(280, Math.max(220, viewportWidth - 24));
+    const spaceAbove = rect.top;
+    const spaceBelow = viewportHeight - rect.bottom;
+    const placeAbove = spaceAbove >= 120 || spaceAbove > spaceBelow;
+    const x = Math.min(Math.max(rect.left + rect.width / 2, 16 + maxWidth / 2), viewportWidth - 16 - maxWidth / 2);
+    const y = placeAbove ? rect.top - 10 : rect.bottom + 10;
+
+    return {
+      x,
+      y,
+      placeAbove,
+      width: maxWidth,
+      text: buildHoldTooltipText(reasons[0])
+    };
+  };
+
+  const openHoldTooltip = (event, payslip) => {
+    const data = getHoldTooltipData(event, payslip);
+    if (data) setHoldTooltip(data);
+  };
 
   const renderContent = () => {
     if (activePath === "/dashboard/payroll/hr/staff") {
@@ -2927,7 +3055,14 @@ export default function HRPayrollPage() {
     }
 
     if (activePath === "/dashboard/payroll/hr/payslips") {
-      return <PayslipsView />;
+      return (
+        <PayslipsView
+          holdTooltip={holdTooltip}
+          setHoldTooltip={setHoldTooltip}
+          openHoldTooltip={openHoldTooltip}
+          getHoldTooltipData={getHoldTooltipData}
+        />
+      );
     }
 
     if (activePath === "/dashboard/payroll/hr/notifications") {

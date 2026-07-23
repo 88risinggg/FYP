@@ -202,7 +202,7 @@ function LoanRequestForm() {
     <>
       {/* Toast Notification */}
       {toast && (
-        <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[70] w-full max-w-md rounded-xl border px-5 py-4 shadow-2xl backdrop-blur-sm animate-[slideDown_0.3s_ease-out] ${
+        <div className={`fixed top-24 left-4 right-4 mx-auto z-[70] w-auto max-w-md rounded-xl border px-5 py-4 shadow-2xl backdrop-blur-sm animate-[slideDown_0.3s_ease-out] ${
           toast.type === "error"
             ? "border-red-400/30 bg-[#FDD9CD] text-red-700"
             : "border-emerald-400/30 bg-[#FFF6F2] text-emerald-700"
@@ -266,7 +266,7 @@ function LoanRequestForm() {
             >
               <option value="" disabled>Select repayment period</option>
               {Array.from({ length: 36 }, (_, i) => i + 1).map((m) => (
-                <option key={m} value={m} style={{ backgroundColor: "#fff3ee", color: "#FFFFFF" }}>
+                <option key={m} value={m} style={{ backgroundColor: "#fff3ee", color: "#251E1F" }}>
                   {m} {m === 1 ? "month" : "months"}
                 </option>
               ))}
@@ -372,7 +372,7 @@ function LoanRequestList() {
               <div key={loanId} className="rounded-xl border border-[#f0d2ca] bg-[#251E1F]/10 p-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <p className="text-sm font-semibold text-[#251E1F]">{formatCurrency(loan.requested_amount)}</p>
                       <span className={`rounded-full border px-3 py-0.5 text-xs font-semibold whitespace-nowrap ${loanStatusStyles[loan.status] || "border-[#F0D2CA]/30 bg-[#FFF6F2]/10 text-[#7B6660]"}`}>
                         {statusLabels[loan.status] || loan.status}
@@ -387,7 +387,7 @@ function LoanRequestList() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <p className="text-xs text-[#251E1F]/30 whitespace-nowrap">{formatDate(loan.created_at)}</p>
                     {isApproved && (
                       <button

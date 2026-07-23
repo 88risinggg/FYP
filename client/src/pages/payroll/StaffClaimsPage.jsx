@@ -63,24 +63,24 @@ export default function StaffClaimsPage() {
         </div>
         <form onSubmit={handleSubmit} className="mt-6 grid gap-4 md:grid-cols-2">
           <label className="text-sm text-[#7b6660]">Claim type
-            <select value={form.claim_type} onChange={(e) => setForm({ ...form, claim_type: e.target.value })} className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-[#251E1F] outline-none focus:border-[#F38978]">
+            <select value={form.claim_type} onChange={(e) => setForm({ ...form, claim_type: e.target.value })} className="mt-1 w-full rounded-md border border-[#f0d2ca] bg-transparent px-3 py-2 text-[#251E1F] outline-none focus:border-[#F38978]">
               {CLAIM_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
             </select>
           </label>
           <label className="text-sm text-[#7b6660]">Amount (SGD)
-            <input required type="number" min="0.01" max="100000" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0.00" className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-[#251E1F] placeholder-[#7b6660]/40 outline-none focus:border-[#F38978]" />
+            <input required type="number" min="0.01" max="100000" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0.00" className="mt-1 w-full rounded-md border border-[#f0d2ca] bg-transparent px-3 py-2 text-[#251E1F] placeholder-[#7b6660]/40 outline-none focus:border-[#F38978]" />
           </label>
           <label className="text-sm text-[#7b6660]">Expense date
-            <input required type="date" max={new Date().toISOString().slice(0, 10)} value={form.expense_date} onChange={(e) => setForm({ ...form, expense_date: e.target.value })} className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-[#251E1F] outline-none focus:border-[#F38978]" />
+            <input required type="date" max={new Date().toISOString().slice(0, 10)} value={form.expense_date} onChange={(e) => setForm({ ...form, expense_date: e.target.value })} className="mt-1 w-full rounded-md border border-[#f0d2ca] bg-transparent px-3 py-2 text-[#251E1F] outline-none focus:border-[#F38978]" />
           </label>
           <label className="text-sm text-[#7b6660]">Proof (PDF, JPG or PNG; max 5MB)
             <span className="mt-1 flex items-center gap-2 rounded-lg border border-dashed border-[#F38978]/40 bg-[#F38978]/5 px-3 py-2.5 text-[#251E1F]">
               <Upload size={16} className="text-[#F38978]" />
-              <input required type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(e) => setForm({ ...form, proof: e.target.files?.[0] || null })} className="min-w-0 text-xs text-[#7b6660]" />
+              <input required type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(e) => setForm({ ...form, proof: e.target.files?.[0] || null })} className="min-w-0 max-w-full truncate text-xs text-[#7b6660]" />
             </span>
           </label>
           <label className="text-sm text-[#7b6660] md:col-span-2">Business purpose / description
-            <textarea required minLength={5} maxLength={1000} rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe the business purpose of this expense..." className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-[#251E1F] placeholder-[#7b6660]/40 outline-none focus:border-[#F38978]" />
+            <textarea required minLength={5} maxLength={1000} rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe the business purpose of this expense..." className="mt-1 w-full rounded-md border border-[#f0d2ca] bg-transparent px-3 py-2 text-[#251E1F] placeholder-[#7b6660]/40 outline-none focus:border-[#F38978]" />
           </label>
           <button disabled={submitting} className="inline-flex w-fit items-center gap-2 rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:brightness-110 disabled:opacity-50">
             {submitting ? <Loader2 size={16} className="animate-spin" /> : <FileCheck2 size={16} />} Submit claim
@@ -105,7 +105,7 @@ export default function StaffClaimsPage() {
             {claims.map((claim) => (
               <div key={claim.claim_id} className="rounded-xl border border-[#f0d2ca] bg-white/50 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-semibold text-[#251E1F]">{claim.claim_type} · ${Number(claim.amount).toFixed(2)}</p>
                     <p className="mt-1 text-xs text-[#7b6660]">{new Date(claim.expense_date).toLocaleDateString("en-SG")} · {claim.description}</p>
                   </div>
@@ -115,12 +115,12 @@ export default function StaffClaimsPage() {
                 </div>
                 <ClaimWorkflowProgress status={claim.status} />
                 <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
-                  <button onClick={() => openClaimProof(claim.claim_id).catch((error) => setMessage({ type: "error", text: error.message }))} className="inline-flex items-center gap-1 text-[#F38978] hover:text-[#F38978] transition">
+                  <button onClick={() => openClaimProof(claim.claim_id).catch((error) => setMessage({ type: "error", text: error.message }))} className="inline-flex min-w-0 max-w-full items-center gap-1 text-[#F38978] hover:text-[#F38978] transition">
                     <Paperclip size={14} />{claim.proof_original_name}
                   </button>
-                  {claim.hr_comments && <span className="text-[#7b6660]">HR: {claim.hr_comments}</span>}
-                  {claim.finance_comments && <span className="text-[#7b6660]">Finance: {claim.finance_comments}</span>}
-                  {claim.payment_reference && <span className="text-emerald-600 font-medium">Ref: {claim.payment_reference}</span>}
+                  {claim.hr_comments && <span className="min-w-0 break-words text-[#7b6660]">HR: {claim.hr_comments}</span>}
+                  {claim.finance_comments && <span className="min-w-0 break-words text-[#7b6660]">Finance: {claim.finance_comments}</span>}
+                  {claim.payment_reference && <span className="min-w-0 break-words font-medium text-emerald-600">Ref: {claim.payment_reference}</span>}
                 </div>
               </div>
             ))}
