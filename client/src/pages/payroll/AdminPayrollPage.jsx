@@ -23,14 +23,16 @@ import {
 } from "lucide-react";
 
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import {
   addPayslipLayout,
   createUser,
   getAdminPayrollDashboard,
+  getAdminPayrollInsights,
   getAdminPayrollReports,
+  getEffectivePayrollRules,
   resetUserPassword,
   setDefaultPayslipLayout,
   updatePayrollSetting,
@@ -40,6 +42,7 @@ import {
 
 import { getStoredSession } from "../../services/sessionService.js";
 import PayrollAuditLogPage from "./PayrollAuditLogPage.jsx";
+import PayrollUserManagement from "../../components/payroll/PayrollUserManagement.jsx";
 
 import {
   buildSettingsByKey,
@@ -62,43 +65,27 @@ const payrollSidebarSections = [
   {
     label: "MAIN",
     items: [
-      {
-        label: "Dashboard",
-        icon: LayoutDashboard,
-        path: "/dashboard/payroll/admin",
-        end: true,
-        children: [
-          { label: "Overview", path: "/dashboard/payroll/admin", end: true },
-          { label: "Configure Payroll Rules", path: "/dashboard/payroll/admin/settings" },
-          { label: "Import Payslip Layout", path: "/dashboard/payroll/admin/payslip-layouts" },
-          { label: "Staff Management", path: "/dashboard/payroll/admin/staff-management" },
-          { label: "User Accounts", path: "/dashboard/payroll/admin/user-accounts" },
-          { label: "Monitor Payroll Status", path: "/dashboard/payroll/admin/payroll-monitor" },
-          { label: "Audit & Reports", path: "/dashboard/payroll/admin/audit-logs" }
-        ]
-      },
-      {
-        label: "Staff Management",
-        icon: Users,
-        path: "/dashboard/payroll/admin/staff-management"
-      },
-      {
-        label: "User Accounts",
-        icon: UserCog,
-        path: "/dashboard/payroll/admin/user-accounts"
-      }
+      { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard/payroll/admin", end: true }
     ]
   },
   {
-    label: "CONFIGURATION",
+    label: "ACCESS & GOVERNANCE",
     items: [
+      { label: "User Management", icon: UserCog, path: "/dashboard/payroll/admin/user-management" },
+      { label: "System Audit Trail", icon: History, path: "/dashboard/payroll/admin/system-audit-trail" }
+    ]
+  },
+  {
+    label: "PAYROLL CONTROL",
+    items: [
+      { label: "Effective Payroll Rules", icon: ClipboardList, path: "/dashboard/payroll/admin/effective-rules" },
       {
-        label: "System Settings",
+        label: "Payroll Configuration",
         icon: Settings,
         path: "/dashboard/payroll/admin/settings"
       },
       {
-        label: "Compliance Rules",
+        label: "Statutory & Compliance Rules",
         icon: ShieldCheck,
         path: "/dashboard/payroll/admin/compliance-rules"
       },
@@ -110,18 +97,13 @@ const payrollSidebarSections = [
     ]
   },
   {
-    label: "MONITORING",
+    label: "MONITORING & REPORTING",
     items: [
       {
-        label: "Audit Logs",
-        icon: History,
-        path: "/dashboard/payroll/admin/audit-logs"
-      }
-    ]
-  },
-  {
-    label: "REPORTS",
-    items: [
+        label: "Payroll Run Monitor",
+        icon: PlayCircle,
+        path: "/dashboard/payroll/admin/payroll-monitor"
+      },
       {
         label: "Reports",
         icon: FileBarChart,
@@ -133,14 +115,14 @@ const payrollSidebarSections = [
 
 const workflowSteps = [
   {
-    title: "Configure Payroll Rules",
+    title: "Review Effective Payroll Rules",
     icon: Settings,
     status: "Configured",
     owner: "Admin",
     updatedKey: "default_pay_cycle",
-    details: ["Employee master data", "Salary, pay type, allowance and deduction rules", "CPF, leave and overtime settings"],
-    action: "Open Rules",
-    path: "/dashboard/payroll/admin/settings"
+    details: ["Calculation policies", "Validation requirements", "Effective dates and override sources"],
+    action: "View Effective Rules",
+    path: "/dashboard/payroll/admin/effective-rules"
   },
   {
     title: "Manage Users & Roles",
@@ -150,7 +132,7 @@ const workflowSteps = [
     updatedKey: "users",
     details: ["Admin, HR and Finance access", "Payroll module permissions", "Active and inactive user accounts"],
     action: "Manage Access",
-    path: "/dashboard/payroll/admin/user-accounts"
+    path: "/dashboard/payroll/admin/user-management"
   },
   {
     title: "Import Payslip Layout",
@@ -163,14 +145,14 @@ const workflowSteps = [
     path: "/dashboard/payroll/admin/payslip-layouts"
   },
   {
-    title: "Maintain Staff Setup",
+    title: "Account Activation Oversight",
     icon: ClipboardList,
     status: "Needs Data",
     owner: "Admin / HR",
     updatedKey: "users",
-    details: ["Department assignment", "Base salary reference", "Employee account link"],
-    action: "View Staff Setup",
-    path: "/dashboard/payroll/admin/staff-setup"
+    details: ["Account linkage", "Activation requests", "Role and access status"],
+    action: "Manage Accounts",
+    path: "/dashboard/payroll/admin/user-management"
   },
   {
     title: "Monitor Payroll Status",
@@ -183,62 +165,69 @@ const workflowSteps = [
     path: "/dashboard/payroll/admin/payroll-monitor"
   },
   {
-    title: "Audit & Reports",
+    title: "System Audit Trail",
     icon: History,
     status: "Tracking",
     owner: "System",
     updatedKey: "auditLogs",
     details: ["Admin changes", "Template updates", "System access records"],
     action: "View Logs",
-    path: "/dashboard/payroll/admin/audit-logs"
+    path: "/dashboard/payroll/admin/system-audit-trail"
   }
 ];
 
 const cpfAccountMappings = [
   {
     key: "cpf_account_employee_payable",
-    label: "CPF Payable (Employee)",
+    label: "Employee CPF Payable Account",
     description: "Liability account for employee CPF payable.",
-    placeholder: "2100 - CPF Payable (Employee)"
+    placeholder: "2100 - CPF Payable (Employee)",
+    usage: "Operational reference only"
   },
   {
     key: "cpf_account_employer_payable",
-    label: "CPF Payable (Employer)",
+    label: "Employer CPF Payable Account",
     description: "Liability account for employer CPF payable.",
-    placeholder: "2110 - CPF Payable (Employer)"
+    placeholder: "2110 - CPF Payable (Employer)",
+    usage: "Operational reference only"
   },
   {
     key: "cpf_account_employer_expense",
-    label: "Employer CPF Expense",
+    label: "Employer CPF Expense Account",
     description: "Expense account for employer CPF cost.",
-    placeholder: "5200 - CPF Expense"
+    placeholder: "5200 - CPF Expense",
+    usage: "Operational reference only"
   }
 ];
 
 const otherCpfSettings = [
   {
     key: "cpf_payment_due_day",
-    label: "Payment Due Day",
+    label: "CPF Contribution Payment Deadline",
     description: "CPF payment due day, for example 14th of next month.",
-    placeholder: "14th of next month"
+    placeholder: "14th of next month",
+    usage: "Operational reference only"
   },
   {
     key: "cpf_payment_method",
-    label: "Payment Method",
+    label: "CPF Contribution Payment Method",
     description: "CPF payment method used by Finance.",
-    placeholder: "GIRO / PayNow"
+    placeholder: "GIRO / PayNow",
+    usage: "Operational reference only"
   },
   {
     key: "cpf_notification_enabled",
-    label: "Notification",
+    label: "CPF Deadline Reminders",
     description: "Enable reminders for CPF payment and submission.",
-    placeholder: "Enabled"
+    placeholder: "Enabled",
+    usage: "Operational reference only"
   },
   {
     key: "cpf_submission_tracking",
-    label: "CPF Submission",
+    label: "CPF Submission Status Tracking",
     description: "Track CPF submission files and statuses.",
-    placeholder: "Enabled"
+    placeholder: "Enabled",
+    usage: "Operational reference only"
   }
 ];
 
@@ -397,7 +386,7 @@ function EmptyState({ message }) {
 
 function PageShell({ heading, children, actions, updatedAt }) {
   return (
-    <section>
+    <section className="admin-payroll-page">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#F38978]/80">
@@ -476,8 +465,8 @@ function getDashboardUpdateSegments(data = {}) {
 
   return [
     {
-      label: "Compliance Rules",
-      records: `${source.settings?.length || 0} rule(s)`,
+      label: "Effective Rule Groups",
+      records: `${source.stats?.payrollRules || 0} group(s)`,
       updatedAt: getLatestTimestamp(source.settings)
     },
     {
@@ -496,7 +485,7 @@ function getDashboardUpdateSegments(data = {}) {
       updatedAt: getLatestTimestamp(source.layouts)
     },
     {
-      label: "Audit Trail",
+      label: "System Audit Trail",
       records: `${source.auditLogs?.length || 0} event(s)`,
       updatedAt: getLatestTimestamp(source.auditLogs)
     }
@@ -612,99 +601,275 @@ function WorkflowCard({ data, onNavigate, step }) {
   );
 }
 
-function DashboardView({ data, onImportLayout, onNavigate, onSetDefaultLayout }) {
+const adminInsightDatasets = {
+  audit_activity: { label: "Audit Activity", description: "Administrative events over time.", chartType: "Line trend", unit: "events" },
+  user_roles: { label: "Users by Role", description: "Current account distribution across payroll roles.", chartType: "Horizontal bars", unit: "users" },
+  account_status: { label: "Account Status", description: "Current activation and access state.", chartType: "Donut", unit: "records" },
+  run_health: { label: "Payroll Run Health", description: "Operational outcomes by payroll period.", chartType: "Stacked columns", unit: "runs" }
+};
+
+const insightPresetDays = { "7d": 7, "30d": 30, "90d": 90, "6m": 183, "12m": 365, "3m": 92 };
+
+function insightDateRange(preset, dataset = "audit_activity") {
+  const to = new Date();
+  if (dataset === "run_health") {
+    const months = { "3m": 3, "6m": 6, "12m": 12 }[preset] || 6;
+    const from = new Date(to.getFullYear(), to.getMonth() - (months - 1), 1);
+    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  }
+  const from = new Date(to);
+  from.setDate(from.getDate() - ((insightPresetDays[preset] || 30) - 1));
+  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+}
+
+function insightLabel(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return value;
+  return new Date(`${value}T00:00:00`).toLocaleDateString("en-SG", { day: "2-digit", month: "short", year: "2-digit" });
+}
+
+function DashboardView({ data, onImportLayout, onNavigate }) {
   const stats = data?.stats || {};
   const dashboardUpdates = getDashboardUpdateSegments(data);
+  const now = new Date();
+  const countRecent = (items, days) => items.filter((item) => {
+    const timestamp = item?.updated_at || item?.created_at;
+    return timestamp && now - new Date(timestamp) <= days * 86400000;
+  }).length;
   const dashboardStats = [
-    { label: "Active Users", value: stats.activeUsers ?? 0, tone: "text-[#F38978]", updatedAt: getLatestTimestamp(data?.users) },
-    { label: "Payroll Rules", value: stats.payrollRules ?? 0, tone: "text-[#251E1F]", updatedAt: getLatestTimestamp(data?.settings) },
-    { label: "Payslip Layouts", value: stats.payslipLayouts ?? 0, tone: "text-[#2f8758]", updatedAt: getLatestTimestamp(data?.layouts) },
-    { label: "Admin Logs", value: stats.adminLogs ?? 0, tone: "text-[#D97706]", updatedAt: getLatestTimestamp(data?.auditLogs) }
+    { label: "Active Users", value: stats.activeUsers ?? 0, icon: Users, iconClass: "dashboard-icon--rose", note: `${countRecent(data?.users || [], 30)} updated this month` },
+    { label: "Effective Rule Groups", value: stats.payrollRules ?? 0, icon: Settings, iconClass: "dashboard-icon--orange", note: "Calculation and validation policies", onClick: () => onNavigate("/dashboard/payroll/admin/effective-rules") },
+    { label: "Payslip Layouts", value: stats.payslipLayouts ?? data?.layouts?.length ?? 0, icon: Palette, iconClass: "dashboard-icon--green", note: data?.layouts?.some((item) => Number(item.is_default) === 1) ? "Default layout configured" : "Default layout required" },
+    { label: "Admin Logs", value: stats.adminLogs ?? 0, icon: History, iconClass: "dashboard-icon--blue", note: `${countRecent(data?.auditLogs || [], 7)} events this week` }
   ];
-  const defaultLayout = data?.layouts?.find((layout) => Number(layout.is_default) === 1);
+  const quickActions = [
+    { title: "Payroll Configuration", description: "Review accounting references and CPF operational controls.", action: "Open Configuration", icon: Settings, iconClass: "dashboard-icon--blue", onClick: () => onNavigate("/dashboard/payroll/admin/settings") },
+    { title: "Effective Payroll Rules", description: "See the resolved policies currently used by payroll.", action: "View Effective Rules", icon: ClipboardList, iconClass: "dashboard-icon--indigo", onClick: () => onNavigate("/dashboard/payroll/admin/effective-rules") },
+    { title: "Manage Users & Roles", description: "Control access and permissions for users.", action: "Manage Access", icon: Users, iconClass: "dashboard-icon--orange", onClick: () => onNavigate("/dashboard/payroll/admin/user-management") },
+    { title: "Import Payslip Layout", description: "Upload and preview your payslip design.", action: "Import Design", icon: Upload, iconClass: "dashboard-icon--indigo", onClick: onImportLayout },
+    { title: "Payslip Layout Control", description: "Set the default layout and manage templates.", action: "Manage Layouts", icon: Palette, iconClass: "dashboard-icon--rose", onClick: () => onNavigate("/dashboard/payroll/admin/payslip-layouts") },
+    { title: "Payroll Run Monitor", description: "Review run health, workflow ownership and processing delays.", action: "View Monitor", icon: ShieldCheck, iconClass: "dashboard-icon--teal", onClick: () => onNavigate("/dashboard/payroll/admin/payroll-monitor") },
+    { title: "System Audit Trail", description: "Inspect technical events, actors, outcomes and value changes.", action: "View Audit Trail", icon: History, iconClass: "dashboard-icon--blue", onClick: () => onNavigate("/dashboard/payroll/admin/system-audit-trail") },
+    { title: "Admin Reports", description: "Generate governance, access, rules and workflow reports.", action: "View Reports", icon: FileBarChart, iconClass: "dashboard-icon--amber", onClick: () => onNavigate("/dashboard/payroll/admin/reports") }
+  ];
 
   return (
     <PageShell
       heading="Dashboard"
       updatedAt={getOverallUpdatedAt(data)}
       actions={
-        <>
-          <ActionButton icon={Plus} onClick={() => onNavigate("/dashboard/payroll/admin/settings")}>Add Payroll Rule</ActionButton>
-          <ActionButton icon={Upload} variant="secondary" onClick={onImportLayout}>Import Payslip Design</ActionButton>
-        </>
+        <ActionButton icon={Eye} onClick={() => onNavigate("/dashboard/payroll/admin/effective-rules")}>View Effective Rules</ActionButton>
       }
     >
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {dashboardStats.map((stat) => (
-          <div key={stat.label} className="app-panel rounded-2xl p-5">
-            <p className="text-sm text-[#7b6660]">{stat.label}</p>
-            <p className={`mt-3 text-3xl font-semibold ${stat.tone}`}>{stat.value}</p>
-            <p className="mt-3 flex items-center gap-2 text-xs text-[#7b6660]/80">
-              <CalendarDays size={14} className="text-[#F38978]" />
-              {stat.updatedAt ? `Updated ${formatDateTime(stat.updatedAt)}` : "No update date"}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <section className="mt-6 app-panel rounded-2xl p-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-[#251E1F]">Overall Update Timeline</h3>
-            <p className="mt-1 text-sm text-[#7b6660]">Last changed date for each admin payroll segment.</p>
-          </div>
-          <p className="text-sm font-semibold text-[#F38978]">
-            Latest: {formatDateTime(getLatestTimestamp(dashboardUpdates.map((item) => ({ updated_at: item.updatedAt }))))}
-          </p>
-        </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-5">
-          {dashboardUpdates.map((item) => (
-            <div key={item.label} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
-              <p className="text-sm font-semibold text-[#251E1F]">{item.label}</p>
-              <p className="mt-1 text-xs text-[#7b6660]">{item.records}</p>
-              <p className="mt-3 text-xs font-semibold text-[#F38978]">
-                {item.updatedAt ? formatDateTime(item.updatedAt) : "Not updated"}
-              </p>
-            </div>
-          ))}
-        </div>
+      <div className="admin-payroll-dashboard">
+      <section aria-label="Payroll administration summary" className="dashboard-kpi-grid">
+        {dashboardStats.map((stat) => {
+          const Card = stat.onClick ? "button" : "article";
+          return <Card type={stat.onClick ? "button" : undefined} onClick={stat.onClick} key={stat.label} className={`dashboard-card dashboard-kpi-card ${stat.onClick ? "dashboard-kpi-card--interactive" : ""}`}>
+            <div className={`dashboard-icon ${stat.iconClass}`}><stat.icon aria-hidden="true" size={21} /></div>
+            <div><p className="dashboard-label">{stat.label}</p><p className="dashboard-kpi-value">{stat.value}</p><p className="dashboard-note">{stat.note}</p></div>
+          </Card>;
+        })}
       </section>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {workflowSteps.map((step) => (
-              <WorkflowCard key={step.title} data={data} onNavigate={onNavigate} step={step} />
+      <div className="dashboard-overview-grid">
+        <section className="dashboard-card dashboard-timeline-card" aria-labelledby="payroll-update-timeline">
+          <div className="dashboard-section-heading"><div><h3 id="payroll-update-timeline">Overall Update Timeline</h3><p>Latest changes across payroll administration.</p></div><time>{formatDate(getLatestTimestamp(dashboardUpdates.map((item) => ({ updated_at: item.updatedAt }))))}</time></div>
+          <ol className="dashboard-timeline">
+          {dashboardUpdates.map((item) => (
+            <li key={item.label}><span className="dashboard-timeline-dot" aria-hidden="true"/><div><strong>{item.label}</strong><span>{item.records}</span><time>{item.updatedAt ? formatDateTime(item.updatedAt) : "Not updated"}</time></div></li>
+          ))}
+          </ol>
+        </section>
+
+        <section className="dashboard-card dashboard-overview-card" aria-labelledby="payroll-overview-heading">
+          <AdminInsightsPanel />
+        </section>
+      </div>
+
+      <section className="dashboard-card dashboard-quick-actions" aria-labelledby="payroll-quick-actions">
+        <div className="dashboard-section-heading"><div><h3 id="payroll-quick-actions">Quick Actions</h3><p>Frequently used payroll administration tools.</p></div></div>
+          <div className="dashboard-action-grid">
+            {quickActions.map((item) => (
+              <article key={item.title} className="dashboard-action-card">
+                <div className="dashboard-action-title"><span className={`dashboard-icon ${item.iconClass}`}><item.icon aria-hidden="true" size={18}/></span><div><h4>{item.title}</h4><p>{item.description}</p></div></div>
+                <button type="button" onClick={item.onClick}>{item.action}<span aria-hidden="true">→</span></button>
+              </article>
             ))}
           </div>
-        </div>
-
-        <aside className="app-panel rounded-2xl p-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F38978]/20 text-[#F38978]">
-              <Palette size={21} />
-            </div>
-            <div>
-              <h3 className="font-semibold text-[#251E1F]">Payslip Layout Control</h3>
-              <p className="text-sm text-[#7b6660]">Admin manages the templates Finance uses when generating payslips.</p>
-            </div>
-          </div>
-          <div className="mt-6 space-y-3">
-            <ActionButton icon={Upload} onClick={onImportLayout}>Import New Layout</ActionButton>
-            <ActionButton icon={Eye} variant="secondary" disabled={!defaultLayout} onClick={() => defaultLayout?.file_path && window.open(defaultLayout.file_path, "_blank")}>
-              Preview Default Layout
-            </ActionButton>
-            <ActionButton icon={ShieldCheck} variant="secondary" disabled={!data?.layouts?.length} onClick={() => onSetDefaultLayout(data.layouts[0].layout_id)}>
-              Set Latest as Default
-            </ActionButton>
-          </div>
-          <div className="mt-6 rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 p-4 text-sm text-[#6F4F47]">
-            Finance keeps payroll data submission. Admin only controls setup, access and reusable payslip designs.
-          </div>
-        </aside>
+      </section>
       </div>
     </PageShell>
   );
+}
+
+function AdminInsightsPanel() {
+  const initialAudit = insightDateRange("30d");
+  const initialRuns = insightDateRange("6m", "run_health");
+  const [selectedDataset, setSelectedDataset] = useState("audit_activity");
+  const [filters, setFilters] = useState({
+    audit_activity: { preset: "30d", ...initialAudit },
+    run_health: { preset: "6m", ...initialRuns },
+    user_roles: { accountStatus: "all" },
+    account_status: { role: "all" }
+  });
+  const [insight, setInsight] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const activeFilters = filters[selectedDataset];
+  const definition = adminInsightDatasets[selectedDataset];
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    getAdminPayrollInsights({ dataset: selectedDataset, ...activeFilters, preset: undefined })
+      .then((result) => { if (active) { setInsight(result); setError(""); } })
+      .catch((loadError) => { if (active) setError(loadError.message || "Unable to load dashboard insight."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [selectedDataset, activeFilters]);
+
+  const updateFilter = (values) => setFilters((current) => ({ ...current, [selectedDataset]: { ...current[selectedDataset], ...values } }));
+  const selectPreset = (preset) => updateFilter({ preset, ...insightDateRange(preset, selectedDataset) });
+  const isTrend = ["audit_activity", "run_health"].includes(selectedDataset);
+  const presets = selectedDataset === "audit_activity" ? ["7d", "30d", "90d", "6m", "12m", "custom"] : ["3m", "6m", "12m", "custom"];
+
+  return <div className="admin-insights" aria-labelledby="payroll-overview-heading">
+    <div className="dashboard-section-heading"><div><h3 id="payroll-overview-heading">Admin Insights</h3><p>{definition.description}</p></div>
+      <label className="dashboard-dataset-control"><span>Data set</span><select value={selectedDataset} onChange={(event) => setSelectedDataset(event.target.value)}>{Object.entries(adminInsightDatasets).map(([key, dataset]) => <option key={key} value={key}>{dataset.label}</option>)}</select></label>
+    </div>
+    <div className="admin-insights__filters">
+      {isTrend ? <><div className="admin-insights__presets" aria-label="Date range">{presets.map((preset) => <button type="button" key={preset} className={activeFilters.preset === preset ? "admin-insights__preset--active" : ""} onClick={() => preset === "custom" ? updateFilter({ preset }) : selectPreset(preset)}>{preset === "custom" ? "Custom" : preset.toUpperCase()}</button>)}</div>
+        {activeFilters.preset === "custom" ? <div className="admin-insights__dates"><label>From<input type="date" value={activeFilters.from} max={activeFilters.to} onChange={(event) => updateFilter({ from: event.target.value })}/></label><label>To<input type="date" value={activeFilters.to} min={activeFilters.from} onChange={(event) => updateFilter({ to: event.target.value })}/></label></div> : null}</> : null}
+      {selectedDataset === "user_roles" ? <label className="admin-insights__snapshot-filter">Account status<select value={activeFilters.accountStatus} onChange={(event) => updateFilter({ accountStatus: event.target.value })}><option value="all">All statuses</option><option value="active">Active</option><option value="pending">Pending</option><option value="disabled">Disabled</option></select></label> : null}
+      {selectedDataset === "account_status" ? <label className="admin-insights__snapshot-filter">Payroll role<select value={activeFilters.role} onChange={(event) => updateFilter({ role: event.target.value })}><option value="all">All roles</option><option>Admin</option><option>Finance</option><option>HR</option><option>Staff</option></select></label> : null}
+      <p className="admin-insights__asof">{insight?.filters?.granularity ? `${insight.filters.granularity} aggregation` : `As of ${formatDateTime(insight?.asOf)}`}</p>
+    </div>
+    {loading ? <div className="admin-insights__state"><Loader2 className="animate-spin" size={18}/>Loading insight...</div> : error ? <div className="admin-insights__state admin-insights__state--error"><AlertCircle size={18}/>{error}</div> : <AdminInsightChart insight={insight} definition={definition}/>}
+  </div>;
+}
+
+function AdminInsightChart({ insight, definition }) {
+  const hasData = insight?.series?.some((series) => series.data?.some((point) => Number(point.value) > 0));
+  if (!hasData) return <div className="admin-insights__state"><FileBarChart size={20}/>No {definition.label.toLowerCase()} data matches these filters.</div>;
+  const chart = insight.chartType === "line" ? <InsightLineChart insight={insight}/>
+    : insight.chartType === "horizontal_bar" ? <InsightBarChart insight={insight}/>
+      : insight.chartType === "donut" ? <InsightDonutChart insight={insight}/>
+        : <InsightStackedChart insight={insight}/>;
+  return <figure className="dashboard-chart admin-insights__chart"><figcaption><span>{definition.label}</span><small>{definition.chartType}</small></figcaption>{chart}<InsightLegend series={insight.series}/><InsightDataTable insight={insight}/></figure>;
+}
+
+function InsightLineChart({ insight }) {
+  const points = insight.series[0].data;
+  const width = 720, height = 250, left = 44, right = 18, top = 22, bottom = 42;
+  const maxValue = Math.max(1, ...points.map((point) => point.value));
+  const ceiling = Math.max(10, Math.ceil(maxValue / 10) * 10);
+  const x = (index) => left + index * ((width - left - right) / Math.max(1, points.length - 1));
+  const y = (value) => top + (height - top - bottom) * (1 - value / ceiling);
+  const line = points.map((point, index) => `${index ? "L" : "M"}${x(index)},${y(point.value)}`).join(" ");
+  const area = `${line} L${x(points.length - 1)},${height - bottom} L${x(0)},${height - bottom} Z`;
+  const ticks = [0, .25, .5, .75, 1].map((ratio) => Math.round(ceiling * ratio));
+  const labelEvery = Math.max(1, Math.ceil(points.length / 6));
+  return <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Audit events trend">
+      <desc>{points.map((point) => `${insightLabel(point.x)}: ${point.value} events`).join(", ")}</desc>
+      {ticks.map((tick) => <g key={tick}><line className="dashboard-chart-gridline" x1={left} x2={width-right} y1={y(tick)} y2={y(tick)}/><text x={left-10} y={y(tick)+4} textAnchor="end">{tick}</text></g>)}
+      <path className="dashboard-chart-area" d={area}/><path className="dashboard-chart-line" d={line}/>
+      {points.map((point,index)=><g key={point.x} tabIndex="0" role="img" aria-label={`${insightLabel(point.x)}: ${point.value} events`}><circle className="dashboard-chart-point" cx={x(index)} cy={y(point.value)} r="5"><title>{point.value} events</title></circle>{index % labelEvery === 0 || index === points.length-1 ? <text x={x(index)} y={height-15} textAnchor="middle">{insightLabel(point.x)}</text> : null}</g>)}
+    </svg>;
+}
+
+export function InsightBarChart({ insight }) {
+  const points = insight.series[0].data;
+  const max = Math.max(1, ...points.map((point) => point.value));
+  return <div className="admin-role-bars" role="img" aria-label="Users by payroll role">
+    {points.map((point) => <div key={point.x} className="admin-role-bars__row" tabIndex="0" role="img" aria-label={`${point.x}: ${point.value} users`}>
+      <div className="admin-role-bars__heading"><span>{point.x}</span><strong>{point.value}</strong></div>
+      <div className="admin-role-bars__track"><i style={{ width: `${point.value ? Math.max(5, point.value / max * 100) : 0}%` }}/></div>
+    </div>)}
+  </div>;
+}
+
+function InsightDonutChart({ insight }) {
+  const points = insight.series[0].data;
+  const total = points.reduce((sum, point) => sum + point.value, 0);
+  const radius = 72, circumference = 2 * Math.PI * radius;
+  let offset = 0;
+  return <svg className="admin-insights__donut" viewBox="0 0 360 220" role="img" aria-label="Account status distribution">
+    <g transform="rotate(-90 180 110)"><circle className="admin-insights__donut-track" cx="180" cy="110" r={radius}/>{points.map((point) => { const length = total ? point.value / total * circumference : 0; const currentOffset = offset; offset += length; return <circle key={point.x} tabIndex="0" role="img" aria-label={`${point.x}: ${point.value}`} cx="180" cy="110" r={radius} fill="none" stroke={point.color} strokeWidth="30" strokeDasharray={`${length} ${circumference-length}`} strokeDashoffset={-currentOffset}><title>{point.x}: {point.value}</title></circle>; })}</g>
+    <text className="admin-insights__donut-total" x="180" y="105" textAnchor="middle">{total}</text><text x="180" y="127" textAnchor="middle">records</text>
+  </svg>;
+}
+
+function InsightStackedChart({ insight }) {
+  const labels = insight.series[0]?.data?.map((point) => point.x) || [];
+  const width = 720, height = 260, left = 44, right = 18, top = 20, bottom = 48;
+  const totals = labels.map((_, index) => insight.series.reduce((sum, series) => sum + Number(series.data[index]?.value || 0), 0));
+  const max = Math.max(1, ...totals); const plotHeight = height-top-bottom; const columnWidth = Math.min(62, (width-left-right) / Math.max(1, labels.length) * .62);
+  return <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Payroll run health by period">{labels.map((label,index) => { const x = left + (index+.5)*((width-left-right)/labels.length)-columnWidth/2; let baseY=height-bottom; return <g key={label}><text x={x+columnWidth/2} y={height-18} textAnchor="middle">{insightLabel(label)}</text>{insight.series.map((series) => { const value=Number(series.data[index]?.value||0); const segmentHeight=value/max*plotHeight; baseY-=segmentHeight; return <rect key={series.key} tabIndex="0" role="img" aria-label={`${insightLabel(label)}, ${series.label}: ${value}`} x={x} y={baseY} width={columnWidth} height={segmentHeight} fill={series.color}><title>{series.label}: {value}</title></rect>; })}</g>; })}</svg>;
+}
+
+function InsightLegend({ series }) {
+  const items = series.flatMap((item) => item.data?.some((point) => point.color)
+    ? item.data.map((point) => ({ key: `${item.key}-${point.x}`, label: point.x, color: point.color }))
+    : [item]);
+  return <div className="admin-insights__legend">{items.map((item) => <span key={item.key}><i style={{ backgroundColor: item.color }}/>{item.label}</span>)}</div>;
+}
+
+function InsightDataTable({ insight }) {
+  const labels = [...new Set(insight.series.flatMap((series) => series.data.map((point) => point.x)))];
+  return <details className="admin-insights__data"><summary>View chart data</summary><div><table><thead><tr><th>Label</th>{insight.series.map((series) => <th key={series.key}>{series.label}</th>)}</tr></thead><tbody>{labels.map((label) => <tr key={label}><td>{insightLabel(label)}</td>{insight.series.map((series) => <td key={series.key}>{series.data.find((point) => point.x === label)?.value || 0}</td>)}</tr>)}</tbody></table></div></details>;
+}
+
+function EffectivePayrollRulesView({ onNavigate }) {
+  const [catalogue, setCatalogue] = useState({ categories: [], rules: [] });
+  const [category, setCategory] = useState("All categories");
+  const [usage, setUsage] = useState("All usage types");
+  const [status, setStatus] = useState("All statuses");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = () => {
+    setLoading(true); setError("");
+    getEffectivePayrollRules()
+      .then(setCatalogue)
+      .catch((loadError) => setError(loadError.message || "Unable to load effective payroll rules."))
+      .finally(() => setLoading(false));
+  };
+  useEffect(load, []);
+  const rules = (catalogue.rules || []).filter((rule) =>
+    (category === "All categories" || rule.category === category)
+    && (usage === "All usage types" || rule.usage === usage)
+    && (status === "All statuses" || rule.status === status)
+  );
+  const overrides = (catalogue.rules || []).filter((rule) => rule.source === "Admin Override").length;
+  const usageLabel = (value) => value === "calculation" ? "Applied to calculations" : value === "validation" ? "Used for validation" : "Operational reference";
+  const usageClass = (value) => ({
+    calculation: "effective-rules__usage--calculation",
+    validation: "effective-rules__usage--validation",
+    reference: "effective-rules__usage--reference"
+  }[value] || "effective-rules__usage--reference");
+
+  return <PageShell heading="Effective Payroll Rules" updatedAt={catalogue.asOf} actions={<>
+    <ActionButton icon={Settings} onClick={() => onNavigate("/dashboard/payroll/admin/settings")}>Payroll Configuration</ActionButton>
+    <ActionButton icon={ShieldCheck} variant="secondary" onClick={() => onNavigate("/dashboard/payroll/admin/compliance-rules")}>Statutory & Compliance Rules</ActionButton>
+  </>}>
+    <div className="effective-rules">
+      <div className="effective-rules__intro"><ShieldCheck size={20}/><div><strong>Resolved rules used by payroll</strong><p>This is a read-only view of calculation and validation policies after system defaults and Admin overrides are combined.</p></div></div>
+      <section className="effective-rules__metrics" aria-label="Effective payroll rules summary">
+        {[{label:"Rule Groups",value:catalogue.groupCount||0,className:"effective-rules__metric--purple"},{label:"Active Groups",value:catalogue.activeGroupCount||0,className:"effective-rules__metric--green"},{label:"Admin Overrides",value:overrides,className:"effective-rules__metric--blue"},{label:"Categories",value:catalogue.categories?.length||0,className:"effective-rules__metric--amber"}].map((item)=><article key={item.label} className={`effective-rules__metric ${item.className}`}><span>{item.label}</span><strong>{item.value}</strong></article>)}
+      </section>
+      <div className="effective-rules__filters">
+        <label><span>Category</span><select value={category} onChange={(event)=>setCategory(event.target.value)}><option>All categories</option>{(catalogue.categories||[]).map((item)=><option key={item.category}>{item.category}</option>)}</select></label>
+        <label><span>Usage</span><select value={usage} onChange={(event)=>setUsage(event.target.value)}><option>All usage types</option><option value="calculation">Applied to calculations</option><option value="validation">Used for validation</option></select></label>
+        <label><span>Status</span><select value={status} onChange={(event)=>setStatus(event.target.value)}><option>All statuses</option><option>Active</option><option>Inactive</option></select></label>
+        <button type="button" onClick={load}><History size={15}/>Refresh</button>
+      </div>
+      {error ? <div className="effective-rules__state effective-rules__state--error"><AlertCircle size={18}/>{error}</div> : loading ? <div className="effective-rules__state"><Loader2 className="animate-spin" size={18}/>Loading effective rules...</div> :
+      <div className="effective-rules__table-wrap"><table><thead><tr><th>Rule</th><th>Current Value</th><th>Usage</th><th>Source</th><th>Effective From</th><th>Status</th><th>Last Update</th><th>Configuration</th></tr></thead><tbody>
+        {rules.map((rule)=><tr key={rule.key}><td><strong>{rule.name}</strong><small>{rule.category}</small>{rule.details?.length ? <details><summary>View {rule.details.length} values</summary><dl>{rule.details.map((detail)=><div key={detail.label}><dt>{detail.label}</dt><dd>{detail.value}</dd></div>)}</dl></details>:null}</td><td><strong>{rule.value}</strong></td><td><span className={`effective-rules__usage ${usageClass(rule.usage)}`}>{usageLabel(rule.usage)}</span></td><td><span className={rule.source === "Admin Override" ? "effective-rules__source--override" : "effective-rules__source--default"}>{rule.source}</span></td><td>{formatDate(rule.effectiveFrom)}</td><td><span className={rule.isActive ? "effective-rules__status--active" : "effective-rules__status--inactive"}>{rule.status}</span></td><td>{rule.updatedAt ? <><strong>{formatDate(rule.updatedAt)}</strong><small>{rule.updatedBy}</small></> : <><strong>Statutory baseline</strong><small>System default</small></>}</td><td><button type="button" onClick={()=>onNavigate(rule.editPath)}><Eye size={15}/>Open settings</button></td></tr>)}
+        {!rules.length ? <tr><td colSpan="8"><EmptyState message="No effective payroll rules match these filters."/></td></tr>:null}
+      </tbody></table></div>}
+    </div>
+  </PageShell>;
 }
 
 function StaffManagementView() {
@@ -1746,6 +1911,9 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
 function SettingEditor({ definition, setting, onSave }) {
   const [value, setValue] = useState(setting?.setting_value || "");
   const [isSaving, setIsSaving] = useState(false);
+  const usage = definition.usage || "Applied to payroll calculations";
+  const usageClass = usage === "Operational reference only" ? "setting-usage--reference"
+    : usage === "Used for validation" ? "setting-usage--validation" : "setting-usage--applied";
 
   useEffect(() => {
     setValue(setting?.setting_value || "");
@@ -1773,6 +1941,7 @@ function SettingEditor({ definition, setting, onSave }) {
         <div>
           <h4 className="font-semibold text-[#251E1F]">{definition.label}</h4>
           <p className="mt-1 text-sm text-[#7b6660]">{definition.description}</p>
+          <span className={`setting-usage ${usageClass}`}>{usage}</span>
         </div>
       </div>
 
@@ -2776,18 +2945,18 @@ function SettingsView({ mbmfEligibility, onUpdateSetting, settings = [], users =
 
   return (
     <PageShell
-      heading="Payroll Settings"
+      heading="Payroll Configuration"
       updatedAt={getLatestTimestamp(settings)}
       actions={
         <>
-          <ActionButton icon={Settings} onClick={() => document.getElementById("payroll-settings-start")?.scrollIntoView({ behavior: "smooth" })}>Payroll Configurations</ActionButton>
-          <ActionButton icon={PlayCircle} variant="secondary" onClick={testAppliedRules}>Test Applied Rules</ActionButton>
+          <ActionButton icon={Settings} onClick={() => document.getElementById("payroll-settings-start")?.scrollIntoView({ behavior: "smooth" })}>Configuration Sections</ActionButton>
+          <ActionButton icon={PlayCircle} variant="secondary" onClick={testAppliedRules}>Preview Effective Payroll Rules</ActionButton>
         </>
       }
     >
       <div id="payroll-settings-start" className="space-y-8">
         <section className="app-panel rounded-2xl p-5">
-          <h3 className="text-lg font-semibold text-[#251E1F]">Operational Payroll Settings</h3>
+          <h3 className="text-lg font-semibold text-[#251E1F]">Configuration Overview</h3>
           <p className="mt-1 text-sm text-[#7b6660]">
             CPF rates, wage ceilings, SDL and self-help fund rules are managed in Compliance Rules.
           </p>
@@ -2795,15 +2964,15 @@ function SettingsView({ mbmfEligibility, onUpdateSetting, settings = [], users =
         <SettingsSection
           definitions={cpfAccountMappings}
           settingsByKey={settingsByKey}
-          title="CPF Account Mappings"
-          subtitle="Map CPF liabilities and employer CPF expenses to accounting accounts."
+          title="CPF Accounting Reference Mappings"
+          subtitle="Maintain reference accounts for future accounting and journal integrations. These values do not post journals by themselves."
           onSave={onUpdateSetting}
         />
         <SettingsSection
           definitions={otherCpfSettings}
           settingsByKey={settingsByKey}
-          title="Other CPF Related Settings"
-          subtitle="Configure CPF payment, notification and submission settings."
+          title="CPF Payment & Submission Controls"
+          subtitle="Maintain operational references for CPF payment, reminder and submission tracking."
           onSave={onUpdateSetting}
         />
       </div>
@@ -2820,32 +2989,32 @@ function ComplianceRulesView({ mbmfEligibility, onUpdateSetting, settings = [], 
     {
       label: "CPF rates",
       value: "SC/SPR 3rd year onward, effective 01 Jan 2026",
-      updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.startsWith("cpf_rate_")))
+      updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.startsWith("cpf_rate_"))), cardClass: "compliance-summary--purple"
     },
     {
       label: "CPF wage ceiling",
       value: "Ordinary Wage ceiling SGD 8,000 from 01 Jan 2026",
-      updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.includes("cpf_wage_ceiling")))
+      updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.includes("cpf_wage_ceiling"))), cardClass: "compliance-summary--blue"
     },
     {
       label: "SDL",
       value: "0.25% of remuneration, min SGD 2 and max SGD 11.25 monthly",
-      updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.includes("sdl") || setting.setting_key.includes("employer_contribution_sdl")))
+      updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.includes("sdl") || setting.setting_key.includes("employer_contribution_sdl"))), cardClass: "compliance-summary--green"
     },
     {
       label: "Foreign worker levy",
       value: "Managed by MOM sector, quota and worker type",
-      updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.includes("foreign_worker_levy")))
+      updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.includes("foreign_worker_levy"))), cardClass: "compliance-summary--amber"
     },
     {
       label: "Self-help groups",
       value: "MBMF, CDAC, SINDA and ECF by staff religion/race",
-      updatedAt: getLatestTimestamp(settings.filter((setting) => ["mbmf_", "cdac_", "sinda_", "ecf_"].some((prefix) => setting.setting_key.startsWith(prefix))))
+      updatedAt: getLatestTimestamp(settings.filter((setting) => ["mbmf_", "cdac_", "sinda_", "ecf_"].some((prefix) => setting.setting_key.startsWith(prefix)))), cardClass: "compliance-summary--teal"
     },
     {
       label: "IRAS reporting",
       value: "AIS employment income and IR21 tax clearance tracking",
-      updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.startsWith("iras_") || setting.setting_key.startsWith("ir21_")))
+      updatedAt: getLatestTimestamp(settings.filter((setting) => setting.setting_key.startsWith("iras_") || setting.setting_key.startsWith("ir21_"))), cardClass: "compliance-summary--coral"
     }
   ];
   const testAppliedRules = () => {
@@ -2865,7 +3034,7 @@ function ComplianceRulesView({ mbmfEligibility, onUpdateSetting, settings = [], 
       actions={
         <>
           <ActionButton icon={ShieldCheck} onClick={() => document.getElementById("compliance-rules-start")?.scrollIntoView({ behavior: "smooth" })}>Singapore Rules</ActionButton>
-          <ActionButton icon={PlayCircle} variant="secondary" onClick={testAppliedRules}>Test Applied Rules</ActionButton>
+          <ActionButton icon={PlayCircle} variant="secondary" onClick={testAppliedRules}>Preview Effective Payroll Rules</ActionButton>
         </>
       }
     >
@@ -2880,7 +3049,7 @@ function ComplianceRulesView({ mbmfEligibility, onUpdateSetting, settings = [], 
           </div>
           <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
             {complianceUpdates.map((item) => (
-              <div key={item.label} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+              <div key={item.label} className={`compliance-summary ${item.cardClass}`}>
                 <p className="text-sm font-semibold text-[#251E1F]">{item.label}</p>
                 <p className="mt-2 text-xs leading-5 text-[#7b6660]">{item.value}</p>
                 <p className="mt-3 text-xs font-semibold text-[#F38978]">
@@ -2990,7 +3159,8 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[#251E1F]">Custom Compliance Rules</h3>
-          <p className="mt-1 text-sm text-[#7b6660]">Add company-specific payroll compliance rules and keep their effective dates visible.</p>
+          <p className="mt-1 text-sm text-[#7b6660]">Add company-specific payroll compliance references and keep their effective dates visible.</p>
+          <span className="setting-usage setting-usage--reference">Operational reference only</span>
         </div>
         <p className="text-sm font-semibold text-[#F38978]">{customRules.length} custom rule(s)</p>
       </div>
@@ -3089,7 +3259,29 @@ function CustomComplianceRulesPanel({ onSave, settings = [] }) {
   );
 }
 
-function PayrollMonitorView({ payrollRuns = [] }) {
+function getRunOperationalState(run) {
+  const status = String(run.status || "Draft").toLowerCase();
+  const completed = ["payment processed", "payslips sent", "reconciled", "closed", "completed", "success"]
+    .some((value) => status.includes(value));
+  const failed = ["failed", "error", "rejected"].some((value) => status.includes(value));
+  const lastActivity = new Date(run.updated_at || run.created_at || 0);
+  const delayed = !completed && !failed && Number.isFinite(lastActivity.getTime())
+    && Date.now() - lastActivity.getTime() > 48 * 60 * 60 * 1000;
+  if (failed) return { label: "Failed", tone: "failed", needsAttention: true };
+  if (delayed) return { label: "Delayed", tone: "delayed", needsAttention: true };
+  if (completed) return { label: "Complete", tone: "complete", needsAttention: false };
+  return { label: "In progress", tone: "progress", needsAttention: false };
+}
+
+function getRunResponsibleRole(statusValue) {
+  const status = String(statusValue || "Draft").toLowerCase();
+  if (["failed", "error"].some((value) => status.includes(value))) return "Admin technical review";
+  if (["finance", "approved for payment", "payment"].some((value) => status.includes(value))) return "Finance";
+  if (["sent", "reconciled", "closed", "completed"].some((value) => status.includes(value))) return "Completed";
+  return "HR";
+}
+
+function PayrollMonitorView({ payrollRuns = [], onNavigate }) {
   const today = new Date().toISOString().slice(0, 10);
   const [periodMode, setPeriodMode] = useState("all");
   const [fromDate, setFromDate] = useState(today);
@@ -3109,19 +3301,29 @@ function PayrollMonitorView({ payrollRuns = [] }) {
       return runDate >= startDate && runDate <= endDate;
     });
   }, [fromDate, payrollRuns, periodMode, toDate]);
+  const states = payrollRuns.map(getRunOperationalState);
+  const attentionCount = states.filter((state) => state.needsAttention).length;
+  const completedCount = states.filter((state) => state.tone === "complete").length;
+  const inProgressCount = states.filter((state) => state.tone === "progress").length;
 
   return (
     <PageShell
-      heading="Payroll Monitor"
+      heading="Payroll Run Monitor"
       updatedAt={getLatestTimestamp(payrollRuns)}
       actions={
-        <>
-          <ActionButton icon={Eye} onClick={() => setSelectedRun(payrollRuns[0] || null)} disabled={!payrollRuns.length}>View Finance Status</ActionButton>
-          <ActionButton icon={FileBarChart} variant="secondary" onClick={() => setSelectedRun(payrollRuns[0] || null)} disabled={!payrollRuns.length}>Export Status</ActionButton>
-        </>
+        <ActionButton icon={History} variant="secondary" onClick={() => onNavigate("/dashboard/payroll/admin/system-audit-trail")}>View System Audit Trail</ActionButton>
       }
     >
-      <div className="mb-5 grid gap-3 rounded-2xl border border-[#f0d2ca] bg-white/80 p-4 md:grid-cols-[1fr_1fr_1fr_auto]">
+      <div className="payroll-run-monitor">
+      <div className="payroll-run-monitor__notice"><ShieldCheck size={19}/><div><strong>Read-only operational oversight</strong><p>HR and Finance own payroll processing. Admin can review workflow health and technical exceptions but cannot approve, edit or process payroll.</p></div></div>
+      <section className="payroll-run-monitor__metrics" aria-label="Payroll run monitoring summary">
+        {[{ label: "Total Runs", value: payrollRuns.length, icon: FileBarChart, className: "payroll-run-monitor__metric--total" },
+          { label: "In Progress", value: inProgressCount, icon: PlayCircle, className: "payroll-run-monitor__metric--progress" },
+          { label: "Need Attention", value: attentionCount, icon: AlertCircle, className: "payroll-run-monitor__metric--attention" },
+          { label: "Completed", value: completedCount, icon: CheckCircle2, className: "payroll-run-monitor__metric--complete" }]
+          .map((metric) => <article key={metric.label} className={`payroll-run-monitor__metric ${metric.className}`}><span><metric.icon size={20}/></span><div><small>{metric.label}</small><strong>{metric.value}</strong></div></article>)}
+      </section>
+      <div className="payroll-run-monitor__filters">
         <label className="space-y-2">
           <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
             <Filter size={14} />
@@ -3130,7 +3332,7 @@ function PayrollMonitorView({ payrollRuns = [] }) {
           <select
             value={periodMode}
             onChange={(event) => setPeriodMode(event.target.value)}
-            className="w-full rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none"
+            className="payroll-run-monitor__control"
           >
             <option value="all">All payroll periods</option>
             <option value="range">From date to date</option>
@@ -3143,7 +3345,7 @@ function PayrollMonitorView({ payrollRuns = [] }) {
             value={fromDate}
             disabled={periodMode === "all"}
             onChange={(event) => setFromDate(event.target.value)}
-            className="w-full rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none disabled:opacity-50"
+            className="payroll-run-monitor__control disabled:opacity-50"
           />
         </label>
         <label className="space-y-2">
@@ -3154,62 +3356,50 @@ function PayrollMonitorView({ payrollRuns = [] }) {
             min={fromDate}
             disabled={periodMode === "all"}
             onChange={(event) => setToDate(event.target.value)}
-            className="w-full rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none disabled:opacity-50"
+            className="payroll-run-monitor__control disabled:opacity-50"
           />
         </label>
         <div className="flex items-end">
-          <div className="rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2.5 text-sm font-semibold text-[#251E1F]">
+          <div className="payroll-run-monitor__count">
             {filteredRuns.length} of {payrollRuns.length} run(s)
           </div>
         </div>
       </div>
 
-      <div className="app-panel overflow-hidden rounded-2xl">
-        <div className="grid grid-cols-5 gap-4 border-b border-[#f0d2ca] px-6 py-4 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
-          <span>Pay Period</span>
-          <span>Updated</span>
-          <span>Employees</span>
-          <span>Status</span>
-          <span>Action</span>
-        </div>
+      <div className="payroll-run-monitor__table-wrap"><table><thead><tr><th>Pay Period</th><th>Workflow Stage</th><th>Responsible Role</th><th>Last Activity</th><th>Health</th><th>Action</th></tr></thead><tbody>
         {filteredRuns.length ? (
-          filteredRuns.map((run) => (
-            <div key={run.payroll_run_id} className="grid grid-cols-5 gap-4 border-b border-[#f0d2ca] px-6 py-4 text-sm last:border-b-0">
-              <div>
-                <p className="font-semibold text-[#251E1F]">{formatPayrollPeriod(run)}</p>
-                <p className="mt-1 text-[#7b6660]">Created by {run.created_by_name || "Unknown"}</p>
-              </div>
-              <p className="text-[#7b6660]">{formatDateTime(run.updated_at || run.created_at)}</p>
-              <p className="text-[#7b6660]">{run.employee_count}</p>
-              <p className="text-[#251E1F]">{run.status}</p>
-              <button type="button" className="justify-self-start rounded-xl bg-white/80 px-4 py-2 font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45" onClick={() => setSelectedRun(run)}>
-                Review
-              </button>
-            </div>
-          ))
+          filteredRuns.map((run) => {
+            const state = getRunOperationalState(run);
+            return <tr key={run.payroll_run_id || `${run.payroll_month}-${run.payroll_year}`}>
+              <td><strong>{formatPayrollPeriod(run)}</strong><small>{Number(run.employee_count || 0)} employees · Initiated by {run.created_by_name || "System"}</small></td>
+              <td><span className="payroll-run-monitor__stage">{run.status || "Draft"}</span></td>
+              <td><strong>{getRunResponsibleRole(run.status)}</strong></td>
+              <td><strong>{formatDateTime(run.updated_at || run.created_at)}</strong><small>Created {formatDate(run.created_at)}</small></td>
+              <td><span className={`payroll-run-monitor__health ${{
+                complete: "payroll-run-monitor__health--complete",
+                progress: "payroll-run-monitor__health--progress",
+                delayed: "payroll-run-monitor__health--delayed",
+                failed: "payroll-run-monitor__health--failed"
+              }[state.tone] || "payroll-run-monitor__health--progress"}`}><i/>{state.label}</span></td>
+              <td><button type="button" className="payroll-run-monitor__view" onClick={() => setSelectedRun(run)}><Eye size={15}/>View details</button></td>
+            </tr>;
+          })
         ) : (
-          <div className="px-6 py-4">
-            <EmptyState message="No payroll runs match the selected date filter." />
-          </div>
-        )}
-      </div>
+          <tr><td colSpan="6"><EmptyState message="No payroll runs match the selected date filter." /></td></tr>
+        )}</tbody></table></div>
       {selectedRun ? (
-        <div className="mt-5 rounded-2xl border border-[#f0d2ca] bg-white/80 p-5 text-sm text-[#7b6660]">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-semibold text-[#251E1F]">{formatPayrollPeriod(selectedRun)}</p>
-              <p className="mt-1">Finance status: {selectedRun.status}</p>
-            </div>
-            <button
-              type="button"
-              className="w-fit rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
-              onClick={() => setSelectedRun(null)}
-            >
-              Close
-            </button>
+        <div className="payroll-run-monitor__detail">
+          <header><div><small>Operational run details</small><h3>{formatPayrollPeriod(selectedRun)}</h3><p>No employee salary or banking information is exposed here.</p></div><button onClick={() => setSelectedRun(null)} aria-label="Close details"><X size={19}/></button></header>
+          <div className="payroll-run-monitor__detail-grid">
+            <div><span>Workflow stage</span><strong>{selectedRun.status || "Draft"}</strong></div><div><span>Responsible role</span><strong>{getRunResponsibleRole(selectedRun.status)}</strong></div>
+            <div><span>Employees included</span><strong>{Number(selectedRun.employee_count || 0)}</strong></div><div><span>Initiated by</span><strong>{selectedRun.created_by_name || "System"}</strong></div>
+            <div><span>Created</span><strong>{formatDateTime(selectedRun.created_at)}</strong></div><div><span>Last activity</span><strong>{formatDateTime(selectedRun.updated_at || selectedRun.created_at)}</strong></div>
+            <div><span>Approved</span><strong>{selectedRun.approved_at ? formatDateTime(selectedRun.approved_at) : "Not yet approved"}</strong></div><div><span>Payment reference</span><strong>{selectedRun.payment_reference || "Not available"}</strong></div>
           </div>
+          <footer><button onClick={() => onNavigate("/dashboard/payroll/admin/system-audit-trail")}><History size={15}/>Open related audit trail</button><button onClick={() => setSelectedRun(null)}>Close</button></footer>
         </div>
       ) : null}
+      </div>
     </PageShell>
   );
 }
@@ -3619,12 +3809,13 @@ function PayslipsApprovalView() {
 function createPdfBlob(title, rows, periodLabel = "All available dates") {
   const brandedRows = rows.map((row) => (typeof row === "string" ? [row] : row.columns || [row.summary || ""]));
   const reportHeaders = {
-    "Access Control Report": ["Employee", "Role", "Account / Department / Staff Link"],
-    "Audit Activity Report": ["Date / Time", "Action or Event", "Record / Module", "User / Role"],
+    "User Access & Account Status Report": ["Employee", "Role", "Account / Department / Staff Link"],
+    "Audit Activity Report": ["Date / Time", "Action or Event", "Record / Module", "Actor", "Outcome"],
     "Audit Logs": ["Date / Time", "Action or Event", "Record / Module", "User / Role"],
-    "Compliance Configuration Report": ["Setting", "Configured Value", "Description"],
-    "Payroll Control Summary": ["Control Item", "Current Value"],
-    "Payroll Run Financial Report": ["Payroll Period", "Status", "Employees / Gross / Net"]
+    "Statutory Configuration Report": ["Setting", "Configured Value", "Description"],
+    "Payroll Governance Summary": ["Control Item", "Current Value"],
+    "Payroll Run Status & Exception Report": ["Payroll Period", "Workflow Stage", "Health / Responsible Role"],
+    "Effective Payroll Rules Report": ["Rule / Category", "Current Value", "Usage", "Source", "Effective From", "Status / Updated By"]
   };
   const headers = reportHeaders[title] || Array.from(
     { length: Math.max(1, ...brandedRows.map((row) => row.length)) },
@@ -3665,22 +3856,26 @@ function getPeriodLabel(periodMode, fromDate, toDate) {
   return `From ${formatDate(fromDate)} to ${formatDate(toDate || fromDate)}`;
 }
 
+function humanizeSettingKey(key) {
+  const acronyms = new Set(["cpf", "sdl", "mbmf", "cdac", "sinda", "ecf", "iras", "ir21", "gl"]);
+  return String(key || "").split("_").map((part) => acronyms.has(part.toLowerCase()) ? part.toUpperCase() : `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join(" ");
+}
+
 function getReportLines(report, data = {}, periodMode = "range", fromDate = "", toDate = "") {
   const stats = data.stats || {};
 
-  if (report === "Payroll Control Summary") {
+  if (report === "Payroll Governance Summary") {
     return [
       { summary: `Active users: ${stats.activeUsers ?? 0}`, columns: ["Active users", String(stats.activeUsers ?? 0)] },
       { summary: `Pending approvals: ${data.pendingApprovalCount ?? 0}`, columns: ["Pending admin approvals", String(data.pendingApprovalCount ?? 0)] },
       { summary: `Payroll runs: ${data.payrollRuns?.length || 0}`, columns: ["Payroll runs monitored", String(data.payrollRuns?.length || 0)] },
-      { summary: `Payroll records: ${stats.payrollRecords ?? 0}`, columns: ["Employee payroll records", String(stats.payrollRecords ?? 0)] },
-      { summary: `Gross payroll: ${formatMoney(stats.grossPay)}`, columns: ["Gross payroll", formatMoney(stats.grossPay)] },
-      { summary: `Net payroll: ${formatMoney(stats.netPay)}`, columns: ["Net payroll", formatMoney(stats.netPay)] },
-      { summary: `Total deductions: ${formatMoney(stats.deductions)}`, columns: ["Total deductions", formatMoney(stats.deductions)] }
+      { summary: `Payroll records: ${stats.payrollRecords ?? 0}`, columns: ["Employee records included in monitored runs", String(stats.payrollRecords ?? 0)] },
+      { summary: `Payroll rules: ${stats.payrollRules ?? 0}`, columns: ["Configured payroll rules", String(stats.payrollRules ?? 0)] },
+      { summary: `Audit events: ${stats.adminLogs ?? 0}`, columns: ["Recent audit events available", String(stats.adminLogs ?? 0)] }
     ];
   }
 
-  if (report === "Access Control Report") {
+  if (report === "User Access & Account Status Report") {
     return (data.users || []).map((user) =>
       ({
         columns: [
@@ -3692,16 +3887,18 @@ function getReportLines(report, data = {}, periodMode = "range", fromDate = "", 
     );
   }
 
-  if (report === "Compliance Configuration Report") {
+  if (report === "Statutory Configuration Report") {
     return (data.settings || [])
       .filter((setting) =>
         ["statutory_", "cpf_", "sdl_", "mbmf_", "cdac_", "sinda_", "ecf_", "iras_", "ir21_", "foreign_worker_levy_"].some((prefix) =>
           setting.setting_key.startsWith(prefix)
+        ) && !["bank", "account", "payable", "expense", "clearing", "payment_method"].some((fragment) =>
+          setting.setting_key.toLowerCase().includes(fragment)
         )
       )
       .map((setting) => ({
-        summary: `${setting.setting_key}: ${setting.setting_value}`,
-        columns: [setting.setting_key, setting.setting_value, setting.description || "No description"]
+        summary: `${humanizeSettingKey(setting.setting_key)}: ${setting.setting_value}`,
+        columns: [humanizeSettingKey(setting.setting_key), setting.setting_value, setting.description || "No description"]
       }));
   }
 
@@ -3715,16 +3912,27 @@ function getReportLines(report, data = {}, periodMode = "range", fromDate = "", 
     }));
   }
 
-  if (report === "Payroll Run Financial Report") {
+  if (report === "Payroll Run Status & Exception Report") {
     return (data.payrollRuns || [])
       .filter((run) => isWithinReportPeriod(run.created_at, periodMode, fromDate, toDate))
       .map((run) => ({
         columns: [
           `${String(run.payroll_month).padStart(2, "0")}/${run.payroll_year}`,
           run.status || "Pending",
-          `${Number(run.employee_count || 0)} staff / gross ${formatMoney(run.gross_pay)} / net ${formatMoney(run.net_pay)}`
+          `${getRunOperationalState(run).label} / ${getRunResponsibleRole(run.status)} / ${Number(run.employee_count || 0)} employees`
         ]
       }));
+  }
+
+  if (report === "Effective Payroll Rules Report") {
+    return (data.effectiveRules?.rules || []).map((rule) => ({ columns: [
+      `${rule.name} / ${rule.category}`,
+      rule.value,
+      rule.usage === "calculation" ? "Applied to calculations" : "Used for validation",
+      rule.source,
+      formatDate(rule.effectiveFrom),
+      `${rule.status} / ${rule.updatedBy || "System default"}`
+    ] }));
   }
 
   return (data.auditLogs || []).map((log) =>
@@ -3736,8 +3944,9 @@ function getReportLines(report, data = {}, periodMode = "range", fromDate = "", 
       columns: [
         formatDateTime(log.created_at),
         log.action || "System activity",
-        formatAuditArea(log.entity_type),
-        log.user_name || "System"
+        `${formatAuditArea(log.entity_type)} / ${log.module || "System"}`,
+        log.user_name || "System",
+        log.status || "Info"
       ]
     })
   );
@@ -3750,16 +3959,17 @@ function ReportPreviewModal({ data, report, onClose }) {
   const [periodMode, setPeriodMode] = useState("range");
   const [fromDate, setFromDate] = useState(yearStart);
   const [toDate, setToDate] = useState(today);
+  const supportsPeriod = ["Payroll Run Status & Exception Report", "Audit Activity Report"].includes(report);
 
   useEffect(() => {
-    const periodLabel = getPeriodLabel(periodMode, fromDate, toDate);
-    const lines = getReportLines(report, data, periodMode, fromDate, toDate);
+    const periodLabel = supportsPeriod ? getPeriodLabel(periodMode, fromDate, toDate) : `As of ${formatDate(today)}`;
+    const lines = getReportLines(report, data, periodMode, supportsPeriod ? fromDate : "", supportsPeriod ? toDate : "");
     const blob = createPdfBlob(report, lines, periodLabel);
     const url = URL.createObjectURL(blob);
     setPdfUrl(url);
 
     return () => URL.revokeObjectURL(url);
-  }, [data, fromDate, periodMode, report, toDate]);
+  }, [data, fromDate, periodMode, report, supportsPeriod, toDate, today]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#fff8f5]/80 px-4 backdrop-blur-sm">
@@ -3768,7 +3978,7 @@ function ReportPreviewModal({ data, report, onClose }) {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#F38978]/80">PDF Preview</p>
             <h3 className="mt-2 text-xl font-semibold text-[#251E1F]">{report}</h3>
-            <p className="mt-1 text-sm text-[#7b6660]">{getPeriodLabel(periodMode, fromDate, toDate)}</p>
+            <p className="mt-1 text-sm text-[#7b6660]">{supportsPeriod ? getPeriodLabel(periodMode, fromDate, toDate) : `As of ${formatDate(today)}`}</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <a
@@ -3788,7 +3998,7 @@ function ReportPreviewModal({ data, report, onClose }) {
             </button>
           </div>
         </div>
-        <div className="mt-5 grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 md:grid-cols-3">
+        {supportsPeriod ? <div className="mt-5 grid gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 md:grid-cols-3">
           <label className="space-y-2">
             <span className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">Period Type</span>
             <select
@@ -3823,7 +4033,7 @@ function ReportPreviewModal({ data, report, onClose }) {
               />
             </label>
           ) : null}
-        </div>
+        </div> : <div className="mt-5 rounded-xl border border-[#f0d2ca] bg-[#fff8f5] p-4 text-sm text-[#7b6660]">Current-state snapshot using the latest available configuration and account data. Date filters do not apply.</div>}
         <div className="mt-5 min-h-0 flex-1 overflow-hidden rounded-xl border border-[#f0d2ca] bg-white">
           {pdfUrl ? (
             <iframe title={`${report} preview`} src={pdfUrl} className="h-[68vh] w-full" />
@@ -3840,12 +4050,6 @@ function ReportsView({ data }) {
   const [reportLoading, setReportLoading] = useState(true);
 
   useEffect(() => {
-    if (data?.payrollRuns && data?.settings && data?.auditLogs) {
-      setReportData(data);
-      setReportLoading(false);
-      return undefined;
-    }
-
     let active = true;
     getAdminPayrollReports()
       .then((result) => {
@@ -3866,26 +4070,42 @@ function ReportsView({ data }) {
   const effectiveData = reportData || data || {};
   const reportCards = [
     {
-      title: "Payroll Control Summary",
-      description: "Active users, pending approvals, monitored runs and active layouts."
+      title: "Payroll Governance Summary",
+      category: "Payroll oversight",
+      description: "A management snapshot of payroll readiness and operating volume.",
+      contains: "Active users, pending approvals, monitored runs, configured rules and audit coverage.",
+      purpose: "Monthly governance review",
+      filter: "Current snapshot", cardClass: "admin-report-card--coral", iconClass: "admin-report-icon--coral"
     },
     {
-      title: "Access Control Report",
-      description: "Admin, HR, Finance and Staff access with account status."
+      title: "User Access & Account Status Report",
+      category: "Access & governance", description: "Shows who can enter each payroll role and whether their account is usable.",
+      contains: "Roles, account status, department and linked staff record.", purpose: "Access and onboarding reviews", filter: "Current snapshot", cardClass: "admin-report-card--purple", iconClass: "admin-report-icon--purple"
     },
     {
-      title: "Compliance Configuration Report",
-      description: "CPF, SDL, self-help fund, IRAS and statutory rule settings."
+      title: "Statutory Configuration Report",
+      category: "Compliance", description: "Explains the statutory settings applied to payroll calculations.",
+      contains: "CPF, SDL, self-help funds, IRAS, IR21 and levy settings.", purpose: "Compliance configuration review", filter: "Current snapshot", cardClass: "admin-report-card--blue", iconClass: "admin-report-icon--blue"
     },
     {
-      title: "Payroll Run Financial Report",
-      description: "Monthly employee count, gross pay, deductions, net pay and run status."
+      title: "Payroll Run Status & Exception Report",
+      category: "Payroll oversight", description: "Reviews workflow progress, ownership, delays and processing exceptions without exposing pay values.",
+      contains: "Employee count, workflow stage, responsible role and operational health.", purpose: "Operational exception review", filter: "Date range", cardClass: "admin-report-card--teal", iconClass: "admin-report-icon--teal"
     },
     {
       title: "Audit Activity Report",
-      description: "Recent admin payroll changes with timestamp and performer."
+      category: "Access & governance", description: "Provides a traceable history of payroll administration activity.",
+      contains: "Time, action, affected area, outcome and performing account.", purpose: "Audit and change investigation", filter: "Date range", cardClass: "admin-report-card--amber", iconClass: "admin-report-icon--amber"
+    },
+    {
+      title: "Effective Payroll Rules Report",
+      category: "Compliance", description: "Documents the calculation and validation rules currently resolved by the payroll engine.",
+      contains: "Rule groups, resolved values, usage, source, effective dates, status and updater.", purpose: "As-of rule governance and compliance evidence", filter: "Current snapshot", cardClass: "admin-report-card--green", iconClass: "admin-report-icon--green"
     }
   ];
+  const reportGroups = ["Payroll oversight", "Access & governance", "Compliance"]
+    .map((category) => ({ category, reports: reportCards.filter((report) => report.category === category) }));
+  const lastRefresh = formatDateTime(getOverallUpdatedAt(effectiveData));
 
   return (
     <PageShell
@@ -3894,7 +4114,7 @@ function ReportsView({ data }) {
       actions={
         <>
           <ActionButton icon={FileBarChart} onClick={() => setSelectedReport(reportCards[0].title)}>Generate Report</ActionButton>
-          <ActionButton icon={FileText} variant="secondary" onClick={() => setSelectedReport("Payroll Run Financial Report")}>Payroll Financial Report</ActionButton>
+          <ActionButton icon={FileText} variant="secondary" onClick={() => setSelectedReport("Payroll Run Status & Exception Report")}>Run Status Report</ActionButton>
         </>
       }
     >
@@ -3906,21 +4126,29 @@ function ReportsView({ data }) {
       {reportError ? (
         <div className="mb-4 rounded-xl border border-red-300/40 bg-[#FDD9CD] p-4 text-sm text-red-700">{reportError}</div>
       ) : null}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        {reportCards.map((report) => (
-          <div key={report.title} className="app-panel rounded-2xl p-6">
-            <FileBarChart size={24} className="text-[#F38978]" />
+      <div className="space-y-7">
+        {reportGroups.map((group) => <section key={group.category}>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-[#7b6660]">{group.category}</h3>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{group.reports.map((report) => (
+          <article key={report.title} className={`app-panel admin-report-card ${report.cardClass}`}>
+            <span className={`admin-report-icon ${report.iconClass}`}><FileBarChart size={22}/></span>
             <h3 className="mt-4 font-semibold text-[#251E1F]">{report.title}</h3>
             <p className="mt-2 text-sm text-[#7b6660]">{report.description}</p>
+            <dl className="mt-4 space-y-3 rounded-xl bg-[#fff8f5] p-4 text-sm">
+              <div><dt className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Contains</dt><dd className="mt-1 text-[#7b6660]">{report.contains}</dd></div>
+              <div><dt className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Best used for</dt><dd className="mt-1 text-[#7b6660]">{report.purpose}</dd></div>
+              <div><dt className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Filter</dt><dd className="mt-1 text-[#7b6660]">{report.filter}</dd></div>
+              <div><dt className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Last refreshed</dt><dd className="mt-1 text-[#7b6660]">{lastRefresh}</dd></div>
+            </dl>
             <button
               type="button"
-              className="mt-5 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+              className="mt-auto pt-5 text-left text-sm font-semibold text-[#F38978] hover:underline"
               onClick={() => setSelectedReport(report.title)}
             >
-              Open
+              Preview report →
             </button>
-          </div>
-        ))}
+          </article>
+        ))}</div></section>)}
       </div>
       {selectedReport ? (
         <ReportPreviewModal
@@ -3946,26 +4174,19 @@ function AdminPayrollContent({
   onUpdateStatus,
   pathname
 }) {
+  if (pathname.endsWith("/user-management")) {
+    return <PayrollUserManagement role="Admin" />;
+  }
+
   if (
-    pathname.endsWith("/users-roles")
-    || pathname.endsWith("/user-accounts")
+    pathname.endsWith("/user-accounts")
+    || pathname.endsWith("/users-roles")
+    || pathname.endsWith("/staff-management")
+    || pathname.endsWith("/staff-setup")
   ) {
-    return (
-      <UsersRolesView
-        availableStaff={data?.availableStaff}
-        currentUserId={currentUserId}
-        roleSummary={data?.roleSummary}
-        users={data?.users}
-        onCreateUser={onCreateUser}
-        onResetPassword={onResetPassword}
-        onUpdateRole={onUpdateRole}
-        onUpdateStatus={onUpdateStatus}
-      />
-    );
+    return <Navigate replace to="/dashboard/payroll/admin/user-management" />;
   }
-  if (pathname.endsWith("/staff-setup") || pathname.endsWith("/staff-management")) {
-    return <StaffManagementView />;
-  }
+  if (pathname.endsWith("/effective-rules")) return <EffectivePayrollRulesView onNavigate={onNavigate} />;
   if (pathname.endsWith("/settings")) {
     return (
       <SettingsView
@@ -3995,8 +4216,9 @@ function AdminPayrollContent({
       />
     );
   }
-  if (pathname.endsWith("/payroll-monitor")) return <PayrollMonitorView payrollRuns={data?.payrollRuns} />;
-  if (pathname.endsWith("/audit-logs")) return <PayrollAuditLogPage />;
+  if (pathname.endsWith("/payroll-monitor")) return <PayrollMonitorView payrollRuns={data?.payrollRuns} onNavigate={onNavigate} />;
+  if (pathname.endsWith("/audit-logs")) return <Navigate replace to="/dashboard/payroll/admin/system-audit-trail" />;
+  if (pathname.endsWith("/system-audit-trail")) return <PayrollAuditLogPage />;
   if (pathname.endsWith("/reports")) return <ReportsView data={data} />;
 
   return (
@@ -4004,7 +4226,6 @@ function AdminPayrollContent({
       data={data}
       onImportLayout={onImportLayout}
       onNavigate={onNavigate}
-      onSetDefaultLayout={onSetDefaultLayout}
     />
   );
 }
@@ -4170,6 +4391,7 @@ export default function AdminPayrollPage() {
       sidebarTitle="Automated Invoicing & Payroll System"
       homePath="/dashboard/payroll/admin"
       searchPlaceholder="Search payroll, staff, approvals..."
+      moduleClassName="payroll-module"
     >
       {isLoading ? (
         <div className="app-panel rounded-2xl p-6 text-sm text-[#7b6660]">

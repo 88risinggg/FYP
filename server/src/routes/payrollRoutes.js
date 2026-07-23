@@ -5,6 +5,7 @@ const { pool } = require("../config/db");
 const { addAudit } = require("../services/audit");
 const { authenticateToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/rolesMiddleware");
+const { notifyRoles } = require("../services/payrollNotificationService");
 
 const router = express.Router();
 
@@ -74,6 +75,12 @@ router.put("/payslips/:id/finance-approve", authenticateToken, allowRoles("Finan
     );
 
     addAudit(req.user.email, `Finance approved payslip ${payslipId}`, "Payroll");
+    await notifyRoles("HR", {
+      type: "payslip_approved", title: "Payslip approved by Finance",
+      message: `Payslip ${payslipId} is approved and ready for the next HR action.`,
+      actorUserId: req.user.userId, entityType: "payslip", entityId: payslipId,
+      actionPath: "/dashboard/payroll/hr/payslips"
+    }, { excludeUserId: req.user.userId });
     res.json({ message: "Payslip approved by Finance", payslip: { ...payslip, status: 'finance_approved' } });
   } catch (err) {
     res.status(500).json({ message: "Failed to approve payslip", error: err.message });
@@ -101,6 +108,12 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR"),
     );
 
     addAudit(req.user.email, `HR sent payslip ${payslipId} to Finance`, "Payroll");
+    await notifyRoles("Finance", {
+      type: "payslip_finance_review", title: "Payslip awaiting Finance approval",
+      message: `Payslip ${payslipId} requires Finance review.`, actorUserId: req.user.userId,
+      entityType: "payslip", entityId: payslipId,
+      actionPath: "/dashboard/payroll/finance/payslips-approval"
+    }, { excludeUserId: req.user.userId });
     res.json({ message: "Payslip sent to Finance", payslip: { ...payslip, status: 'finance_pending' } });
   } catch (err) {
     res.status(500).json({ message: "Failed to send to Finance", error: err.message });
@@ -136,6 +149,12 @@ router.put("/payslips/bulk-send-to-finance", authenticateToken, allowRoles("HR")
     const skipped = targetIds.length - updated_count;
 
     addAudit(req.user.email, `Bulk sent ${updated_count} payslips to Finance`, "Payroll");
+    if (updated_count > 0) await notifyRoles("Finance", {
+      type: "payslip_finance_review", title: "Payslips awaiting Finance approval",
+      message: `${updated_count} payslip(s) require Finance review.`, actorUserId: req.user.userId,
+      entityType: "payslip_batch", entityId: targetIds.slice(0, updated_count).join(","),
+      actionPath: "/dashboard/payroll/finance/payslips-approval"
+    }, { excludeUserId: req.user.userId });
 
     res.json({
       message: "Bulk send completed",
@@ -175,6 +194,12 @@ router.put("/payslips/:id/finance-reject", authenticateToken, allowRoles("Financ
     );
 
     addAudit(req.user.email, `Finance rejected payslip ${payslipId}: ${reason}`, "Payroll");
+    await notifyRoles("HR", {
+      type: "payslip_rejected", title: "Payslip returned by Finance",
+      message: `Payslip ${payslipId} was returned for correction: ${reason}`,
+      actorUserId: req.user.userId, entityType: "payslip", entityId: payslipId,
+      actionPath: "/dashboard/payroll/hr/payslips"
+    }, { excludeUserId: req.user.userId });
     res.json({ message: "Payslip rejected by Finance", payslip: { ...payslip, status: 'draft' } });
   } catch (err) {
     res.status(500).json({ message: "Failed to reject payslip", error: err.message });

@@ -1,7 +1,7 @@
 // Payslips are stored directly in `payroll`; payroll_id is the payslip ID.
 // This avoids separate payslip, allowance and deduction tables.
 const { pool } = require("../config/db");
-const { createNotificationInternal } = require("./notificationController");
+const { notifyUser } = require("../services/payrollNotificationService");
 
 async function getEmployeeIdFromUserId(userId) {
   const [rows] = await pool.query(
@@ -272,12 +272,15 @@ async function createPayslip(req, res) {
         [payroll_payroll_id]
       );
       if (staff?.user_user_id) {
-        await createNotificationInternal(
-          staff.user_user_id,
-          "payslip_available",
-          `Your ${staff.payroll_month}/${staff.payroll_year} payslip is ready`,
-          "Your payslip has been generated and is ready to view."
-        );
+        await notifyUser(staff.user_user_id, {
+          type: "payslip_available",
+          title: `Your ${staff.payroll_month}/${staff.payroll_year} payslip is ready`,
+          message: "Your payslip has been generated and is ready to view.",
+          actorUserId: req.user.userId,
+          entityType: "payslip",
+          entityId: payroll_payroll_id,
+          actionPath: "/dashboard/payroll/staff/payslips"
+        });
       }
     } catch { /* Notification failure must not roll back payslip generation. */ }
 

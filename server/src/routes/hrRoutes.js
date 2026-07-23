@@ -18,7 +18,9 @@ const { validateUpload } = require("../services/uploadValidationService");
 const { commitUpload } = require("../services/uploadCommitService");
 require("../models/advanceModel");
 const { createNotificationInternal } = require("../controllers/notificationController");
+const { notifyRoles, notifyUser } = require("../services/payrollNotificationService");
 const { generateAndSendPayslip } = require("../services/payslipDeliveryService");
+const { writeAuditLog } = require("../services/auditService");
 const {
   createFinancePayrollRunFromStaff,
   listFinancePayrollRuns
@@ -140,7 +142,7 @@ function normalizePayslipResult(payslip) {
  * There are NO routes in the HR module that allow UPDATE or DELETE of the audit_log table,
  * ensuring that the history remains tamper-proof as per NFR5 requirements.
  */
-router.get("/search", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
+router.get("/search", authenticateToken, allowRoles("HR"), (req, res) => {
   const q = String(req.query.q || "").trim().toLowerCase();
   if (!q) {
     return res.json([]);
@@ -184,7 +186,7 @@ router.get("/search", authenticateToken, allowRoles("Admin", "HR"), (req, res) =
 });
 
 // ----- Parameterized routes (MUST come before generic /staff routes) -----
-router.get("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
+router.get("/staff/:id", authenticateToken, allowRoles("HR"), (req, res) => {
   const { id } = req.params;
   // Prefer DB-backed lookup using `staff` table and `employee_id` column
   (async () => {
@@ -201,7 +203,7 @@ router.get("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res
   })();
 });
 
-router.put("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
+router.put("/staff/:id", authenticateToken, allowRoles("HR"), (req, res) => {
   const { id } = req.params;
   const updates = req.body;
   (async () => {
@@ -274,12 +276,10 @@ router.put("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res
       const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? LIMIT 1', [id]);
 
       try {
-        await pool.query(
-          `INSERT INTO audit_logs
-             (module, action_description, activity_type, affected_record, user_id, status)
-           VALUES ('HR', ?, ?, ?, ?, 'Success')`,
-          [`Updated staff record ${id}`, 'HR', String(id), req.user.userId || null]
-        );
+        await writeAuditLog({ module: "HR", activityType: "staff_updated", action: `Updated staff record ${id}`,
+          entityType: "staff", entityId: id, userId: req.user.userId || null, userName: req.user.name || req.user.email,
+          newValue: JSON.stringify({ employee_id: rows[0]?.employee_id, name: rows[0]?.name, department: rows[0]?.department, status: rows[0]?.status }),
+          ipAddress: req.ip, deviceInfo: req.get("user-agent"), status: "Success" });
       } catch (_e) { /* ignore audit errors */ }
 
       return res.json({ message: 'Staff record updated successfully', staff: rows[0] });
@@ -290,7 +290,7 @@ router.put("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res
   })();
 });
 
-router.delete("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
+router.delete("/staff/:id", authenticateToken, allowRoles("HR"), (req, res) => {
   const { id } = req.params;
   (async () => {
     try {
@@ -304,12 +304,9 @@ router.delete("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, 
         return res.json({ message: 'Staff record deleted (in-memory)', deletedStaff });
       }
       try {
-        await pool.query(
-          `INSERT INTO audit_logs
-             (module, action_description, activity_type, affected_record, user_id, status)
-           VALUES ('HR', ?, ?, ?, ?, 'Success')`,
-          [`Deleted staff record ${id}`, 'HR', String(id), req.user.userId || null]
-        );
+        await writeAuditLog({ module: "HR", activityType: "staff_deleted", action: `Deleted staff record ${id}`,
+          entityType: "staff", entityId: id, userId: req.user.userId || null, userName: req.user.name || req.user.email,
+          ipAddress: req.ip, deviceInfo: req.get("user-agent"), status: "Success" });
       } catch (e) {}
       return res.json({ message: 'Staff record deleted successfully', deletedId: id });
     } catch (err) {
@@ -323,7 +320,7 @@ router.delete("/staff/:id", authenticateToken, allowRoles("Admin", "HR"), (req, 
 });
 // ----- End parameterized routes -----
 
-router.get("/staff", authenticateToken, allowRoles("Admin", "HR"), (_req, res) => {
+router.get("/staff", authenticateToken, allowRoles("HR"), (_req, res) => {
   (async () => {
     try {
       const [rows] = await pool.query(
@@ -338,7 +335,7 @@ router.get("/staff", authenticateToken, allowRoles("Admin", "HR"), (_req, res) =
   })();
 });
 
-router.post("/staff", authenticateToken, allowRoles("Admin", "HR"), (req, res) => {
+router.post("/staff", authenticateToken, allowRoles("HR"), (req, res) => {
   const body = req.body || {};
   (async () => {
     try {
@@ -378,12 +375,10 @@ router.post("/staff", authenticateToken, allowRoles("Admin", "HR"), (req, res) =
         upsertStaffProfile(rows[0]);
         // insert audit
         try {
-          await pool.query(
-            `INSERT INTO audit_logs
-               (module, action_description, activity_type, affected_record, user_id, status)
-             VALUES ('HR', ?, ?, ?, ?, 'Success')`,
-            [`Added staff record ${employee_id}`, 'HR', String(employee_id), req.user.userId || null]
-          );
+          await writeAuditLog({ module: "HR", activityType: "staff_created", action: `Added staff record ${employee_id}`,
+            entityType: "staff", entityId: employee_id, userId: req.user.userId || null, userName: req.user.name || req.user.email,
+            newValue: JSON.stringify({ employee_id: rows[0]?.employee_id, name: rows[0]?.name, department: rows[0]?.department, status: rows[0]?.status }),
+            ipAddress: req.ip, deviceInfo: req.get("user-agent"), status: "Success" });
         } catch (e) {}
         return res.status(201).json(rows[0]);
       }
@@ -416,7 +411,7 @@ router.post("/staff", authenticateToken, allowRoles("Admin", "HR"), (req, res) =
   })();
 });
 
-router.post("/import-staff", authenticateToken, allowRoles("Admin", "HR"), upload.single("file"), async (req, res) => {
+router.post("/import-staff", authenticateToken, allowRoles("HR"), upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "File required" });
     const rows = await parseFile(req.file.path, req.file.originalname);
@@ -521,7 +516,7 @@ function mapHeaders(foundHeaders) {
 router.post(
   "/employees/upload",
   authenticateToken,
-  allowRoles("Admin", "HR"),
+  allowRoles("HR"),
   upload.single("file"),
   async (req, res) => {
     try {
@@ -758,7 +753,7 @@ router.post(
 router.post(
   "/employees/validate",
   authenticateToken,
-  allowRoles("Admin", "HR"),
+  allowRoles("HR"),
   upload.single("file"),
   async (req, res) => {
     try {
@@ -786,7 +781,7 @@ router.post(
 router.post(
   "/employees/commit",
   authenticateToken,
-  allowRoles("Admin", "HR"),
+  allowRoles("HR"),
   async (req, res) => {
     try {
       const { sessionId, selectedRowIds } = req.body;
@@ -825,7 +820,7 @@ router.post(
 // ----- END: commit endpoint -----
 
 // ----- Payroll Run Management (merged into payroll table) -----
-router.post("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+router.post("/payroll-run", authenticateToken, allowRoles("HR"), async (req, res) => {
   try {
     const { period_month, period_year } = req.body;
 
@@ -902,7 +897,7 @@ router.get("/payroll-run/:id", authenticateToken, allowRoles("Admin", "HR"), asy
   }
 });
 
-router.get("/payroll-run/:id/payslips", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+router.get("/payroll-run/:id/payslips", authenticateToken, allowRoles("HR"), async (req, res) => {
   try {
     const [month, year] = String(req.params.id).split("_").map(Number);
     if (!month || !year) {
@@ -939,7 +934,7 @@ router.get("/payroll-run/:id/payslips", authenticateToken, allowRoles("Admin", "
   }
 });
 
-router.put("/payroll-run/:id/lock", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+router.put("/payroll-run/:id/lock", authenticateToken, allowRoles("HR"), async (req, res) => {
   try {
     const [month, year] = String(req.params.id).split("_").map(Number);
     if (!month || !year) {
@@ -978,7 +973,7 @@ router.put("/payroll-run/:id/lock", authenticateToken, allowRoles("Admin", "HR")
 router.post(
   "/payslips/generate",
   authenticateToken,
-  allowRoles("Admin", "HR"),
+  allowRoles("HR"),
   upload.single("file"),
   async (req, res) => {
     try {
@@ -1110,7 +1105,7 @@ router.post(
 
 // ----- Quick Generate: Create payslips from DB data (no file upload needed) -----
 // Uses base_salary from staff table + CPF/SDL calculation
-router.post("/payslips/quick-generate", authenticateToken, allowRoles("Admin", "HR"), async (req, res, next) => {
+router.post("/payslips/quick-generate", authenticateToken, allowRoles("HR"), async (req, res, next) => {
   try {
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     const rawMonth = req.body?.period_month;
@@ -1157,7 +1152,7 @@ router.post("/payslips/quick-generate", authenticateToken, allowRoles("Admin", "
 
 // Legacy implementation retained temporarily for reference. The route above
 // handles requests first and uses the central statutory calculation engine.
-router.post("/legacy-payslips/quick-generate", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+router.post("/legacy-payslips/quick-generate", authenticateToken, allowRoles("HR"), async (req, res) => {
   try {
     const { period_month, period_year } = req.body || {};
     if (!period_month || !period_year) {
@@ -1358,12 +1353,18 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR"),
     [req.params.id]
   );
   if (!result.affectedRows) return res.status(409).json({ message: "Only compliant draft payslips can be sent to Finance" });
+  await notifyRoles("Finance", {
+    type: "payslip_finance_review", title: "Payslip awaiting Finance approval",
+    message: `Payslip ${req.params.id} requires Finance review.`, actorUserId: req.user.userId,
+    entityType: "payslip", entityId: req.params.id,
+    actionPath: "/dashboard/payroll/finance/payslips-approval"
+  }, { excludeUserId: req.user.userId });
   return res.json({ message: "Payslip sent to Finance" });
 });
 
 router.put("/payslips/:id/send-to-staff", authenticateToken, allowRoles("HR"), async (req, res) => {
   try {
-    const result = await generateAndSendPayslip(req.params.id);
+    const result = await generateAndSendPayslip(req.params.id, { actorUserId: req.user.userId });
     if (result.status !== 200) return res.status(result.status).json({ message: result.message });
     addAudit(req.user.email, `Generated and sent payslip ${req.params.id} to employee ${result.payslip.employee_id}`, "HR");
     return res.json(result);
@@ -1495,6 +1496,12 @@ router.post("/advance-requests", authenticateToken, allowRoles("Staff"), async (
     );
 
     addAudit(req.user.email, `Advance pay request created ${requestId} for employee ${staffEmployeeId}`, 'Payroll');
+    await notifyRoles("HR", {
+      type: "advance_request", title: "Salary advance awaiting HR review",
+      message: `Advance request ${requestId} requires HR review.`, actorUserId: req.user.userId,
+      entityType: "advance_request", entityId: requestId,
+      actionPath: "/dashboard/payroll/hr"
+    }, { excludeUserId: req.user.userId });
     res.status(201).json(rows[0]);
   } catch (err) {
     res.status(500).json({ message: 'Failed to create advance request', error: err.message });
@@ -1576,7 +1583,17 @@ router.put("/advance-requests/:id/approve", authenticateToken, allowRoles("HR"),
 
     addAudit(req.user.email, `HR approved advance request ${id}`, 'Payroll');
     const [ownerRows] = await pool.query('SELECT user_user_id FROM staff WHERE employee_id = ? LIMIT 1', [advRow.staff_employee_id]);
-    if (ownerRows[0]?.user_user_id) await createNotificationInternal(ownerRows[0].user_user_id, 'system', 'Salary advance approved by HR', 'Your request has been sent to Finance for release.');
+    if (ownerRows[0]?.user_user_id) await notifyUser(ownerRows[0].user_user_id, {
+      type: 'advance_hr_result', title: 'Salary advance approved by HR',
+      message: 'Your request has been sent to Finance for release.', actorUserId: req.user.userId,
+      entityType: 'advance_request', entityId: id, actionPath: '/dashboard/payroll/staff/advances'
+    });
+    await notifyRoles("Finance", {
+      type: "advance_finance_review", title: "Salary advance awaiting Finance release",
+      message: `Advance request ${id} was approved by HR and requires Finance action.`, actorUserId: req.user.userId,
+      entityType: "advance_request", entityId: id,
+      actionPath: "/dashboard/payroll/finance/employee-requests"
+    }, { excludeUserId: req.user.userId });
     res.json({ message: 'Advance request approved and queued for Finance', request: updatedRows[0] });
   } catch (err) {
     res.status(500).json({ message: 'Failed to approve advance request', error: err.message });
@@ -1584,7 +1601,7 @@ router.put("/advance-requests/:id/approve", authenticateToken, allowRoles("HR"),
 });
 
 // HR rejects advance request
-router.put("/advance-requests/:id/reject", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+router.put("/advance-requests/:id/reject", authenticateToken, allowRoles("HR"), async (req, res) => {
   try {
     const id = req.params.id;
 
@@ -1622,7 +1639,11 @@ router.put("/advance-requests/:id/reject", authenticateToken, allowRoles("Admin"
 
     addAudit(req.user.email, `HR rejected advance request ${id}`, 'Payroll');
     const [ownerRows] = await pool.query('SELECT user_user_id FROM staff WHERE employee_id = ? LIMIT 1', [advRows[0].staff_employee_id]);
-    if (ownerRows[0]?.user_user_id) await createNotificationInternal(ownerRows[0].user_user_id, 'system', 'Salary advance rejected by HR', hrComments || 'Contact HR for details.');
+    if (ownerRows[0]?.user_user_id) await notifyUser(ownerRows[0].user_user_id, {
+      type: 'advance_hr_result', title: 'Salary advance rejected by HR',
+      message: hrComments || 'Contact HR for details.', actorUserId: req.user.userId,
+      entityType: 'advance_request', entityId: id, actionPath: '/dashboard/payroll/staff/advances'
+    });
     res.json({ message: 'Advance request rejected', request: updatedRows[0] });
   } catch (err) {
     res.status(500).json({ message: 'Failed to reject advance request', error: err.message });
@@ -1690,7 +1711,18 @@ router.put('/finance-requests/:id/approve', authenticateToken, allowRoles('Finan
 
     addAudit(req.user.email, `Finance processed advance request ${id}`, 'Payroll');
     const [ownerRows] = await pool.query('SELECT user_user_id FROM staff WHERE employee_id = ? LIMIT 1', [advRow.staff_employee_id]);
-    if (ownerRows[0]?.user_user_id) await createNotificationInternal(ownerRows[0].user_user_id, 'system', 'Salary advance released', `Finance released your approved salary advance. Reference: ${paymentReference}`);
+    if (ownerRows[0]?.user_user_id) await notifyUser(ownerRows[0].user_user_id, {
+      type: 'advance_finance_result', title: 'Salary advance released',
+      message: `Finance released your approved salary advance. Reference: ${paymentReference}`,
+      actorUserId: req.user.userId, entityType: 'advance_request', entityId: id,
+      actionPath: '/dashboard/payroll/staff/advances'
+    });
+    await notifyRoles("HR", {
+      type: "advance_outcome", title: "Salary advance released by Finance",
+      message: `Advance request ${id} was released with reference ${paymentReference}.`, actorUserId: req.user.userId,
+      entityType: "advance_request", entityId: id,
+      actionPath: "/dashboard/payroll/hr"
+    }, { excludeUserId: req.user.userId });
     return res.json({ message: 'Finance request processed', advance_request: updatedRows[0] });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to process finance request', error: err.message });
@@ -1740,6 +1772,12 @@ router.post("/loan-requests", authenticateToken, allowRoles("Staff"), async (req
     );
     const [rows] = await pool.query(`SELECT ${LOAN_SELECT} FROM claims_and_loans c JOIN staff s ON c.staff_employee_id = s.employee_id WHERE c.record_id = ? LIMIT 1`, [loanId]);
     addAudit(req.user.email, `Loan request created ${loanId} for employee ${staffEmployeeId}`, 'Payroll');
+    await notifyRoles("HR", {
+      type: "loan_request", title: "Employee loan awaiting HR review",
+      message: `Loan request ${loanId} requires HR review.`, actorUserId: req.user.userId,
+      entityType: "loan", entityId: loanId,
+      actionPath: "/dashboard/payroll/hr/loans"
+    }, { excludeUserId: req.user.userId });
     res.status(201).json(rows[0]);
   } catch (err) {
     res.status(500).json({ message: 'Failed to create loan request', error: err.message });
@@ -1801,6 +1839,12 @@ router.put("/loan-requests/:id/approve", authenticateToken, allowRoles("HR"), as
     await pool.query(`UPDATE claims_and_loans SET status = 'approved', reviewer_comments = ?, reviewed_at = NOW(), monthly_installment = ?, outstanding_balance = ?, request_metadata = ? WHERE record_id = ? AND type = 'loan' AND status = 'pending'`, [hr_comments || null, monthlyInstallment, amount, updatedMeta, id]);
     const [updatedLoan] = await pool.query(`SELECT ${LOAN_SELECT} FROM claims_and_loans c JOIN staff s ON c.staff_employee_id = s.employee_id WHERE c.record_id = ? LIMIT 1`, [id]);
     addAudit(req.user.email, `HR approved loan request ${id}`, 'Payroll');
+    const [approvedOwner] = await pool.query("SELECT user_user_id FROM staff WHERE employee_id = ? LIMIT 1", [loanRows[0].staff_employee_id]);
+    if (approvedOwner[0]?.user_user_id) await notifyUser(approvedOwner[0].user_user_id, {
+      type: "loan_approved", title: "Loan request approved", message: `Your loan request ${id} was approved by HR.`,
+      actorUserId: req.user.userId, entityType: "loan", entityId: id,
+      actionPath: "/dashboard/payroll/staff/loans"
+    });
     res.json({ ...updatedLoan[0], installments });
   } catch (err) {
     res.status(500).json({ message: 'Failed to approve loan request', error: err.message });
@@ -1819,6 +1863,12 @@ router.put("/loan-requests/:id/reject", authenticateToken, allowRoles("HR"), asy
     await pool.query(`UPDATE claims_and_loans SET status = 'rejected', reviewer_comments = ?, reviewed_at = NOW(), request_metadata = ? WHERE record_id = ? AND type = 'loan' AND status = 'pending'`, [hr_comments || null, updatedMeta, id]);
     const [updatedLoan] = await pool.query(`SELECT ${LOAN_SELECT} FROM claims_and_loans c JOIN staff s ON c.staff_employee_id = s.employee_id WHERE c.record_id = ? LIMIT 1`, [id]);
     addAudit(req.user.email, `HR rejected loan request ${id}`, 'Payroll');
+    const [rejectedOwner] = await pool.query("SELECT user_user_id FROM staff WHERE employee_id = ? LIMIT 1", [loanRows[0].staff_employee_id]);
+    if (rejectedOwner[0]?.user_user_id) await notifyUser(rejectedOwner[0].user_user_id, {
+      type: "loan_rejected", title: "Loan request rejected", message: hr_comments || `Your loan request ${id} was rejected by HR.`,
+      actorUserId: req.user.userId, entityType: "loan", entityId: id,
+      actionPath: "/dashboard/payroll/staff/loans"
+    });
     res.json(updatedLoan[0]);
   } catch (err) {
     res.status(500).json({ message: 'Failed to reject loan request', error: err.message });
@@ -1893,13 +1943,16 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR"),
     await pool.query('UPDATE payroll SET payslip_status = ? WHERE payroll_id = ?',
       ['finance_pending', req.params.id]);
     try {
-      await pool.query(
-        `INSERT INTO audit_logs
-           (module, action_description, activity_type, affected_record, user_id, status)
-         VALUES ('Payroll', ?, 'Payroll', ?, ?, 'Success')`,
-        [`Sent payslip ${req.params.id} to Finance for approval`, String(req.params.id), req.user.userId || null]
-      );
+      await writeAuditLog({ module: "Payroll", activityType: "payslip_submitted", action: `Sent payslip ${req.params.id} to Finance for approval`,
+        entityType: "payslip", entityId: req.params.id, userId: req.user.userId || null, userName: req.user.name || req.user.email,
+        newValue: JSON.stringify({ payslip_status: "finance_pending" }), ipAddress: req.ip, deviceInfo: req.get("user-agent"), status: "Success" });
     } catch(e) {}
+    await notifyRoles("Finance", {
+      type: "payslip_finance_review", title: "Payslip awaiting Finance approval",
+      message: `Payslip ${req.params.id} requires Finance review.`, actorUserId: req.user.userId,
+      entityType: "payslip", entityId: req.params.id,
+      actionPath: "/dashboard/payroll/finance/payslips-approval"
+    }, { excludeUserId: req.user.userId });
     return res.json({ message: "Payslip sent to Finance for approval" });
   } catch (err) {
     return res.status(500).json({ message: "Server error", error: err.message });
@@ -1908,7 +1961,7 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR"),
 
 router.put("/payslips/:id/send-to-staff", authenticateToken, allowRoles("HR"), async (req, res) => {
   try {
-    const result = await generateAndSendPayslip(req.params.id);
+    const result = await generateAndSendPayslip(req.params.id, { actorUserId: req.user.userId });
     if (result.status !== 200) return res.status(result.status).json({ message: result.message });
     addAudit(req.user.email, `Generated and sent payslip ${req.params.id} to employee ${result.payslip.employee_id}`, "HR");
     return res.json(result);
@@ -1916,8 +1969,20 @@ router.put("/payslips/:id/send-to-staff", authenticateToken, allowRoles("HR"), a
     return res.status(500).json({ message: "Server error", error: err.message });
   }
 });
-router.get("/notifications", authenticateToken, allowRoles("HR", "Admin"), (_req, res) => {
-  res.json([]);
+router.get("/notifications", authenticateToken, allowRoles("HR", "Admin"), async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT n.notification_id AS notif_id, n.type, n.title, n.message,
+              n.created_at AS timestamp, n.is_read AS \`read\`, n.action_path,
+              n.delivery_status, actor.name AS actor_name
+       FROM notification n LEFT JOIN user actor ON actor.user_id = n.actor_user_id
+       WHERE n.user_id = ? ORDER BY n.created_at DESC LIMIT 100`,
+      [req.user.userId]
+    );
+    return res.json(rows.map((row) => ({ ...row, priority: row.read ? "Low" : "High" })));
+  } catch (error) {
+    return res.status(500).json({ message: "Unable to load notifications." });
+  }
 });
 
 router.get("/audit-log", authenticateToken, allowRoles("HR", "Admin"), async (req, res) => {
@@ -1937,7 +2002,7 @@ router.get("/audit-log", authenticateToken, allowRoles("HR", "Admin"), async (re
 });
 
 // --- Staff Records Excel Export (server-side using ExcelJS) ---
-router.get("/staff/export/excel", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
+router.get("/staff/export/excel", authenticateToken, allowRoles("HR"), async (req, res) => {
   try {
     const ExcelJS = require("exceljs");
     const [rows] = await pool.query(

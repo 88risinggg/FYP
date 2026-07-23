@@ -118,6 +118,13 @@ async function googleCallback(req, res) {
     const localUser = await findOrCreateGoogleUser(userInfo);
 
     // Issue local JWT
+    if (!(Number(localUser.status) === 1)) {
+      return res.redirect(`${clientUrl}/login?error=account_disabled`);
+    }
+    if (Number(localUser.must_change_password) === 1) {
+      return res.redirect(`${clientUrl}/login?error=password_setup_required`);
+    }
+
     const token = jwt.sign(
       { userId: localUser.user_id, email: localUser.email, role: localUser.role },
       process.env.JWT_SECRET,
@@ -145,9 +152,8 @@ async function findOrCreateGoogleUser(googleUser) {
 
   // Check if user already linked to this Google account
   const [existing] = await pool.query(
-    `SELECT u.user_id, u.name, u.email, u.status, r.role_name AS role
+    `SELECT u.user_id, u.name, u.email, u.status, u.must_change_password, u.role_name AS role
      FROM user u
-     JOIN role r ON r.role_id = u.role_id
      WHERE u.google_sub = ?
      LIMIT 1`,
     [sub]
@@ -160,9 +166,8 @@ async function findOrCreateGoogleUser(googleUser) {
   // Try to match existing user by email
   if (email) {
     const [byEmail] = await pool.query(
-      `SELECT u.user_id, u.name, u.email, u.status, r.role_name AS role
+      `SELECT u.user_id, u.name, u.email, u.status, u.must_change_password, u.role_name AS role
        FROM user u
-       JOIN role r ON r.role_id = u.role_id
        WHERE u.email = ?
        LIMIT 1`,
       [email]
@@ -176,15 +181,13 @@ async function findOrCreateGoogleUser(googleUser) {
   }
 
   // Create new user with Staff role
-  const [staffRole] = await pool.query("SELECT role_id FROM role WHERE role_name = 'Staff' LIMIT 1");
-  const roleId = staffRole[0]?.role_id || 4;
   const displayName = name || "Google User";
   const userEmail = email || `${sub.substring(0, 8)}@google.local`;
 
   const [result] = await pool.query(
-    `INSERT INTO user (name, email, password, role_id, status, google_sub)
-     VALUES (?, ?, ?, ?, 1, ?)`,
-    [displayName, userEmail, "", roleId, sub]
+    `INSERT INTO user (name, email, password, role_name, status, google_sub)
+     VALUES (?, ?, ?, 'Staff', 1, ?)`,
+    [displayName, userEmail, "", sub]
   );
 
   return {

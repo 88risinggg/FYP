@@ -8,7 +8,7 @@ const {
   listRoleActivity,
   listRoles
 } = require("../models/adminRoleModel");
-const { getClientIp, logAuditEvent } = require("../models/auditLogModel");
+const { getClientIp, getDeviceInfo, logAuditEvent } = require("../models/auditLogModel");
 
 async function getRoles(req, res) {
   try {
@@ -96,7 +96,8 @@ async function postDuplicateRole(req, res) {
       actionDescription: `Duplicate role requested for ${role.roleName}`,
       affectedRecord: String(role.roleId),
       status: "Success",
-      ipAddress: getClientIp(req)
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req)
     });
 
     res.json({
@@ -123,7 +124,8 @@ async function patchDeactivateRole(req, res) {
       actionDescription: `Deactivated role ${role.roleName}`,
       affectedRecord: String(role.roleId),
       status: "Success",
-      ipAddress: getClientIp(req)
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req)
     });
 
     res.json({ role });

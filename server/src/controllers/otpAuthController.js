@@ -138,6 +138,13 @@ async function verifyOtp(req, res) {
     // Find or create user
     const localUser = await findOrCreateOtpUser(normalizedEmail);
 
+    if (!(Number(localUser.status) === 1)) {
+      return res.status(403).json({ message: "This account is awaiting activation or has been disabled." });
+    }
+    if (Number(localUser.must_change_password) === 1) {
+      return res.status(403).json({ message: "Use the temporary password supplied by HR to create your permanent password first." });
+    }
+
     // Issue JWT
     const token = jwt.sign(
       { userId: localUser.user_id, email: localUser.email, role: localUser.role },
@@ -167,7 +174,7 @@ async function verifyOtp(req, res) {
 async function findOrCreateOtpUser(email) {
   // Check if user exists
   const [existing] = await pool.query(
-    `SELECT user_id, name, email, status, role_name AS role
+    `SELECT user_id, name, email, status, must_change_password, role_name AS role
      FROM user
      WHERE email = ?
      LIMIT 1`,

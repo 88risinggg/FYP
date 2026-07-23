@@ -2,6 +2,7 @@ const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const { getEffectivePayrollRules } = require("../services/payrollRuleConfigService");
 
 const {
   createUserAccount,
@@ -9,13 +10,18 @@ const {
   getUserById,
   getDashboardStats,
   getAdminPayrollReportData,
+  listAccountStatusInsight,
+  listAdminActivityTrends,
+  listAuditActivityInsight,
   listAuditLogs,
   listAvailableStaffForUserCreation,
   listMbmfEligibilitySummary,
   listPayrollRuns,
+  listRunHealthInsight,
   listPayrollSettings,
   listPayslipLayouts,
   listUsers,
+  listUserRoleInsight,
   listUsersWithRoles,
   setDefaultPayslipLayout,
   updateUserPassword,
@@ -23,6 +29,120 @@ const {
   updateUserStatus,
   upsertPayrollSetting
 } = require("../models/adminPayrollModel");
+
+const INSIGHT_DATASETS = new Set(["audit_activity", "user_roles", "account_status", "run_health"]);
+const INSIGHT_ROLES = new Set(["all", "Admin", "Finance", "HR", "Staff"]);
+const ACCOUNT_FILTERS = new Set(["all", "active", "pending", "disabled"]);
+const GRANULARITIES = new Set(["day", "week", "month"]);
+
+function isoDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function validDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return null;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && isoDate(date) === value ? date : null;
+}
+
+function normalizeInsightQuery(query = {}, now = new Date()) {
+  const dataset = String(query.dataset || "audit_activity");
+  if (!INSIGHT_DATASETS.has(dataset)) return { error: "Select a valid dashboard dataset." };
+  const snapshot = ["user_roles", "account_status"].includes(dataset);
+  const defaultTo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const defaultFrom = new Date(defaultTo);
+  if (dataset === "run_health") {
+    defaultFrom.setUTCDate(1);
+    defaultFrom.setUTCMonth(defaultFrom.getUTCMonth() - 5);
+  } else {
+    defaultFrom.setUTCDate(defaultFrom.getUTCDate() - 29);
+  }
+  const fromDate = snapshot ? null : (query.from ? validDate(query.from) : defaultFrom);
+  const toDate = snapshot ? null : (query.to ? validDate(query.to) : defaultTo);
+  if (!snapshot && (!fromDate || !toDate)) return { error: "Dates must use YYYY-MM-DD format." };
+  if (!snapshot && fromDate > toDate) return { error: "The start date must not be after the end date." };
+  const dayCount = snapshot ? 0 : Math.floor((toDate - fromDate) / 86400000) + 1;
+  if (dayCount > 731) return { error: "Dashboard insight periods cannot exceed 731 days." };
+  const requestedGranularity = String(query.granularity || "auto");
+  if (requestedGranularity !== "auto" && !GRANULARITIES.has(requestedGranularity)) return { error: "Select a valid aggregation level." };
+  const granularity = snapshot ? null : dataset === "run_health" ? "month" : requestedGranularity === "auto"
+    ? (dayCount <= 31 ? "day" : dayCount <= 180 ? "week" : "month")
+    : requestedGranularity;
+  const role = String(query.role || "all");
+  const accountStatus = String(query.accountStatus || "all").toLowerCase();
+  if (!INSIGHT_ROLES.has(role)) return { error: "Select a valid payroll role." };
+  if (!ACCOUNT_FILTERS.has(accountStatus)) return { error: "Select a valid account status." };
+  return {
+    dataset, snapshot, from: fromDate ? isoDate(fromDate) : null, to: toDate ? isoDate(toDate) : null,
+    granularity, role, accountStatus
+  };
+}
+
+function completeTimeBuckets(rows, filters, valueKey) {
+  const byBucket = new Map(rows.map((row) => [String(row.bucket), row]));
+  const cursor = new Date(`${filters.from}T00:00:00Z`);
+  const end = new Date(`${filters.to}T00:00:00Z`);
+  if (filters.granularity === "week") cursor.setUTCDate(cursor.getUTCDate() - ((cursor.getUTCDay() + 6) % 7));
+  if (filters.granularity === "month") cursor.setUTCDate(1);
+  const output = [];
+  while (cursor <= end) {
+    const bucket = isoDate(cursor);
+    output.push({ x: bucket, value: Number(byBucket.get(bucket)?.[valueKey] || 0) });
+    if (filters.granularity === "day") cursor.setUTCDate(cursor.getUTCDate() + 1);
+    else if (filters.granularity === "week") cursor.setUTCDate(cursor.getUTCDate() + 7);
+    else cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+  return output;
+}
+
+function completeRunBuckets(rows, filters) {
+  const byBucket = new Map(rows.map((row) => [String(row.bucket), row]));
+  const cursor = new Date(`${filters.from}T00:00:00Z`);
+  cursor.setUTCDate(1);
+  const end = new Date(`${filters.to}T00:00:00Z`);
+  const output = [];
+  while (cursor <= end) {
+    const bucket = isoDate(cursor);
+    output.push({ bucket, Completed: 0, "In Progress": 0, Delayed: 0, Failed: 0, ...(byBucket.get(bucket) || {}) });
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+  return output;
+}
+
+async function getAdminPayrollInsights(req, res) {
+  const filters = normalizeInsightQuery(req.query);
+  if (filters.error) return res.status(400).json({ message: filters.error });
+  try {
+    const asOf = new Date().toISOString();
+    if (filters.dataset === "audit_activity") {
+      const rows = await listAuditActivityInsight(filters);
+      const data = completeTimeBuckets(rows, filters, "event_count");
+      return res.json({ dataset: filters.dataset, chartType: "line", asOf, filters, totals: { events: data.reduce((sum, item) => sum + item.value, 0) }, series: [{ key: "events", label: "Audit events", color: "#4778dc", data }] });
+    }
+    if (filters.dataset === "user_roles") {
+      const rows = await listUserRoleInsight(filters);
+      const counts = new Map(rows.map((row) => [row.role_name, Number(row.user_count || 0)]));
+      const data = ["Admin", "Finance", "HR", "Staff", "Unassigned"].map((role) => ({ x: role, value: counts.get(role) || 0 }));
+      return res.json({ dataset: filters.dataset, chartType: "horizontal_bar", asOf, filters, totals: { users: data.reduce((sum, item) => sum + item.value, 0) }, series: [{ key: "users", label: "Users", color: "#7156b2", data }] });
+    }
+    if (filters.dataset === "account_status") {
+      const colors = { Active: "#36855d", Pending: "#bd7b22", Disabled: "#d34b4b", Unlinked: "#68707a" };
+      const rows = await listAccountStatusInsight(filters);
+      const data = rows.map((row) => ({ x: row.status, value: Number(row.user_count || 0), color: colors[row.status] }));
+      return res.json({ dataset: filters.dataset, chartType: "donut", asOf, filters, totals: { records: data.reduce((sum, item) => sum + item.value, 0) }, series: [{ key: "accounts", label: "Accounts", color: "#d65778", data }] });
+    }
+    const rows = completeRunBuckets(await listRunHealthInsight(filters), filters);
+    const definitions = [
+      ["completed", "Completed", "#36855d"], ["in_progress", "In Progress", "#7156b2"],
+      ["delayed", "Delayed", "#bd7b22"], ["failed", "Failed", "#d34b4b"]
+    ];
+    const series = definitions.map(([key, label, color]) => ({ key, label, color, data: rows.map((row) => ({ x: row.bucket, value: Number(row[label] || 0) })) }));
+    return res.json({ dataset: filters.dataset, chartType: "stacked_column", asOf, filters, totals: { runs: series.reduce((total, item) => total + item.data.reduce((sum, point) => sum + point.value, 0), 0) }, series });
+  } catch (error) {
+    console.error("Admin payroll insight error:", error.message);
+    return res.status(500).json({ message: "Failed to load dashboard insight data." });
+  }
+}
 
 async function getAdminPayrollReports(req, res) {
   try {
@@ -33,18 +153,28 @@ async function getAdminPayrollReports(req, res) {
   }
 }
 
+async function getAdminEffectivePayrollRules(req, res) {
+  try {
+    return res.json(await getEffectivePayrollRules());
+  } catch (error) {
+    console.error("Effective payroll rules error:", error.message);
+    return res.status(500).json({ message: "Failed to load effective payroll rules." });
+  }
+}
+
 function normalizeFileType(fileType) {
   return String(fileType || "").trim().toUpperCase();
 }
 
 async function getAdminPayrollDashboard(req, res) {
   try {
-    const [stats, layouts, settings, payrollRuns, auditLogs, roleSummary, users, mbmfEligibility, availableStaff] = await Promise.all([
+    const [stats, layouts, settings, payrollRuns, auditLogs, auditTrends, roleSummary, users, mbmfEligibility, availableStaff] = await Promise.all([
       getDashboardStats(),
       listPayslipLayouts(),
       listPayrollSettings(),
       listPayrollRuns(),
       listAuditLogs(),
+      listAdminActivityTrends(),
       listUsersWithRoles(),
       listUsers(),
       listMbmfEligibilitySummary(),
@@ -57,6 +187,7 @@ async function getAdminPayrollDashboard(req, res) {
       settings,
       payrollRuns,
       auditLogs,
+      auditTrends,
       roleSummary,
       users,
       mbmfEligibility,
@@ -393,6 +524,10 @@ async function updatePayrollSetting(req, res) {
     const settingKey = String(req.params.settingKey || "").trim();
     const settingValue = String(req.body.settingValue ?? "").trim();
     const description = String(req.body.description || "").trim();
+    const effectiveFrom = req.body.effectiveFrom ? String(req.body.effectiveFrom).trim() : null;
+    const ruleCategory = req.body.ruleCategory ? String(req.body.ruleCategory).trim() : null;
+    const usageType = req.body.usageType ? String(req.body.usageType).trim().toLowerCase() : null;
+    const isActive = req.body.isActive;
 
     if (!settingKey || !settingValue || !/^[a-z0-9_]+$/i.test(settingKey) || settingKey.length > 191) {
       return res.status(400).json({
@@ -402,6 +537,9 @@ async function updatePayrollSetting(req, res) {
     if (settingValue.length > 10000 || description.length > 500) {
       return res.status(400).json({ message: "Payroll setting value is too long." });
     }
+    if (effectiveFrom && !validDate(effectiveFrom)) return res.status(400).json({ message: "Effective date must use YYYY-MM-DD format." });
+    if (ruleCategory && ruleCategory.length > 80) return res.status(400).json({ message: "Rule category is too long." });
+    if (usageType && !["calculation", "validation", "reference"].includes(usageType)) return res.status(400).json({ message: "Select a valid rule usage type." });
     if (/^cpf_rate_.*_(employee|employer)_percent$/.test(settingKey)) {
       const rate = Number(settingValue);
       if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
@@ -420,7 +558,13 @@ async function updatePayrollSetting(req, res) {
       settingKey,
       settingValue,
       description,
-      updatedBy: req.user?.userId
+      effectiveFrom,
+      ruleCategory,
+      usageType,
+      isActive,
+      updatedBy: req.user?.userId,
+      ipAddress: req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || req.ip || null,
+      deviceInfo: String(req.headers["user-agent"] || "").slice(0, 500) || null
     });
 
     const [stats, settings, auditLogs, mbmfEligibility] = await Promise.all([
@@ -449,10 +593,13 @@ module.exports = {
   changeUserRole,
   changeUserStatus,
   getAdminPayrollDashboard,
+  getAdminEffectivePayrollRules,
+  getAdminPayrollInsights,
   getAdminPayrollReports,
   getPayrollRuleConfig,
   getPayslipLayouts,
   makeDefaultPayslipLayout,
   resetUserPassword,
-  updatePayrollSetting
+  updatePayrollSetting,
+  normalizeInsightQuery
 };

@@ -1,6 +1,8 @@
 const { pool } = require("../config/db");
+const { writeAuditLog } = require("../services/auditService");
 const {
   ensurePayrollConfigurationTable,
+  getEffectivePayrollRules,
   listStoredPayrollSettings,
   upsertStoredPayrollSetting
 } = require("../services/payrollRuleConfigService");
@@ -16,23 +18,30 @@ function parseJson(value, fallback = {}) {
   }
 }
 
+function isReportableStatutorySetting(setting = {}) {
+  const key = String(setting.setting_key || "").toLowerCase();
+  const statutoryPrefix = ["statutory_", "cpf_", "sdl_", "mbmf_", "cdac_", "sinda_", "ecf_", "iras_", "ir21_", "foreign_worker_levy_"]
+    .some((prefix) => key.startsWith(prefix));
+  const operationalOrBankingReference = ["bank", "account", "payable", "expense", "clearing", "payment_method"]
+    .some((fragment) => key.includes(fragment));
+  return statutoryPrefix && !operationalOrBankingReference;
+}
+
 async function getAdminPayrollReportData() {
   const [[[userStats]], [payrollRuns], [roleSummary], [users], [auditLogs]] = await Promise.all([
     pool.execute("SELECT COUNT(*) AS activeUsers FROM user WHERE status = 1"),
     pool.execute(
       `SELECT
-        p.payroll_month, p.payroll_year, p.run_status AS status,
-        p.run_created_at AS created_at, p.run_updated_at AS updated_at,
-        p.run_approved_at AS approved_at, p.payment_reference,
-        COUNT(p.payroll_id) AS employee_count,
-        COALESCE(SUM(COALESCE(p.net_salary, 0) + COALESCE(p.total_deductions, 0)), 0) AS gross_pay,
-        COALESCE(SUM(p.total_deductions), 0) AS total_deductions,
-        COALESCE(SUM(p.net_salary), 0) AS net_pay,
-        COALESCE(SUM(p.employee_cpf), 0) AS employee_cpf,
-        COALESCE(SUM(p.employer_cpf), 0) AS employer_cpf
+        p.payroll_month, p.payroll_year,
+        COALESCE(MAX(pr.status), MAX(p.run_status)) AS status,
+        COALESCE(MAX(pr.created_at), MAX(p.run_created_at)) AS created_at,
+        COALESCE(MAX(pr.updated_at), MAX(p.run_updated_at)) AS updated_at,
+        COALESCE(MAX(pr.approved_at), MAX(p.run_approved_at)) AS approved_at,
+        COALESCE(MAX(pr.payment_reference), MAX(p.payment_reference)) AS payment_reference,
+        COUNT(p.payroll_id) AS employee_count
        FROM payroll p
-       GROUP BY p.payroll_month, p.payroll_year, p.run_status,
-                p.run_created_at, p.run_updated_at, p.run_approved_at, p.payment_reference
+       LEFT JOIN payroll_run pr ON pr.payroll_run_id = p.payroll_run_id
+       GROUP BY p.payroll_month, p.payroll_year
        ORDER BY p.payroll_year DESC, p.payroll_month DESC`
     ),
     pool.execute(
@@ -51,12 +60,13 @@ async function getAdminPayrollReportData() {
        ORDER BY u.name`
     ),
     pool.execute(
-      `SELECT audit_log_id AS log_id, action_description AS action,
-              activity_type AS entity_type, affected_record AS entity_id,
-              created_at, COALESCE(user_name, 'System') AS user_name,
-              status
-       FROM audit_logs
-       ORDER BY created_at DESC
+      `SELECT a.audit_log_id AS log_id, a.action_description AS action,
+              COALESCE(a.entity_type, a.activity_type) AS entity_type, a.affected_record AS entity_id,
+              a.module, a.created_at, COALESCE(u.name, NULLIF(a.user_name, ''), 'System') AS user_name,
+              a.status
+       FROM audit_logs a
+       LEFT JOIN user u ON u.user_id = a.user_id
+       ORDER BY a.created_at DESC
        LIMIT 100`
     )
   ]);
@@ -64,44 +74,30 @@ async function getAdminPayrollReportData() {
   const pendingApprovalCount = payrollRuns.filter(
     (run) => !["Approved for Payment", "Payment Processed", "Payslips Sent", "Reconciled"].includes(run.status)
   ).length;
-  const totals = payrollRuns.reduce(
-    (result, run) => ({
-      grossPay: result.grossPay + Number(run.gross_pay || 0),
-      deductions: result.deductions + Number(run.total_deductions || 0),
-      netPay: result.netPay + Number(run.net_pay || 0),
-      employeeCpf: result.employeeCpf + Number(run.employee_cpf || 0),
-      employerCpf: result.employerCpf + Number(run.employer_cpf || 0)
-    }),
-    { grossPay: 0, deductions: 0, netPay: 0, employeeCpf: 0, employerCpf: 0 }
-  );
-  const settings = await listPayrollSettings();
+  const effectiveRules = await getEffectivePayrollRules();
+  const settings = (await listPayrollSettings()).filter(isReportableStatutorySetting);
 
   return {
     stats: {
       activeUsers: Number(userStats.activeUsers || 0),
-      payrollRules: settings.length,
+      payrollRules: effectiveRules.groupCount,
       payrollRuns: payrollRuns.length,
       payrollRecords: payrollRuns.reduce((sum, run) => sum + Number(run.employee_count || 0), 0),
-      adminLogs: auditLogs.length,
-      ...totals
+      adminLogs: auditLogs.length
     },
     pendingApprovalCount,
     payrollRuns,
     roleSummary,
     users,
     auditLogs,
+    effectiveRules,
     settings,
     layouts: []
   };
 }
 
 async function logAdminAction({ action, entityType, entityId, userId }) {
-  await pool.execute(
-    `INSERT INTO audit_logs
-      (module, activity_type, action_description, affected_record, user_id, status)
-     VALUES ('Payroll', ?, ?, ?, ?, 'Success')`,
-    [entityType, action, entityId == null ? null : String(entityId), userId || null]
-  );
+  await writeAuditLog({ module: "Payroll", activityType: entityType, action, entityId, entityType, userId, status: "Success" });
 }
 
 async function getDashboardStats() {
@@ -116,10 +112,10 @@ async function getDashboardStats() {
     "SELECT COUNT(*) AS total FROM payroll_configuration WHERE configuration_type = 'payslip_layout'"
   );
 
-  const settings = await listPayrollSettings();
+  const effectiveRules = await getEffectivePayrollRules();
   return {
     activeUsers: users.total,
-    payrollRules: settings.length,
+    payrollRules: effectiveRules.groupCount,
     payslipLayouts: Number(layouts.total || 0),
     adminLogs: logs.total
   };
@@ -247,37 +243,25 @@ async function listMbmfEligibilitySummary() {
     FROM staff`,
     [applicableReligion, applicableReligion]
   );
-  const [sampleEmployees] = await pool.execute(
-    `SELECT
-      staff.employee_id,
-      staff.employee_code,
-      staff.religion,
-      user.name
-    FROM staff
-    LEFT JOIN user ON staff.user_user_id = user.user_id
-    WHERE LOWER(TRIM(COALESCE(staff.religion, ''))) = LOWER(?)
-    ORDER BY user.name
-    LIMIT 5`,
-    [applicableReligion]
-  );
-
   return {
     hasReligionColumn: true,
     applicableReligion,
     totalStaff: summary.totalStaff || 0,
     eligibleMuslimEmployees: summary.eligibleMuslimEmployees || 0,
     nonEligibleEmployees: summary.nonEligibleEmployees || 0,
-    sampleEmployees
+    sampleEmployees: []
   };
 }
 
-async function upsertPayrollSetting({ settingKey, settingValue, description, updatedBy }) {
-  await upsertStoredPayrollSetting({ settingKey, settingValue, description, updatedBy });
-  await logAdminAction({
-    action: `Updated payroll setting: ${settingKey}`,
-    entityType: "payroll_setting",
-    entityId: null,
-    userId: updatedBy
+async function upsertPayrollSetting({ settingKey, settingValue, description, effectiveFrom, ruleCategory, usageType, isActive, updatedBy, ipAddress, deviceInfo }) {
+  const previous = (await listStoredPayrollSettings()).find((setting) => setting.setting_key === settingKey);
+  await upsertStoredPayrollSetting({ settingKey, settingValue, description, effectiveFrom, ruleCategory, usageType, isActive, updatedBy });
+  await writeAuditLog({
+    module: "Payroll", activityType: "Payroll Configuration", action: `Updated payroll setting: ${settingKey}`,
+    entityId: settingKey, entityType: "payroll_setting", userId: updatedBy, status: "Success",
+    ipAddress, deviceInfo,
+    previousValue: previous ? JSON.stringify({ value: previous.setting_value, effectiveFrom: previous.effective_from }) : null,
+    newValue: JSON.stringify({ value: settingValue, effectiveFrom: effectiveFrom || new Date().toISOString().slice(0, 10), ruleCategory, usageType, isActive: isActive !== false })
   });
 }
 
@@ -286,12 +270,17 @@ async function listPayrollRuns() {
     `SELECT
       p.payroll_month,
       p.payroll_year,
-      p.run_status AS status,
-      p.run_created_at AS created_at,
-      p.run_updated_at AS updated_at,
+      COALESCE(MAX(pr.status), MAX(p.run_status)) AS status,
+      COALESCE(MAX(pr.created_at), MAX(p.run_created_at)) AS created_at,
+      COALESCE(MAX(pr.updated_at), MAX(p.run_updated_at)) AS updated_at,
+      COALESCE(MAX(pr.approved_at), MAX(p.run_approved_at)) AS approved_at,
+      COALESCE(MAX(pr.payment_reference), MAX(p.payment_reference)) AS payment_reference,
+      COALESCE(MAX(creator.name), 'System') AS created_by_name,
       COUNT(p.payroll_id) AS employee_count
     FROM payroll p
-    GROUP BY p.payroll_month, p.payroll_year, p.run_status, p.run_created_at, p.run_updated_at
+    LEFT JOIN payroll_run pr ON pr.payroll_run_id = p.payroll_run_id
+    LEFT JOIN user creator ON creator.user_id = p.run_created_by
+    GROUP BY p.payroll_month, p.payroll_year
     ORDER BY p.payroll_year DESC, p.payroll_month DESC`
   );
 
@@ -316,6 +305,119 @@ async function listAuditLogs() {
   return rows;
 }
 
+async function listAdminActivityTrends() {
+  const [rows] = await pool.execute(
+    `SELECT
+      YEAR(created_at) AS activity_year,
+      MONTH(created_at) AS activity_month,
+      COUNT(*) AS event_count
+    FROM audit_logs
+    WHERE created_at >= DATE_SUB(DATE_FORMAT(CURRENT_DATE, '%Y-%m-01'), INTERVAL 5 MONTH)
+    GROUP BY YEAR(created_at), MONTH(created_at)
+    ORDER BY activity_year, activity_month`
+  );
+
+  return rows;
+}
+
+async function listAuditActivityInsight({ from, to, granularity }) {
+  const bucketSql = {
+    day: "DATE_FORMAT(created_at, '%Y-%m-%d')",
+    week: "DATE_FORMAT(DATE_SUB(created_at, INTERVAL WEEKDAY(created_at) DAY), '%Y-%m-%d')",
+    month: "DATE_FORMAT(created_at, '%Y-%m-01')"
+  }[granularity];
+  const [rows] = await pool.execute(
+    `SELECT ${bucketSql} AS bucket, COUNT(*) AS event_count
+     FROM audit_logs
+     WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)
+     GROUP BY ${bucketSql}
+     ORDER BY bucket`,
+    [from, to]
+  );
+  return rows;
+}
+
+async function listUserRoleInsight({ accountStatus = "all" } = {}) {
+  const statusClauses = {
+    active: "u.status = 1",
+    pending: "COALESCE(ar.has_pending, 0) = 1",
+    disabled: "u.status <> 1 AND COALESCE(ar.has_pending, 0) = 0"
+  };
+  const where = statusClauses[accountStatus] ? `WHERE ${statusClauses[accountStatus]}` : "";
+  const [rows] = await pool.execute(
+    `SELECT COALESCE(NULLIF(TRIM(u.role_name), ''), 'Unassigned') AS role_name,
+            COUNT(*) AS user_count
+     FROM user u
+     LEFT JOIN (
+       SELECT user_id, MAX(status = 'pending') AS has_pending
+       FROM account_action_requests
+       WHERE request_type = 'user_activation'
+       GROUP BY user_id
+     ) ar ON ar.user_id = u.user_id
+     ${where}
+     GROUP BY COALESCE(NULLIF(TRIM(u.role_name), ''), 'Unassigned')
+     ORDER BY role_name`
+  );
+  return rows;
+}
+
+async function listAccountStatusInsight({ role = "all" } = {}) {
+  const params = [];
+  const roleWhere = role !== "all" ? "WHERE u.role_name = ?" : "";
+  if (role !== "all") params.push(role);
+  const [[accountCounts]] = await pool.execute(
+    `SELECT
+       SUM(CASE WHEN u.status = 1 THEN 1 ELSE 0 END) AS active_count,
+       SUM(CASE WHEN u.status <> 1 AND COALESCE(ar.has_pending, 0) = 1 THEN 1 ELSE 0 END) AS pending_count,
+       SUM(CASE WHEN u.status <> 1 AND COALESCE(ar.has_pending, 0) = 0 THEN 1 ELSE 0 END) AS disabled_count
+     FROM user u
+     LEFT JOIN (
+       SELECT user_id, MAX(status = 'pending') AS has_pending
+       FROM account_action_requests
+       WHERE request_type = 'user_activation'
+       GROUP BY user_id
+     ) ar ON ar.user_id = u.user_id
+     ${roleWhere}`,
+    params
+  );
+  let unlinkedCount = 0;
+  if (role === "all") {
+    const [[unlinked]] = await pool.execute("SELECT COUNT(*) AS total FROM staff WHERE user_user_id IS NULL");
+    unlinkedCount = Number(unlinked.total || 0);
+  }
+  return [
+    { status: "Active", user_count: Number(accountCounts.active_count || 0) },
+    { status: "Pending", user_count: Number(accountCounts.pending_count || 0) },
+    { status: "Disabled", user_count: Number(accountCounts.disabled_count || 0) },
+    { status: "Unlinked", user_count: unlinkedCount }
+  ];
+}
+
+function payrollRunHealth(run, now = Date.now()) {
+  const status = String(run.status || "Draft").toLowerCase();
+  if (["failed", "error", "rejected"].some((value) => status.includes(value))) return "Failed";
+  if (["payment processed", "payslips sent", "reconciled", "closed", "completed", "success"].some((value) => status.includes(value))) return "Completed";
+  const activity = new Date(run.updated_at || run.created_at || 0).getTime();
+  if (Number.isFinite(activity) && now - activity > 48 * 60 * 60 * 1000) return "Delayed";
+  return "In Progress";
+}
+
+async function listRunHealthInsight({ from, to }) {
+  const runs = await listPayrollRuns();
+  const start = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T23:59:59`);
+  const buckets = new Map();
+  runs.forEach((run) => {
+    const date = new Date(Number(run.payroll_year), Number(run.payroll_month) - 1, 1);
+    if (date < start || date > end) return;
+    const bucket = `${run.payroll_year}-${String(run.payroll_month).padStart(2, "0")}-01`;
+    const counts = buckets.get(bucket) || { Completed: 0, "In Progress": 0, Delayed: 0, Failed: 0 };
+    counts[payrollRunHealth(run)] += 1;
+    buckets.set(bucket, counts);
+  });
+  return [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([bucket, counts]) => ({ bucket, ...counts }));
+}
+
 async function listUsersWithRoles() {
   const [counts] = await pool.execute(
     `SELECT role_name, COUNT(*) AS user_count
@@ -337,9 +439,6 @@ async function listAvailableStaffForUserCreation() {
       staff.employee_id,
       staff.name,
       staff.email,
-      staff.phone,
-      staff.hire_date,
-      staff.base_salary,
       staff.status,
       NULL AS department_id,
       staff.department_name
@@ -367,15 +466,6 @@ async function listUsers() {
       user.role_name,
       staff.employee_id,
       staff.employee_code,
-      staff.phone,
-      staff.race,
-      staff.religion,
-      staff.hire_date,
-      staff.base_salary,
-      staff.race,
-      staff.religion,
-      staff.bank,
-      staff.account_no,
       staff.status AS staff_status,
       NULL AS department_id,
       staff.department_name
@@ -457,12 +547,7 @@ async function createUserAccount({ email, name, passwordHash, roleId, status, st
       );
     }
 
-    await connection.execute(
-      `INSERT INTO audit_logs
-        (module, activity_type, action_description, affected_record, user_id, status)
-       VALUES ('Payroll', 'user', 'Created user account', ?, ?, 'Success')`,
-      [String(userId), adminUserId || null]
-    );
+    await writeAuditLog({ connection, module: "Payroll", activityType: "User Management", action: "Created user account", entityId: userId, entityType: "user", userId: adminUserId, status: "Success", newValue: JSON.stringify({ roleName, status }) });
 
     await connection.commit();
 
@@ -537,7 +622,7 @@ async function updateUserRole({ userId, roleId, adminUserId }) {
 
 async function updateUserPassword({ userId, passwordHash, adminUserId }) {
   const [result] = await pool.execute(
-    "UPDATE user SET password = ? WHERE user_id = ?",
+    "UPDATE user SET password = ?, must_change_password = 1 WHERE user_id = ?",
     [passwordHash, userId]
   );
 
@@ -559,13 +644,19 @@ module.exports = {
   getUserById,
   getDashboardStats,
   getAdminPayrollReportData,
+  isReportableStatutorySetting,
+  listAccountStatusInsight,
+  listAdminActivityTrends,
+  listAuditActivityInsight,
   listAuditLogs,
   listAvailableStaffForUserCreation,
   listMbmfEligibilitySummary,
   listPayrollRuns,
+  listRunHealthInsight,
   listPayrollSettings,
   listPayslipLayouts,
   listUsers,
+  listUserRoleInsight,
   listUsersWithRoles,
   setDefaultPayslipLayout,
   updateUserPassword,

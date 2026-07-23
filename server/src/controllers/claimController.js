@@ -2,8 +2,9 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { pool } = require("../config/db");
-const { createNotificationInternal } = require("./notificationController");
+const { notifyRoles: notifyPayrollRoles, notifyUser } = require("../services/payrollNotificationService");
 const { getClaimTransition } = require("../services/claimWorkflow");
+const { writeAuditLog } = require("../services/auditService");
 
 const CLAIM_TYPES = ["Medical", "Transport", "Meal", "Internet", "Office Purchase", "Business Travel", "Other"];
 const SERVER_ROOT = path.resolve(__dirname, "..", "..");
@@ -68,7 +69,7 @@ async function getClaimById(claimId) {
   return rows[0] || null;
 }
 
-async function notifyClaimOwner(claimId, title, message) {
+async function notifyClaimOwner(claimId, title, message, event = {}) {
   const [rows] = await pool.query(
     `SELECT s.user_user_id
      FROM claims_and_loans c
@@ -78,34 +79,33 @@ async function notifyClaimOwner(claimId, title, message) {
     [claimId]
   );
   if (rows[0]?.user_user_id) {
-    await createNotificationInternal(rows[0].user_user_id, "payroll_claim", title, message);
+    await notifyUser(rows[0].user_user_id, {
+      type: "payroll_claim", title, message, entityType: "claim", entityId: claimId,
+      actionPath: "/dashboard/payroll/staff/claims", ...event
+    });
   }
 }
 
-async function notifyRoles(roleNames, title, message, excludedUserId = null) {
-  const [users] = await pool.query(
-    `SELECT user_id
-     FROM user
-     WHERE status = 1 AND role_name IN (?)`,
-    [roleNames]
-  );
-  await Promise.all(users
-    .filter((user) => Number(user.user_id) !== Number(excludedUserId))
-    .map((user) => createNotificationInternal(user.user_id, "payroll_claim", title, message)));
+async function notifyRoles(roleNames, title, message, excludedUserId = null, event = {}) {
+  await notifyPayrollRoles(roleNames, {
+    type: "payroll_claim", title, message, entityType: "claim", ...event
+  }, { excludeUserId: excludedUserId });
 }
 
 async function logClaimAudit(connection, req, claimId, description) {
-  await connection.query(
-    `INSERT INTO audit_logs
-      (user_id, user_name, module, activity_type, action_description, affected_record, status, created_at)
-     VALUES (?, ?, 'Claims', 'Payroll Claim', ?, ?, 'Success', NOW())`,
-    [
-      req.user?.userId || null,
-      req.user?.name || req.user?.email || req.user?.role || "System",
-      description,
-      claimId
-    ]
-  );
+  await writeAuditLog({
+    connection,
+    module: "Claims",
+    activityType: "Payroll Claim",
+    action: description,
+    entityType: "claim",
+    entityId: claimId,
+    userId: req.user?.userId || null,
+    userName: req.user?.name || req.user?.email || req.user?.role || "System",
+    ipAddress: req.ip || req.socket?.remoteAddress || null,
+    deviceInfo: req.get?.("user-agent") || null,
+    status: "Success"
+  });
 }
 
 async function submitClaim(req, res) {
@@ -186,6 +186,7 @@ async function submitClaim(req, res) {
       "New expense claim awaiting HR review",
       `${claim_type} claim ${claimId} for $${numericAmount.toFixed(2)} requires review.`,
       req.user.userId
+      , { actorUserId: req.user.userId, entityId: claimId, actionPath: "/dashboard/payroll/hr/claims" }
     );
   } catch (error) {
     console.error("Failed to notify claim reviewers:", error.message);
@@ -251,6 +252,7 @@ async function reviewByHr(req, res) {
       req.params.id,
       action === "approve" ? "Claim approved by HR" : "Claim rejected by HR",
       action === "approve" ? "Your claim has been sent to Finance for approval and reimbursement." : comments
+      , { actorUserId: req.user.userId }
     );
     if (action === "approve") {
       await notifyRoles(
@@ -258,6 +260,7 @@ async function reviewByHr(req, res) {
         "Expense claim awaiting Finance approval",
         `Claim ${req.params.id} was reviewed by HR and is ready for Finance approval.`,
         req.user.userId
+        , { actorUserId: req.user.userId, entityId: req.params.id, actionPath: "/dashboard/payroll/finance/employee-requests" }
       );
     }
   } catch (error) {
@@ -309,14 +312,16 @@ async function processByFinance(req, res) {
       req.params.id,
       action === "release" ? "Claim reimbursement released" : "Claim rejected by Finance",
       action === "release" ? `Your reimbursement was released. Reference: ${paymentReference}` : comments
+      , { actorUserId: req.user.userId }
     );
     await notifyRoles(
-      ["Admin"],
+      ["HR"],
       action === "release" ? "Expense claim reimbursed" : "Expense claim rejected by Finance",
       action === "release"
         ? `Claim ${req.params.id} was released with reference ${paymentReference}.`
         : `Claim ${req.params.id} was rejected by Finance.`,
       req.user.userId
+      , { actorUserId: req.user.userId, entityId: req.params.id, actionPath: "/dashboard/payroll/hr/claims" }
     );
   } catch (error) {
     console.error("Failed to send Finance claim notifications:", error.message);

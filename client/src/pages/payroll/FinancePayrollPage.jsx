@@ -51,6 +51,7 @@ import {
 } from "../../utils/payrollRules.js";
 import { createPayrollReportPdf } from "../../utils/payrollReportPdf.js";
 import FinanceRequestsPage from "./FinanceRequestsPage.jsx";
+import PayrollNotificationsView from "../../components/payroll/PayrollNotificationsView.jsx";
 
 /*
 ===============================================================================
@@ -3226,7 +3227,7 @@ function FinancePayrollContent({
       />
     );
   }
-  if (pathname.endsWith("/notification-records")) return <NotificationRecordsView selectedRun={selectedRun} />;
+  if (pathname.endsWith("/notification-records")) return <PayrollNotificationsView />;
   if (pathname.endsWith("/payroll-reports")) {
     return (
       <PayrollReportsView
@@ -3606,6 +3607,7 @@ export default function FinancePayrollPage() {
         sidebarSections={payrollSidebarSections}
         sidebarTitle="Automated Invoicing & Payroll System"
         searchPlaceholder="Search payroll runs, staff, reports..."
+        moduleClassName="payroll-module"
       >
         <section>
           <PayslipsApprovalView />
@@ -3621,6 +3623,7 @@ export default function FinancePayrollPage() {
       sidebarSections={payrollSidebarSections}
       sidebarTitle="Automated Invoicing & Payroll System"
       searchPlaceholder="Search payroll runs, staff, reports..."
+      moduleClassName="payroll-module"
     >
       {configError ? (
         <div className="mb-4 rounded-xl border border-[#D97706]/25 bg-[#D97706]/10 p-4 text-sm text-[#9A6412]">

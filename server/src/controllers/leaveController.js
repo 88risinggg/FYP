@@ -1,5 +1,5 @@
 const { pool } = require("../config/db");
-const { createNotificationInternal } = require("./notificationController");
+const { notifyRoles, notifyUser } = require("../services/payrollNotificationService");
 const { getActiveHolidaysInRange } = require("../models/publicHolidayModel");
 
 // [STAFF BRANCH - Steven] Leave tables disabled - 11 table schema
@@ -146,17 +146,15 @@ async function applyLeave(req, res) {
     }
 
     // Notify all HR users
-    const [hrUsers] = await pool.query(
-      "SELECT u.user_id FROM user u JOIN role r ON u.role_id = r.role_id WHERE r.role_name = 'HR'"
-    );
-    for (const hrUser of hrUsers) {
-      await createNotificationInternal(
-        hrUser.user_id,
-        "leave_request",
-        "New Leave Request",
-        `Staff ID ${staffId} has submitted a ${leaveType.name} leave request for ${totalDays} day(s).`
-      );
-    }
+    await notifyRoles("HR", {
+      type: "leave_request",
+      title: "New Leave Request",
+      message: `Staff ID ${staffId} submitted a ${leaveType.name} leave request for ${totalDays} day(s).`,
+      actorUserId: req.user.userId,
+      entityType: "leave_application",
+      entityId: insertResult.insertId,
+      actionPath: "/dashboard/payroll/hr/leave-management"
+    }, { excludeUserId: req.user.userId });
 
     return res.status(201).json({
       message: "Leave application submitted successfully",
@@ -284,12 +282,15 @@ async function updateLeaveStatus(req, res) {
       const endDate = new Date(application.end_date).toISOString().split("T")[0];
       const notificationMessage = `Your leave from ${startDate} to ${endDate} has been ${status}.`;
 
-      await createNotificationInternal(
-        staffUserId,
-        notificationType,
-        notificationTitle,
-        notificationMessage
-      );
+      await notifyUser(staffUserId, {
+        type: notificationType,
+        title: notificationTitle,
+        message: notificationMessage,
+        actorUserId: req.user.userId,
+        entityType: "leave_application",
+        entityId: id,
+        actionPath: "/dashboard/payroll/staff/leave"
+      });
     }
 
     return res.status(200).json({ message: `Leave ${status}`, id });

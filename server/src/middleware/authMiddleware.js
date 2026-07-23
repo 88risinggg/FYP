@@ -24,6 +24,7 @@ async function authenticateToken(req, res, next) {
         user.user_id AS userId,
         user.email,
         user.status,
+        user.must_change_password,
         user.role_name AS role
       FROM user
       WHERE user.user_id = ?`,
@@ -36,6 +37,13 @@ async function authenticateToken(req, res, next) {
       return res.status(403).json({
         code: "ACCOUNT_DISABLED",
         message: "Account is disabled or no longer available"
+      });
+    }
+
+    if (Number(user.must_change_password) === 1) {
+      return res.status(403).json({
+        code: "PASSWORD_CHANGE_REQUIRED",
+        message: "Sign in with your temporary password and create a permanent password before continuing."
       });
     }
 

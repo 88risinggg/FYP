@@ -99,6 +99,7 @@ export default function DashboardLayout({
   onMarkNotificationRead,
   onMarkAllRead,
   theme,
+  moduleClassName = "",
   hideSidebar = false
 }) {
   const navigate = useNavigate();
@@ -347,7 +348,7 @@ export default function DashboardLayout({
     const token = session?.token;
     if (!userId || !token) return;
 
-    apiRequest(`/api/notifications/user/${userId}/read-all`, {
+    apiRequest("/api/notifications/read-all", {
       method: "PUT",
       headers: { Authorization: `Bearer ${token}` }
     }).then(() => {
@@ -365,10 +366,14 @@ export default function DashboardLayout({
     const notificationId = notification.notification_id || notification.id;
     const isRead = notification.is_read === 1 || notification.is_read === true || notification.read;
     const isDeletionRequest = notification.type === "account_deletion_request";
+    const actionPath = notification.action_path || notification.actionPath;
 
     if (isDeletionRequest) {
       setShowNotifications(false);
       navigate("/dashboard/settings?section=danger");
+    } else if (actionPath) {
+      setShowNotifications(false);
+      navigate(actionPath);
     }
 
     if (isRead || !notificationId) return;
@@ -700,7 +705,7 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        <main className="px-4 py-6 sm:px-6">
+        <main className={`px-4 py-6 sm:px-6 ${moduleClassName}`}>
           {children}
         </main>
       </div>

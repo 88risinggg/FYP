@@ -4,6 +4,15 @@ export function getAdminPayrollDashboard() {
   return apiRequest("/api/payroll/admin/dashboard");
 }
 
+export function getAdminPayrollInsights(params = {}) {
+  const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ""));
+  return apiRequest(`/api/payroll/admin/dashboard/insights?${query.toString()}`);
+}
+
+export function getEffectivePayrollRules() {
+  return apiRequest("/api/payroll/admin/effective-rules");
+}
+
 export function getAdminPayrollReports() {
   return apiRequest("/api/payroll/admin/reports");
 }
@@ -36,21 +45,21 @@ export function setDefaultPayslipLayout(layoutId) {
 }
 
 export function updateUserStatus(userId, status) {
-  return apiRequest(`/api/payroll/admin/users/${userId}/status`, {
+  return apiRequest(`/api/payroll/users/${userId}/status`, {
     method: "PATCH",
     body: JSON.stringify({ status })
   });
 }
 
 export function updateUserRole(userId, roleId) {
-  return apiRequest(`/api/payroll/admin/users/${userId}/role`, {
+  return apiRequest(`/api/payroll/users/${userId}/role`, {
     method: "PATCH",
     body: JSON.stringify({ roleId })
   });
 }
 
 export function resetUserPassword(userId) {
-  return apiRequest(`/api/payroll/admin/users/${userId}/reset-password`, {
+  return apiRequest(`/api/payroll/users/${userId}/reset-password`, {
     method: "POST"
   });
 }

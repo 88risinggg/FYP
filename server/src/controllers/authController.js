@@ -9,7 +9,7 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
-const { findUserByEmail } = require("../models/authModel");
+const { completeFirstLogin: saveFirstLoginPassword, findUserByEmail, findUserById } = require("../models/authModel");
 
 /**
  * Determine which application modules a user role can access.
@@ -42,6 +42,25 @@ function isActiveStatus(status) {
     return status.toLowerCase() === "active" || status === "1";
   }
   return status === 1 || status === true;
+}
+
+function normalToken(user) {
+  return jwt.sign({ userId: user.user_id, email: user.email, role: user.role_name }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || "1d"
+  });
+}
+
+function authPayload(user) {
+  return {
+    token: normalToken(user),
+    user: {
+      userId: user.user_id,
+      email: user.email,
+      name: user.name,
+      role: user.role_name,
+      allowedModules: getAllowedModules(user.role_name)
+    }
+  };
 }
 
 /**
@@ -85,29 +104,17 @@ async function login(req, res) {
       });
     }
 
-    // Build JWT payload with user identity and role
-    const payload = {
-      userId: user.user_id,
-      email: user.email,
-      role: user.role_name
-    };
-
-    // Sign JWT token with configured secret and expiration
-    const token = jwt.sign(payload, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN || "1d"
-    });
+    if (Number(user.must_change_password) === 1) {
+      const setupToken = jwt.sign(
+        { userId: user.user_id, purpose: "first_login_password" },
+        process.env.JWT_SECRET,
+        { expiresIn: "15m" }
+      );
+      return res.json({ requiresPasswordChange: true, setupToken, email: user.email });
+    }
 
     // Return token and user profile including allowed modules
-    res.json({
-      token,
-      user: {
-        userId: user.user_id,
-        email: user.email,
-        name: user.name,
-        role: user.role_name,
-        allowedModules: getAllowedModules(user.role_name)
-      }
-    });
+    res.json(authPayload(user));
   } catch (error) {
     res.status(500).json({
       message: "Login failed. Please try again later."
@@ -115,6 +122,33 @@ async function login(req, res) {
   }
 }
 
+async function completeFirstLogin(req, res) {
+  try {
+    const setupToken = String(req.body.setupToken || "");
+    const newPassword = String(req.body.newPassword || "");
+    if (!setupToken || newPassword.length < 8) {
+      return res.status(400).json({ message: "A setup token and password of at least 8 characters are required." });
+    }
+    const payload = jwt.verify(setupToken, process.env.JWT_SECRET);
+    if (payload.purpose !== "first_login_password") {
+      return res.status(401).json({ message: "Invalid password setup token." });
+    }
+    const current = await findUserById(payload.userId);
+    if (!current || !isActiveStatus(current.status) || Number(current.must_change_password) !== 1) {
+      return res.status(409).json({ message: "Password setup is no longer available for this account." });
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    const user = await saveFirstLoginPassword(payload.userId, passwordHash);
+    return res.json(authPayload(user));
+  } catch (error) {
+    if (error.name === "TokenExpiredError" || error.name === "JsonWebTokenError") {
+      return res.status(401).json({ message: "Password setup link has expired. Sign in again with the temporary password." });
+    }
+    return res.status(500).json({ message: "Unable to complete password setup." });
+  }
+}
+
 module.exports = {
+  completeFirstLogin,
   login
 };

@@ -1,4 +1,4 @@
-const { resolveAppliedPayrollRules } = require("./payrollRuleConfigService");
+const { buildEffectiveRuleCatalogue, resolveAppliedPayrollRules } = require("./payrollRuleConfigService");
 
 describe("admin payroll rule configuration", () => {
   test("converts stored Admin settings into calculation rules", () => {
@@ -27,5 +27,21 @@ describe("admin payroll rule configuration", () => {
 
     expect(rules.cpfOrdinaryWageCeiling).toBe(8000);
     expect(rules.cpfRateTiers[0].employeeRate).toBe(20);
+  });
+
+  test("groups resolved values and excludes operational accounting references", () => {
+    const catalogue = buildEffectiveRuleCatalogue([
+      { setting_id: 1, setting_key: "cpf_monthly_wage_ceiling", setting_value: "7500", effective_from: "2026-02-01", updated_at: "2026-01-20", updated_by_name: "Admin User" },
+      { setting_id: 2, setting_key: "cpf_account_employee_payable", setting_value: "2100", usage_type: "reference", updated_at: "2026-01-20", updated_by_name: "Admin User" },
+      { setting_id: "default_compliance_cpf_enabled", setting_key: "compliance_cpf_enabled", setting_value: "Enabled", effective_from: "2026-01-01", updated_by_name: "System default" }
+    ], new Date("2026-07-24T00:00:00Z"));
+
+    expect(catalogue.groupCount).toBeGreaterThan(1);
+    expect(catalogue.rules.find((rule) => rule.key === "cpf_wage_ceiling")).toMatchObject({
+      value: "SGD 7,500",
+      source: "Admin Override",
+      effectiveFrom: "2026-02-01"
+    });
+    expect(catalogue.rules.some((rule) => rule.key.includes("payable"))).toBe(false);
   });
 });

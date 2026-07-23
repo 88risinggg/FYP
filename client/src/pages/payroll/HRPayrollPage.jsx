@@ -26,6 +26,8 @@ import HRLoanManagement from "./HRLoanManagement.jsx";
 import HRPublicHolidays from "./HRPublicHolidays.jsx";
 import HRReportsPage from "./HRReportsPage.jsx";
 import ClaimManagementPage from "./ClaimManagementPage.jsx";
+import PayrollUserManagement from "../../components/payroll/PayrollUserManagement.jsx";
+import PayrollNotificationsView from "../../components/payroll/PayrollNotificationsView.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
 import { buildVanidayPayslipHtml } from "../../utils/vanidayPayslipTemplate.js";
 
@@ -108,7 +110,8 @@ const payrollSidebarSections = [
   {
     label: "STAFF MANAGEMENT",
     items: [
-      { label: "Staff Records", icon: Users, path: "/dashboard/payroll/hr/staff" }
+      { label: "Staff Records", icon: Users, path: "/dashboard/payroll/hr/staff" },
+      { label: "User Management", icon: Users, path: "/dashboard/payroll/hr/user-management" }
     ]
   },
   {
@@ -150,6 +153,7 @@ const payrollSidebarSections = [
 const routeHeadings = {
   "/dashboard/payroll/hr": "Dashboard",
   "/dashboard/payroll/hr/staff": "Staff Records",
+  "/dashboard/payroll/hr/user-management": "User Management",
   "/dashboard/payroll/hr/upload": "Payroll Upload",
   "/dashboard/payroll/hr/payroll-runs": "Payroll Runs",
   "/dashboard/payroll/hr/leave-management": "Leave Management",
@@ -3066,7 +3070,11 @@ export default function HRPayrollPage() {
     }
 
     if (activePath === "/dashboard/payroll/hr/notifications") {
-      return <NotificationsView />;
+      return <PayrollNotificationsView />;
+    }
+
+    if (activePath === "/dashboard/payroll/hr/user-management") {
+      return <PayrollUserManagement role="HR" />;
     }
 
     if (activePath === "/dashboard/payroll/hr/leave-management") {
@@ -3104,6 +3112,7 @@ export default function HRPayrollPage() {
       sidebarTitle="Automated Invoicing & Payroll System"
       searchPlaceholder="Search staff, payroll runs, payslips..."
       searchEndpoint={headerSearchEndpoint}
+      moduleClassName="payroll-module"
     >
       <section>
         <h2 className="text-2xl font-semibold text-[#251E1F]">{heading}</h2>

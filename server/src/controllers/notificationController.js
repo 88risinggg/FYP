@@ -1,4 +1,5 @@
 const { pool } = require("../config/db");
+const { notifyUser } = require("../services/payrollNotificationService");
 
 /**
  * Ensures the notification table exists and has up-to-date schema.
@@ -21,10 +22,13 @@ async function getNotificationsByUserId(req, res) {
 
   try {
     const [rows] = await pool.query(
-      `SELECT notification_id, type, title, message, is_read, created_at
-       FROM notification
-       WHERE user_id = ?
-       ORDER BY created_at DESC
+      `SELECT n.notification_id, n.type, n.title, n.message, n.is_read, n.created_at,
+              n.action_path, n.actor_user_id, n.entity_type, n.entity_id, n.channel,
+              n.metadata, n.delivery_status, n.sent_at, n.error_message, actor.name AS actor_name
+       FROM notification n
+       LEFT JOIN user actor ON actor.user_id = n.actor_user_id
+       WHERE n.user_id = ?
+       ORDER BY n.created_at DESC
        LIMIT 50`,
       [userId]
     );
@@ -122,12 +126,31 @@ async function createNotification(req, res) {
  */
 async function createNotificationInternal(userId, type, title, message) {
   try {
-    await pool.query(
-      "INSERT INTO notification (user_id, type, title, message, is_read, created_at) VALUES (?, ?, ?, ?, 0, NOW())",
-      [userId, type, title, message || null]
-    );
+    await notifyUser(userId, { type, title, message: message || "" });
   } catch (error) {
     console.error("Failed to create notification:", error.message);
+  }
+}
+
+async function markAllMyNotificationsAsRead(req, res) {
+  req.params.userId = String(req.user.userId);
+  return markAllAsRead(req, res);
+}
+
+async function getMyNotifications(req, res) {
+  req.params.userId = String(req.user.userId);
+  return getNotificationsByUserId(req, res);
+}
+
+async function getUnreadCount(req, res) {
+  try {
+    const [[row]] = await pool.execute(
+      "SELECT COUNT(*) AS count FROM notification WHERE user_id = ? AND is_read = 0",
+      [req.user.userId]
+    );
+    return res.json({ count: Number(row.count || 0) });
+  } catch (_error) {
+    return res.status(500).json({ message: "Failed to load unread notification count" });
   }
 }
 
@@ -135,6 +158,9 @@ module.exports = {
   getNotificationsByUserId,
   markAsRead,
   markAllAsRead,
+  markAllMyNotificationsAsRead,
   createNotification,
-  createNotificationInternal
+  createNotificationInternal,
+  getMyNotifications,
+  getUnreadCount
 };

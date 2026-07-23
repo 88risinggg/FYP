@@ -57,7 +57,7 @@ async function writeAuditLog(connOrOpts, action, activityType, entityId, userId,
   // Detect new object-signature call
   if (connOrOpts && typeof connOrOpts === "object" && !connOrOpts.query && connOrOpts.module !== undefined) {
     const opts = connOrOpts;
-    return _insert(null, {
+    return _insert(opts.connection || null, {
       module:          opts.module || inferModule(opts.activityType),
       action:          opts.action || opts.actionDescription || "",
       activityType:    opts.activityType || opts.action || "",
@@ -136,34 +136,38 @@ async function listAuditLogs(filters = {}) {
   const params = [];
 
   if (filters.module) {
-    where.push("module = ?");
+    where.push("a.module = ?");
     params.push(filters.module);
   }
 
   if (filters.startDate) {
-    where.push("DATE(created_at) >= ?");
+    where.push("DATE(a.created_at) >= ?");
     params.push(filters.startDate);
   }
 
   if (filters.endDate) {
-    where.push("DATE(created_at) <= ?");
+    where.push("DATE(a.created_at) <= ?");
     params.push(filters.endDate);
   }
 
   if (filters.userId) {
-    where.push("user_id = ?");
+    where.push("a.user_id = ?");
     params.push(Number(filters.userId));
   }
 
   if (filters.activityType) {
-    where.push("activity_type = ?");
+    where.push("a.activity_type = ?");
     params.push(filters.activityType);
   }
 
   if (filters.keyword) {
-    where.push("(action_description LIKE ? OR affected_record LIKE ? OR user_name LIKE ?)");
+    where.push("(a.action_description LIKE ? OR a.affected_record LIKE ? OR COALESCE(u.name, a.user_name) LIKE ?)");
     const kw = `%${filters.keyword}%`;
     params.push(kw, kw, kw);
+  }
+  if (filters.status) {
+    where.push("a.status = ?");
+    params.push(filters.status);
   }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -173,29 +177,30 @@ async function listAuditLogs(filters = {}) {
   const offset = (page - 1) * limit;
 
   const [[{ total }]] = await pool.query(
-    `SELECT COUNT(*) AS total FROM audit_logs ${whereSql}`,
+    `SELECT COUNT(*) AS total FROM audit_logs a LEFT JOIN user u ON u.user_id = a.user_id ${whereSql}`,
     params
   );
 
   const [rows] = await pool.query(
     `SELECT
-       audit_log_id  AS id,
-       user_id       AS userId,
-       user_name     AS userName,
-       module,
-       activity_type AS activityType,
-       action_description AS actionDescription,
-       affected_record    AS affectedRecord,
-       entity_type        AS entityType,
-       status,
-       ip_address    AS ipAddress,
-       device_info   AS deviceInfo,
-       previous_value AS previousValue,
-       new_value      AS newValue,
-       created_at    AS createdAt
-     FROM audit_logs
+       a.audit_log_id  AS id,
+       a.user_id       AS userId,
+       COALESCE(u.name, NULLIF(a.user_name, ''), 'System') AS userName,
+       a.module,
+       a.activity_type AS activityType,
+       a.action_description AS actionDescription,
+       a.affected_record    AS affectedRecord,
+       a.entity_type        AS entityType,
+       a.status,
+       a.ip_address    AS ipAddress,
+       a.device_info   AS deviceInfo,
+       a.previous_value AS previousValue,
+       a.new_value      AS newValue,
+       a.created_at    AS createdAt
+     FROM audit_logs a
+     LEFT JOIN user u ON u.user_id = a.user_id
      ${whereSql}
-     ORDER BY created_at DESC, audit_log_id DESC
+     ORDER BY a.created_at DESC, a.audit_log_id DESC
      LIMIT ? OFFSET ?`,
     [...params, limit, offset]
   );
@@ -224,22 +229,38 @@ async function getAuditSummary(module) {
     `SELECT COUNT(*) AS cnt FROM audit_logs ${moduleWhere}`,
     moduleParams
   );
+  const [riskRows] = await pool.query(
+    `SELECT COUNT(*) AS cnt FROM audit_logs WHERE LOWER(status) IN ('failed', 'failure', 'warning', 'error') ${module ? "AND module = ?" : ""}`,
+    module ? [module] : []
+  );
+  const [actorRows] = await pool.query(
+    `SELECT COUNT(DISTINCT user_id) AS cnt FROM audit_logs ${moduleWhere}`,
+    moduleParams
+  );
 
   return {
     totalLogs:       Number(totalRows[0]?.cnt || 0),
     totalEventsToday: Number(todayRows[0]?.cnt || 0),
+    warningFailureEvents: Number(riskRows[0]?.cnt || 0),
+    uniqueActors: Number(actorRows[0]?.cnt || 0),
     activityBreakdown: rows.map(r => ({ activityType: r.activity_type, count: Number(r.cnt) })),
     retentionMonths: 12,
   };
+}
+
+async function getDistinctModules() {
+  const [rows] = await pool.query("SELECT DISTINCT module FROM audit_logs WHERE module IS NOT NULL AND module <> '' ORDER BY module");
+  return rows.map((row) => row.module);
 }
 
 /**
  * getDistinctUsers — users who have created audit log entries (module-filtered).
  */
 async function getDistinctUsers(module) {
-  const where = module ? "WHERE module = ?" : "";
+  const where = module ? "WHERE a.module = ?" : "";
   const [rows] = await pool.query(
-    `SELECT DISTINCT user_id AS userId, user_name AS name FROM audit_logs ${where} ORDER BY user_name`,
+    `SELECT DISTINCT a.user_id AS userId, COALESCE(u.name, NULLIF(a.user_name, ''), 'System') AS name
+     FROM audit_logs a LEFT JOIN user u ON u.user_id = a.user_id ${where} ORDER BY name`,
     module ? [module] : []
   );
   return rows.filter(r => r.userId);
@@ -265,4 +286,5 @@ module.exports = {
   getAuditSummary,
   getDistinctUsers,
   getDistinctActivityTypes,
+  getDistinctModules,
 };

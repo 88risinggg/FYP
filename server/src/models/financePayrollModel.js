@@ -1,10 +1,9 @@
 /**
  * Finance Payroll Model
  *
- * After schema consolidation, payroll_run is merged into the payroll table.
- * A "run" is identified by a unique (payroll_month, payroll_year) group.
- * Run metadata (status, approval, config) is stored on each payroll row via
- * run_status, run_created_at, run_approved_at, payment_reference, configuration_json.
+ * payroll_run is the run header and payroll contains one employee result per run.
+ * Legacy run_* columns on payroll are dual-written temporarily for compatibility;
+ * payroll_run is the canonical source for run status, approval, configuration and payment reference.
  */
 
 const { pool } = require("../config/db");
@@ -35,9 +34,9 @@ async function ensureFinancePayrollTables() {
     `SELECT table_name
      FROM information_schema.tables
      WHERE table_schema = DATABASE()
-       AND table_name IN ('payroll', 'staff')`
+       AND table_name IN ('payroll', 'payroll_configuration', 'payroll_run', 'staff')`
   );
-  if (rows.length !== 2) {
+  if (rows.length !== 4) {
     throw new Error("Payroll database tables are incomplete. Run the payroll migrations first.");
   }
 }
@@ -108,9 +107,17 @@ async function getPayrollRows(connection, month, year) {
   const [rows] = await connection.execute(
     `SELECT
       p.*, s.employee_id, s.employee_code, s.name, s.email, s.department_name,
-      s.date_of_birth, s.race, s.religion, s.bank, s.account_no
+      s.date_of_birth, s.race, s.religion, s.bank, s.account_no,
+      pr.status AS header_run_status, pr.configuration_json AS header_configuration_json,
+      pr.approved_by AS header_approved_by, pr.approved_at AS header_approved_at,
+      pr.payment_reference AS header_payment_reference,
+      pr.created_at AS header_created_at, pr.updated_at AS header_updated_at,
+      pc.configuration_value AS rules_snapshot_json
      FROM payroll p
      JOIN staff s ON s.employee_id = p.staff_employee_id
+     LEFT JOIN payroll_run pr ON pr.payroll_run_id = p.payroll_run_id
+     LEFT JOIN payroll_configuration pc
+       ON pc.configuration_id = pr.configuration_id AND pc.configuration_type = 'rules_snapshot'
      WHERE p.payroll_month = ? AND p.payroll_year = ?
      ORDER BY s.name`,
     [month, year]
@@ -121,7 +128,8 @@ async function getPayrollRows(connection, month, year) {
 function mapRun(rows) {
   if (!rows.length) return null;
   const first = rows[0];
-  const stored = parseJson(first.configuration_json, {});
+  const stored = parseJson(first.header_configuration_json || first.configuration_json, {});
+  if (!stored.rules && first.rules_snapshot_json) stored.rules = parseJson(first.rules_snapshot_json, {});
   const workflow = stored.workflow || {};
   // Use a composite ID: month_year
   const runId = `${first.payroll_month}_${first.payroll_year}`;
@@ -129,11 +137,11 @@ function mapRun(rows) {
     id: runId,
     month: Number(first.payroll_month),
     year: Number(first.payroll_year),
-    status: first.run_status || "Draft",
+    status: first.header_run_status || first.run_status || "Draft",
     submittedBy: stored.submittedBy || "System",
-    submittedAt: stored.submittedAt || first.run_created_at,
-    approvedAt: first.run_approved_at || workflow.approvedAt,
-    bankReference: first.payment_reference || "",
+    submittedAt: stored.submittedAt || first.header_created_at || first.run_created_at,
+    approvedAt: first.header_approved_at || first.run_approved_at || workflow.approvedAt,
+    bankReference: first.header_payment_reference || first.payment_reference || "",
     source: "staff_db",
     rulesVersion: stored.rules?.version || DEFAULT_PAYROLL_RULES_2026.version,
     employees: rows.map(buildEmployeeFromPayroll),
@@ -198,11 +206,14 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    const [existing] = await connection.execute(
-      "SELECT payroll_id FROM payroll WHERE payroll_month = ? AND payroll_year = ? LIMIT 1",
-      [month, year]
+    const [[existing]] = await connection.execute(
+      `SELECT (
+        EXISTS(SELECT 1 FROM payroll WHERE payroll_month = ? AND payroll_year = ?)
+        OR EXISTS(SELECT 1 FROM payroll_run WHERE payroll_month = ? AND payroll_year = ?)
+       ) AS run_exists`,
+      [month, year, month, year]
     );
-    if (existing.length) {
+    if (Number(existing.run_exists) === 1) {
       const error = new Error("A payroll run already exists for this period.");
       error.code = "DUPLICATE_PAYROLL_RUN";
       throw error;
@@ -232,6 +243,21 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
     };
 
     const recoveries = await getApprovedRecoveries(connection);
+    const rulesSnapshot = JSON.stringify(activeRules);
+    const [configurationResult] = await connection.execute(
+      `INSERT INTO payroll_configuration
+        (configuration_type, configuration_key, configuration_value, description, updated_by)
+       VALUES ('rules_snapshot', SHA2(?, 256), ?, 'Immutable rules used by a payroll run', ?)
+       ON DUPLICATE KEY UPDATE configuration_id = LAST_INSERT_ID(configuration_id)`,
+      [rulesSnapshot, rulesSnapshot, userId || null]
+    );
+    const [runResult] = await connection.execute(
+      `INSERT INTO payroll_run
+        (payroll_month, payroll_year, status, configuration_id, configuration_json, created_at, updated_at)
+       VALUES (?, ?, 'Submitted for Finance Review', ?, ?, NOW(), NOW())`,
+      [month, year, configurationResult.insertId, JSON.stringify(configuration)]
+    );
+    const payrollRunId = runResult.insertId;
 
     for (const staff of staffRows) {
       const otherDeductions = recoveries
@@ -266,14 +292,14 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
       }
       await connection.execute(
         `INSERT INTO payroll (
-          staff_employee_id, payroll_month, payroll_year, gross_salary,
+          staff_employee_id, payroll_month, payroll_year, payroll_run_id, gross_salary,
           total_allowances, total_deductions, employee_cpf, employer_cpf, mbmf_amount,
           deduction_breakdown, net_salary, source, payslip_status,
           run_status, run_created_by, run_created_at, configuration_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'automated_2026', ?,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'automated_2026', ?,
           'Submitted for Finance Review', ?, NOW(), ?)`,
         [
-          staff.employee_id, month, year, calculation.grossSalary,
+          staff.employee_id, month, year, payrollRunId, calculation.grossSalary,
           calculation.allowanceTotal, calculation.totalDeductions, calculation.cpfEmployee,
           calculation.cpfEmployer, calculation.mbmfAmount, JSON.stringify(breakdown),
           calculation.netSalary,
@@ -303,7 +329,7 @@ async function upsertFinancePayrollRun({ run, userId }) {
   const rows = await getPayrollRows(pool, month, year);
   if (!rows.length) throw new Error("Payroll run not found.");
 
-  const stored = parseJson(rows[0].configuration_json, {});
+  const stored = parseJson(rows[0].header_configuration_json || rows[0].configuration_json, {});
   const configuration = {
     ...stored,
     rules: stored.rules || DEFAULT_PAYROLL_RULES_2026,
@@ -313,6 +339,14 @@ async function upsertFinancePayrollRun({ run, userId }) {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+    await connection.execute(
+      `UPDATE payroll_run
+       SET status = ?, approved_by = ?, approved_at = ?, payment_reference = ?,
+           configuration_json = ?, updated_at = NOW()
+       WHERE payroll_run_id = ?`,
+      [run.status, run.approvedAt ? userId || null : null, run.approvedAt || null,
+        run.bankReference || null, JSON.stringify(configuration), rows[0].payroll_run_id]
+    );
     // Update all payroll rows for this period
     await connection.execute(
       `UPDATE payroll

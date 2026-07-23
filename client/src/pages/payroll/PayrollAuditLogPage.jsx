@@ -3,9 +3,9 @@ import ModuleAuditLogPage from "../../components/common/ModuleAuditLogPage.jsx";
 export default function PayrollAuditLogPage() {
   return (
     <ModuleAuditLogPage
-      module="Payroll"
-      title="Payroll Audit Logs"
-      description="All payroll-related activities: payroll generation, approval, salary updates, exports, and payroll configuration changes."
+      module=""
+      title="System Audit Trail"
+      description="Technical activity across access, configuration, payroll workflows, exports and system operations."
     />
   );
 }

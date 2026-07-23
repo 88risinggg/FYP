@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { pool } = require("../config/db");
-const { createNotificationInternal } = require("../controllers/notificationController");
+const { notifyUser } = require("./payrollNotificationService");
 const { listPayslipLayouts } = require("../models/adminPayrollModel");
 const { generatePayslipPDF } = require("./payslipPdfService");
 
@@ -85,12 +85,15 @@ async function generateAndSendPayslip(payrollId, options = {}) {
     return { status: 409, message: "Payslip status changed before it could be sent" };
   }
 
-  await createNotificationInternal(
-    payslip.user_user_id,
-    "payslip_available",
-    `Your ${payslip.payroll_month}/${payslip.payroll_year} payslip is ready`,
-    `Payslip for ${payslip.employee_name} (${payslip.employee_id}) is available to view.`
-  ).catch(() => null);
+  await notifyUser(payslip.user_user_id, {
+    type: "payslip_available",
+    title: `Your ${payslip.payroll_month}/${payslip.payroll_year} payslip is ready`,
+    message: `Payslip for ${payslip.employee_name} (${payslip.employee_id}) is available to view.`,
+    actorUserId: options.actorUserId || null,
+    entityType: "payslip",
+    entityId: payrollId,
+    actionPath: "/dashboard/payroll/staff/payslips"
+  }).catch(() => null);
 
   return { status: 200, message: "Payslip generated and sent to the linked employee", payslip: { ...payslip, file_path: publicPath } };
 }

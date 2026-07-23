@@ -22,7 +22,8 @@ async function findUserByEmail(email) {
       user.name,
       user.password,
       user.status,
-      user.role_name
+      user.role_name,
+      user.must_change_password
     FROM user
     WHERE LOWER(user.email) = LOWER(?)`,
     [email]
@@ -31,6 +32,27 @@ async function findUserByEmail(email) {
   return rows[0] || null;
 }
 
+async function findUserById(userId) {
+  const [rows] = await pool.execute(
+    `SELECT user_id, email, name, password, status, role_name, must_change_password
+     FROM user WHERE user_id = ? LIMIT 1`,
+    [userId]
+  );
+  return rows[0] || null;
+}
+
+async function completeFirstLogin(userId, passwordHash) {
+  await pool.execute(
+    `UPDATE user
+     SET password = ?, must_change_password = 0, password_changed_at = NOW(), updated_at = NOW()
+     WHERE user_id = ? AND status = 1 AND must_change_password = 1`,
+    [passwordHash, userId]
+  );
+  return findUserById(userId);
+}
+
 module.exports = {
-  findUserByEmail
+  completeFirstLogin,
+  findUserByEmail,
+  findUserById
 };

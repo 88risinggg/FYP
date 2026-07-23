@@ -4,7 +4,7 @@ const {
   listFinancePayrollRuns,
   upsertFinancePayrollRun
 } = require("../models/financePayrollModel");
-const { logAuditEvent, getClientIp } = require("../models/auditLogModel");
+const { logAuditEvent, getClientIp, getDeviceInfo } = require("../models/auditLogModel");
 const { validateFinancePayrollRun } = require("../services/financePayrollWorkflow");
 const { generateAndSendPayslip } = require("../services/payslipDeliveryService");
 const { launchPayslipBrowser } = require("../services/payslipPdfService");
@@ -48,7 +48,8 @@ async function createRunFromStaffDatabase(req, res) {
       actionDescription: `Created Finance payroll run ${result.run.id} from staff database`,
       affectedRecord: result.run.id,
       status: "Success",
-      ipAddress: getClientIp(req)
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req)
     });
 
     res.status(201).json({ run: result.run });
@@ -106,7 +107,7 @@ async function saveFinancePayrollRun(req, res) {
       try {
         for (const payslip of payslips) {
           try {
-            const delivery = await generateAndSendPayslip(payslip.payroll_id, { browser });
+            const delivery = await generateAndSendPayslip(payslip.payroll_id, { browser, actorUserId: req.user?.userId });
             if (delivery.status !== 200) deliveryErrors.push(`Payslip ${payslip.payroll_id}: ${delivery.message}`);
           } catch (error) {
             deliveryErrors.push(`Payslip ${payslip.payroll_id}: ${error.message}`);
@@ -131,7 +132,8 @@ async function saveFinancePayrollRun(req, res) {
       actionDescription: `Updated payroll run ${run.id} to ${run.status}`,
       affectedRecord: run.id,
       status: "Success",
-      ipAddress: getClientIp(req)
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req)
     });
 
     res.json({ run: savedRun });

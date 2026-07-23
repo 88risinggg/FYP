@@ -218,6 +218,7 @@ export default function StaffPayrollPage() {
 
   return (
     <DashboardLayout
+      moduleClassName="payroll-module"
       pageTitle={pageTitle}
       user={session?.user}
       sidebarSections={payrollSidebarSections}
@@ -861,7 +862,7 @@ function NotificationsView({ payslips, getMonthLabel }) {
     const token = session?.token;
     if (!userId || !token) return;
     try {
-      await apiRequest(`/api/notifications/user/${userId}/read-all`, {
+      await apiRequest("/api/notifications/read-all", {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` }
       });

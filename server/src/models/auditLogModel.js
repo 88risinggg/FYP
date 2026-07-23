@@ -1,4 +1,5 @@
 const { pool } = require("../config/db");
+const { inferModule, writeAuditLog } = require("../services/auditService");
 
 function isMissingAuditTable(error) {
   return error?.code === "ER_NO_SUCH_TABLE" || error?.code === "ER_BAD_FIELD_ERROR";
@@ -28,41 +29,35 @@ async function tableExists(tableName) {
 async function logAuditEvent({
   userId = null,
   userName = "System",
+  module = null,
   activityType,
   actionDescription,
   affectedRecord = null,
+  entityType = null,
   status = "Info",
-  ipAddress = null
+  ipAddress = null,
+  deviceInfo = null,
+  previousValue = null,
+  newValue = null
 }) {
-  try {
-    if (await tableExists("audit_logs")) {
-      await pool.execute(
-        `INSERT INTO audit_logs (
-          user_id, user_name, module, activity_type, action_description,
-          affected_record, status, ip_address, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-        [userId, userName, activityType, activityType, actionDescription, affectedRecord, status, ipAddress]
-      );
-      return;
-    }
+  return writeAuditLog({
+    module: module || inferModule(activityType),
+    activityType,
+    action: actionDescription,
+    entityId: affectedRecord,
+    entityType: entityType || String(activityType || "system").trim().toLowerCase().replaceAll(" ", "_"),
+    userId,
+    userName,
+    status,
+    ipAddress,
+    deviceInfo,
+    previousValue,
+    newValue
+  });
+}
 
-    if (await tableExists("audit_log")) {
-      await pool.execute(
-        `INSERT INTO audit_log (action, entity_type, entity_id, user_user_id)
-         VALUES (?, ?, ?, ?)`,
-        [
-          actionDescription,
-          activityType,
-          Number.isFinite(Number(affectedRecord)) ? Number(affectedRecord) : null,
-          userId
-        ]
-      );
-    }
-  } catch (error) {
-    if (!isMissingAuditTable(error)) {
-      console.error("Audit logging failed:", error.message);
-    }
-  }
+function getDeviceInfo(req) {
+  return String(req.headers["user-agent"] || "").slice(0, 500) || null;
 }
 
 function buildAuditFilters(filters) {
@@ -245,6 +240,7 @@ module.exports = {
   getAuditSummary,
   getAuditUsers,
   getClientIp,
+  getDeviceInfo,
   listAuditLogs,
   logAuditEvent
 };

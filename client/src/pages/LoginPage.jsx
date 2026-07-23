@@ -19,7 +19,7 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from "../services/motion.js";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import { login } from "../services/authService.js";
+import { completeFirstLogin, login } from "../services/authService.js";
 import { startHealthCheck } from "../services/apiClient.js";
 import { saveSession } from "../services/sessionService.js";
 import VanidayLogo from "../components/branding/VanidayLogo.jsx";
@@ -59,6 +59,9 @@ export default function LoginPage() {
   const [otpEmail, setOtpEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+  const [setupToken, setSetupToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   // Handle OAuth callback redirects (Google)
   useEffect(() => {
@@ -79,7 +82,9 @@ export default function LoginPage() {
       const errorMessages = {
         invalid_state: "Login session expired. Please try again.",
         google_denied: "Google login was cancelled.",
-        google_failed: "Google authentication failed. Please try again."
+        google_failed: "Google authentication failed. Please try again.",
+        account_disabled: "This account is awaiting activation or has been disabled.",
+        password_setup_required: "Use the temporary password supplied by HR to create your permanent password first."
       };
       setError(errorMessages[oauthError] || "Authentication failed. Please try again.");
     }
@@ -173,11 +178,35 @@ export default function LoginPage() {
 
     try {
       const data = await login(email, password);
+      if (data.requiresPasswordChange) {
+        setSetupToken(data.setupToken);
+        setIsLoginOpen(false);
+        return;
+      }
       saveSession(data.token, data.user, rememberMe);
       startHealthCheck();
       navigate("/module-selection", { replace: true });
     } catch (requestError) {
       setError(requestError.message || "Invalid email or password");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleFirstLogin(event) {
+    event.preventDefault();
+    setError("");
+    if (newPassword.length < 8) return setError("Password must contain at least 8 characters.");
+    if (newPassword !== confirmPassword) return setError("Passwords do not match.");
+    setIsLoading(true);
+    try {
+      const data = await completeFirstLogin(setupToken, newPassword);
+      saveSession(data.token, data.user, rememberMe);
+      setSetupToken("");
+      startHealthCheck();
+      navigate("/module-selection", { replace: true });
+    } catch (requestError) {
+      setError(requestError.message || "Unable to set your permanent password.");
     } finally {
       setIsLoading(false);
     }
@@ -703,6 +732,34 @@ export default function LoginPage() {
                 Role-based access is applied after successful login.
               </div>
             </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {setupToken && (
+          <motion.div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#251E1F]/70 p-4 backdrop-blur-md"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.form onSubmit={handleFirstLogin} className="w-full max-w-md rounded-2xl border border-[#f0d2ca] bg-white p-7 shadow-2xl"
+              initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F38978]/15 text-[#F38978]"><Lock size={22} /></div>
+              <h2 className="mt-5 text-2xl font-semibold text-[#251E1F]">Create your permanent password</h2>
+              <p className="mt-2 text-sm text-[#7b6660]">Your temporary password was accepted. Set a private password before entering PayNivo.</p>
+              <div className="mt-6 space-y-4">
+                <label className="block text-sm font-medium text-[#6f5b55]">New password
+                  <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={8} required
+                    className="mt-2 w-full rounded-xl border border-[#f0d2ca] px-4 py-3 outline-none focus:border-[#F38978]" />
+                </label>
+                <label className="block text-sm font-medium text-[#6f5b55]">Confirm password
+                  <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={8} required
+                    className="mt-2 w-full rounded-xl border border-[#f0d2ca] px-4 py-3 outline-none focus:border-[#F38978]" />
+                </label>
+              </div>
+              {error ? <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
+              <button type="submit" disabled={isLoading} className="primary-button mt-6 w-full px-4 py-3 font-semibold disabled:opacity-60">
+                {isLoading ? "Saving..." : "Save password and continue"}
+              </button>
+            </motion.form>
           </motion.div>
         )}
       </AnimatePresence>

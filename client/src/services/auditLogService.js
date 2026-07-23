@@ -18,8 +18,8 @@ export function fetchModuleAuditLogs(module, filters = {}) {
   return apiRequest(`/api/audit-logs${toQuery({ module, ...filters })}`);
 }
 
-export function fetchModuleAuditSummary(module) {
-  return apiRequest(`/api/audit-logs/summary${toQuery({ module })}`);
+export function fetchModuleAuditSummary(module, filters = {}) {
+  return apiRequest(`/api/audit-logs/summary${toQuery({ module, ...filters })}`);
 }
 
 export async function exportModuleAuditLogs(module, filters = {}) {

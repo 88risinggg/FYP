@@ -11,7 +11,7 @@ const {
   updateUserPassword,
   updateUserStatus
 } = require("../models/adminUserModel");
-const { getClientIp, logAuditEvent } = require("../models/auditLogModel");
+const { getClientIp, getDeviceInfo, logAuditEvent } = require("../models/auditLogModel");
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -162,8 +162,11 @@ async function postUser(req, res) {
       activityType: "User Management",
       actionDescription: `Created user account ${user.email}`,
       affectedRecord: String(user.userId),
+      entityType: "user",
+      newValue: JSON.stringify({ roleId, status }),
       status: "Success",
-      ipAddress: getClientIp(req)
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req)
     });
 
     res.status(201).json({ user: formatUser(user) });
@@ -224,8 +227,12 @@ async function putUser(req, res) {
       activityType: "User Management",
       actionDescription: `Updated user account ${user.email}`,
       affectedRecord: String(user.userId),
+      entityType: "user",
+      previousValue: JSON.stringify({ name: currentUser.name, email: currentUser.email, roleId: currentUser.roleId, status: currentUser.status }),
+      newValue: JSON.stringify({ name: user.name, email: user.email, roleId: user.roleId, status: user.status }),
       status: "Success",
-      ipAddress: getClientIp(req)
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req)
     });
 
     res.json({ user: formatUser(user) });
@@ -259,8 +266,12 @@ async function patchUserStatus(req, res) {
       activityType: "User Management",
       actionDescription: `${status === 1 ? "Enabled" : "Disabled"} user account ${user.email}`,
       affectedRecord: String(user.userId),
+      entityType: "user",
+      previousValue: JSON.stringify({ status: currentUser.status }),
+      newValue: JSON.stringify({ status: user.status }),
       status: "Success",
-      ipAddress: getClientIp(req)
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req)
     });
 
     res.json({ user: formatUser(user) });
@@ -291,8 +302,12 @@ async function patchUserPassword(req, res) {
       activityType: "User Management",
       actionDescription: `Reset password for user account ${user.email}`,
       affectedRecord: String(user.userId),
+      entityType: "user",
+      previousValue: JSON.stringify({ credential: "Existing password" }),
+      newValue: JSON.stringify({ credential: "Password reset by Admin" }),
       status: "Success",
-      ipAddress: getClientIp(req)
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req)
     });
 
     res.json({
