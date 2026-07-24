@@ -627,7 +627,7 @@ function insightLabel(value) {
   return new Date(`${value}T00:00:00`).toLocaleDateString("en-SG", { day: "2-digit", month: "short", year: "2-digit" });
 }
 
-function DashboardView({ data, onImportLayout, onNavigate }) {
+function DashboardView({ data, onNavigate }) {
   const stats = data?.stats || {};
   const dashboardUpdates = getDashboardUpdateSegments(data);
   const now = new Date();
@@ -642,14 +642,13 @@ function DashboardView({ data, onImportLayout, onNavigate }) {
     { label: "Admin Logs", value: stats.adminLogs ?? 0, icon: History, iconClass: "dashboard-icon--blue", note: `${countRecent(data?.auditLogs || [], 7)} events this week` }
   ];
   const quickActions = [
-    { title: "Payroll Configuration", description: "Review accounting references and CPF operational controls.", action: "Open Configuration", icon: Settings, iconClass: "dashboard-icon--blue", onClick: () => onNavigate("/dashboard/payroll/admin/settings") },
-    { title: "Effective Payroll Rules", description: "See the resolved policies currently used by payroll.", action: "View Effective Rules", icon: ClipboardList, iconClass: "dashboard-icon--indigo", onClick: () => onNavigate("/dashboard/payroll/admin/effective-rules") },
-    { title: "Manage Users & Roles", description: "Control access and permissions for users.", action: "Manage Access", icon: Users, iconClass: "dashboard-icon--orange", onClick: () => onNavigate("/dashboard/payroll/admin/user-management") },
-    { title: "Import Payslip Layout", description: "Upload and preview your payslip design.", action: "Import Design", icon: Upload, iconClass: "dashboard-icon--indigo", onClick: onImportLayout },
-    { title: "Payslip Layout Control", description: "Set the default layout and manage templates.", action: "Manage Layouts", icon: Palette, iconClass: "dashboard-icon--rose", onClick: () => onNavigate("/dashboard/payroll/admin/payslip-layouts") },
-    { title: "Payroll Run Monitor", description: "Review run health, workflow ownership and processing delays.", action: "View Monitor", icon: ShieldCheck, iconClass: "dashboard-icon--teal", onClick: () => onNavigate("/dashboard/payroll/admin/payroll-monitor") },
-    { title: "System Audit Trail", description: "Inspect technical events, actors, outcomes and value changes.", action: "View Audit Trail", icon: History, iconClass: "dashboard-icon--blue", onClick: () => onNavigate("/dashboard/payroll/admin/system-audit-trail") },
-    { title: "Admin Reports", description: "Generate governance, access, rules and workflow reports.", action: "View Reports", icon: FileBarChart, iconClass: "dashboard-icon--amber", onClick: () => onNavigate("/dashboard/payroll/admin/reports") }
+    { title: "Payroll Configuration", description: "Review accounting references and CPF operational controls.", action: "Open Configuration", updatedAt: getLatestTimestamp(data?.settings), icon: Settings, iconClass: "dashboard-icon--blue", onClick: () => onNavigate("/dashboard/payroll/admin/settings") },
+    { title: "Effective Payroll Rules", description: "See the resolved policies currently used by payroll.", action: "View Effective Rules", updatedAt: getLatestTimestamp(data?.settings), icon: ClipboardList, iconClass: "dashboard-icon--indigo", onClick: () => onNavigate("/dashboard/payroll/admin/effective-rules") },
+    { title: "Manage Users & Roles", description: "Control access and permissions for users.", action: "Manage Access", updatedAt: getLatestTimestamp(data?.users), icon: Users, iconClass: "dashboard-icon--orange", onClick: () => onNavigate("/dashboard/payroll/admin/user-management") },
+    { title: "Payslip Management", description: "Import, preview and set the default payslip layout.", action: "Manage Payslips", updatedAt: getLatestTimestamp(data?.layouts), icon: Palette, iconClass: "dashboard-icon--rose", onClick: () => onNavigate("/dashboard/payroll/admin/payslip-layouts") },
+    { title: "Payroll Run Monitor", description: "Review run health, workflow ownership and processing delays.", action: "View Monitor", updatedAt: getLatestTimestamp(data?.payrollRuns), icon: ShieldCheck, iconClass: "dashboard-icon--teal", onClick: () => onNavigate("/dashboard/payroll/admin/payroll-monitor") },
+    { title: "System Audit Trail", description: "Inspect technical events, actors, outcomes and value changes.", action: "View Audit Trail", updatedAt: getLatestTimestamp(data?.auditLogs), icon: History, iconClass: "dashboard-icon--blue", onClick: () => onNavigate("/dashboard/payroll/admin/system-audit-trail") },
+    { title: "Admin Reports", description: "Generate governance, access, rules and workflow reports.", action: "View Reports", updatedAt: getOverallUpdatedAt(data), icon: FileBarChart, iconClass: "dashboard-icon--amber", onClick: () => onNavigate("/dashboard/payroll/admin/reports") }
   ];
 
   return (
@@ -691,7 +690,7 @@ function DashboardView({ data, onImportLayout, onNavigate }) {
           <div className="dashboard-action-grid">
             {quickActions.map((item) => (
               <article key={item.title} className="dashboard-action-card">
-                <div className="dashboard-action-title"><span className={`dashboard-icon ${item.iconClass}`}><item.icon aria-hidden="true" size={18}/></span><div><h4>{item.title}</h4><p>{item.description}</p></div></div>
+                <div className="dashboard-action-title"><span className={`dashboard-icon ${item.iconClass}`}><item.icon aria-hidden="true" size={18}/></span><div><h4>{item.title}</h4><p>{item.description}</p><time>Last updated: {item.updatedAt ? formatDateTime(item.updatedAt) : "Not updated"}</time></div></div>
                 <button type="button" onClick={item.onClick}>{item.action}<span aria-hidden="true">→</span></button>
               </article>
             ))}
@@ -4224,7 +4223,6 @@ function AdminPayrollContent({
   return (
     <DashboardView
       data={data}
-      onImportLayout={onImportLayout}
       onNavigate={onNavigate}
     />
   );

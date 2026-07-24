@@ -35,7 +35,7 @@ export async function apiRequest(path, options = {}) {
     });
     const data = await response.json().catch(() => ({}));
 
-    const sessionMustEnd = response.status === 401 || data.code === "ACCOUNT_DISABLED";
+    const sessionMustEnd = response.status === 401 || data.code === "ACCOUNT_DISABLED" || data.code === "ACCOUNT_LOCKED";
 
     if (sessionMustEnd && getStoredSession()) {
       forceLogout();

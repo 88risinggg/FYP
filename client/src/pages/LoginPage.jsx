@@ -21,7 +21,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { completeFirstLogin, login } from "../services/authService.js";
 import { startHealthCheck } from "../services/apiClient.js";
-import { saveSession } from "../services/sessionService.js";
+import { getPostAuthDestination, saveSession } from "../services/sessionService.js";
 import VanidayLogo from "../components/branding/VanidayLogo.jsx";
 
 const features = [
@@ -74,7 +74,7 @@ export default function LoginPage() {
         const user = JSON.parse(decodeURIComponent(userParam));
         saveSession(googleToken, user, true);
         startHealthCheck();
-        navigate("/module-selection", { replace: true });
+        navigate(getPostAuthDestination(user), { replace: true });
       } catch (e) {
         setError("OAuth login failed. Please try again.");
       }
@@ -84,6 +84,7 @@ export default function LoginPage() {
         google_denied: "Google login was cancelled.",
         google_failed: "Google authentication failed. Please try again.",
         account_disabled: "This account is awaiting activation or has been disabled.",
+        account_locked: "This account is locked. Contact an administrator to reactivate it.",
         password_setup_required: "Use the temporary password supplied by HR to create your permanent password first."
       };
       setError(errorMessages[oauthError] || "Authentication failed. Please try again.");
@@ -148,7 +149,7 @@ export default function LoginPage() {
       if (response.ok && data.token) {
         saveSession(data.token, data.user, true);
         startHealthCheck();
-        navigate("/module-selection", { replace: true });
+        navigate(getPostAuthDestination(data.user), { replace: true });
       } else {
         setError(data.message || "OTP verification failed.");
       }
@@ -185,7 +186,7 @@ export default function LoginPage() {
       }
       saveSession(data.token, data.user, rememberMe);
       startHealthCheck();
-      navigate("/module-selection", { replace: true });
+      navigate(getPostAuthDestination(data.user), { replace: true });
     } catch (requestError) {
       setError(requestError.message || "Invalid email or password");
     } finally {
@@ -204,7 +205,7 @@ export default function LoginPage() {
       saveSession(data.token, data.user, rememberMe);
       setSetupToken("");
       startHealthCheck();
-      navigate("/module-selection", { replace: true });
+      navigate(getPostAuthDestination(data.user), { replace: true });
     } catch (requestError) {
       setError(requestError.message || "Unable to set your permanent password.");
     } finally {
@@ -229,10 +230,10 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#fff8f5] text-[#251E1F]">
+    <main className="login-page min-h-screen overflow-hidden bg-[#fff8f5] text-[#251E1F]">
       <section id="top" className="relative min-h-screen">
         <motion.div
-          className="pointer-events-none absolute inset-0"
+          className="login-hero-background pointer-events-none absolute inset-0"
           style={{
             background:
               "radial-gradient(circle at 18% 22%, rgba(243,137,120,0.18), transparent 28%), radial-gradient(circle at 86% 18%, rgba(253,217,205,0.55), transparent 30%), radial-gradient(circle at 72% 72%, rgba(45,124,131,0.10), transparent 34%), linear-gradient(135deg, #fff8f5 0%, #fff3ee 46%, #FDD9CD 100%)",
@@ -244,7 +245,7 @@ export default function LoginPage() {
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.045)_1px,transparent_1px)] bg-[size:64px_64px] opacity-30" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[#fff8f5] to-transparent" />
 
-        <header className="relative z-20 border-b border-[#f0d2ca] bg-white/80 backdrop-blur-xl">
+        <header className="login-header relative z-20 border-b border-[#f0d2ca] bg-white/80 backdrop-blur-xl">
           <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
             <a href="#top" className="flex min-w-0 items-center" aria-label="PayNivo home">
               <VanidayLogo />
@@ -327,7 +328,7 @@ export default function LoginPage() {
           </motion.div>
 
           <motion.div
-            className="relative min-h-[520px]"
+            className="relative min-h-[570px] sm:min-h-[520px]"
             initial={shouldReduceMotion ? false : { opacity: 0, y: 30, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ ...standardTransition, delay: shouldReduceMotion ? 0 : 0.2 }}
@@ -360,13 +361,13 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                <div className="mt-5 grid grid-cols-3 gap-2 sm:gap-4">
                   {[
                     ["Invoices", "Active", FileText],
                     ["Payroll", "Ready", Wallet],
                     ["Reports", "Synced", BarChart3]
                   ].map(([label, value, Icon]) => (
-                    <div key={label} className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+                    <div key={label} className="min-w-0 rounded-xl border border-[#f0d2ca] bg-white/80 p-2 sm:p-4">
                       <Icon className="text-[#F38978]" size={20} />
                       <p className="mt-4 text-xs text-[#7b6660]">{label}</p>
                       <p className="mt-1 text-sm font-semibold text-[#251E1F]">{value}</p>
@@ -565,7 +566,7 @@ export default function LoginPage() {
             transition={{ duration: shouldReduceMotion ? 0 : 0.22 }}
           >
             <motion.section
-              className="relative w-full max-w-md rounded-3xl border border-[#ead3cc] bg-white/95 p-6 text-[#251E1F] shadow-2xl shadow-[#f2b5a9]/20 backdrop-blur-xl sm:p-8"
+              className="login-dialog relative w-full max-w-md rounded-3xl border border-[#ead3cc] bg-white/95 p-6 text-[#251E1F] shadow-2xl shadow-[#f2b5a9]/20 backdrop-blur-xl sm:p-8"
               initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.94, y: 18 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={shouldReduceMotion ? undefined : { opacity: 0, scale: 0.97, y: 12 }}

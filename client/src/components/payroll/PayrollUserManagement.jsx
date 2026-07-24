@@ -31,7 +31,18 @@ function initials(record) {
 
 function adminAccountStatus(record) {
   if (["Pending", "Rejected", "No Account"].includes(record.activation_status)) return record.activation_status;
+  if (record.account_locked_at) return "Locked";
   return record.user_id && Number(record.account_status) !== 1 ? "Disabled" : "Approved";
+}
+
+function normalizeManagedUsers(payload) {
+  return {
+    ...(payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {}),
+    users: Array.isArray(payload?.users) ? payload.users : [],
+    roles: Array.isArray(payload?.roles) && payload.roles.length
+      ? payload.roles
+      : ["Admin", "Finance", "HR", "Staff"]
+  };
 }
 
 const roleVisuals = {
@@ -47,6 +58,7 @@ const statusVisuals = {
   Pending: "admin-user-management__status--pending",
   Rejected: "admin-user-management__status--rejected",
   Disabled: "admin-user-management__status--disabled",
+  Locked: "admin-user-management__status--locked",
   "No Account": "admin-user-management__status--no-account"
 };
 
@@ -63,7 +75,8 @@ function AdminUserDirectory({ data, loading, busy, error, success, temporaryPass
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selected, setSelected] = useState(null);
-  const users = data.users || [];
+  const users = Array.isArray(data?.users) ? data.users : [];
+  const roles = Array.isArray(data?.roles) ? data.roles : [];
   const departments = [...new Set(users.map((record) => record.department_name).filter(Boolean))].sort();
   const statuses = [...new Set(users.map(adminAccountStatus).filter(Boolean))];
   const filteredUsers = useMemo(() => {
@@ -120,7 +133,7 @@ function AdminUserDirectory({ data, loading, busy, error, success, temporaryPass
     <div className="admin-user-management__directory">
       <div className="admin-user-management__filters">
         <label className="admin-user-management__search"><Search size={17}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name, email, or employee code..."/></label>
-        <label><span>Role</span><select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}><option>All Roles</option>{data.roles.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <label><span>Role</span><select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}><option>All Roles</option>{roles.map((item) => <option key={item}>{item}</option>)}</select></label>
         <label><span>Department</span><select value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)}><option>All Departments</option><option>No department</option>{departments.map((item) => <option key={item}>{item}</option>)}</select></label>
         <label><span>Activation status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>All Statuses</option>{statuses.map((item) => <option key={item}>{item}</option>)}</select></label>
       </div>
@@ -131,7 +144,7 @@ function AdminUserDirectory({ data, loading, busy, error, success, temporaryPass
             <td><div className="admin-user-management__employee"><span className={`admin-user-management__avatar ${getRoleVisuals(record).avatar}`}>{initials(record)}</span><div><strong>{record.staff_name || record.name || "Unnamed user"}</strong><small>{record.employee_code || "No employee code"} · {record.staff_email || record.email || "No email"}</small></div></div></td>
             <td><strong>{record.department_name || "No department"}</strong><small>{record.employee_id ? "Staff record linked" : "No staff record linked"}</small></td>
             <td><span className={`admin-user-management__role ${getRoleVisuals(record).badge}`}>{record.role_name || record.requested_role || "No account"}</span><small>{record.role_name === "Admin" ? "Full system access" : record.user_id ? "Role-based access" : "Account not created"}</small></td>
-            <td><span className={`admin-user-management__status ${statusVisuals[adminAccountStatus(record)] || statusVisuals["No Account"]}`}><i/>{adminAccountStatus(record)}</span><small>{record.user_id ? (Number(record.account_status) === 1 ? "Active" : "Access disabled") : "Unlinked"}</small></td>
+            <td><span className={`admin-user-management__status ${statusVisuals[adminAccountStatus(record)] || statusVisuals["No Account"]}`}><i/>{adminAccountStatus(record)}</span><small>{record.account_locked_at ? `Locked ${new Date(record.account_locked_at).toLocaleString("en-SG")}` : record.user_id ? (Number(record.account_status) === 1 ? "Active" : "Access disabled") : "Unlinked"}</small></td>
             <td><button type="button" className="admin-user-management__manage" onClick={() => setSelected(record)}><BriefcaseBusiness size={15}/>Manage Account Details</button></td>
           </tr>)}</tbody></table>{!rows.length ? <div className="admin-user-management__empty">No users match the selected filters.</div> : null}</div>
         <footer className="admin-user-management__pagination"><p>Showing {start} to {end} of {filteredUsers.length} users</p><div><select aria-label="Rows per page" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}><option value="10">10 per page</option><option value="25">25 per page</option><option value="50">50 per page</option></select><button disabled={currentPage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} aria-label="Previous page"><ChevronLeft size={18}/></button><span>{currentPage} / {totalPages}</span><button disabled={currentPage === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))} aria-label="Next page"><ChevronRight size={18}/></button></div></footer>
@@ -142,10 +155,11 @@ function AdminUserDirectory({ data, loading, busy, error, success, temporaryPass
       <header><div><span>Account administration</span><h3 id="manage-account-title">Manage Account Details</h3><p>Only access-related information is available to Admin.</p></div><button onClick={() => setSelected(null)} aria-label="Close"><X size={20}/></button></header>
       <div className="admin-user-management__identity"><span className={`admin-user-management__avatar ${getRoleVisuals(selected).avatar}`}>{initials(selected)}</span><div><strong>{selected.staff_name || selected.name}</strong><p>{selected.staff_email || selected.email}</p><small>{selected.employee_code || "No employee code"} · {selected.department_name || "No department"}</small></div></div>
       {selected.requested_by_name ? <p className="admin-user-management__request-note">Requested by {selected.requested_by_name}{selected.rejection_reason ? ` · Previous rejection: ${selected.rejection_reason}` : ""}</p> : null}
+      {selected.account_locked_at ? <p className="admin-user-management__request-note admin-user-management__request-note--locked"><strong>Security lock:</strong> {selected.account_lock_reason || "Too many failed password attempts"}<br/>Locked {new Date(selected.account_locked_at).toLocaleString("en-SG")} after {selected.failed_login_attempts || 5} failed attempts.</p> : null}
       {selected.activation_status === "Pending" ? <div className="admin-user-management__review-actions"><button disabled={busy} onClick={() => review(selected, "approve")} className="admin-user-management__approve"><CheckCircle2 size={16}/>Approve activation</button><button disabled={busy} onClick={() => review(selected, "reject")} className="admin-user-management__reject"><X size={16}/>Reject request</button></div> : null}
       {selected.user_id && selected.activation_status === "Approved" ? <div className="admin-user-management__account-controls">
-        <label><span>PayNivo role</span><select value={selected.role_name || "Staff"} onChange={(event) => accountAction(selected, "role", data.roles.indexOf(event.target.value) + 1)}>{data.roles.map((item) => <option key={item}>{item}</option>)}</select></label>
-        <div><span>Account access</span><button onClick={() => accountAction(selected, "status", Number(selected.account_status) === 1 ? 0 : 1)}>{Number(selected.account_status) === 1 ? "Disable account" : "Enable account"}</button></div>
+        <label><span>PayNivo role</span><select value={selected.role_name || "Staff"} onChange={(event) => accountAction(selected, "role", roles.indexOf(event.target.value) + 1)}>{roles.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <div><span>Account access</span><button onClick={() => accountAction(selected, "status", selected.account_locked_at ? 1 : Number(selected.account_status) === 1 ? 0 : 1)}>{selected.account_locked_at ? "Reactivate account" : Number(selected.account_status) === 1 ? "Disable account" : "Enable account"}</button></div>
         <div><span>Password security</span><button onClick={() => accountAction(selected, "password")}><KeyRound size={15}/>Issue temporary password</button></div>
       </div> : null}
       {!selected.user_id ? <p className="admin-user-management__request-note">This staff record has no PayNivo account. HR must create and submit the account request.</p> : null}
@@ -168,7 +182,7 @@ export default function PayrollUserManagement({ role }) {
 
   const load = async () => {
     setLoading(true);
-    try { setData(await getPayrollUsers()); setError(""); }
+    try { setData(normalizeManagedUsers(await getPayrollUsers())); setError(""); }
     catch (loadError) { setError(loadError.message || "Unable to load user management."); }
     finally { setLoading(false); }
   };
@@ -292,3 +306,5 @@ export default function PayrollUserManagement({ role }) {
     </form></div> : null}
   </section>;
 }
+
+export { normalizeManagedUsers };

@@ -25,6 +25,7 @@ async function authenticateToken(req, res, next) {
         user.email,
         user.status,
         user.must_change_password,
+        user.account_locked_at,
         user.role_name AS role
       FROM user
       WHERE user.user_id = ?`,
@@ -32,6 +33,13 @@ async function authenticateToken(req, res, next) {
     );
 
     const user = rows[0];
+
+    if (user?.account_locked_at) {
+      return res.status(423).json({
+        code: "ACCOUNT_LOCKED",
+        message: "This account is locked. Contact an administrator to reactivate it."
+      });
+    }
 
     if (!user || !(user.status === 1 || user.status === "1" || (typeof user.status === "string" && user.status.toLowerCase() === "active"))) {
       return res.status(403).json({

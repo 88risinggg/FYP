@@ -56,6 +56,9 @@ function toAdminManagedUser(record) {
     role_name: record.role_name,
     account_status: record.account_status,
     must_change_password: record.must_change_password,
+    failed_login_attempts: record.failed_login_attempts,
+    account_locked_at: record.account_locked_at,
+    account_lock_reason: record.account_lock_reason,
     account_created_at: record.account_created_at,
     employee_id: record.employee_id,
     employee_code: record.employee_code,
@@ -76,15 +79,26 @@ function toAdminManagedUser(record) {
   };
 }
 
+function toHrManagedUser(record) {
+  const {
+    failed_login_attempts: _failedLoginAttempts,
+    account_locked_at: _accountLockedAt,
+    account_lock_reason: _accountLockReason,
+    ...hrRecord
+  } = record;
+  return hrRecord;
+}
+
 async function getManagedUsers(req, res) {
   try {
     const users = await listManagedUsers();
     return res.json({
-      users: req.user.role === "Admin" ? users.map(toAdminManagedUser) : users,
+      users: req.user.role === "Admin" ? users.map(toAdminManagedUser) : users.map(toHrManagedUser),
       roles: ROLE_NAMES
     });
   } catch (error) {
-    return res.status(500).json({ message: "Unable to load payroll user management.", detail: error.message });
+    console.error("Unable to load payroll user management:", error.message);
+    return res.status(500).json({ message: "Unable to load payroll user management." });
   }
 }
 
@@ -183,4 +197,4 @@ async function reviewRequest(req, res) {
   }
 }
 
-module.exports = { createHire, editRequest, getManagedUsers, reviewRequest, toAdminManagedUser };
+module.exports = { createHire, editRequest, getManagedUsers, reviewRequest, toAdminManagedUser, toHrManagedUser };

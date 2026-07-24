@@ -24,7 +24,7 @@ import SettingsPage from "./pages/settings/SettingsPage.jsx";
 import { startHealthCheck, stopHealthCheck } from "./services/apiClient.js";
 import { applyAppearance, readCachedAppearance } from "./services/appearanceService.js";
 import { fetchAppearance } from "./services/settingsService.js";
-import { getStoredSession } from "./services/sessionService.js";
+import { getPostAuthDestination, getStoredSession } from "./services/sessionService.js";
 
 function ProtectedRoute({ children }) {
   const session = getStoredSession();
@@ -34,6 +34,14 @@ function ProtectedRoute({ children }) {
   }
 
   return children;
+}
+
+function ModuleSelectionRoute() {
+  const session = getStoredSession();
+  if (!session?.token) return <Navigate to="/login" replace />;
+  const destination = getPostAuthDestination(session.user);
+  if (destination !== "/module-selection") return <Navigate to={destination} replace />;
+  return <ModuleSelectionPage />;
 }
 
 function AdminInvoicingRoute({ children }) {
@@ -190,9 +198,7 @@ export default function App() {
       <Route
         path="/module-selection"
         element={
-          <ProtectedRoute>
-            <ModuleSelectionPage />
-          </ProtectedRoute>
+          <ModuleSelectionRoute />
         }
       />
       <Route

@@ -84,6 +84,16 @@ describe("DashboardLayout account menu", () => {
     fireEvent.click(screen.getByRole("button", { name: /Settings/i }));
     expect(screen.getByTestId("location").textContent).toBe("/dashboard/settings");
   });
+
+  it("closes when the user interacts anywhere outside the account menu", () => {
+    renderLayout({ user: { name: "Admin User", role: "Admin" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open account menu" }));
+    expect(screen.getByRole("menu", { name: "Account menu" })).toBeTruthy();
+
+    fireEvent.pointerDown(screen.getByText("Content"));
+    expect(screen.queryByRole("menu", { name: "Account menu" })).toBeNull();
+  });
 });
 
 describe("DashboardLayout sidebar module navigation", () => {

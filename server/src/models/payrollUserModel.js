@@ -4,9 +4,10 @@ const { writeAuditLog } = require("../services/auditService");
 const ROLE_NAMES = ["Admin", "Finance", "HR", "Staff"];
 
 async function listManagedUsers() {
-  const [rows] = await pool.query(
+  const [accountRows] = await pool.query(
     `SELECT u.user_id, u.name, u.email, u.role_name, u.status AS account_status,
-            u.must_change_password, u.created_at AS account_created_at,
+            u.must_change_password, u.failed_login_attempts, u.account_locked_at,
+            u.account_lock_reason, u.created_at AS account_created_at,
             s.employee_id, s.employee_code, s.name AS staff_name, s.email AS staff_email,
             s.phone, s.department_name, s.hire_date, s.base_salary,
             s.status AS employment_status, s.bank, s.account_no,
@@ -21,17 +22,47 @@ async function listManagedUsers() {
      LEFT JOIN account_action_requests ar
        ON ar.user_id = u.user_id AND ar.request_type = 'user_activation'
      LEFT JOIN user requester ON requester.user_id = ar.requested_by
-     LEFT JOIN user reviewer ON reviewer.user_id = ar.reviewed_by
-     UNION ALL
-     SELECT NULL, s.name, s.email, NULL, NULL, 0, NULL,
-            s.employee_id, s.employee_code, s.name, s.email, s.phone,
-            s.department_name, s.hire_date, s.base_salary, s.status, s.bank, s.account_no,
-            NULL, 'No Account', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
-     FROM staff s
-     WHERE s.user_user_id IS NULL
-     ORDER BY activation_status = 'Pending' DESC, staff_name, name`
+     LEFT JOIN user reviewer ON reviewer.user_id = ar.reviewed_by`
   );
-  return rows;
+  const [unlinkedRows] = await pool.query(
+    `SELECT s.employee_id, s.employee_code, s.name AS staff_name, s.email AS staff_email,
+            s.phone, s.department_name, s.hire_date, s.base_salary,
+            s.status AS employment_status, s.bank, s.account_no
+     FROM staff s
+     WHERE s.user_user_id IS NULL`
+  );
+
+  const unlinkedUsers = unlinkedRows.map((staff) => ({
+    user_id: null,
+    name: staff.staff_name,
+    email: staff.staff_email,
+    role_name: null,
+    account_status: null,
+    must_change_password: 0,
+    failed_login_attempts: null,
+    account_locked_at: null,
+    account_lock_reason: null,
+    account_created_at: null,
+    ...staff,
+    request_id: null,
+    activation_status: "No Account",
+    requested_role: null,
+    requested_by: null,
+    requested_by_name: null,
+    reviewed_by: null,
+    reviewed_by_name: null,
+    rejection_reason: null,
+    requested_at: null,
+    reviewed_at: null
+  }));
+
+  return [...accountRows, ...unlinkedUsers].sort((left, right) => {
+    const pendingDifference = Number(right.activation_status === "Pending") - Number(left.activation_status === "Pending");
+    if (pendingDifference) return pendingDifference;
+    const leftName = left.staff_name || left.name || "";
+    const rightName = right.staff_name || right.name || "";
+    return leftName.localeCompare(rightName, "en", { sensitivity: "base" });
+  });
 }
 
 async function createHireWithAccount({ staff, account, requestedBy, passwordHash }) {

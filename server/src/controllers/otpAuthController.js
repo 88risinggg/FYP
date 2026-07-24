@@ -138,6 +138,9 @@ async function verifyOtp(req, res) {
     // Find or create user
     const localUser = await findOrCreateOtpUser(normalizedEmail);
 
+    if (localUser.account_locked_at) {
+      return res.status(423).json({ code: "ACCOUNT_LOCKED", message: "This account is locked. Contact an administrator to reactivate it." });
+    }
     if (!(Number(localUser.status) === 1)) {
       return res.status(403).json({ message: "This account is awaiting activation or has been disabled." });
     }
@@ -174,7 +177,7 @@ async function verifyOtp(req, res) {
 async function findOrCreateOtpUser(email) {
   // Check if user exists
   const [existing] = await pool.query(
-    `SELECT user_id, name, email, status, must_change_password, role_name AS role
+    `SELECT user_id, name, email, status, must_change_password, account_locked_at, role_name AS role
      FROM user
      WHERE email = ?
      LIMIT 1`,

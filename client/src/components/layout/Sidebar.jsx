@@ -19,16 +19,16 @@ export default function Sidebar({
   const location = useLocation();
   const [openItems, setOpenItems] = useState({});
   const classes = {
-    aside: "fixed inset-y-0 left-0 z-30 w-64 border-r border-[#f2d5cc] bg-gradient-to-b from-[#fff8f5] via-[#fff3ee] to-[#FDD9CD]/80 shadow-2xl shadow-[#f2b5a9]/20 backdrop-blur-2xl transition-transform duration-200 ease-out lg:flex lg:flex-col",
+    aside: "app-sidebar fixed inset-y-0 left-0 z-30 w-64 border-r border-[#f2d5cc] bg-gradient-to-b from-[#fff8f5] via-[#fff3ee] to-[#FDD9CD]/80 shadow-2xl shadow-[#f2b5a9]/20 backdrop-blur-2xl transition-transform duration-200 ease-out lg:flex lg:flex-col",
     headerBorder: "border-[#f2d5cc]",
     toggleButton: "ml-auto hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[#6f4f47] transition hover:bg-[#FDD9CD]/45 hover:text-[#F38978] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]/45 lg:inline-flex",
     sectionLabel: "mb-3 px-2 text-[11px] font-bold uppercase tracking-wide text-[#b06b5f]",
     itemBase: "flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[#F38978]/45",
-    activeItem: "bg-[#FDD9CD] text-[#F38978] shadow-lg shadow-[#F38978]/10",
-    expandedItem: "bg-[#FDD9CD]/55 text-[#6f4f47]",
-    inactiveItem: "text-[#6f4f47] hover:bg-[#FDD9CD]/45 hover:text-[#F38978] hover:shadow-lg hover:shadow-[#F38978]/10",
+    activeItem: "app-sidebar-active bg-[#FDD9CD] text-[#F38978] shadow-lg shadow-[#F38978]/10",
+    expandedItem: "app-sidebar-expanded bg-[#FDD9CD]/55 text-[#6f4f47]",
+    inactiveItem: "app-sidebar-inactive text-[#6f4f47] hover:bg-[#FDD9CD]/45 hover:text-[#F38978] hover:shadow-lg hover:shadow-[#F38978]/10",
     childBase: "flex min-h-9 w-full items-center rounded-lg px-3 py-2 text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-[#F38978]/35",
-    activeChild: "bg-white/80 text-[#F38978] shadow-sm",
+    activeChild: "app-sidebar-active bg-white/80 text-[#F38978] shadow-sm",
     inactiveChild: "text-[#6f4f47] hover:bg-white/60 hover:text-[#F38978]"
   };
 

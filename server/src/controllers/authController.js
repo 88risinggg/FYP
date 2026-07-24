@@ -9,7 +9,23 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
-const { completeFirstLogin: saveFirstLoginPassword, findUserByEmail, findUserById } = require("../models/authModel");
+const {
+  completeFirstLogin: saveFirstLoginPassword,
+  findUserByEmail,
+  findUserById,
+  recordFailedLogin,
+  resetFailedLogins
+} = require("../models/authModel");
+const { notifyRoles } = require("../services/payrollNotificationService");
+
+const LOGIN_FAILURE_LIMIT = 5;
+
+function lockedResponse(res) {
+  return res.status(423).json({
+    code: "ACCOUNT_LOCKED",
+    message: "This account is locked. Contact an administrator to reactivate it."
+  });
+}
 
 /**
  * Determine which application modules a user role can access.
@@ -95,14 +111,33 @@ async function login(req, res) {
       });
     }
 
+    if (user.account_locked_at) return lockedResponse(res);
+
     // Verify password against bcrypt hash
     const passwordMatches = await bcrypt.compare(password, user.password);
 
     if (!passwordMatches) {
+      const failure = await recordFailedLogin(user.user_id, LOGIN_FAILURE_LIMIT);
+      if (failure.newlyLocked) {
+        await notifyRoles("Admin", {
+          type: "security_account_locked",
+          title: "User account locked",
+          message: `${user.name} (${user.email}) was locked at ${new Date().toISOString()} after ${LOGIN_FAILURE_LIMIT} failed password attempts.`,
+          actionPath: "/dashboard/payroll/admin/user-management",
+          entityType: "user",
+          entityId: user.user_id,
+          metadata: { userId: user.user_id, lockedAt: new Date().toISOString(), reason: "Too many failed password attempts" }
+        }).catch((notificationError) => {
+          console.error("Unable to deliver account lock notification:", notificationError.message);
+        });
+        return lockedResponse(res);
+      }
       return res.status(401).json({
         message: "Invalid email or password"
       });
     }
+
+    await resetFailedLogins(user.user_id);
 
     if (Number(user.must_change_password) === 1) {
       const setupToken = jwt.sign(
@@ -134,6 +169,7 @@ async function completeFirstLogin(req, res) {
       return res.status(401).json({ message: "Invalid password setup token." });
     }
     const current = await findUserById(payload.userId);
+    if (current?.account_locked_at) return lockedResponse(res);
     if (!current || !isActiveStatus(current.status) || Number(current.must_change_password) !== 1) {
       return res.status(409).json({ message: "Password setup is no longer available for this account." });
     }

@@ -10,7 +10,7 @@ jest.mock("../services/payrollNotificationService", () => ({
   notifyUser: jest.fn()
 }));
 
-const { toAdminManagedUser } = require("./payrollUserController");
+const { toAdminManagedUser, toHrManagedUser } = require("./payrollUserController");
 
 describe("Admin payroll user privacy projection", () => {
   test("keeps access-management fields and removes private HR/payroll fields", () => {
@@ -44,5 +44,24 @@ describe("Admin payroll user privacy projection", () => {
     expect(projected).not.toHaveProperty("base_salary");
     expect(projected).not.toHaveProperty("bank");
     expect(projected).not.toHaveProperty("account_no");
+  });
+});
+
+describe("HR payroll user privacy projection", () => {
+  test("removes security lockout metadata while preserving employment workflow fields", () => {
+    const projected = toHrManagedUser({
+      user_id: 8,
+      employee_id: 18,
+      staff_name: "Example User",
+      activation_status: "Approved",
+      failed_login_attempts: 5,
+      account_locked_at: "2026-07-24T10:00:00.000Z",
+      account_lock_reason: "Too many failed password attempts"
+    });
+
+    expect(projected).toMatchObject({ user_id: 8, employee_id: 18, activation_status: "Approved" });
+    expect(projected).not.toHaveProperty("failed_login_attempts");
+    expect(projected).not.toHaveProperty("account_locked_at");
+    expect(projected).not.toHaveProperty("account_lock_reason");
   });
 });

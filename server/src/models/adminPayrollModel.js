@@ -584,13 +584,17 @@ async function getUserById(userId) {
 
 async function updateUserStatus({ userId, status, adminUserId }) {
   const [result] = await pool.execute(
-    "UPDATE user SET status = ? WHERE user_id = ?",
-    [status, userId]
+    `UPDATE user SET status = ?,
+       failed_login_attempts = IF(? = 1, 0, failed_login_attempts),
+       account_locked_at = IF(? = 1, NULL, account_locked_at),
+       account_lock_reason = IF(? = 1, NULL, account_lock_reason)
+     WHERE user_id = ?`,
+    [status, status, status, status, userId]
   );
 
   if (result.affectedRows > 0) {
     await logAdminAction({
-      action: status === 1 ? "Activated user account" : "Deactivated user account",
+      action: status === 1 ? "Activated or reactivated user account" : "Deactivated user account",
       entityType: "user",
       entityId: userId,
       userId: adminUserId

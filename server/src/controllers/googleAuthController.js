@@ -118,6 +118,9 @@ async function googleCallback(req, res) {
     const localUser = await findOrCreateGoogleUser(userInfo);
 
     // Issue local JWT
+    if (localUser.account_locked_at) {
+      return res.redirect(`${clientUrl}/login?error=account_locked`);
+    }
     if (!(Number(localUser.status) === 1)) {
       return res.redirect(`${clientUrl}/login?error=account_disabled`);
     }
@@ -152,7 +155,7 @@ async function findOrCreateGoogleUser(googleUser) {
 
   // Check if user already linked to this Google account
   const [existing] = await pool.query(
-    `SELECT u.user_id, u.name, u.email, u.status, u.must_change_password, u.role_name AS role
+    `SELECT u.user_id, u.name, u.email, u.status, u.must_change_password, u.account_locked_at, u.role_name AS role
      FROM user u
      WHERE u.google_sub = ?
      LIMIT 1`,
@@ -166,7 +169,7 @@ async function findOrCreateGoogleUser(googleUser) {
   // Try to match existing user by email
   if (email) {
     const [byEmail] = await pool.query(
-      `SELECT u.user_id, u.name, u.email, u.status, u.must_change_password, u.role_name AS role
+      `SELECT u.user_id, u.name, u.email, u.status, u.must_change_password, u.account_locked_at, u.role_name AS role
        FROM user u
        WHERE u.email = ?
        LIMIT 1`,

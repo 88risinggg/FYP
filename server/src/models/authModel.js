@@ -23,7 +23,10 @@ async function findUserByEmail(email) {
       user.password,
       user.status,
       user.role_name,
-      user.must_change_password
+      user.must_change_password,
+      user.failed_login_attempts,
+      user.account_locked_at,
+      user.account_lock_reason
     FROM user
     WHERE LOWER(user.email) = LOWER(?)`,
     [email]
@@ -34,11 +37,58 @@ async function findUserByEmail(email) {
 
 async function findUserById(userId) {
   const [rows] = await pool.execute(
-    `SELECT user_id, email, name, password, status, role_name, must_change_password
+    `SELECT user_id, email, name, password, status, role_name, must_change_password,
+            failed_login_attempts, account_locked_at, account_lock_reason
      FROM user WHERE user_id = ? LIMIT 1`,
     [userId]
   );
   return rows[0] || null;
+}
+
+async function recordFailedLogin(userId, threshold = 5) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.execute(
+      `SELECT failed_login_attempts, account_locked_at
+       FROM user WHERE user_id = ? FOR UPDATE`,
+      [userId]
+    );
+    if (!rows[0]) {
+      await connection.rollback();
+      return { locked: false, newlyLocked: false, attempts: 0 };
+    }
+    if (rows[0].account_locked_at) {
+      await connection.commit();
+      return { locked: true, newlyLocked: false, attempts: Number(rows[0].failed_login_attempts || threshold) };
+    }
+
+    const attempts = Number(rows[0].failed_login_attempts || 0) + 1;
+    const newlyLocked = attempts >= threshold;
+    await connection.execute(
+      `UPDATE user
+       SET failed_login_attempts = ?,
+           account_locked_at = IF(?, NOW(), NULL),
+           account_lock_reason = IF(?, 'Too many failed password attempts', NULL)
+       WHERE user_id = ?`,
+      [attempts, newlyLocked ? 1 : 0, newlyLocked ? 1 : 0, userId]
+    );
+    await connection.commit();
+    return { locked: newlyLocked, newlyLocked, attempts };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function resetFailedLogins(userId) {
+  await pool.execute(
+    `UPDATE user SET failed_login_attempts = 0
+     WHERE user_id = ? AND account_locked_at IS NULL`,
+    [userId]
+  );
 }
 
 async function completeFirstLogin(userId, passwordHash) {
@@ -54,5 +104,7 @@ async function completeFirstLogin(userId, passwordHash) {
 module.exports = {
   completeFirstLogin,
   findUserByEmail,
-  findUserById
+  findUserById,
+  recordFailedLogin,
+  resetFailedLogins
 };

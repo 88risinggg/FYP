@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -124,14 +124,15 @@ export default function DashboardLayout({
   const [searchOpen, setSearchOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef(null);
   const [fetchedNotifications, setFetchedNotifications] = useState(null);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readStoredSidebarCollapsed);
   const classes = {
-    page: "relative min-h-screen overflow-hidden bg-[#fff8f5] text-[#251E1F]",
-    grid: "pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(243,137,120,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(243,137,120,0.08)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20",
-    header: "sticky top-0 z-10 flex h-20 items-center gap-4 border-b border-[#f2d5cc] bg-[#fff8f5]/85 px-4 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur-2xl sm:px-6",
+    page: "app-dashboard-shell relative min-h-screen overflow-hidden bg-[#fff8f5] text-[#251E1F]",
+    grid: "app-dashboard-grid pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(243,137,120,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(243,137,120,0.08)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20",
+    header: "app-dashboard-header sticky top-0 z-10 flex h-20 items-center gap-4 border-b border-[#f2d5cc] bg-[#fff8f5]/85 px-4 shadow-xl shadow-[#f2b5a9]/10 backdrop-blur-2xl sm:px-6",
     iconButton: "flex h-10 w-10 items-center justify-center rounded-lg text-[#6f4f47] transition hover:bg-[#FDD9CD]/45 hover:text-[#F38978] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]/45",
     title: "min-w-0 flex-1 truncate text-base font-semibold text-[#251E1F] sm:text-lg",
     searchWrap: "hidden w-full max-w-sm items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 shadow-lg shadow-[#F38978]/10 backdrop-blur lg:flex",
@@ -139,8 +140,8 @@ export default function DashboardLayout({
     searchInput: "w-full bg-transparent text-sm text-[#251E1F] outline-none placeholder:text-[#9c7b72]",
     mutedButton: "text-[#6f4f47] hover:text-[#F38978]",
     badge: "absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#F38978] text-[9px] font-bold text-white ring-2 ring-[#fff8f5]",
-    dropdown: "absolute right-0 top-12 z-30 w-80 rounded-xl border border-[#f0d2ca] bg-white shadow-2xl shadow-[#f2b5a9]/30",
-    dropdownWide: "absolute right-0 top-14 z-30 w-[min(23rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#f0d2ca] bg-white shadow-2xl shadow-[#f2b5a9]/35",
+    dropdown: "app-dashboard-popover absolute right-0 top-12 z-30 w-80 rounded-xl border border-[#f0d2ca] bg-white shadow-2xl shadow-[#f2b5a9]/30",
+    dropdownWide: "app-dashboard-popover absolute right-0 top-14 z-30 w-[min(23rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#f0d2ca] bg-white shadow-2xl shadow-[#f2b5a9]/35",
     dropdownBorder: "border-[#f0d2ca]",
     dropdownTitle: "text-[#251E1F]",
     dropdownMuted: "text-[#7b6660]",
@@ -175,6 +176,28 @@ export default function DashboardLayout({
         notification.is_read === 1 || notification.is_read === true || notification.read
       )).length;
   const searchEnabled = typeof onSearch === "function" || Boolean(searchEndpoint);
+
+  useEffect(() => {
+    if (!showProfileMenu) return undefined;
+
+    function closeProfileMenuOnOutsideInteraction(event) {
+      if (!profileMenuRef.current?.contains(event.target)) {
+        setShowProfileMenu(false);
+      }
+    }
+
+    function closeProfileMenuOnEscape(event) {
+      if (event.key === "Escape") setShowProfileMenu(false);
+    }
+
+    document.addEventListener("pointerdown", closeProfileMenuOnOutsideInteraction);
+    document.addEventListener("keydown", closeProfileMenuOnEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeProfileMenuOnOutsideInteraction);
+      document.removeEventListener("keydown", closeProfileMenuOnEscape);
+    };
+  }, [showProfileMenu]);
 
   useEffect(() => {
     if (!searchEndpoint || !searchQuery.trim()) {
@@ -593,7 +616,7 @@ export default function DashboardLayout({
             )}
           </div>
 
-          <div className="relative flex items-center gap-3 rounded-lg px-2 py-1.5">
+          <div ref={profileMenuRef} className="relative flex items-center gap-3 rounded-lg px-2 py-1.5">
             <button
               type="button"
               onClick={() => {
@@ -621,7 +644,7 @@ export default function DashboardLayout({
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setShowProfileMenu(false)} />
                 <div className={classes.dropdownWide} role="menu" aria-label="Account menu">
-                  <div className="relative flex items-center justify-between overflow-hidden bg-gradient-to-br from-[#251E1F] to-[#3a2d2f] px-5 py-4 text-white">
+                  <div className="account-menu__brand relative flex items-center justify-between overflow-hidden bg-gradient-to-br from-[#251E1F] to-[#3a2d2f] px-5 py-4 text-white">
                     <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full border border-white/10 bg-white/[0.03]" />
                     <div className="relative flex min-w-0 items-center gap-3">
                       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white shadow-lg shadow-black/20">
@@ -635,14 +658,14 @@ export default function DashboardLayout({
                     <button
                       type="button"
                       onClick={() => { setShowProfileMenu(false); handleLogout(); }}
-                      className="relative ml-3 inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                      className="account-menu__signout relative ml-3 inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                     >
                       <LogOut size={13} aria-hidden="true" />
                       Sign out
                     </button>
                   </div>
 
-                  <div className="border-b border-[#f0d2ca] bg-gradient-to-br from-white via-white to-[#fff8f5] px-5 py-5">
+                  <div className="account-menu__identity border-b border-[#f0d2ca] bg-gradient-to-br from-white via-white to-[#fff8f5] px-5 py-5">
                     <div className="flex items-start gap-4">
                       <div className="relative shrink-0">
                         {avatarUrl ? (
@@ -652,13 +675,13 @@ export default function DashboardLayout({
                             {displayInitials}
                           </div>
                         )}
-                        <span className="absolute bottom-0 right-0 h-4 w-4 rounded-full border-[3px] border-white bg-emerald-500" aria-label="Account active" title="Account active" />
+                        <span className="account-menu__presence absolute bottom-0 right-0 h-4 w-4 rounded-full border-[3px] border-white bg-emerald-500" aria-label="Account active" title="Account active" />
                       </div>
                       <div className="min-w-0 flex-1 pt-0.5">
                         <p className="truncate text-lg font-bold leading-6 text-[#251E1F]">{displayName}</p>
                         <p className="mt-0.5 truncate text-sm text-[#7b6660]">{displayEmail}</p>
                         <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <span className="inline-flex rounded-full bg-[#FDD9CD]/70 px-2.5 py-1 text-[11px] font-semibold text-[#6f4f47]">
+                          <span className="account-menu__role inline-flex rounded-full bg-[#FDD9CD]/70 px-2.5 py-1 text-[11px] font-semibold text-[#6f4f47]">
                             {displayRole}
                           </span>
                           <button
@@ -674,11 +697,11 @@ export default function DashboardLayout({
                     </div>
                   </div>
 
-                  <div className="space-y-2 p-3">
+                  <div className="account-menu__actions space-y-2 p-3">
                     <button
                       type="button"
                       onClick={() => { setShowProfileMenu(false); openSettings(); }}
-                      className="group flex w-full items-center gap-3 rounded-xl border border-[#f0d2ca] bg-[#fff8f5] px-3.5 py-3 text-left text-sm font-semibold text-[#251E1F] shadow-sm transition hover:-translate-y-0.5 hover:border-[#F38978]/45 hover:bg-[#FDD9CD]/45 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]/35"
+                      className="account-menu__primary-action group flex w-full items-center gap-3 rounded-xl border border-[#f0d2ca] bg-[#fff8f5] px-3.5 py-3 text-left text-sm font-semibold text-[#251E1F] shadow-sm transition hover:-translate-y-0.5 hover:border-[#F38978]/45 hover:bg-[#FDD9CD]/45 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]/35"
                     >
                       <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-[#F38978] shadow-sm">
                         <Settings size={18} />
@@ -692,7 +715,7 @@ export default function DashboardLayout({
                     <button
                       type="button"
                       onClick={() => { setShowProfileMenu(false); openSettings("security"); }}
-                      className="group flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm text-[#6f4f47] transition hover:bg-[#fff3ee] hover:text-[#251E1F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]/35"
+                      className="account-menu__secondary-action group flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm text-[#6f4f47] transition hover:bg-[#fff3ee] hover:text-[#251E1F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]/35"
                     >
                       <Shield size={17} className="text-[#F38978]" />
                       <span className="flex-1">Security &amp; privacy</span>

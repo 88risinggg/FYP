@@ -1,4 +1,5 @@
 import payNivoLogo from "../../assets/paynivo-logo.png";
+import payNivoLogoWhite from "../../assets/paynivo-logo-report-white.png";
 
 export default function VanidayLogo({ className = "", compact = false, inverse = false }) {
   const secondaryColor = inverse ? "text-white/65" : "text-[#7b6660]";
@@ -9,7 +10,13 @@ export default function VanidayLogo({ className = "", compact = false, inverse =
         src={payNivoLogo}
         alt=""
         aria-hidden="true"
-        className={`${compact ? "h-16 w-20" : "h-20 w-24"} shrink-0 object-contain`}
+        className={`brand-logo-light ${compact ? "h-16 w-20" : "h-20 w-24"} shrink-0 object-contain`}
+      />
+      <img
+        src={payNivoLogoWhite}
+        alt=""
+        aria-hidden="true"
+        className={`brand-logo-dark hidden ${compact ? "h-16 w-20" : "h-20 w-24"} shrink-0 object-contain`}
       />
       {!compact ? (
         <span className={`hidden min-w-0 border-l border-[#F38978]/35 pl-3 text-[0.68rem] font-semibold uppercase leading-4 tracking-[0.12em] sm:block ${secondaryColor}`}>
