@@ -1,5 +1,6 @@
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
 const {
   ROLE_NAMES,
   createHireWithAccount,
@@ -8,6 +9,7 @@ const {
   updatePendingRequest
 } = require("../models/payrollUserModel");
 const { notifyRoles, notifyUser } = require("../services/payrollNotificationService");
+const { sendAccountSetupEmail } = require("../services/emailService");
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -184,10 +186,21 @@ async function reviewRequest(req, res) {
     };
     await notifyUser(result.request.requested_by, event);
     if (result.approved) {
+      const setupToken = jwt.sign(
+        { userId: result.request.user_id, purpose: "first_login_password" },
+        process.env.JWT_SECRET,
+        { expiresIn: "24h" }
+      );
+      const setupUrl = `${process.env.CLIENT_URL || "http://localhost:5173"}/login?setup_token=${encodeURIComponent(setupToken)}`;
+      await sendAccountSetupEmail({
+        to: result.request.email,
+        name: result.request.name,
+        setupUrl
+      });
       await notifyUser(result.request.user_id, {
         ...event,
         title: "Your PayNivo account is active",
-        message: "Your account has been approved. Sign in with the temporary password supplied by HR, then create a permanent password.",
+        message: "Your account has been approved. Check your email for the one-time password setup link.",
         actionPath: "/login"
       });
     }

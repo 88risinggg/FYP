@@ -7,10 +7,22 @@ jest.mock("../models/authModel", () => ({
   recordFailedLogin: jest.fn(),
   resetFailedLogins: jest.fn()
 }));
+jest.mock("../services/authChallengeService", () => ({
+  createChallenge: jest.fn(),
+  resendChallenge: jest.fn(),
+  verifyChallenge: jest.fn()
+}));
+jest.mock("../services/emailService", () => ({ sendAuthOtpEmail: jest.fn() }));
 jest.mock("../services/payrollNotificationService", () => ({ notifyRoles: jest.fn() }));
+jest.mock("../services/auditService", () => ({
+  MODULE: { AUTH: "Auth" },
+  writeAuditLog: jest.fn()
+}));
 
 const bcrypt = require("bcrypt");
 const authModel = require("../models/authModel");
+const challengeService = require("../services/authChallengeService");
+const { sendAuthOtpEmail } = require("../services/emailService");
 const { notifyRoles } = require("../services/payrollNotificationService");
 const { login } = require("./authController");
 
@@ -38,6 +50,12 @@ beforeEach(() => {
   jest.clearAllMocks();
   authModel.findUserByEmail.mockResolvedValue({ ...activeUser });
   authModel.resetFailedLogins.mockResolvedValue();
+  challengeService.createChallenge.mockResolvedValue({
+    challengeId: "login-challenge",
+    otp: "123456",
+    expiresAt: new Date("2026-07-25T10:00:00Z")
+  });
+  sendAuthOtpEmail.mockResolvedValue();
   notifyRoles.mockResolvedValue([]);
 });
 
@@ -69,11 +87,14 @@ test("locked accounts are rejected before password comparison", async () => {
   expect(bcrypt.compare).not.toHaveBeenCalled();
 });
 
-test("successful login resets consecutive failures", async () => {
+test("successful password check resets failures and returns a session token", async () => {
   bcrypt.compare.mockResolvedValue(true);
   const res = response();
   await login({ body: { email: activeUser.email, password: "correct" } }, res);
   expect(authModel.resetFailedLogins).toHaveBeenCalledWith(activeUser.user_id);
   expect(res.statusCode).toBe(200);
   expect(res.body.token).toBe("token");
+  expect(res.body.user.email).toBe(activeUser.email);
+  expect(challengeService.createChallenge).not.toHaveBeenCalled();
+  expect(sendAuthOtpEmail).not.toHaveBeenCalled();
 });

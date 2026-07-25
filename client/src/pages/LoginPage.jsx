@@ -17,12 +17,16 @@ import {
   X
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "../services/motion.js";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
-import { completeFirstLogin, login } from "../services/authService.js";
+import {
+  completeFirstLogin,
+  login
+} from "../services/authService.js";
 import { startHealthCheck } from "../services/apiClient.js";
 import { getPostAuthDestination, saveSession } from "../services/sessionService.js";
 import VanidayLogo from "../components/branding/VanidayLogo.jsx";
+import { privacyPolicySections, termsOfServiceSections } from "../data/legalContent.js";
 
 const features = [
   {
@@ -44,8 +48,40 @@ const features = [
 
 const roleItems = ["Admin", "Finance", "HR", "Staff"];
 
+function LegalScrollBox({ title, sections, isRead, onRead }) {
+  function handleScroll(event) {
+    const element = event.currentTarget;
+    const reachedBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 8;
+    if (reachedBottom && !isRead) onRead();
+  }
+
+  return (
+    <section className="rounded-xl border border-[#f0d2ca] bg-[#fff8f5]/70 p-3">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-[#251E1F]">{title}</h3>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${isRead ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+          {isRead ? "Read successfully" : "Scroll to finish"}
+        </span>
+      </div>
+      <div
+        className="max-h-44 overflow-y-auto rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm leading-6 text-[#5f514d]"
+        onScroll={handleScroll}
+        tabIndex={0}
+      >
+        {sections.map((section) => (
+          <div key={section.title} className="mb-4 last:mb-0">
+            <p className="font-semibold text-[#251E1F]">{section.title}</p>
+            <p className="mt-1">{section.body}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const shouldReduceMotion = useReducedMotion();
   const [email, setEmail] = useState("");
@@ -55,110 +91,27 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
-  const [showOtpForm, setShowOtpForm] = useState(false);
-  const [otpEmail, setOtpEmail] = useState("");
-  const [otpCode, setOtpCode] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
   const [setupToken, setSetupToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [termsRead, setTermsRead] = useState(false);
+  const [privacyRead, setPrivacyRead] = useState(false);
 
-  // Handle OAuth callback redirects (Google)
   useEffect(() => {
-    const googleToken = searchParams.get("google_token");
-    const userParam = searchParams.get("user");
-    const oauthError = searchParams.get("error");
-
-    if (googleToken && userParam) {
-      try {
-        const user = JSON.parse(decodeURIComponent(userParam));
-        saveSession(googleToken, user, true);
-        startHealthCheck();
-        navigate(getPostAuthDestination(user), { replace: true });
-      } catch (e) {
-        setError("OAuth login failed. Please try again.");
-      }
-    } else if (oauthError) {
-      const errorMessages = {
-        invalid_state: "Login session expired. Please try again.",
-        google_denied: "Google login was cancelled.",
-        google_failed: "Google authentication failed. Please try again.",
-        account_disabled: "This account is awaiting activation or has been disabled.",
-        account_locked: "This account is locked. Contact an administrator to reactivate it.",
-        password_setup_required: "Use the temporary password supplied by HR to create your permanent password first."
-      };
-      setError(errorMessages[oauthError] || "Authentication failed. Please try again.");
+    const linkToken = searchParams.get("setup_token");
+    if (linkToken) {
+      setSetupToken(linkToken);
+      setIsLoginOpen(false);
+      setTermsAccepted(false);
+      setPrivacyAccepted(false);
+      setTermsRead(false);
+      setPrivacyRead(false);
+      return;
     }
-  }, [searchParams, navigate]);
-
-  async function handleGoogleLogin() {
-    setError("");
-    setIsLoading(true);
-    try {
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-      const response = await fetch(`${API_BASE}/api/auth/google/login`);
-      const data = await response.json();
-      if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
-      } else {
-        setError("Failed to initiate Google login.");
-      }
-    } catch (err) {
-      setError("Google service unavailable. Please try again later.");
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function handleOtpRequest(e) {
-    e.preventDefault();
-    setError("");
-    setIsLoading(true);
-    try {
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-      const response = await fetch(`${API_BASE}/api/auth/otp/request`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: otpEmail })
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setOtpSent(true);
-      } else {
-        setError(data.message || "Failed to send OTP.");
-      }
-    } catch (err) {
-      setError("OTP service unavailable. Please try again later.");
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function handleOtpVerify(e) {
-    e.preventDefault();
-    setError("");
-    setIsLoading(true);
-    try {
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-      const response = await fetch(`${API_BASE}/api/auth/otp/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: otpEmail, otp: otpCode })
-      });
-      const data = await response.json();
-      if (response.ok && data.token) {
-        saveSession(data.token, data.user, true);
-        startHealthCheck();
-        navigate(getPostAuthDestination(data.user), { replace: true });
-      } else {
-        setError(data.message || "OTP verification failed.");
-      }
-    } catch (err) {
-      setError("Verification failed. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  }
+    setIsLoginOpen(location.pathname === "/login");
+  }, [location.pathname, searchParams]);
 
   function openLogin() {
     setError("");
@@ -169,6 +122,7 @@ export default function LoginPage() {
     if (!isLoading) {
       setIsLoginOpen(false);
       setError("");
+      if (location.pathname === "/login") navigate("/", { replace: true });
     }
   }
 
@@ -184,9 +138,13 @@ export default function LoginPage() {
         setIsLoginOpen(false);
         return;
       }
-      saveSession(data.token, data.user, rememberMe);
-      startHealthCheck();
-      navigate(getPostAuthDestination(data.user), { replace: true });
+      if (data.token && data.user) {
+        saveSession(data.token, data.user, rememberMe);
+        startHealthCheck();
+        navigate(getPostAuthDestination(data.user), { replace: true });
+        return;
+      }
+      throw new Error("The login response was incomplete.");
     } catch (requestError) {
       setError(requestError.message || "Invalid email or password");
     } finally {
@@ -199,9 +157,20 @@ export default function LoginPage() {
     setError("");
     if (newPassword.length < 8) return setError("Password must contain at least 8 characters.");
     if (newPassword !== confirmPassword) return setError("Passwords do not match.");
+    if (!termsRead || !privacyRead) {
+      return setError("Please scroll through the Terms of Service and Privacy Policy before continuing.");
+    }
+    if (!termsAccepted || !privacyAccepted) {
+      return setError("You must accept the Terms of Service and Privacy Policy.");
+    }
     setIsLoading(true);
     try {
-      const data = await completeFirstLogin(setupToken, newPassword);
+      const data = await completeFirstLogin(
+        setupToken,
+        newPassword,
+        termsAccepted,
+        privacyAccepted
+      );
       saveSession(data.token, data.user, rememberMe);
       setSetupToken("");
       startHealthCheck();
@@ -518,8 +487,8 @@ export default function LoginPage() {
               Users continue through the same authenticated module flow
             </h2>
             <p className="mt-4 text-sm leading-7 text-[#7b6660]">
-              The separate login page verifies password and email OTP before saved user data
-              controls Admin, Finance, HR, and Staff access.
+              The separate login page verifies passwords before saved user data controls
+              Admin, Finance, HR, and Staff access.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -655,7 +624,7 @@ export default function LoginPage() {
                     />
                     Remember me
                   </label>
-                  <Link className="font-medium text-[#F38978] hover:text-[#6f5b55]" to="/login">
+                  <Link className="font-medium text-[#F38978] hover:text-[#6f5b55]" to="/forgot-password">
                     Forgot password?
                   </Link>
                 </div>
@@ -692,41 +661,6 @@ export default function LoginPage() {
                   )}
                 </motion.button>
 
-                <div className="relative my-4 flex items-center gap-3">
-                  <div className="h-px flex-1 bg-white/80" />
-                  <span className="text-xs text-[#6f5b55]">or</span>
-                  <div className="h-px flex-1 bg-white/80" />
-                </div>
-
-                <motion.button
-                  type="button"
-                  onClick={handleGoogleLogin}
-                  disabled={isLoading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#ead3cc] bg-white/80 px-4 py-3 text-sm font-semibold text-[#251E1F] transition hover:bg-white/[0.14] disabled:cursor-not-allowed disabled:opacity-50"
-                  whileHover={!isLoading && !shouldReduceMotion ? { scale: 1.02 } : undefined}
-                  whileTap={!isLoading && !shouldReduceMotion ? { scale: 0.98 } : undefined}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#F38978"/>
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#2D7C83"/>
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FDD9CD"/>
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#C55245"/>
-                  </svg>
-                  Log in with Google
-                </motion.button>
-
-                <motion.button
-                  type="button"
-                  onClick={() => setShowOtpForm(true)}
-                  disabled={isLoading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#F38978]/30 bg-[#F38978]/10 px-4 py-3 text-sm font-semibold text-[#251E1F] transition hover:bg-[#F38978]/20 disabled:cursor-not-allowed disabled:opacity-50"
-                  whileHover={!isLoading && !shouldReduceMotion ? { scale: 1.02 } : undefined}
-                  whileTap={!isLoading && !shouldReduceMotion ? { scale: 0.98 } : undefined}
-                >
-                  <Mail size={18} />
-                  Log in with Email OTP
-                </motion.button>
-
               </form>
 
               <div className="mt-5 flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3 text-sm text-[#7b6660]">
@@ -742,11 +676,11 @@ export default function LoginPage() {
         {setupToken && (
           <motion.div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#251E1F]/70 p-4 backdrop-blur-md"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <motion.form onSubmit={handleFirstLogin} className="w-full max-w-md rounded-2xl border border-[#f0d2ca] bg-white p-7 shadow-2xl"
+            <motion.form onSubmit={handleFirstLogin} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#f0d2ca] bg-white p-7 shadow-2xl"
               initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F38978]/15 text-[#F38978]"><Lock size={22} /></div>
               <h2 className="mt-5 text-2xl font-semibold text-[#251E1F]">Create your permanent password</h2>
-              <p className="mt-2 text-sm text-[#7b6660]">Your temporary password was accepted. Set a private password before entering PayNivo.</p>
+              <p className="mt-2 text-sm text-[#7b6660]">Your account was approved. Set a private password before entering PayNivo.</p>
               <div className="mt-6 space-y-4">
                 <label className="block text-sm font-medium text-[#6f5b55]">New password
                   <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={8} required
@@ -756,111 +690,48 @@ export default function LoginPage() {
                   <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={8} required
                     className="mt-2 w-full rounded-xl border border-[#f0d2ca] px-4 py-3 outline-none focus:border-[#F38978]" />
                 </label>
+                <LegalScrollBox
+                  title="Terms of Service"
+                  sections={termsOfServiceSections}
+                  isRead={termsRead}
+                  onRead={() => setTermsRead(true)}
+                />
+                <label className="flex items-start gap-3 text-sm text-[#6f5b55]">
+                  <input
+                    type="checkbox"
+                    checked={termsAccepted}
+                    disabled={!termsRead}
+                    onChange={(event) => setTermsAccepted(termsRead && event.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-[#F0D2CA] text-[#F38978] focus:ring-[#F38978] disabled:opacity-50"
+                  />
+                  <span>{termsRead ? "I accept the Terms of Service." : "Scroll to the end of the Terms of Service before accepting."}</span>
+                </label>
+                <LegalScrollBox
+                  title="Privacy Policy"
+                  sections={privacyPolicySections}
+                  isRead={privacyRead}
+                  onRead={() => setPrivacyRead(true)}
+                />
+                <label className="flex items-start gap-3 text-sm text-[#6f5b55]">
+                  <input
+                    type="checkbox"
+                    checked={privacyAccepted}
+                    disabled={!privacyRead}
+                    onChange={(event) => setPrivacyAccepted(privacyRead && event.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-[#F0D2CA] text-[#F38978] focus:ring-[#F38978] disabled:opacity-50"
+                  />
+                  <span>{privacyRead ? "I accept the Privacy Policy." : "Scroll to the end of the Privacy Policy before accepting."}</span>
+                </label>
               </div>
               {error ? <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
-              <button type="submit" disabled={isLoading} className="primary-button mt-6 w-full px-4 py-3 font-semibold disabled:opacity-60">
+              <button
+                type="submit"
+                disabled={isLoading || !termsRead || !privacyRead || !termsAccepted || !privacyAccepted}
+                className="primary-button mt-6 w-full px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+              >
                 {isLoading ? "Saving..." : "Save password and continue"}
               </button>
             </motion.form>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Email OTP Modal */}
-      <AnimatePresence>
-        {showOtpForm && (
-          <motion.div
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-[#251E1F]/60 backdrop-blur-sm p-4"
-            initial={shouldReduceMotion ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={shouldReduceMotion ? undefined : { opacity: 0 }}
-            onClick={() => { if (!isLoading) { setShowOtpForm(false); setOtpSent(false); setOtpCode(""); setError(""); } }}
-          >
-            <motion.div
-              className="w-full max-w-sm rounded-2xl border border-[#f0d2ca] bg-white/95 p-6 shadow-2xl"
-              initial={shouldReduceMotion ? false : { scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={shouldReduceMotion ? undefined : { scale: 0.95, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3 className="text-lg font-semibold text-[#251E1F]">
-                {otpSent ? "Enter verification code" : "Sign in with Email"}
-              </h3>
-              <p className="mt-1 text-sm text-[#7b6660]">
-                {otpSent
-                  ? `We sent a 6-digit code to ${otpEmail}`
-                  : "We'll send a one-time code to your email"}
-              </p>
-
-              {!otpSent ? (
-                <form className="mt-5 space-y-4" onSubmit={handleOtpRequest}>
-                  <div>
-                    <label className="block text-sm font-medium text-[#6f5b55]" htmlFor="otp-email">Email</label>
-                    <div className="mt-2 flex rounded-xl border border-[#f0d2ca] bg-white/80 focus-within:border-[#F38978]/70 focus-within:ring-4 focus-within:ring-[#F38978]/15">
-                      <span className="flex items-center px-3 text-[#7b6660]"><Mail size={18} /></span>
-                      <input
-                        id="otp-email"
-                        type="email"
-                        required
-                        value={otpEmail}
-                        onChange={(e) => setOtpEmail(e.target.value)}
-                        className="min-w-0 flex-1 rounded-r-xl bg-transparent px-1 py-3 pr-4 text-sm text-[#251E1F] outline-none placeholder:text-[#6f5b55]"
-                        placeholder="name@example.com"
-                      />
-                    </div>
-                  </div>
-                  {error && <p className="rounded-xl border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm text-red-700">{error}</p>}
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full rounded-xl bg-gradient-to-r from-[#F38978] via-[#F38978] to-[#F38978] px-4 py-3 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isLoading ? "Sending..." : "Send Code"}
-                  </button>
-                </form>
-              ) : (
-                <form className="mt-5 space-y-4" onSubmit={handleOtpVerify}>
-                  <div>
-                    <label className="block text-sm font-medium text-[#6f5b55]" htmlFor="otp-code">Verification Code</label>
-                    <input
-                      id="otp-code"
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={6}
-                      required
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                      className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-[#251E1F] outline-none focus:border-[#F38978]/70 focus:ring-4 focus:ring-[#F38978]/15"
-                      placeholder="000000"
-                      autoFocus
-                    />
-                  </div>
-                  {error && <p className="rounded-xl border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm text-red-700">{error}</p>}
-                  <button
-                    type="submit"
-                    disabled={isLoading || otpCode.length < 6}
-                    className="w-full rounded-xl bg-gradient-to-r from-[#F38978] via-[#F38978] to-[#F38978] px-4 py-3 text-sm font-semibold text-[#251E1F] shadow-lg shadow-[#F38978]/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isLoading ? "Verifying..." : "Verify & Login"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); }}
-                    className="w-full text-center text-sm text-[#7b6660] hover:text-[#251E1F]"
-                  >
-                    Use a different email
-                  </button>
-                </form>
-              )}
-
-              <button
-                type="button"
-                onClick={() => { setShowOtpForm(false); setOtpSent(false); setOtpCode(""); setError(""); }}
-                className="mt-4 w-full text-center text-sm text-[#6f5b55] hover:text-[#251E1F]"
-              >
-                Cancel
-              </button>
-            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

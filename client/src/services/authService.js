@@ -7,10 +7,24 @@ export function login(email, password) {
   });
 }
 
-export function completeFirstLogin(setupToken, newPassword) {
+export function verifyLoginOtp(challengeId, otp) {
+  return apiRequest("/api/auth/login/verify-otp", {
+    method: "POST",
+    body: JSON.stringify({ challengeId, otp })
+  });
+}
+
+export function resendLoginOtp(challengeId) {
+  return apiRequest("/api/auth/login/resend-otp", {
+    method: "POST",
+    body: JSON.stringify({ challengeId })
+  });
+}
+
+export function completeFirstLogin(setupToken, newPassword, termsAccepted, privacyAccepted) {
   return apiRequest("/api/auth/complete-first-login", {
     method: "POST",
-    body: JSON.stringify({ setupToken, newPassword })
+    body: JSON.stringify({ setupToken, newPassword, termsAccepted, privacyAccepted })
   });
 }
 
