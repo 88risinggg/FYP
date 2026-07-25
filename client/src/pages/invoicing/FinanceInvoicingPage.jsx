@@ -89,38 +89,7 @@ const financeSidebarSections = [
         label: "Dashboard",
         icon: LayoutDashboard,
         path: "/dashboard/invoicing/finance",
-        end: true,
-        children: [
-          {
-            label: "Overview",
-            path: "/dashboard/invoicing/finance",
-            end: true
-          },
-          {
-            label: "Customers",
-            path: "/dashboard/invoicing/finance/customers"
-          },
-          {
-            label: "Invoices",
-            path: "/dashboard/invoicing/finance/invoices"
-          },
-          {
-            label: "Subscriptions",
-            path: "/dashboard/invoicing/finance/subscriptions"
-          },
-          {
-            label: "Payments",
-            path: "/dashboard/invoicing/finance/payments"
-          },
-          {
-            label: "Fraud Detection",
-            path: "/dashboard/invoicing/finance/fraud"
-          },
-          {
-            label: "Reports",
-            path: "/dashboard/invoicing/finance/reports"
-          }
-        ]
+        end: true
       }
     ]
   },
