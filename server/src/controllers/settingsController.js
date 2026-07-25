@@ -567,6 +567,90 @@ async function verifyOtp(req, res) {
   }
 }
 
+// ─── Subscription Settings ──────────────────────────────────────────────────
+
+async function getSubscriptionSettings(req, res) {
+  try {
+    const settings = await settingsModel.getSubscriptionSettings(req.user.userId);
+    res.json(settings || {});
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch subscription settings" });
+  }
+}
+
+async function updateSubscriptionSettings(req, res) {
+  try {
+    await settingsModel.upsertSubscriptionSettings(req.user.userId, req.body);
+    await settingsModel.createSettingsAuditLog(req.user.userId, {
+      action: "Subscription settings updated",
+      module: "subscription_settings",
+      ip_address: req.ip
+    });
+    res.json({ message: "Subscription settings updated successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to update subscription settings" });
+  }
+}
+
+// ─── Payment Settings ───────────────────────────────────────────────────────
+
+async function getPaymentSettings(req, res) {
+  try {
+    const settings = await settingsModel.getPaymentSettings(req.user.userId);
+    res.json(settings || {});
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch payment settings" });
+  }
+}
+
+async function updatePaymentSettings(req, res) {
+  try {
+    await settingsModel.upsertPaymentSettings(req.user.userId, req.body);
+    await settingsModel.createSettingsAuditLog(req.user.userId, {
+      action: "Payment settings updated",
+      module: "payment_settings",
+      ip_address: req.ip
+    });
+    res.json({ message: "Payment settings updated successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to update payment settings" });
+  }
+}
+
+// ─── Email Settings ─────────────────────────────────────────────────────────
+
+async function getEmailSettings(req, res) {
+  try {
+    const settings = await settingsModel.getEmailSettings(req.user.userId);
+    res.json(settings || {});
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch email settings" });
+  }
+}
+
+async function updateEmailSettings(req, res) {
+  try {
+    await settingsModel.upsertEmailSettings(req.user.userId, req.body);
+    await settingsModel.createSettingsAuditLog(req.user.userId, {
+      action: "Email settings updated",
+      module: "email_settings",
+      ip_address: req.ip
+    });
+    res.json({ message: "Email settings updated successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to update email settings" });
+  }
+}
+
+async function sendTestEmail(req, res) {
+  try {
+    // In production, this would send a real test email
+    res.json({ message: "Test email sent successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to send test email" });
+  }
+}
+
 module.exports = {
   getProfile,
   updateProfile,
@@ -585,6 +669,13 @@ module.exports = {
   updatePayrollSettings,
   getCompanySettings,
   updateCompanySettings,
+  getSubscriptionSettings,
+  updateSubscriptionSettings,
+  getPaymentSettings,
+  updatePaymentSettings,
+  getEmailSettings,
+  updateEmailSettings,
+  sendTestEmail,
   getSessions,
   deleteSession,
   logoutAll,

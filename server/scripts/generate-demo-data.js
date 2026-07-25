@@ -242,13 +242,14 @@ async function generateInvoices(connection, customerMap, subscriptionMap, compan
   const invoices = [];
   let invoiceSeq = 1;
 
-  // Status distribution: 8 Paid, 6 Sent, 5 Viewed, 5 Draft, 6 Overdue
+  // Status distribution: 8 Paid, 5 Sent, 4 Viewed, 4 Draft, 5 Overdue, 4 Cancelled
   const statusPool = [
     ...Array(8).fill("Paid"),
-    ...Array(6).fill("Sent"),
-    ...Array(5).fill("Viewed"),
-    ...Array(5).fill("Draft"),
-    ...Array(6).fill("Overdue"),
+    ...Array(5).fill("Sent"),
+    ...Array(4).fill("Viewed"),
+    ...Array(4).fill("Draft"),
+    ...Array(5).fill("Overdue"),
+    ...Array(4).fill("Cancelled"),
   ];
 
   // Generate 12 subscription-linked invoices first (from different billing periods)
@@ -307,6 +308,10 @@ async function generateInvoices(connection, customerMap, subscriptionMap, compan
       case "Overdue":
         issueDate = daysAgo(randomInt(40, 100));
         dueDate = addDays(issueDate, 20); // Short due date = already overdue
+        break;
+      case "Cancelled":
+        issueDate = daysAgo(randomInt(10, 60));
+        dueDate = addDays(issueDate, 30);
         break;
     }
 
@@ -553,11 +558,11 @@ async function generateAuditLogs(connection, invoiceRecords, subscriptionMap) {
       String(inv.invoice_id), "invoice", createdAt
     );
 
-    // Subscription Imported (for subscription-linked invoices)
+    // Subscription Invoice Generated (for subscription-linked invoices)
     if (inv.subscription_id) {
       await insertAudit(
-        "Subscription Imported",
-        `Recurring invoice ${inv.invoiceNumber} generated from subscription`,
+        "Subscription Invoice Generated",
+        `Recurring invoice ${inv.invoiceNumber} generated from subscription #${inv.subscription_id}`,
         String(inv.subscription_id), "subscription", createdAt
       );
     }
@@ -608,6 +613,16 @@ async function generateAuditLogs(connection, invoiceRecords, subscriptionMap) {
       );
     }
 
+    // Invoice Cancelled
+    if (inv.status === "Cancelled") {
+      const cancelledAt = formatDatetime(addDays(inv.issueDate, randomInt(2, 10)));
+      await insertAudit(
+        "Invoice Cancelled",
+        `Invoice ${inv.invoiceNumber} cancelled by Finance user`,
+        String(inv.invoice_id), "invoice", cancelledAt
+      );
+    }
+
     // Fraud Analysis Completed
     await insertAudit(
       "Fraud Analysis Completed",
@@ -630,7 +645,249 @@ async function generateAuditLogs(connection, invoiceRecords, subscriptionMap) {
   console.log(`  ✓ ${auditCount} audit log entries created\n`);
 }
 
-// ─── Phase 8: Verification ───────────────────────────────────────────────────
+// ─── Phase 8: Generate finance reminders ─────────────────────────────────────
+
+async function generateFinanceReminders(connection, invoiceRecords) {
+  console.log("╔══════════════════════════════════════════╗");
+  console.log("║   PHASE 8: Finance Reminders             ║");
+  console.log("╚══════════════════════════════════════════╝\n");
+
+  let count = 0;
+
+  // Ensure finance_reminders table exists
+  try {
+    await connection.query("SELECT 1 FROM finance_reminders LIMIT 1");
+  } catch (e) {
+    if (e.code === "ER_NO_SUCH_TABLE") {
+      console.log("  - finance_reminders table not found. Run: npm run db:finance-reminders\n");
+      return;
+    }
+    throw e;
+  }
+
+  // Clear existing reminders
+  await connection.query("DELETE FROM finance_reminders");
+  try { await connection.query("ALTER TABLE finance_reminders AUTO_INCREMENT = 1"); } catch {}
+
+  const today = new Date().toISOString().split("T")[0];
+
+  for (const inv of invoiceRecords) {
+    // Overdue invoices get an overdue reminder
+    if (inv.status === "Overdue") {
+      await connection.query(
+        `INSERT INTO finance_reminders
+          (reminder_type, priority, title, message, invoice_id, customer_id, company_id,
+           customer_name, invoice_number, amount, due_date, status, created_at)
+         VALUES ('invoice_overdue', 'High', ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'Active', ?)`,
+        [
+          `Invoice ${inv.invoiceNumber} overdue`,
+          `Invoice ${inv.invoiceNumber} for ${inv.customerName} (SGD ${inv.total.toFixed(2)}) is overdue since ${inv.dueDate}`,
+          inv.invoice_id,
+          inv.customerId,
+          inv.customerName,
+          inv.invoiceNumber,
+          inv.total,
+          inv.dueDate,
+          formatDatetime(addDays(inv.dueDate, 1)),
+        ]
+      );
+      count++;
+    }
+
+    // Sent/Viewed invoices due within 7 days get a due-soon reminder
+    if (["Sent", "Viewed"].includes(inv.status)) {
+      const dueDate = new Date(inv.dueDate);
+      const todayDate = new Date(today);
+      const daysUntilDue = Math.round((dueDate - todayDate) / 86400000);
+
+      if (daysUntilDue >= 0 && daysUntilDue <= 7) {
+        await connection.query(
+          `INSERT INTO finance_reminders
+            (reminder_type, priority, title, message, invoice_id, customer_id, company_id,
+             customer_name, invoice_number, amount, due_date, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'Active', ?)`,
+          [
+            daysUntilDue === 0 ? "invoice_due_today" : "invoice_due_7_days",
+            daysUntilDue === 0 ? "Medium" : "Low",
+            daysUntilDue === 0
+              ? `Invoice ${inv.invoiceNumber} due today`
+              : `Invoice ${inv.invoiceNumber} due in ${daysUntilDue} days`,
+            `Invoice ${inv.invoiceNumber} for ${inv.customerName} (SGD ${inv.total.toFixed(2)}) is due on ${inv.dueDate}`,
+            inv.invoice_id,
+            inv.customerId,
+            inv.customerName,
+            inv.invoiceNumber,
+            inv.total,
+            inv.dueDate,
+            formatDatetime(daysAgo(1)),
+          ]
+        );
+        count++;
+      }
+    }
+  }
+
+  // Add a failed payment reminder for one overdue invoice
+  const overdueWithFailed = invoiceRecords.find(i => i.status === "Overdue");
+  if (overdueWithFailed) {
+    await connection.query(
+      `INSERT INTO finance_reminders
+        (reminder_type, priority, title, message, invoice_id, customer_id, company_id,
+         customer_name, invoice_number, amount, due_date, status, created_at)
+       VALUES ('payment_failed', 'High', ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'Active', ?)`,
+      [
+        `Payment failed for ${overdueWithFailed.invoiceNumber}`,
+        `Stripe payment attempt failed for ${overdueWithFailed.invoiceNumber} — ${overdueWithFailed.customerName}`,
+        overdueWithFailed.invoice_id,
+        overdueWithFailed.customerId,
+        overdueWithFailed.customerName,
+        overdueWithFailed.invoiceNumber,
+        overdueWithFailed.total,
+        overdueWithFailed.dueDate,
+        formatDatetime(daysAgo(2)),
+      ]
+    );
+    count++;
+  }
+
+  // Add a subscription renewal due reminder
+  await connection.query(
+    `INSERT INTO finance_reminders
+      (reminder_type, priority, title, message, subscription_id, customer_id, company_id,
+       customer_name, status, created_at)
+     VALUES ('subscription_renewal_due', 'Medium', 'Subscription renewal approaching',
+             'Premium Monthly subscription for Luxe Hair Studio is due for renewal within 7 days',
+             1, NULL, NULL, 'Luxe Hair Studio', 'Active', ?)`,
+    [formatDatetime(daysAgo(1))]
+  );
+  count++;
+
+  // Add a completed reminder (for history)
+  await connection.query(
+    `INSERT INTO finance_reminders
+      (reminder_type, priority, title, message, invoice_id, customer_id, company_id,
+       customer_name, invoice_number, amount, status, resolved_at, notes, created_at)
+     VALUES ('payment_succeeded', 'Low', 'Payment received', 'Payment received for INV-2026-0001',
+             NULL, NULL, NULL, 'Luxe Hair Studio', 'INV-2026-0001', 299.00,
+             'Completed', NOW(), 'Auto-resolved: payment confirmed', ?)`,
+    [formatDatetime(daysAgo(5))]
+  );
+  count++;
+
+  // Add a dismissed reminder (for history)
+  await connection.query(
+    `INSERT INTO finance_reminders
+      (reminder_type, priority, title, message, invoice_id, customer_id, company_id,
+       customer_name, invoice_number, status, resolved_at, notes, created_at)
+     VALUES ('bulk_upload_validation_error', 'Medium', 'Bulk upload validation errors',
+             'Last bulk upload contained 3 validation errors — records were skipped',
+             NULL, NULL, NULL, NULL, NULL,
+             'Dismissed', NOW(), 'Reviewed and re-uploaded corrected file', ?)`,
+    [formatDatetime(daysAgo(10))]
+  );
+  count++;
+
+  console.log(`  ✓ ${count} finance reminders created\n`);
+}
+
+// ─── Phase 9: Generate sample Excel files ────────────────────────────────────
+
+async function generateSampleExcelFiles() {
+  console.log("╔══════════════════════════════════════════╗");
+  console.log("║   PHASE 9: Sample Excel Files            ║");
+  console.log("╚══════════════════════════════════════════╝\n");
+
+  const ExcelJS = require("exceljs");
+  const path = require("path");
+  const fs = require("fs");
+
+  const templateDir = path.join(__dirname, "../uploads/templates");
+  if (!fs.existsSync(templateDir)) {
+    fs.mkdirSync(templateDir, { recursive: true });
+  }
+
+  // ── 1. Successful bulk invoice upload ──────────────────────────────────────
+  const successWorkbook = new ExcelJS.Workbook();
+  const successSheet = successWorkbook.addWorksheet("Invoices");
+
+  successSheet.columns = [
+    { header: "Customer Name", key: "customer_name", width: 25 },
+    { header: "Customer Email", key: "customer_email", width: 30 },
+    { header: "Company Name", key: "company_name", width: 25 },
+    { header: "Invoice Number", key: "invoice_number", width: 18 },
+    { header: "Invoice Date", key: "invoice_date", width: 15 },
+    { header: "Due Date", key: "due_date", width: 15 },
+    { header: "Invoice Description", key: "description", width: 35 },
+    { header: "Quantity", key: "quantity", width: 10 },
+    { header: "Unit Price", key: "unit_price", width: 12 },
+    { header: "Total Amount", key: "total_amount", width: 14 },
+    { header: "Currency", key: "currency", width: 10 },
+    { header: "Payment Method", key: "payment_method", width: 16 },
+  ];
+
+  const successRows = [
+    { customer_name: "Luxe Hair Studio", customer_email: "bookings@luxehairstudio.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-01", due_date: "2026-07-31", description: "Balayage Hair Coloring", quantity: 2, unit_price: 350.00, total_amount: 700.00, currency: "SGD", payment_method: "Stripe" },
+    { customer_name: "The Nail Artistry", customer_email: "hello@thenailartistry.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-02", due_date: "2026-08-01", description: "Gel Manicure Session", quantity: 5, unit_price: 85.00, total_amount: 425.00, currency: "SGD", payment_method: "PayNow" },
+    { customer_name: "Serenity Spa & Wellness", customer_email: "reservations@serenityspa.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-03", due_date: "2026-08-02", description: "Full Body Massage (90 min)", quantity: 3, unit_price: 180.00, total_amount: 540.00, currency: "SGD", payment_method: "Bank Transfer" },
+    { customer_name: "Glow Aesthetics Clinic", customer_email: "appointments@glowaesthetics.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-04", due_date: "2026-08-03", description: "Hydrafacial Treatment", quantity: 1, unit_price: 299.00, total_amount: 299.00, currency: "SGD", payment_method: "Credit Card" },
+    { customer_name: "Brow & Lash Bar", customer_email: "info@browlashbar.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-05", due_date: "2026-08-04", description: "Eyelash Extensions (Full Set)", quantity: 2, unit_price: 120.00, total_amount: 240.00, currency: "SGD", payment_method: "Stripe" },
+    { customer_name: "KBeauty Haven", customer_email: "hello@kbeautyhaven.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-06", due_date: "2026-08-05", description: "LED Light Therapy", quantity: 4, unit_price: 150.00, total_amount: 600.00, currency: "SGD", payment_method: "PayNow" },
+    { customer_name: "Zen Reflexology Centre", customer_email: "bookings@zenreflexology.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-07", due_date: "2026-08-06", description: "Hot Stone Therapy", quantity: 2, unit_price: 200.00, total_amount: 400.00, currency: "SGD", payment_method: "Bank Transfer" },
+    { customer_name: "Prestige Barbers", customer_email: "appointments@prestigebarbers.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-08", due_date: "2026-08-07", description: "Men's Grooming Package", quantity: 3, unit_price: 95.00, total_amount: 285.00, currency: "SGD", payment_method: "Stripe" },
+    { customer_name: "Skin Lab Express", customer_email: "info@skinlabexpress.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-09", due_date: "2026-08-08", description: "Chemical Peel Session", quantity: 1, unit_price: 450.00, total_amount: 450.00, currency: "SGD", payment_method: "Credit Card" },
+    { customer_name: "Orchid Beauty Lounge", customer_email: "bookings@orchidbeauty.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-10", due_date: "2026-08-09", description: "Oxygen Facial", quantity: 2, unit_price: 175.00, total_amount: 350.00, currency: "SGD", payment_method: "PayNow" },
+  ];
+
+  successRows.forEach((row) => successSheet.addRow(row));
+
+  // Style the header row
+  successSheet.getRow(1).font = { bold: true };
+  successSheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8F5E9" } };
+
+  await successWorkbook.xlsx.writeFile(path.join(templateDir, "sample_bulk_invoice_success.xlsx"));
+  console.log("  ✓ sample_bulk_invoice_success.xlsx created");
+
+  // ── 2. Failed bulk invoice upload (contains validation errors) ─────────────
+  const failWorkbook = new ExcelJS.Workbook();
+  const failSheet = failWorkbook.addWorksheet("Invoices");
+
+  failSheet.columns = successSheet.columns;
+
+  const failRows = [
+    { customer_name: "", customer_email: "bookings@luxehairstudio.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-01", due_date: "2026-07-31", description: "Balayage Hair Coloring", quantity: 2, unit_price: 350.00, total_amount: 700.00, currency: "SGD", payment_method: "Stripe" },
+    { customer_name: "The Nail Artistry", customer_email: "invalid-email-format", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-02", due_date: "2026-08-01", description: "Gel Manicure Session", quantity: 5, unit_price: 85.00, total_amount: 425.00, currency: "SGD", payment_method: "PayNow" },
+    { customer_name: "Serenity Spa & Wellness", customer_email: "reservations@serenityspa.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "invalid-date", due_date: "2026-08-02", description: "Full Body Massage (90 min)", quantity: 3, unit_price: 180.00, total_amount: 540.00, currency: "SGD", payment_method: "Bank Transfer" },
+    { customer_name: "Glow Aesthetics Clinic", customer_email: "appointments@glowaesthetics.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-04", due_date: "2026-08-03", description: "", quantity: 1, unit_price: 299.00, total_amount: 299.00, currency: "SGD", payment_method: "Credit Card" },
+    { customer_name: "Brow & Lash Bar", customer_email: "info@browlashbar.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-05", due_date: "2026-08-04", description: "Eyelash Extensions (Full Set)", quantity: -1, unit_price: 120.00, total_amount: 240.00, currency: "SGD", payment_method: "Stripe" },
+    { customer_name: "KBeauty Haven", customer_email: "hello@kbeautyhaven.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-06", due_date: "2026-08-05", description: "LED Light Therapy", quantity: 4, unit_price: -50.00, total_amount: 600.00, currency: "SGD", payment_method: "PayNow" },
+    { customer_name: "Zen Reflexology Centre", customer_email: "bookings@zenreflexology.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-07", due_date: "2026-06-01", description: "Hot Stone Therapy", quantity: 2, unit_price: 200.00, total_amount: 400.00, currency: "SGD", payment_method: "Bank Transfer" },
+    { customer_name: "Prestige Barbers", customer_email: "appointments@prestigebarbers.sg", company_name: "Vaniday Pte Ltd", invoice_number: "", invoice_date: "2026-07-08", due_date: "2026-08-07", description: "Men's Grooming Package", quantity: 3, unit_price: 95.00, total_amount: 0.00, currency: "INVALID", payment_method: "Unknown" },
+  ];
+
+  failRows.forEach((row) => failSheet.addRow(row));
+  failSheet.getRow(1).font = { bold: true };
+  failSheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFEBEE" } };
+
+  await failWorkbook.xlsx.writeFile(path.join(templateDir, "sample_bulk_invoice_errors.xlsx"));
+  console.log("  ✓ sample_bulk_invoice_errors.xlsx created");
+
+  // ── 3. CSV version for validation testing ──────────────────────────────────
+  const csvContent = [
+    "Customer Name,Customer Email,Company Name,Invoice Number,Invoice Date,Due Date,Invoice Description,Quantity,Unit Price,Total Amount,Currency,Payment Method",
+    'Luxe Hair Studio,bookings@luxehairstudio.sg,Vaniday Pte Ltd,,2026-07-15,2026-08-14,Hair Treatment Package,1,500.00,500.00,SGD,Stripe',
+    'The Nail Artistry,hello@thenailartistry.sg,Vaniday Pte Ltd,,2026-07-15,2026-08-14,Nail Art Full Set,3,120.00,360.00,SGD,PayNow',
+    'Serenity Spa & Wellness,reservations@serenityspa.sg,Vaniday Pte Ltd,,2026-07-15,2026-08-14,Spa Day Package,2,250.00,500.00,SGD,Bank Transfer',
+    'Glow Aesthetics Clinic,appointments@glowaesthetics.sg,Vaniday Pte Ltd,,2026-07-15,2026-08-14,Facial Treatment Series,4,175.00,700.00,SGD,Credit Card',
+    'Brow & Lash Bar,info@browlashbar.sg,Vaniday Pte Ltd,,2026-07-15,2026-08-14,Lash Lift & Tint,5,80.00,400.00,SGD,PayNow',
+  ].join("\n");
+
+  fs.writeFileSync(path.join(templateDir, "sample_bulk_invoice_validation.csv"), csvContent, "utf-8");
+  console.log("  ✓ sample_bulk_invoice_validation.csv created");
+
+  console.log("");
+}
+
+// ─── Phase 10: Verification ──────────────────────────────────────────────────
 
 async function verify() {
   console.log("╔══════════════════════════════════════════╗");
@@ -645,6 +902,7 @@ async function verify() {
     { label: "Fraud Assessments", sql: "SELECT COUNT(*) AS cnt FROM invoice_fraud_assessment" },
     { label: "Fraud Indicators", sql: "SELECT COUNT(*) AS cnt FROM invoice_fraud_indicator" },
     { label: "Invoice Audit Logs", sql: "SELECT COUNT(*) AS cnt FROM audit_logs WHERE module = 'Invoice'" },
+    { label: "Finance Reminders", sql: "SELECT COUNT(*) AS cnt FROM finance_reminders" },
   ];
 
   for (const { label, sql } of queries) {
@@ -727,6 +985,9 @@ async function main() {
     // Phase 7: Audit Logs
     await generateAuditLogs(connection, invoiceRecords, subscriptionMap);
 
+    // Phase 8: Finance Reminders
+    await generateFinanceReminders(connection, invoiceRecords);
+
     await connection.commit();
     console.log("═══════════════════════════════════════════════════════");
     console.log("  ✓ All data committed successfully!");
@@ -737,6 +998,14 @@ async function main() {
     throw error;
   } finally {
     connection.release();
+  }
+
+  // Phase 9: Sample Excel files (no DB transaction needed)
+  try {
+    await generateSampleExcelFiles();
+  } catch (err) {
+    console.error("  ⚠ Sample Excel generation failed:", err.message);
+    console.error("    (this is non-fatal — ensure exceljs is installed)");
   }
 
   // Verify outside transaction

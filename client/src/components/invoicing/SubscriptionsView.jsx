@@ -5,13 +5,13 @@ import {
   ArrowLeft,
   CalendarClock,
   CheckCircle2,
-  Download,
-  FileSpreadsheet,
   FileText,
   Loader2,
+  Pause,
+  Play,
+  Plus,
   Search,
   TrendingUp,
-  Upload,
   XCircle,
   Zap,
 } from "lucide-react";
@@ -22,12 +22,13 @@ import {
   fetchSubscriptionById,
   fetchSubscriptionInvoices,
   fetchSubscriptionPayments,
+  createSubscription,
   generateInvoiceNow,
-  validateSubscriptionImport,
-  confirmSubscriptionImport,
-  getSubscriptionTemplateUrl,
-  parseSubscriptionFile,
+  pauseSubscription,
+  resumeSubscription,
+  cancelSubscription,
 } from "../../services/subscriptionService.js";
+import { fetchCustomers } from "../../services/invoiceService.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -57,15 +58,14 @@ export default function SubscriptionsView() {
   const path = location.pathname;
 
   // Determine sub-view from URL
-  let subView = "list"; // Default to subscription list/table view
+  let subView = "list";
   let viewParam = null;
 
-  if (path.includes("/subscriptions/import")) {
-    subView = "import";
+  if (path.includes("/subscriptions/create")) {
+    subView = "create";
   } else if (path.includes("/subscriptions/dashboard")) {
     subView = "dashboard";
   } else {
-    // Only match detail view if the path ends with /subscriptions/<digits>
     const detailMatch = path.match(/\/subscriptions\/(\d+)(?:\/|$)/);
     if (detailMatch) {
       subView = "detail";
@@ -76,8 +76,8 @@ export default function SubscriptionsView() {
   switch (subView) {
     case "dashboard":
       return <SubscriptionDashboardPanel />;
-    case "import":
-      return <SubscriptionImportPanel />;
+    case "create":
+      return <CreateSubscriptionPanel />;
     case "detail":
       return <SubscriptionDetailPanel subscriptionId={viewParam} />;
     default:
@@ -95,9 +95,7 @@ function SubscriptionDashboardPanel() {
   useEffect(() => {
     setLoading(true);
     fetchSubscriptionDashboard()
-      .then((metricsData) => {
-        setMetrics(metricsData);
-      })
+      .then((metricsData) => setMetrics(metricsData))
       .catch(() => setMetrics(null))
       .finally(() => setLoading(false));
   }, []);
@@ -121,7 +119,6 @@ function SubscriptionDashboardPanel() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-[#251E1F]">Subscription Dashboard</h2>
@@ -129,7 +126,6 @@ function SubscriptionDashboardPanel() {
         </div>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((card) => (
           <div key={card.label} className="rounded-xl border border-[#f2d5cc]/60 bg-white/80 p-5 shadow-sm">
@@ -142,7 +138,6 @@ function SubscriptionDashboardPanel() {
         ))}
       </div>
 
-      {/* Revenue by Plan */}
       {metrics.revenue_by_plan?.length > 0 && (
         <div className="rounded-xl border border-[#f2d5cc]/60 bg-white/80 p-5 shadow-sm">
           <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#6f4f47]">Revenue by Plan</h3>
@@ -160,12 +155,8 @@ function SubscriptionDashboardPanel() {
         </div>
       )}
 
-      {/* Quick links */}
       <div className="flex items-center gap-6">
-        <button
-          onClick={() => navigate("/dashboard/invoicing/finance/subscriptions/list")}
-          className="text-sm font-medium text-[#F38978] hover:underline"
-        >
+        <button onClick={() => navigate("/dashboard/invoicing/finance/subscriptions/list")} className="text-sm font-medium text-[#F38978] hover:underline">
           View All Subscriptions →
         </button>
       </div>
@@ -183,6 +174,10 @@ function SubscriptionListPanel() {
   const [statusFilter, setStatusFilter] = useState("");
   const [freqFilter, setFreqFilter] = useState("");
   const [autoRenewFilter, setAutoRenewFilter] = useState("");
+  const [sortField, setSortField] = useState("created_at");
+  const [sortDir, setSortDir] = useState("desc");
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   const loadData = () => {
     setLoading(true);
@@ -210,40 +205,55 @@ function SubscriptionListPanel() {
     }
     if (autoRenewFilter === "yes") list = list.filter((s) => s.auto_renew);
     if (autoRenewFilter === "no") list = list.filter((s) => !s.auto_renew);
+    // Sort
+    list = [...list].sort((a, b) => {
+      const aVal = a[sortField] ?? "";
+      const bVal = b[sortField] ?? "";
+      if (sortDir === "asc") return aVal > bVal ? 1 : -1;
+      return aVal < bVal ? 1 : -1;
+    });
     return list;
-  }, [subscriptions, search, autoRenewFilter]);
+  }, [subscriptions, search, autoRenewFilter, sortField, sortDir]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  const handleSort = (field) => {
+    if (sortField === field) setSortDir(sortDir === "asc" ? "desc" : "asc");
+    else { setSortField(field); setSortDir("asc"); }
+  };
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-[#251E1F]">All Subscriptions</h2>
           <p className="text-sm text-[#6f4f47]">{filtered.length} subscription{filtered.length !== 1 ? "s" : ""}</p>
         </div>
+        <button
+          onClick={() => navigate("/dashboard/invoicing/finance/subscriptions/create")}
+          className="flex items-center gap-1.5 rounded-lg bg-[#F38978] px-4 py-2 text-sm font-semibold text-white shadow hover:bg-[#e0776a] transition"
+        >
+          <Plus className="h-4 w-4" /> Create Subscription
+        </button>
       </div>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6f4f47]" />
-          <input
-            type="text"
-            placeholder="Search customer, plan, or ID..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-[#f2d5cc] bg-white py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#F38978]/40"
-          />
+          <input type="text" placeholder="Search customer, plan, or ID..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="w-full rounded-lg border border-[#f2d5cc] bg-white py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#F38978]/40" />
         </div>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border border-[#f2d5cc] bg-white px-3 py-2 text-sm" aria-label="Filter by status">
+        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} className="rounded-lg border border-[#f2d5cc] bg-white px-3 py-2 text-sm" aria-label="Filter by status">
           <option value="">All Statuses</option>
           {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={freqFilter} onChange={(e) => setFreqFilter(e.target.value)} className="rounded-lg border border-[#f2d5cc] bg-white px-3 py-2 text-sm" aria-label="Filter by frequency">
+        <select value={freqFilter} onChange={(e) => { setFreqFilter(e.target.value); setPage(1); }} className="rounded-lg border border-[#f2d5cc] bg-white px-3 py-2 text-sm" aria-label="Filter by frequency">
           <option value="">All Frequencies</option>
           {FREQUENCY_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
         </select>
-        <select value={autoRenewFilter} onChange={(e) => setAutoRenewFilter(e.target.value)} className="rounded-lg border border-[#f2d5cc] bg-white px-3 py-2 text-sm" aria-label="Filter auto renew">
+        <select value={autoRenewFilter} onChange={(e) => { setAutoRenewFilter(e.target.value); setPage(1); }} className="rounded-lg border border-[#f2d5cc] bg-white px-3 py-2 text-sm" aria-label="Filter auto renew">
           <option value="">Auto Renew</option>
           <option value="yes">Yes</option>
           <option value="no">No</option>
@@ -256,51 +266,237 @@ function SubscriptionListPanel() {
       ) : filtered.length === 0 ? (
         <p className="py-10 text-center text-sm text-[#6f4f47]">No subscriptions found.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[#f2d5cc]/60 bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[#f2d5cc]/40 bg-[#fff8f5]">
-                <th className="px-3 py-3 text-left font-semibold text-[#6f4f47]">ID</th>
-                <th className="px-3 py-3 text-left font-semibold text-[#6f4f47]">Customer</th>
-                <th className="px-3 py-3 text-left font-semibold text-[#6f4f47]">Plan</th>
-                <th className="px-3 py-3 text-right font-semibold text-[#6f4f47]">Amount</th>
-                <th className="px-3 py-3 text-left font-semibold text-[#6f4f47]">Frequency</th>
-                <th className="px-3 py-3 text-left font-semibold text-[#6f4f47]">Next Billing</th>
-                <th className="px-3 py-3 text-center font-semibold text-[#6f4f47]">Invoices</th>
-                <th className="px-3 py-3 text-center font-semibold text-[#6f4f47]">Auto Renew</th>
-                <th className="px-3 py-3 text-left font-semibold text-[#6f4f47]">Status</th>
-                <th className="px-3 py-3 text-right font-semibold text-[#6f4f47]">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((sub) => (
-                <tr key={sub.subscription_id} className="border-b border-[#f2d5cc]/20 hover:bg-[#fff3ee]/50 transition">
-                  <td className="px-3 py-3 text-[#6f4f47]">#{sub.subscription_id}</td>
-                  <td className="px-3 py-3 font-medium text-[#251E1F] cursor-pointer hover:text-[#F38978]" onClick={() => navigate(`/dashboard/invoicing/finance/subscriptions/${sub.subscription_id}`)}>
-                    {sub.customer_name}
-                  </td>
-                  <td className="px-3 py-3 text-[#251E1F]">{sub.plan_name}</td>
-                  <td className="px-3 py-3 text-right font-medium">{formatCurrency(sub.amount)}</td>
-                  <td className="px-3 py-3 text-[#6f4f47]">{sub.billing_frequency}</td>
-                  <td className="px-3 py-3 text-[#6f4f47]">{formatDate(sub.next_billing_date)}</td>
-                  <td className="px-3 py-3 text-center">
-                    <span className="inline-block rounded-full bg-[#EAF2FF] px-2 py-0.5 text-xs font-semibold text-[#3269A8]">{sub.invoice_count || 0}</span>
-                  </td>
-                  <td className="px-3 py-3 text-center">{sub.auto_renew ? "Yes" : "No"}</td>
-                  <td className="px-3 py-3">
-                    <span className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusStyles[sub.status] || ""}`}>{sub.status}</span>
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => navigate(`/dashboard/invoicing/finance/subscriptions/${sub.subscription_id}`)} title="View" className="rounded p-1 hover:bg-[#FDD9CD]/50"><FileText className="h-4 w-4 text-[#6f4f47]" /></button>
-                    </div>
-                  </td>
+        <>
+          <div className="overflow-x-auto rounded-xl border border-[#f2d5cc]/60 bg-white shadow-sm">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#f2d5cc]/40 bg-[#fff8f5]">
+                  <ThSort label="ID" field="subscription_id" current={sortField} dir={sortDir} onSort={handleSort} />
+                  <ThSort label="Customer" field="customer_name" current={sortField} dir={sortDir} onSort={handleSort} />
+                  <ThSort label="Plan" field="plan_name" current={sortField} dir={sortDir} onSort={handleSort} />
+                  <ThSort label="Amount" field="amount" current={sortField} dir={sortDir} onSort={handleSort} align="right" />
+                  <ThSort label="Frequency" field="billing_frequency" current={sortField} dir={sortDir} onSort={handleSort} />
+                  <ThSort label="Next Billing" field="next_billing_date" current={sortField} dir={sortDir} onSort={handleSort} />
+                  <th className="px-3 py-3 text-center font-semibold text-[#6f4f47]">Auto Renew</th>
+                  <ThSort label="Status" field="status" current={sortField} dir={sortDir} onSort={handleSort} />
+                  <th className="px-3 py-3 text-right font-semibold text-[#6f4f47]">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {paginated.map((sub) => (
+                  <tr key={sub.subscription_id} className="border-b border-[#f2d5cc]/20 hover:bg-[#fff3ee]/50 transition">
+                    <td className="px-3 py-3 text-[#6f4f47]">#{sub.subscription_id}</td>
+                    <td className="px-3 py-3 font-medium text-[#251E1F] cursor-pointer hover:text-[#F38978]" onClick={() => navigate(`/dashboard/invoicing/finance/subscriptions/${sub.subscription_id}`)}>
+                      {sub.customer_name}
+                    </td>
+                    <td className="px-3 py-3 text-[#251E1F]">{sub.plan_name}</td>
+                    <td className="px-3 py-3 text-right font-medium">{formatCurrency(sub.amount)}</td>
+                    <td className="px-3 py-3 text-[#6f4f47]">{sub.billing_frequency}</td>
+                    <td className="px-3 py-3 text-[#6f4f47]">{formatDate(sub.next_billing_date)}</td>
+                    <td className="px-3 py-3 text-center">{sub.auto_renew ? "Yes" : "No"}</td>
+                    <td className="px-3 py-3">
+                      <span className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusStyles[sub.status] || ""}`}>{sub.status}</span>
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      <button onClick={() => navigate(`/dashboard/invoicing/finance/subscriptions/${sub.subscription_id}`)} title="View" className="rounded p-1 hover:bg-[#FDD9CD]/50"><FileText className="h-4 w-4 text-[#6f4f47]" /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-xs text-[#6f4f47]">Page {page} of {totalPages}</p>
+              <div className="flex gap-1">
+                <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded border border-[#f2d5cc] px-3 py-1 text-xs disabled:opacity-40">Prev</button>
+                <button disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="rounded border border-[#f2d5cc] px-3 py-1 text-xs disabled:opacity-40">Next</button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function ThSort({ label, field, current, dir, onSort, align }) {
+  const active = current === field;
+  return (
+    <th className={`px-3 py-3 font-semibold text-[#6f4f47] cursor-pointer select-none hover:text-[#F38978] ${align === "right" ? "text-right" : "text-left"}`} onClick={() => onSort(field)}>
+      {label} {active ? (dir === "asc" ? "↑" : "↓") : ""}
+    </th>
+  );
+}
+
+// ─── Create Subscription Panel ────────────────────────────────────────────────
+
+function CreateSubscriptionPanel() {
+  const navigate = useNavigate();
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const today = new Date().toISOString().split("T")[0];
+  const [form, setForm] = useState({
+    customer_id: "",
+    plan_name: "",
+    description: "",
+    amount: "",
+    billing_frequency: "Monthly",
+    start_date: today,
+    end_date: "",
+    auto_renew: true,
+    auto_send: true,
+  });
+
+  useEffect(() => {
+    fetchCustomers()
+      .then((data) => setCustomers(data.customers || []))
+      .catch(() => setCustomers([]));
+  }, []);
+
+  const handleChange = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    setError("");
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
+    try {
+      const result = await createSubscription({
+        customer_id: Number(form.customer_id),
+        plan_name: form.plan_name.trim(),
+        description: form.description.trim(),
+        amount: Number(form.amount),
+        billing_frequency: form.billing_frequency,
+        start_date: form.start_date,
+        end_date: form.end_date || null,
+        auto_renew: form.auto_renew,
+        auto_send: form.auto_send,
+      });
+      setSuccess(result.message || "Subscription created successfully.");
+      setTimeout(() => navigate("/dashboard/invoicing/finance/subscriptions/list"), 1500);
+    } catch (err) {
+      setError(err.message || "Failed to create subscription.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <button onClick={() => navigate("/dashboard/invoicing/finance/subscriptions/list")} className="rounded-lg p-1.5 hover:bg-[#FDD9CD]/50">
+          <ArrowLeft className="h-5 w-5 text-[#6f4f47]" />
+        </button>
+        <div>
+          <h2 className="text-lg font-bold text-[#251E1F]">Create Subscription</h2>
+          <p className="text-sm text-[#6f4f47]">Set up a new recurring billing agreement</p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
+          <AlertCircle className="h-4 w-4" /> {error}
         </div>
       )}
+      {success && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">
+          <CheckCircle2 className="h-4 w-4" /> {success}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="rounded-xl border border-[#f2d5cc]/60 bg-white/80 p-6 shadow-sm space-y-5">
+        {/* Customer */}
+        <div>
+          <label className="mb-1 block text-sm font-semibold text-[#6f4f47]">Customer *</label>
+          <select value={form.customer_id} onChange={(e) => handleChange("customer_id", e.target.value)} required
+            className="w-full rounded-lg border border-[#f2d5cc] bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#F38978]/40">
+            <option value="">Select a customer</option>
+            {customers.map((c) => <option key={c.customer_id} value={c.customer_id}>{c.name}</option>)}
+          </select>
+        </div>
+
+        {/* Plan Name + Amount */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-[#6f4f47]">Plan Name *</label>
+            <input type="text" value={form.plan_name} onChange={(e) => handleChange("plan_name", e.target.value)} required placeholder="e.g. Premium Monthly"
+              className="w-full rounded-lg border border-[#f2d5cc] bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#F38978]/40" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-[#6f4f47]">Amount (SGD) *</label>
+            <input type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => handleChange("amount", e.target.value)} required placeholder="0.00"
+              className="w-full rounded-lg border border-[#f2d5cc] bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#F38978]/40" />
+          </div>
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className="mb-1 block text-sm font-semibold text-[#6f4f47]">Description</label>
+          <textarea value={form.description} onChange={(e) => handleChange("description", e.target.value)} rows={2} placeholder="Optional description of the subscription plan"
+            className="w-full rounded-lg border border-[#f2d5cc] bg-white px-3 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-[#F38978]/40" />
+        </div>
+
+        {/* Billing Frequency + Dates */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-[#6f4f47]">Billing Frequency *</label>
+            <select value={form.billing_frequency} onChange={(e) => handleChange("billing_frequency", e.target.value)} required
+              className="w-full rounded-lg border border-[#f2d5cc] bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#F38978]/40">
+              {FREQUENCY_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-[#6f4f47]">Start Date *</label>
+            <input type="date" value={form.start_date} onChange={(e) => handleChange("start_date", e.target.value)} required
+              className="w-full rounded-lg border border-[#f2d5cc] bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#F38978]/40" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-[#6f4f47]">End Date (Optional)</label>
+            <input type="date" value={form.end_date} onChange={(e) => handleChange("end_date", e.target.value)} min={form.start_date || ""}
+              className="w-full rounded-lg border border-[#f2d5cc] bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#F38978]/40" />
+          </div>
+        </div>
+
+        {/* Toggle options */}
+        <div className="flex flex-wrap items-center gap-6">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.auto_renew} onChange={(e) => handleChange("auto_renew", e.target.checked)} className="h-4 w-4 rounded border-[#f2d5cc] accent-[#F38978]" />
+            <span className="text-sm text-[#251E1F]">Auto Renew</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.auto_send} onChange={(e) => handleChange("auto_send", e.target.checked)} className="h-4 w-4 rounded border-[#f2d5cc] accent-[#F38978]" />
+            <span className="text-sm text-[#251E1F]">Auto Send Email</span>
+          </label>
+        </div>
+
+        {/* Info note */}
+        <p className="text-xs text-[#6f4f47]">
+          The system will automatically calculate the initial Next Billing Date based on the Start Date and Billing Frequency.
+        </p>
+
+        {/* Submit */}
+        <div className="flex items-center gap-3 pt-2">
+          <button type="submit" disabled={loading}
+            className="flex items-center gap-2 rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-[#e0776a] disabled:opacity-50 transition">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {loading ? "Creating..." : "Create Subscription"}
+          </button>
+          <button type="button" onClick={() => navigate("/dashboard/invoicing/finance/subscriptions/list")}
+            className="rounded-lg border border-[#f2d5cc] px-4 py-2.5 text-sm font-medium text-[#6f4f47] hover:bg-[#fff3ee]">
+            Cancel
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -314,6 +510,7 @@ function SubscriptionDetailPanel({ subscriptionId }) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [showGenerateForm, setShowGenerateForm] = useState(false);
   const [invoiceAmount, setInvoiceAmount] = useState("");
   const [tab, setTab] = useState("invoices");
@@ -337,7 +534,6 @@ function SubscriptionDetailPanel({ subscriptionId }) {
   if (loading) return <div className="flex h-40 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-[#F38978]" /></div>;
   if (!sub) return <p className="p-6 text-sm text-red-600">Subscription not found.</p>;
 
-  // Calculate how much has already been invoiced (exclude void/cancelled invoices)
   const totalInvoiced = invoices
     .filter((inv) => inv.status !== "Void" && inv.status !== "Cancelled")
     .reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
@@ -346,30 +542,44 @@ function SubscriptionDetailPanel({ subscriptionId }) {
 
   const handleGenerateInvoice = async () => {
     const amount = invoiceAmount ? Number(invoiceAmount) : null;
-    if (!amount || isNaN(amount) || amount <= 0) {
-      alert("Please enter a valid amount greater than 0.");
-      return;
-    }
-    if (amount > remainingBalance) {
-      alert("Amount cannot exceed the remaining balance (" + formatCurrency(remainingBalance) + ").");
-      return;
-    }
+    if (!amount || isNaN(amount) || amount <= 0) { alert("Please enter a valid amount."); return; }
+    if (amount > remainingBalance) { alert("Amount cannot exceed remaining balance (" + formatCurrency(remainingBalance) + ")."); return; }
     setGenerating(true);
     try {
       const result = await generateInvoiceNow(subscriptionId, amount);
       alert(result.message || "Invoice generated.");
       setShowGenerateForm(false);
       setInvoiceAmount("");
-      // Refresh invoices
       const invData = await fetchSubscriptionInvoices(subscriptionId);
       setInvoices(invData.invoices || []);
       const updated = await fetchSubscriptionById(subscriptionId);
       setSub(updated.subscription);
-    } catch (err) {
-      alert(err.message || "Failed to generate invoice.");
-    } finally {
-      setGenerating(false);
-    }
+    } catch (err) { alert(err.message || "Failed to generate invoice."); }
+    finally { setGenerating(false); }
+  };
+
+  const handlePause = async () => {
+    if (!confirm("Pause this subscription?")) return;
+    setActionLoading(true);
+    try { await pauseSubscription(subscriptionId); const u = await fetchSubscriptionById(subscriptionId); setSub(u.subscription); }
+    catch (err) { alert(err.message || "Failed."); }
+    finally { setActionLoading(false); }
+  };
+
+  const handleResume = async () => {
+    if (!confirm("Resume this subscription?")) return;
+    setActionLoading(true);
+    try { await resumeSubscription(subscriptionId); const u = await fetchSubscriptionById(subscriptionId); setSub(u.subscription); }
+    catch (err) { alert(err.message || "Failed."); }
+    finally { setActionLoading(false); }
+  };
+
+  const handleCancel = async () => {
+    if (!confirm("Cancel this subscription permanently?")) return;
+    setActionLoading(true);
+    try { await cancelSubscription(subscriptionId); const u = await fetchSubscriptionById(subscriptionId); setSub(u.subscription); }
+    catch (err) { alert(err.message || "Failed."); }
+    finally { setActionLoading(false); }
   };
 
   return (
@@ -386,15 +596,18 @@ function SubscriptionDetailPanel({ subscriptionId }) {
         <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[sub.status] || ""}`}>{sub.status}</span>
       </div>
 
-      {/* Subscription Info */}
+      {/* General Information */}
       <div className="grid grid-cols-2 gap-4 rounded-xl border border-[#f2d5cc]/60 bg-white/80 p-5 shadow-sm sm:grid-cols-3 lg:grid-cols-4">
+        <InfoCell label="Subscription ID" value={`#${sub.subscription_id}`} />
+        <InfoCell label="Customer" value={sub.customer_name} />
         <InfoCell label="Amount" value={formatCurrency(sub.amount)} />
         <InfoCell label="Frequency" value={sub.billing_frequency} />
+        <InfoCell label="Status" value={sub.status} />
         <InfoCell label="Start Date" value={formatDate(sub.start_date)} />
         <InfoCell label="Next Billing" value={formatDate(sub.next_billing_date)} />
         <InfoCell label="End Date" value={sub.end_date ? formatDate(sub.end_date) : "None"} />
         <InfoCell label="Auto Renew" value={sub.auto_renew ? "Yes" : "No"} />
-        <InfoCell label="Auto Send" value={sub.auto_send ? "Yes" : "No"} />
+        <InfoCell label="Auto Send Email" value={sub.auto_send ? "Yes" : "No"} />
         <InfoCell label="Created" value={formatDate(sub.created_at)} />
       </div>
       {sub.description && (
@@ -404,26 +617,37 @@ function SubscriptionDetailPanel({ subscriptionId }) {
         </div>
       )}
 
-      {/* Billing Progress */}
-      <div className="rounded-xl border border-[#f2d5cc]/60 bg-white/80 p-4 shadow-sm">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-semibold uppercase text-[#6f4f47]">Billing Progress</p>
-          <p className="text-xs text-[#6f4f47]">{formatCurrency(totalInvoiced)} of {formatCurrency(sub.amount)}</p>
-        </div>
-        <div className="h-2 w-full rounded-full bg-[#f2d5cc]/40 overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all ${fullyInvoiced ? "bg-emerald-500" : "bg-blue-500"}`}
-            style={{ width: `${Math.min(100, (totalInvoiced / Number(sub.amount)) * 100)}%` }}
-          />
-        </div>
-        <div className="flex items-center justify-between mt-1.5">
-          <p className="text-xs text-[#6f4f47]">Invoiced: {formatCurrency(totalInvoiced)}</p>
-          <p className="text-xs font-medium text-[#251E1F]">Remaining: {formatCurrency(remainingBalance)}</p>
-        </div>
-      </div>
-
       {/* Actions */}
       <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {sub.status === "Active" && (
+            <>
+              <button onClick={handlePause} disabled={actionLoading} className="flex items-center gap-1.5 rounded-lg border border-amber-300 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50 transition">
+                <Pause className="h-3.5 w-3.5" /> Pause
+              </button>
+              <button onClick={handleCancel} disabled={actionLoading} className="flex items-center gap-1.5 rounded-lg border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50 transition">
+                <XCircle className="h-3.5 w-3.5" /> Cancel
+              </button>
+            </>
+          )}
+          {sub.status === "Paused" && (
+            <>
+              <button onClick={handleResume} disabled={actionLoading} className="flex items-center gap-1.5 rounded-lg border border-emerald-300 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 transition">
+                <Play className="h-3.5 w-3.5" /> Resume
+              </button>
+              <button onClick={handleCancel} disabled={actionLoading} className="flex items-center gap-1.5 rounded-lg border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50 transition">
+                <XCircle className="h-3.5 w-3.5" /> Cancel
+              </button>
+            </>
+          )}
+          {(sub.status === "Cancelled" || sub.status === "Expired") && (
+            <p className="flex items-center gap-2 text-sm text-[#6f4f47]">
+              <AlertCircle className="h-4 w-4" /> This subscription is {sub.status.toLowerCase()} and cannot be modified.
+            </p>
+          )}
+        </div>
+
+        {/* Generate Invoice Now */}
         {sub.status === "Active" && !fullyInvoiced && !showGenerateForm && (
           <button onClick={() => { setInvoiceAmount(""); setShowGenerateForm(true); }} className="flex items-center gap-1.5 rounded-lg border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50">
             <Zap className="h-3.5 w-3.5" /> Generate Invoice Now
@@ -431,40 +655,23 @@ function SubscriptionDetailPanel({ subscriptionId }) {
         )}
         {sub.status === "Active" && fullyInvoiced && (
           <p className="flex items-center gap-2 text-sm font-medium text-emerald-700">
-            <CheckCircle2 className="h-4 w-4" /> Fully invoiced — all partial invoices add up to {formatCurrency(sub.amount)}
+            <CheckCircle2 className="h-4 w-4" /> Fully invoiced
           </p>
         )}
         {sub.status === "Active" && showGenerateForm && (
           <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 space-y-3">
-            <p className="text-sm font-medium text-[#251E1F]">Generate partial invoice</p>
+            <p className="text-sm font-medium text-[#251E1F]">Generate invoice</p>
             <div className="flex items-end gap-3">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-[#6f4f47]">Invoice Amount (SGD) *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  max={remainingBalance}
-                  value={invoiceAmount}
-                  onChange={(e) => setInvoiceAmount(e.target.value)}
-                  placeholder={`Max ${formatCurrency(remainingBalance)}`}
-                  className="w-48 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-300"
-                />
-                <p className="mt-1 text-xs text-[#6f4f47]">Remaining balance: {formatCurrency(remainingBalance)}</p>
+                <label className="mb-1 block text-xs font-semibold text-[#6f4f47]">Amount (SGD) *</label>
+                <input type="number" step="0.01" min="0.01" max={remainingBalance} value={invoiceAmount} onChange={(e) => setInvoiceAmount(e.target.value)} placeholder={`Max ${formatCurrency(remainingBalance)}`}
+                  className="w-48 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-300" />
+                <p className="mt-1 text-xs text-[#6f4f47]">Remaining: {formatCurrency(remainingBalance)}</p>
               </div>
-              <button
-                onClick={handleGenerateInvoice}
-                disabled={generating}
-                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700 disabled:opacity-50 transition"
-              >
+              <button onClick={handleGenerateInvoice} disabled={generating} className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700 disabled:opacity-50 transition">
                 {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />} Generate
               </button>
-              <button
-                onClick={() => { setShowGenerateForm(false); setInvoiceAmount(""); }}
-                className="rounded-lg border border-[#f2d5cc] px-3 py-2 text-sm font-medium text-[#6f4f47] hover:bg-[#fff3ee]"
-              >
-                Cancel
-              </button>
+              <button onClick={() => { setShowGenerateForm(false); setInvoiceAmount(""); }} className="rounded-lg border border-[#f2d5cc] px-3 py-2 text-sm font-medium text-[#6f4f47] hover:bg-[#fff3ee]">Cancel</button>
             </div>
           </div>
         )}
@@ -549,319 +756,6 @@ function InfoCell({ label, value }) {
     <div>
       <p className="text-xs font-medium uppercase tracking-wide text-[#6f4f47]">{label}</p>
       <p className="mt-0.5 text-sm font-semibold text-[#251E1F]">{value}</p>
-    </div>
-  );
-}
-
-// ─── Subscription Import Panel ────────────────────────────────────────────────
-// Primary method for adding subscriptions. Finance uploads CSV/Excel from external systems.
-
-function SubscriptionImportPanel() {
-  const navigate = useNavigate();
-  const [step, setStep] = useState("upload"); // upload | preview | result
-  const [file, setFile] = useState(null);
-  const [parsedRows, setParsedRows] = useState([]);
-  const [validationResult, setValidationResult] = useState(null);
-  const [importResult, setImportResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
-    setFile(selectedFile);
-    setError("");
-    parseFile(selectedFile);
-  };
-
-  const parseFile = async (selectedFile) => {
-    setLoading(true);
-    setError("");
-    try {
-      // Send file to server for parsing (same pattern as VanidayImportPage)
-      const parseResult = await parseSubscriptionFile(selectedFile);
-      const rows = parseResult.rows || [];
-
-      if (!rows || rows.length === 0) {
-        setError("The file contains no data rows.");
-        setLoading(false);
-        return;
-      }
-
-      setParsedRows(rows);
-      // Validate
-      const fileMetadata = {
-        name: selectedFile.name,
-        path: selectedFile.name,
-        type: selectedFile.type,
-      };
-      const result = await validateSubscriptionImport(rows, fileMetadata);
-      setValidationResult(result);
-      setStep("preview");
-    } catch (err) {
-      setError(err.message || "Failed to parse file.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleConfirmImport = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const fileMetadata = {
-        name: file.name,
-        path: file.name,
-        type: file.type,
-      };
-      const result = await confirmSubscriptionImport(parsedRows, fileMetadata);
-      setImportResult(result);
-      setStep("result");
-    } catch (err) {
-      setError(err.message || "Failed to import subscriptions.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleReset = () => {
-    setStep("upload");
-    setFile(null);
-    setParsedRows([]);
-    setValidationResult(null);
-    setImportResult(null);
-    setError("");
-  };
-
-  return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => navigate("/dashboard/invoicing/finance/subscriptions/list")} className="rounded-lg p-1.5 hover:bg-[#FDD9CD]/50">
-          <ArrowLeft className="h-5 w-5 text-[#6f4f47]" />
-        </button>
-        <div className="flex-1">
-          <h2 className="text-lg font-bold text-[#251E1F]">Import Subscriptions</h2>
-          <p className="text-sm text-[#6f4f47]">Upload subscription records from your external business system</p>
-        </div>
-        <a
-          href={getSubscriptionTemplateUrl()}
-          download
-          className="flex items-center gap-1.5 rounded-lg border border-[#f2d5cc] px-3 py-2 text-sm font-medium text-[#6f4f47] hover:bg-[#fff3ee] transition"
-        >
-          <Download className="h-4 w-4" /> Download Template
-        </a>
-      </div>
-
-      {/* Progress Steps */}
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
-        <span className={step === "upload" ? "text-[#F38978]" : "text-[#6f4f47]"}>1. Upload File</span>
-        <span className="text-[#f2d5cc]">→</span>
-        <span className={step === "preview" ? "text-[#F38978]" : "text-[#6f4f47]"}>2. Validate & Preview</span>
-        <span className="text-[#f2d5cc]">→</span>
-        <span className={step === "result" ? "text-[#F38978]" : "text-[#6f4f47]"}>3. Import Complete</span>
-      </div>
-
-      {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
-          <AlertCircle className="h-4 w-4" /> {error}
-        </div>
-      )}
-
-      {/* Step 1: Upload */}
-      {step === "upload" && (
-        <div className="rounded-xl border-2 border-dashed border-[#f2d5cc] bg-[#fff8f5] p-10 text-center">
-          {loading ? (
-            <div className="flex flex-col items-center gap-3">
-              <Loader2 className="h-8 w-8 animate-spin text-[#F38978]" />
-              <p className="text-sm text-[#6f4f47]">Parsing and validating file...</p>
-            </div>
-          ) : (
-            <>
-              <FileSpreadsheet className="mx-auto h-12 w-12 text-[#F38978]/60" />
-              <p className="mt-3 text-sm font-medium text-[#251E1F]">
-                Drop your subscription file here or click to browse
-              </p>
-              <p className="mt-1 text-xs text-[#6f4f47]">
-                Accepts .xlsx, .xls, or .csv files. File name must contain "subscription".
-              </p>
-              <label className="mt-4 inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-[#e0776a] transition">
-                <Upload className="h-4 w-4" /> Choose File
-                <input
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  onChange={handleFileChange}
-                  className="hidden"
-                  aria-label="Upload subscription file"
-                />
-              </label>
-              <div className="mt-4 rounded-lg bg-white/80 p-4 text-left text-xs text-[#6f4f47]">
-                <p className="font-semibold mb-1">Required columns:</p>
-                <p>Customer Name, Plan Name, Amount, Billing Frequency, Start Date</p>
-                <p className="font-semibold mt-2 mb-1">Optional columns:</p>
-                <p>Description, Next Billing Date, End Date, Auto Renew, Auto Send</p>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Step 2: Preview / Validation */}
-      {step === "preview" && validationResult && (
-        <div className="space-y-4">
-          {/* Summary */}
-          <div className="flex flex-wrap gap-4">
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2">
-              <p className="text-xs font-semibold text-emerald-700">Valid Rows</p>
-              <p className="text-lg font-bold text-emerald-800">{validationResult.validCount}</p>
-            </div>
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2">
-              <p className="text-xs font-semibold text-rose-700">Invalid Rows</p>
-              <p className="text-lg font-bold text-rose-800">{validationResult.invalidCount}</p>
-            </div>
-            <div className="rounded-lg border border-[#f2d5cc] bg-[#fff8f5] px-4 py-2">
-              <p className="text-xs font-semibold text-[#6f4f47]">Total Rows</p>
-              <p className="text-lg font-bold text-[#251E1F]">{validationResult.rows?.length || 0}</p>
-            </div>
-          </div>
-
-          {/* File info */}
-          <p className="text-xs text-[#6f4f47]">
-            File: <span className="font-medium">{file?.name}</span>
-          </p>
-
-          {/* Validation table */}
-          {validationResult.rows?.length > 0 && (
-            <div className="overflow-x-auto rounded-xl border border-[#f2d5cc]/60 bg-white shadow-sm max-h-[400px] overflow-y-auto">
-              <table className="w-full text-xs">
-                <thead className="sticky top-0 z-10">
-                  <tr className="border-b border-[#f2d5cc]/40 bg-[#fff8f5]">
-                    <th className="px-3 py-2 text-left font-semibold text-[#6f4f47]">Row</th>
-                    <th className="px-3 py-2 text-left font-semibold text-[#6f4f47]">Customer</th>
-                    <th className="px-3 py-2 text-left font-semibold text-[#6f4f47]">Plan</th>
-                    <th className="px-3 py-2 text-right font-semibold text-[#6f4f47]">Amount</th>
-                    <th className="px-3 py-2 text-left font-semibold text-[#6f4f47]">Frequency</th>
-                    <th className="px-3 py-2 text-left font-semibold text-[#6f4f47]">Start Date</th>
-                    <th className="px-3 py-2 text-left font-semibold text-[#6f4f47]">Status</th>
-                    <th className="px-3 py-2 text-left font-semibold text-[#6f4f47]">Errors</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {validationResult.rows.map((row) => (
-                    <tr key={row.row_number} className={`border-b border-[#f2d5cc]/20 ${row.is_valid ? "" : "bg-rose-50/50"}`}>
-                      <td className="px-3 py-2">{row.row_number}</td>
-                      <td className="px-3 py-2">{row.customer_name || "—"}</td>
-                      <td className="px-3 py-2">{row.plan_name || "—"}</td>
-                      <td className="px-3 py-2 text-right">{row.amount > 0 ? formatCurrency(row.amount) : "—"}</td>
-                      <td className="px-3 py-2">{row.billing_frequency || "—"}</td>
-                      <td className="px-3 py-2">{row.start_date || "—"}</td>
-                      <td className="px-3 py-2">
-                        {row.is_valid ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-3 w-3" /> Valid</span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-rose-700"><XCircle className="h-3 w-3" /> Invalid</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-rose-600 max-w-[200px]">
-                        {row.errors?.length > 0 && (
-                          <ul className="list-disc pl-3 space-y-0.5">
-                            {row.errors.map((err, idx) => <li key={idx}>{err}</li>)}
-                          </ul>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex items-center gap-3 pt-2">
-            <button
-              onClick={handleReset}
-              className="rounded-lg border border-[#f2d5cc] px-4 py-2 text-sm font-medium text-[#6f4f47] hover:bg-[#fff3ee]"
-            >
-              Upload Different File
-            </button>
-            {validationResult.validCount > 0 && (
-              <button
-                onClick={handleConfirmImport}
-                disabled={loading}
-                className="flex items-center gap-2 rounded-lg bg-[#F38978] px-5 py-2 text-sm font-semibold text-white shadow hover:bg-[#e0776a] disabled:opacity-50 transition"
-              >
-                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                Confirm Import ({validationResult.validCount} subscription{validationResult.validCount !== 1 ? "s" : ""})
-              </button>
-            )}
-          </div>
-
-          {validationResult.invalidCount > 0 && validationResult.validCount > 0 && (
-            <p className="text-xs text-amber-700">
-              Note: {validationResult.invalidCount} invalid row{validationResult.invalidCount !== 1 ? "s" : ""} will be skipped during import.
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Step 3: Import Result */}
-      {step === "result" && importResult && (
-        <div className="space-y-4">
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-center">
-            <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" />
-            <h3 className="mt-3 text-lg font-bold text-emerald-800">Import Successful</h3>
-            <p className="mt-1 text-sm text-emerald-700">
-              {importResult.createdCount} subscription{importResult.createdCount !== 1 ? "s" : ""} imported successfully.
-              {importResult.skippedCount > 0 && ` ${importResult.skippedCount} row${importResult.skippedCount !== 1 ? "s" : ""} skipped.`}
-            </p>
-          </div>
-
-          {/* Imported subscriptions summary */}
-          {importResult.subscriptions?.length > 0 && (
-            <div className="overflow-x-auto rounded-xl border border-[#f2d5cc]/60 bg-white shadow-sm">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-[#f2d5cc]/40 bg-[#fff8f5]">
-                    <th className="px-3 py-2 text-left font-semibold text-[#6f4f47]">ID</th>
-                    <th className="px-3 py-2 text-left font-semibold text-[#6f4f47]">Customer</th>
-                    <th className="px-3 py-2 text-left font-semibold text-[#6f4f47]">Plan</th>
-                    <th className="px-3 py-2 text-right font-semibold text-[#6f4f47]">Amount</th>
-                    <th className="px-3 py-2 text-left font-semibold text-[#6f4f47]">Frequency</th>
-                    <th className="px-3 py-2 text-left font-semibold text-[#6f4f47]">Next Billing</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {importResult.subscriptions.map((sub) => (
-                    <tr key={sub.subscription_id} className="border-b border-[#f2d5cc]/20 hover:bg-[#fff3ee]/50">
-                      <td className="px-3 py-2">#{sub.subscription_id}</td>
-                      <td className="px-3 py-2">{sub.customer_name}</td>
-                      <td className="px-3 py-2">{sub.plan_name}</td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(sub.amount)}</td>
-                      <td className="px-3 py-2">{sub.billing_frequency}</td>
-                      <td className="px-3 py-2">{sub.next_billing_date}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate("/dashboard/invoicing/finance/subscriptions/list")}
-              className="rounded-lg bg-[#F38978] px-5 py-2 text-sm font-semibold text-white shadow hover:bg-[#e0776a] transition"
-            >
-              View All Subscriptions
-            </button>
-            <button
-              onClick={handleReset}
-              className="rounded-lg border border-[#f2d5cc] px-4 py-2 text-sm font-medium text-[#6f4f47] hover:bg-[#fff3ee]"
-            >
-              Import More
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -10,22 +10,12 @@ const themes = [
   { id: "system", label: "System", icon: Monitor }
 ];
 
-const accentColors = [
-  { value: "#F38978", label: "Coral" },
-  { value: "#E87562", label: "Peach" },
-  { value: "#C55245", label: "Blush" },
-  { value: "#FDD9CD", label: "Lavender" },
-  { value: "#2D7C83", label: "Powder Blue" },
-  { value: "#7B6660", label: "Sage" }
+const sidebarModes = [
+  { value: "expanded", label: "Expanded" },
+  { value: "collapsed", label: "Collapsed" }
 ];
 
-const fontSizes = [
-  { value: "small", label: "Small" },
-  { value: "medium", label: "Medium" },
-  { value: "large", label: "Large" }
-];
-
-export default function AppearanceSection() {
+export default function FinanceAppearanceSection({ onDirty }) {
   const [settings, setSettings] = useState(DEFAULT_APPEARANCE);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -36,9 +26,9 @@ export default function AppearanceSection() {
   async function loadSettings() {
     try {
       const data = await fetchAppearance();
-      const nextSettings = normalizeAppearance(data);
-      setSettings(nextSettings);
-      applyAppearance(nextSettings);
+      const next = normalizeAppearance(data);
+      setSettings(next);
+      applyAppearance(next);
     } catch (err) { /* ignore */ }
     finally { setLoading(false); }
   }
@@ -49,8 +39,9 @@ export default function AppearanceSection() {
   }
 
   function updateDraft(newSettings) {
-    const normalizedSettings = applyAppearance(newSettings, { persist: false });
-    setSettings(normalizedSettings);
+    const normalized = applyAppearance(newSettings, { persist: false });
+    setSettings(normalized);
+    onDirty?.();
   }
 
   async function handleSave() {
@@ -81,7 +72,7 @@ export default function AppearanceSection() {
           <Palette size={20} className="text-[#F38978]" />
           <h2 className="text-xl font-semibold text-[#251E1F]">Appearance</h2>
         </div>
-        <p className="mt-1 text-sm text-[#7b6660]">Customize how the application looks.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">Customise how the application looks.</p>
 
         <div className="mt-6 space-y-6">
           {/* Theme */}
@@ -104,44 +95,19 @@ export default function AppearanceSection() {
             </div>
           </div>
 
-          {/* Accent Color */}
+          {/* Sidebar */}
           <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Accent Color</p>
-            <div className="flex flex-wrap gap-3">
-              {accentColors.map((accent) => (
-                <button
-                  key={accent.value}
-                  type="button"
-                  data-settings-control
-                  onClick={() => updateDraft({ ...settings, accent_color: accent.value })}
-                  className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition ${
-                    settings.accent_color === accent.value
-                      ? "border-[#F38978]/50 bg-white text-[#251E1F] shadow-md"
-                      : "border-[#F0D2CA] bg-[#fff3ee]/70 text-[#7B6660] hover:-translate-y-0.5 hover:bg-white"
-                  }`}
-                  title={accent.label}
-                >
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full shadow-inner" style={{ backgroundColor: accent.value }}>
-                    {settings.accent_color === accent.value && <Check size={13} className="text-white drop-shadow" />}
-                  </span>
-                  {accent.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Font Size */}
-          <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Font Size</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Sidebar</p>
             <div className="flex gap-3">
-              {fontSizes.map((f) => (
-                <button key={f.value} type="button" data-settings-control onClick={() => updateDraft({ ...settings, font_size: f.value })}
+              {sidebarModes.map((mode) => (
+                <button key={mode.value} type="button" data-settings-control
+                  onClick={() => updateDraft({ ...settings, sidebar_mode: mode.value })}
                   className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition ${
-                    settings.font_size === f.value
-                    ? "border-[#F38978]/50 bg-[#F38978]/10 text-[#251E1F]"
+                    settings.sidebar_mode === mode.value
+                      ? "border-[#F38978]/50 bg-[#F38978]/10 text-[#251E1F]"
                       : "border-[#F0D2CA] bg-[#fff3ee]/70 text-[#7b6660] hover:bg-[#FDD9CD]/45"
                   }`}>
-                  {f.label}
+                  {mode.label}
                 </button>
               ))}
             </div>
@@ -158,7 +124,17 @@ export default function AppearanceSection() {
               <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${settings.compact_mode ? "translate-x-5" : "translate-x-0"}`} />
             </button>
           </div>
-          <button type="button" data-settings-save onClick={handleSave} disabled={saving}>Save appearance</button>
+
+          {/* Note about branding */}
+          <div className="rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 p-4">
+            <p className="text-xs text-[#7b6660]">The coral-and-black PayNivo branding is maintained across all themes.</p>
+          </div>
+
+          <button type="button" data-settings-save onClick={handleSave} disabled={saving}
+            className="primary-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
+            {saving ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Check size={15} />}
+            Save Appearance
+          </button>
         </div>
       </div>
     </div>

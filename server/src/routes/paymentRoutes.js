@@ -1,7 +1,9 @@
 const express = require("express");
 const {
+  confirmPayNowPayment,
   confirmStripePayment,
   createStripePaymentLink,
+  generatePayNowQR,
   getPaymentsWorkspace,
   getPaymentHistory,
   recordManualPayment,
@@ -121,6 +123,8 @@ router.get("/stripe-config", (req, res) => {
 });
 router.post("/manual", recordManualPayment);
 router.post("/stripe-link", createStripePaymentLink);
+router.post("/paynow-qr", allowRoles("Admin", "Finance"), generatePayNowQR);
+router.post("/paynow-confirm", allowRoles("Admin", "Finance"), confirmPayNowPayment);
 router.post("/review/:submissionId", allowRoles("Admin", "Finance"), reviewPaymentSubmission);
 router.post("/modern-treasury-recipients", allowRoles("Admin", "Finance"), setupModernTreasuryRecipientAccounts);
 router.post("/modern-treasury-transfer", allowRoles("Admin", "Finance"), submitModernTreasuryTransfer);

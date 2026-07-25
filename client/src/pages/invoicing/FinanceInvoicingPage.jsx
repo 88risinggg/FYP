@@ -78,6 +78,8 @@ import {
 } from "../../services/pdfExportService.js";
 import VanidayImportPage from "./VanidayImportPage.jsx";
 import SubscriptionsView from "../../components/invoicing/SubscriptionsView.jsx";
+import FinanceRemindersView from "../../components/invoicing/FinanceRemindersView.jsx";
+import FinanceSettingsView from "./FinanceSettingsView.jsx";
 
 const financeSidebarSections = [
   {
@@ -154,6 +156,11 @@ const financeSidebarSections = [
         label: "Fraud Detection",
         icon: ShieldAlert,
         path: "/dashboard/invoicing/finance/fraud"
+      },
+      {
+        label: "Reminders",
+        icon: Bell,
+        path: "/dashboard/invoicing/finance/reminders"
       }
     ]
   },
@@ -166,10 +173,20 @@ const financeSidebarSections = [
         path: "/dashboard/invoicing/finance/reports"
       }
     ]
+  },
+  {
+    label: "SETTINGS",
+    items: [
+      {
+        label: "Settings",
+        icon: Settings2,
+        path: "/dashboard/invoicing/finance/settings"
+      }
+    ]
   }
 ];
 
-const invoiceStatuses = ["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdue"];
+const invoiceStatuses = ["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdue", "Cancelled"];
 
 const statusStyles = {
   Draft: "border-[#F0D2CA]/25 bg-[#FFF6F2]/10 text-[#251E1F]",
@@ -178,6 +195,7 @@ const statusStyles = {
   Viewed: "border-[#35A69B]/30 bg-[#E7F7F5] text-[#218178]",
   Paid: "border-emerald-400/30 bg-emerald-500/15 text-emerald-700",
   Overdue: "border-rose-400/30 bg-rose-500/15 text-rose-700",
+  Cancelled: "border-slate-400/30 bg-slate-500/10 text-slate-600",
   Void: "border-slate-400/30 bg-slate-500/10 text-slate-600"
 };
 
@@ -428,6 +446,115 @@ function LoadingPanel({ label }) {
   );
 }
 
+function InvoiceTimeline({ invoice }) {
+  // Build timeline steps based on invoice lifecycle
+  const steps = [];
+  const status = invoice.status;
+
+  // Always has "Created" step
+  steps.push({
+    label: "Created",
+    date: invoice.created_at || invoice.issue_date,
+    completed: true,
+    icon: FileText,
+    description: `Invoice ${invoice.invoiceId} created`
+  });
+
+  // Sent step
+  const isSent = ["Sent", "Viewed", "Paid", "Overdue"].includes(status);
+  steps.push({
+    label: "Sent",
+    date: isSent ? (invoice.sent_at || invoice.created_at) : null,
+    completed: isSent,
+    icon: Send,
+    description: isSent ? `Sent to ${invoice.customer_email || "customer"}` : "Pending delivery"
+  });
+
+  // Viewed step
+  const isViewed = ["Viewed", "Paid"].includes(status);
+  steps.push({
+    label: "Viewed",
+    date: isViewed ? invoice.viewed_at : null,
+    completed: isViewed,
+    icon: Eye,
+    description: isViewed ? `Viewed by ${invoice.customer_name || "customer"}` : "Not yet viewed"
+  });
+
+  // Paid step
+  const isPaidStatus = status === "Paid";
+  steps.push({
+    label: "Paid",
+    date: isPaidStatus ? (invoice.payment_date || null) : null,
+    completed: isPaidStatus,
+    icon: CheckCircle2,
+    description: isPaidStatus ? `Payment received — ${formatCurrency(invoice.total_amount)}` : "Awaiting payment"
+  });
+
+  // Overdue indicator (if applicable)
+  if (status === "Overdue") {
+    steps.push({
+      label: "Overdue",
+      date: invoice.due_date,
+      completed: true,
+      icon: AlertCircle,
+      description: `Payment was due on ${formatDate(invoice.due_date)}`,
+      isWarning: true
+    });
+  }
+
+  // Cancelled indicator (if applicable)
+  if (status === "Cancelled" || status === "Void") {
+    steps.push({
+      label: status,
+      date: null,
+      completed: true,
+      icon: X,
+      description: `Invoice ${status.toLowerCase()}`,
+      isError: true
+    });
+  }
+
+  return (
+    <div className="relative">
+      {steps.map((step, index) => {
+        const Icon = step.icon;
+        const isLast = index === steps.length - 1;
+        const colorClass = step.isError
+          ? "text-rose-600 bg-rose-100 border-rose-300"
+          : step.isWarning
+          ? "text-amber-600 bg-amber-100 border-amber-300"
+          : step.completed
+          ? "text-emerald-600 bg-emerald-100 border-emerald-300"
+          : "text-[#7b6660] bg-[#FDD9CD]/20 border-[#f0d2ca]";
+
+        return (
+          <div key={step.label} className="flex gap-3">
+            {/* Connector line + Icon */}
+            <div className="flex flex-col items-center">
+              <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${colorClass}`}>
+                <Icon size={13} />
+              </div>
+              {!isLast && (
+                <div className={`w-0.5 flex-1 min-h-[20px] ${step.completed ? "bg-emerald-300" : "bg-[#f0d2ca]"}`} />
+              )}
+            </div>
+            {/* Content */}
+            <div className={`pb-4 ${isLast ? "pb-0" : ""}`}>
+              <p className={`text-sm font-semibold ${step.completed ? "text-[#251E1F]" : "text-[#7b6660]"}`}>
+                {step.label}
+              </p>
+              <p className="text-xs text-[#7b6660]">{step.description}</p>
+              {step.date && (
+                <p className="text-xs text-[#7b6660]/60 mt-0.5">{formatDateTime(step.date)}</p>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function InvoiceDetailsModal({ invoice, onClose }) {
   const [stripeUrl, setStripeUrl] = useState(invoice?.payment_url || null);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
@@ -670,6 +797,45 @@ function InvoiceDetailsModal({ invoice, onClose }) {
             <p className="text-sm font-semibold text-emerald-700">✅ This invoice has been paid.</p>
           </div>
         )}
+
+        {/* Fraud Risk Display */}
+        {(invoice.risk_level || invoice.risk_score != null) && (
+          <div className="mx-5 mb-4 rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-[#F38978] mb-2 flex items-center gap-2">
+              <ShieldAlert size={13} />
+              Fraud Risk Assessment
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-[#7b6660]/70">Risk Level</p>
+                <div className="mt-1">
+                  <RiskBadge level={invoice.risk_level} />
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-[#7b6660]/70">Risk Score</p>
+                <p className="mt-1 text-sm font-semibold text-[#251E1F]">{invoice.risk_score ?? "—"}/100</p>
+              </div>
+              <div>
+                <p className="text-xs text-[#7b6660]/70">Review Status</p>
+                <p className={`mt-1 text-sm font-semibold ${
+                  invoice.review_status === "Approved" ? "text-emerald-700" :
+                  invoice.review_status === "Rejected" ? "text-rose-700" :
+                  "text-amber-700"
+                }`}>{invoice.review_status || "Pending"}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Invoice Timeline */}
+        <div className="mx-5 mb-5 rounded-xl border border-[#f0d2ca] bg-white p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#F38978] mb-3 flex items-center gap-2">
+            <Clock size={13} />
+            Invoice Timeline
+          </h3>
+          <InvoiceTimeline invoice={invoice} />
+        </div>
       </div>
     </div>
   );
@@ -2778,6 +2944,19 @@ function PaymentsView() {
     }
   }
 
+  async function generatePayNowQR(invoiceId) {
+    setError("");
+    setPaymentLink("");
+
+    try {
+      const { generatePayNowQR: genQR } = await import("../../services/invoiceService.js");
+      const response = await genQR(invoiceId);
+      setPaymentLink(`PayNow QR generated for ${response.invoiceId} — UEN: ${response.proxyValue} — Amount: ${formatCurrency(response.amount)}`);
+    } catch (requestError) {
+      setError(requestError.message || "Failed to generate PayNow QR. Ensure PAYNOW_UEN is configured.");
+    }
+  }
+
   return (
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-3">
@@ -2829,6 +3008,14 @@ function PaymentsView() {
                           >
                             <LinkIcon size={14} />
                             Stripe Link
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => generatePayNowQR(invoice.invoice_id)}
+                            className="inline-flex items-center gap-2 rounded-lg border border-violet-400/30 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-500/10"
+                          >
+                            <CreditCard size={14} />
+                            PayNow QR
                           </button>
                           <button
                             type="button"
@@ -3505,8 +3692,12 @@ function ReportsView() {
         <div className="flex gap-2">
           <button type="button" onClick={handleExportPdf} disabled={isExporting}
             className="inline-flex items-center gap-2 rounded-lg border border-[#F38978]/30 px-4 py-2 text-xs font-bold text-[#F38978] hover:bg-[#FDD9CD]/20 disabled:opacity-50">
-            {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}{isExporting ? "Generating PDF..." : "Export Financial Report (PDF)"}
+            {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}{isExporting ? "Generating PDF..." : "Export PDF Report"}
           </button>
+          <a href="/api/reports/invoices/export-excel" download
+            className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/30 px-4 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50">
+            <Download size={14} />Export Excel Report
+          </a>
         </div>
       </div>
 
@@ -3699,12 +3890,20 @@ export default function FinanceInvoicingPage() {
       return "fraud";
     }
 
+    if (location.pathname.endsWith("/reminders")) {
+      return "reminders";
+    }
+
     if (location.pathname.endsWith("/reports")) {
       return "reports";
     }
 
     if (location.pathname.includes("/subscriptions")) {
       return "subscriptions";
+    }
+
+    if (location.pathname.endsWith("/settings")) {
+      return "settings";
     }
 
     return "dashboard";
@@ -3844,12 +4043,20 @@ export default function FinanceInvoicingPage() {
       return <FraudDetectionView />;
     }
 
+    if (activeView === "reminders") {
+      return <FinanceRemindersView />;
+    }
+
     if (activeView === "reports") {
       return <ReportsView />;
     }
 
     if (activeView === "subscriptions") {
       return <SubscriptionsView />;
+    }
+
+    if (activeView === "settings") {
+      return <FinanceSettingsView />;
     }
 
     return (

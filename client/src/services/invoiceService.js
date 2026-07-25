@@ -120,6 +120,24 @@ export function fetchStripeConfig() {
   return apiRequest("/api/payments/stripe-config");
 }
 
+// =====================================================
+// PayNow Payment Services
+// =====================================================
+
+export function generatePayNowQR(invoiceId) {
+  return apiRequest("/api/payments/paynow-qr", {
+    method: "POST",
+    body: JSON.stringify({ invoice_id: invoiceId })
+  });
+}
+
+export function confirmPayNowPayment(payload) {
+  return apiRequest("/api/payments/paynow-confirm", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function sendInvoiceReminder(invoiceId) {
   return apiRequest(`/api/invoices/${invoiceId}/reminder`, {
     method: "POST"

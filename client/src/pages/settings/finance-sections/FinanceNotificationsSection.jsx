@@ -4,36 +4,45 @@ import { fetchNotificationSettings, updateNotificationSettings } from "../../../
 import { reportSettingsSaveResult } from "../../../services/settingsEvents.js";
 
 const invoiceNotifications = [
-  { key: "invoice_approved", label: "Invoice Approved" },
-  { key: "invoice_rejected", label: "Invoice Rejected" },
+  { key: "invoice_created", label: "Invoice Created" },
+  { key: "invoice_sent", label: "Invoice Sent" },
+  { key: "invoice_viewed", label: "Invoice Viewed" },
   { key: "invoice_paid", label: "Invoice Paid" },
-  { key: "invoice_overdue", label: "Invoice Overdue" },
-  { key: "fraud_alert", label: "Fraud Detection Alerts" }
+  { key: "invoice_overdue", label: "Invoice Overdue" }
 ];
 
-const payrollNotifications = [
-  { key: "payroll_completed", label: "Payroll Completed" },
-  { key: "payroll_failed", label: "Payroll Failed" },
-  { key: "salary_released", label: "Salary Released" },
-  { key: "cpf_reminder", label: "CPF Reminder" },
-  { key: "tax_reminder", label: "Tax Reminder" }
+const subscriptionNotifications = [
+  { key: "subscription_renewal_due", label: "Subscription Renewal Due" },
+  { key: "recurring_invoice_generated", label: "Recurring Invoice Generated" },
+  { key: "subscription_expired", label: "Subscription Expired" },
+  { key: "recurring_invoice_failed", label: "Recurring Invoice Failed" }
 ];
 
-const generalNotifications = [
-  { key: "email_notifications", label: "Email Notifications" },
-  { key: "sms_notifications", label: "SMS Notifications" },
-  { key: "push_notifications", label: "Push Notifications" }
+const paymentNotifications = [
+  { key: "stripe_payment_successful", label: "Stripe Payment Successful" },
+  { key: "stripe_payment_failed", label: "Stripe Payment Failed" },
+  { key: "paynow_payment_received", label: "PayNow Payment Received" }
 ];
 
-export default function NotificationsSection() {
+const reminderNotifications = [
+  { key: "invoice_due_soon", label: "Invoice Due Soon" },
+  { key: "invoice_overdue_reminder", label: "Invoice Overdue" },
+  { key: "failed_payment_reminder", label: "Failed Payment" },
+  { key: "failed_invoice_generation", label: "Failed Invoice Generation" }
+];
+
+const channelSettings = [
+  { key: "channel_in_app", label: "In-App Notification" },
+  { key: "channel_email", label: "Email Notification" }
+];
+
+export default function FinanceNotificationsSection({ onDirty }) {
   const [prefs, setPrefs] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
+  useEffect(() => { loadSettings(); }, []);
 
   async function loadSettings() {
     try {
@@ -53,6 +62,7 @@ export default function NotificationsSection() {
 
   function toggle(key) {
     setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
+    onDirty?.();
   }
 
   async function handleSave() {
@@ -89,14 +99,16 @@ export default function NotificationsSection() {
       <div className="app-panel rounded-2xl p-6">
         <div className="flex items-center gap-3">
           <Bell size={20} className="text-[#F38978]" />
-          <h2 className="text-xl font-semibold text-[#251E1F]">Notification Settings</h2>
+          <h2 className="text-xl font-semibold text-[#251E1F]">Notification Preferences</h2>
         </div>
-        <p className="mt-1 text-sm text-[#7b6660]">Choose what notifications you want to receive.</p>
+        <p className="mt-1 text-sm text-[#7b6660]">Configure which notifications you want to receive.</p>
 
         <div className="mt-6 space-y-6">
           <NotificationGroup title="Invoice Notifications" items={invoiceNotifications} prefs={prefs} onToggle={toggle} />
-          <NotificationGroup title="Payroll Notifications" items={payrollNotifications} prefs={prefs} onToggle={toggle} />
-          <NotificationGroup title="General" items={generalNotifications} prefs={prefs} onToggle={toggle} />
+          <NotificationGroup title="Subscription Notifications" items={subscriptionNotifications} prefs={prefs} onToggle={toggle} />
+          <NotificationGroup title="Payment Notifications" items={paymentNotifications} prefs={prefs} onToggle={toggle} />
+          <NotificationGroup title="Reminder Notifications" items={reminderNotifications} prefs={prefs} onToggle={toggle} />
+          <NotificationGroup title="Notification Channels" items={channelSettings} prefs={prefs} onToggle={toggle} />
         </div>
 
         <div className="mt-6 pt-4 border-t border-[#ead3cc]">

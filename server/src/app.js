@@ -36,6 +36,7 @@ const financeDashboardRoutes = require("./routes/financeDashboardRoutes");
 const vanidayImportRoutes = require("./routes/vanidayImportRoutes");
 const subscriptionRoutes = require("./routes/subscriptionRoutes");
 const subscriptionReminderRoutes = require("./routes/subscriptionReminderRoutes");
+const financeReminderRoutes = require("./routes/financeReminderRoutes");
 
 const app = express();
 
@@ -83,6 +84,7 @@ app.use("/api/fraud", fraudRoutes);
 app.use("/api/vaniday-import", vanidayImportRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/subscription-reminders", subscriptionReminderRoutes);
+app.use("/api/finance-reminders", financeReminderRoutes);
 
 // Routes — Payroll module
 app.use("/api/profile", profileRoutes);
