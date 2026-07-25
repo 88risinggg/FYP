@@ -4,10 +4,8 @@
  * Handles subscription management operations with validation,
  * duplicate detection, and notification integration.
  *
- * NOTE: Manual subscription creation has been removed.
- * Subscriptions are created exclusively through the bulk import process
- * (see bulkSubscriptionController.js). Finance users import subscription
- * records from external business systems (CRM, Sales, ERP).
+ * Finance users create subscriptions manually via the Create Subscription form.
+ * The system automatically generates invoices based on billing schedules.
  *
  * Follows the same patterns as invoiceController.js for consistency.
  */
@@ -20,6 +18,7 @@ const {
   autoResolveReminders,
 } = require("../models/subscriptionReminderModel");
 const {
+  createSubscription: createSubscriptionRow,
   findAllSubscriptions,
   findSubscriptionById,
   findSubscriptionInvoices,
@@ -30,6 +29,7 @@ const {
   cancelSubscription: cancelSubscriptionRow,
   hasDuplicateActiveSubscription,
   getSubscriptionDashboardMetrics,
+  calcNextBillingDate,
   toDateString,
 } = require("../models/subscriptionModel");
 const { generateSubscriptionInvoice } = require("../workers/subscriptionScheduler");
@@ -58,6 +58,15 @@ function validateSubscriptionPayload(body) {
     errors.push("End date must be a valid date.");
   }
 
+  // Prevent start_date after end_date
+  if (body.start_date && body.end_date) {
+    const start = new Date(body.start_date);
+    const end = new Date(body.end_date);
+    if (start >= end) {
+      errors.push("End date must be after start date.");
+    }
+  }
+
   // Prevent past next billing dates on new subscriptions
   if (body.next_billing_date) {
     const nextDate = new Date(body.next_billing_date);
@@ -69,6 +78,69 @@ function validateSubscriptionPayload(body) {
   }
 
   return errors;
+}
+
+// ─── POST /api/subscriptions ──────────────────────────────────────────────────
+// Finance users create subscriptions manually via the Create Subscription form.
+
+async function createSubscriptionHandler(req, res) {
+  try {
+    const companyId = getCompanyId(req);
+    const userId = req.user?.userId || null;
+
+    const errors = validateSubscriptionPayload(req.body);
+    if (errors.length) {
+      return res.status(400).json({ message: errors.join(" ") });
+    }
+
+    // Duplicate check: same customer + plan name cannot have an active subscription
+    const isDuplicate = await hasDuplicateActiveSubscription(
+      Number(req.body.customer_id),
+      String(req.body.plan_name).trim(),
+      null,
+      companyId
+    );
+    if (isDuplicate) {
+      return res.status(409).json({
+        message: "An active subscription already exists for this customer with the same plan name.",
+      });
+    }
+
+    // Calculate initial next_billing_date from start_date + frequency
+    const startDate = toDateString(req.body.start_date);
+    const nextBillingDate = req.body.next_billing_date
+      ? toDateString(req.body.next_billing_date)
+      : toDateString(calcNextBillingDate(startDate, req.body.billing_frequency));
+
+    const insertId = await createSubscriptionRow({
+      customer_id:       Number(req.body.customer_id),
+      company_id:        companyId || null,
+      plan_name:         String(req.body.plan_name).trim(),
+      description:       req.body.description || null,
+      amount:            Number(req.body.amount),
+      billing_frequency: req.body.billing_frequency,
+      start_date:        startDate,
+      next_billing_date: nextBillingDate,
+      end_date:          req.body.end_date ? toDateString(req.body.end_date) : null,
+      auto_renew:        req.body.auto_renew !== false,
+      auto_send:         Boolean(req.body.auto_send),
+      created_by:        userId,
+    });
+
+    // Notify Finance of the new subscription
+    await createNotification({
+      type:    "subscription_created",
+      title:   "New Subscription Created",
+      message: `Subscription #${insertId} (${req.body.plan_name}) created for customer #${req.body.customer_id}.`,
+    }).catch(() => {});
+
+    res.status(201).json({
+      message: "Subscription created successfully.",
+      subscription_id: insertId,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to create subscription.", detail: error.message });
+  }
 }
 
 // ─── GET /api/subscriptions ───────────────────────────────────────────────────
@@ -444,6 +516,7 @@ async function deleteSubscriptionHandler(req, res) {
 }
 
 module.exports = {
+  createSubscriptionHandler,
   getSubscriptions,
   getSubscriptionById,
   getSubscriptionDashboard,

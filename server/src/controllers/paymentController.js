@@ -382,9 +382,143 @@ async function getPaymentHistory(req, res) {
   }
 }
 
+/**
+ * POST /api/payments/paynow-qr
+ *
+ * Generate a PayNow QR code for a specific invoice.
+ * Uses the configured UEN from invoice_settings or environment variables.
+ *
+ * Body: { invoice_id }
+ * Returns: { qrCodeDataUri, paynowReference, proxyValue, amount }
+ */
+async function generatePayNowQR(req, res) {
+  const invoiceId = Number(req.body.invoice_id);
+  if (!invoiceId) return res.status(400).json({ message: "Invoice ID is required." });
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT i.invoice_id, i.invoiceId, i.total_amount, i.status, c.name AS customer_name
+       FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id
+       WHERE i.invoice_id = ? LIMIT 1`,
+      [invoiceId]
+    );
+    if (rows.length === 0) return res.status(404).json({ message: "Invoice not found." });
+
+    const invoice = rows[0];
+    if (["Paid", "Cancelled", "Refunded", "Void"].includes(invoice.status)) {
+      return res.status(400).json({ message: "This invoice is not available for payment." });
+    }
+
+    const { generatePayNowQRCode } = require("../services/qrCodeService");
+    const qrCodeDataUri = await generatePayNowQRCode(invoice);
+
+    if (!qrCodeDataUri) {
+      return res.status(400).json({ message: "PayNow UEN not configured. Set PAYNOW_UEN in server environment." });
+    }
+
+    // Store the QR code on the invoice for future reference
+    await pool.query(
+      "UPDATE invoice SET paynow_qr_data = ?, paynow_reference = ? WHERE invoice_id = ?",
+      [qrCodeDataUri, invoice.invoiceId, invoiceId]
+    );
+
+    res.json({
+      message: "PayNow QR code generated.",
+      invoice_id: invoice.invoice_id,
+      invoiceId: invoice.invoiceId,
+      qrCodeDataUri,
+      paynowReference: invoice.invoiceId,
+      proxyValue: process.env.PAYNOW_UEN || "",
+      amount: Number(invoice.total_amount),
+      provider: "paynow"
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to generate PayNow QR code.", detail: error.message });
+  }
+}
+
+/**
+ * POST /api/payments/paynow-confirm
+ *
+ * Manually confirm a PayNow payment received for an invoice.
+ * Used by Finance staff to mark a PayNow transfer as received after
+ * verifying the transaction in the bank statement.
+ *
+ * Body: { invoice_id, transaction_id (optional), amount (optional), notes (optional) }
+ */
+async function confirmPayNowPayment(req, res) {
+  const invoiceId = Number(req.body.invoice_id);
+  const transactionId = String(req.body.transaction_id || "").trim() || `PAYNOW-${Date.now()}`;
+  const notes = req.body.notes || "";
+
+  if (!invoiceId) {
+    return res.status(400).json({ message: "Invoice ID is required." });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [invoiceRows] = await connection.query(
+      "SELECT invoice_id, total_amount, status FROM invoice WHERE invoice_id = ? LIMIT 1 FOR UPDATE",
+      [invoiceId]
+    );
+    if (invoiceRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Invoice not found." });
+    }
+
+    const invoice = invoiceRows[0];
+    if (["Paid", "Cancelled", "Refunded", "Void"].includes(invoice.status)) {
+      await connection.rollback();
+      return res.status(400).json({ message: "This invoice is not available for payment." });
+    }
+
+    const paymentCheck = await ensureInvoiceCanBePaid(connection, invoiceId);
+    if (!paymentCheck.allowed) {
+      await connection.rollback();
+      return res.status(400).json({ message: paymentCheck.message });
+    }
+
+    const amount = req.body.amount ? Number(req.body.amount) : Number(invoice.total_amount);
+
+    await connection.query(
+      `INSERT INTO payment (payment_date, amount, status, transaction_id, invoice_invoice_id, payment_method_name)
+       VALUES (NOW(), ?, 'Completed', ?, ?, 'PayNow')`,
+      [String(amount), transactionId, invoiceId]
+    );
+
+    const { settleInvoiceFromConfirmedPayments } = require("../services/invoicePaymentSettlementService");
+    const settlement = await settleInvoiceFromConfirmedPayments(connection, invoiceId, invoice.status);
+
+    await connection.query(
+      "UPDATE invoice SET payment_date = NOW(), transaction_id = ?, payment_method = 'PayNow' WHERE invoice_id = ?",
+      [transactionId, invoiceId]
+    );
+
+    await connection.commit();
+
+    res.status(201).json({
+      message: settlement.status === "Paid" ? "PayNow payment confirmed. Invoice marked as paid." : "PayNow partial payment recorded.",
+      invoice_status: settlement.status,
+      amount_paid: settlement.confirmedPaid,
+      outstanding_amount: settlement.outstandingAmount,
+      transaction_id: transactionId,
+      provider: "paynow"
+    });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ message: "Failed to confirm PayNow payment.", detail: error.message });
+  } finally {
+    connection.release();
+  }
+}
+
 module.exports = {
+  confirmPayNowPayment,
   confirmStripePayment,
   createStripePaymentLink,
+  generatePayNowQR,
   getPaymentHistory,
   getPaymentsWorkspace,
   recordManualPayment,

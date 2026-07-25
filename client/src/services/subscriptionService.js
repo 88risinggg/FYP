@@ -2,10 +2,7 @@
  * Subscription Service
  *
  * Frontend API calls for the Subscription Invoicing Module.
- * Mirrors the pattern used in invoiceService.js.
- *
- * NOTE: Manual subscription creation has been removed.
- * Subscriptions are imported from external systems via CSV/Excel upload.
+ * Finance users create and manage subscriptions directly.
  */
 
 import { apiRequest } from "./apiClient.js";
@@ -14,6 +11,15 @@ import { apiRequest } from "./apiClient.js";
 
 export function fetchSubscriptionDashboard() {
   return apiRequest("/api/subscriptions/dashboard");
+}
+
+// ─── Create ───────────────────────────────────────────────────────────────────
+
+export function createSubscription(payload) {
+  return apiRequest("/api/subscriptions", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
@@ -33,7 +39,7 @@ export function fetchSubscriptionById(subscriptionId) {
   return apiRequest(`/api/subscriptions/${subscriptionId}`);
 }
 
-// ─── Update (edit imported subscription details) ──────────────────────────────
+// ─── Update ───────────────────────────────────────────────────────────────────
 
 export function updateSubscription(subscriptionId, payload) {
   return apiRequest(`/api/subscriptions/${subscriptionId}`, {
@@ -76,36 +82,6 @@ export function generateInvoiceNow(subscriptionId, amount = null) {
     method: "POST",
     body: JSON.stringify(body),
   });
-}
-
-// ─── Bulk Import ──────────────────────────────────────────────────────────────
-
-export function parseSubscriptionFile(file) {
-  const formData = new FormData();
-  formData.append("file", file);
-  return apiRequest("/api/subscriptions/import/parse", {
-    method: "POST",
-    body: formData,
-    headers: { "Content-Type": undefined }, // Let browser set multipart boundary
-  });
-}
-
-export function validateSubscriptionImport(rows, file) {
-  return apiRequest("/api/subscriptions/import/validate", {
-    method: "POST",
-    body: JSON.stringify({ rows, file }),
-  });
-}
-
-export function confirmSubscriptionImport(rows, file) {
-  return apiRequest("/api/subscriptions/import/confirm", {
-    method: "POST",
-    body: JSON.stringify({ rows, file }),
-  });
-}
-
-export function getSubscriptionTemplateUrl() {
-  return "/api/subscriptions/import/template";
 }
 
 // ─── Related data ────────────────────────────────────────────────────────────

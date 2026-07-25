@@ -1,5 +1,5 @@
 const express = require("express");
-const { getInvoiceReports, exportFinancialReport } = require("../controllers/reportController");
+const { getInvoiceReports, exportFinancialReport, exportReportExcel } = require("../controllers/reportController");
 const { authenticateToken } = require("../middleware/authMiddleware");
 
 const router = express.Router();
@@ -7,6 +7,7 @@ const router = express.Router();
 router.use(authenticateToken);
 router.get("/invoices", getInvoiceReports);
 router.get("/invoices/export", exportFinancialReport);
+router.get("/invoices/export-excel", exportReportExcel);
 
 // Server-side PDF generation from HTML (used by client pdfExportService)
 router.post("/generate-pdf", async (req, res) => {

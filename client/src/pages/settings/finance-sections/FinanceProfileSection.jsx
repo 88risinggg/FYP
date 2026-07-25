@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Camera, Check, Loader2, X } from "lucide-react";
+import { Camera, Check, Loader2, User, X } from "lucide-react";
 import { fetchProfile, updateProfile } from "../../../services/settingsService.js";
 import { reportSettingsSaveResult } from "../../../services/settingsEvents.js";
 
-export default function ProfileSection() {
+export default function FinanceProfileSection({ onDirty }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
@@ -26,9 +26,7 @@ export default function ProfileSection() {
     company_name: ""
   });
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  useEffect(() => { loadProfile(); }, []);
 
   async function loadProfile() {
     try {
@@ -65,13 +63,21 @@ export default function ProfileSection() {
 
   function handleChange(e) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    onDirty?.();
   }
 
   function handleImageUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      showToast("File size must be less than 2MB", "error");
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = () => setForm((prev) => ({ ...prev, profile_picture: reader.result }));
+    reader.onload = () => {
+      setForm((prev) => ({ ...prev, profile_picture: reader.result }));
+      onDirty?.();
+    };
     reader.readAsDataURL(file);
   }
 
@@ -79,6 +85,11 @@ export default function ProfileSection() {
     e.preventDefault();
     if (!form.name.trim()) {
       showToast("Full Name is required", "error");
+      reportSettingsSaveResult(false);
+      return;
+    }
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      showToast("Please enter a valid email address", "error");
       reportSettingsSaveResult(false);
       return;
     }
@@ -95,26 +106,17 @@ export default function ProfileSection() {
     }
   }
 
-  if (loading) {
-    return <LoadingSkeleton />;
-  }
+  if (loading) return <LoadingSkeleton />;
 
   return (
     <div className="space-y-6">
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed right-6 top-24 z-50 animate-[slideDown_0.3s_ease] rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
-          toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-700" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-700"
-        }`}>
-          <div className="flex items-center gap-2">
-            {toast.type === "error" ? <X size={16} /> : <Check size={16} />}
-            <span className="text-sm font-medium">{toast.message}</span>
-          </div>
-        </div>
-      )}
+      {toast && <Toast toast={toast} />}
 
       <div className="app-panel rounded-2xl p-6">
-        <h2 className="text-xl font-semibold text-[#251E1F]">Profile</h2>
+        <div className="flex items-center gap-3">
+          <User size={20} className="text-[#F38978]" />
+          <h2 className="text-xl font-semibold text-[#251E1F]">Profile</h2>
+        </div>
         <p className="mt-1 text-sm text-[#7b6660]">Manage your personal information and preferences.</p>
 
         <form onSubmit={handleSave} className="mt-6 space-y-6">
@@ -143,18 +145,40 @@ export default function ProfileSection() {
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Full Name" name="name" value={form.name} onChange={handleChange} required />
             <Field label="Display Name" name="display_name" value={form.display_name} onChange={handleChange} />
-            <Field label="Email" name="email" value={form.email} onChange={handleChange} type="email" />
+            <Field label="Email Address" name="email" value={form.email} onChange={handleChange} type="email" />
             <Field label="Mobile Number" name="mobile" value={form.mobile} onChange={handleChange} />
             <Field label="Job Title" name="job_title" value={form.job_title} onChange={handleChange} />
             <Field label="Department" name="department" value={form.department} onChange={handleChange} />
             <SelectField label="Preferred Language" name="preferred_language" value={form.preferred_language} onChange={handleChange}
-              options={[{ value: "en", label: "English" }, { value: "zh", label: "Chinese" }, { value: "ms", label: "Malay" }, { value: "ta", label: "Tamil" }]} />
+              options={[
+                { value: "en", label: "English" },
+                { value: "zh", label: "Chinese" },
+                { value: "ms", label: "Malay" },
+                { value: "ta", label: "Tamil" }
+              ]} />
             <SelectField label="Time Zone" name="timezone" value={form.timezone} onChange={handleChange}
-              options={[{ value: "Asia/Singapore", label: "Asia/Singapore (GMT+8)" }, { value: "Asia/Hong_Kong", label: "Asia/Hong Kong (GMT+8)" }, { value: "UTC", label: "UTC (GMT+0)" }]} />
+              options={[
+                { value: "Asia/Singapore", label: "Asia/Singapore (GMT+8)" },
+                { value: "Asia/Hong_Kong", label: "Asia/Hong Kong (GMT+8)" },
+                { value: "Asia/Tokyo", label: "Asia/Tokyo (GMT+9)" },
+                { value: "America/New_York", label: "America/New York (GMT-5)" },
+                { value: "Europe/London", label: "Europe/London (GMT+0)" },
+                { value: "UTC", label: "UTC (GMT+0)" }
+              ]} />
             <SelectField label="Date Format" name="date_format" value={form.date_format} onChange={handleChange}
-              options={[{ value: "DD/MM/YYYY", label: "DD/MM/YYYY" }, { value: "MM/DD/YYYY", label: "MM/DD/YYYY" }, { value: "YYYY-MM-DD", label: "YYYY-MM-DD" }]} />
+              options={[
+                { value: "DD/MM/YYYY", label: "DD/MM/YYYY" },
+                { value: "MM/DD/YYYY", label: "MM/DD/YYYY" },
+                { value: "YYYY-MM-DD", label: "YYYY-MM-DD" }
+              ]} />
             <SelectField label="Currency" name="currency" value={form.currency} onChange={handleChange}
-              options={[{ value: "SGD", label: "SGD - Singapore Dollar" }, { value: "USD", label: "USD - US Dollar" }, { value: "MYR", label: "MYR - Malaysian Ringgit" }]} />
+              options={[
+                { value: "SGD", label: "SGD - Singapore Dollar" },
+                { value: "USD", label: "USD - US Dollar" },
+                { value: "MYR", label: "MYR - Malaysian Ringgit" },
+                { value: "EUR", label: "EUR - Euro" },
+                { value: "GBP", label: "GBP - British Pound" }
+              ]} />
           </div>
 
           {/* Read-only Fields */}
@@ -174,7 +198,7 @@ export default function ProfileSection() {
               {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
               Save Changes
             </button>
-            <button type="button" data-settings-local-cancel onClick={loadProfile}
+            <button type="button" onClick={loadProfile}
               className="rounded-xl border border-[#ead3cc] bg-white px-5 py-2.5 text-sm font-semibold text-[#7b6660] transition hover:bg-[#FDD9CD]/50 hover:text-[#251E1F]">
               Cancel
             </button>
@@ -188,7 +212,9 @@ export default function ProfileSection() {
 function Field({ label, name, value, onChange, type = "text", required = false }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">{label}{required && <span className="text-rose-400"> *</span>}</label>
+      <label className="mb-1.5 block text-xs font-medium text-[#7b6660]">
+        {label}{required && <span className="text-rose-400"> *</span>}
+      </label>
       <input type={type} name={name} value={value} onChange={onChange} required={required}
         className="w-full rounded-lg border border-[#ead3cc] bg-white px-3 py-2.5 text-sm text-[#251E1F] outline-none transition placeholder:text-[#7b6660]/40 focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30" />
     </div>
@@ -225,13 +251,26 @@ function LoadingSkeleton() {
         <div className="h-6 w-32 rounded bg-[#FDD9CD]/50" />
         <div className="h-4 w-64 rounded bg-white" />
         <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {Array.from({ length: 8 }).map((_, i) => (
+          {Array.from({ length: 10 }).map((_, i) => (
             <div key={i} className="space-y-2">
               <div className="h-3 w-20 rounded bg-white" />
               <div className="h-10 rounded-lg bg-[#FDD9CD]/30" />
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function Toast({ toast }) {
+  return (
+    <div className={`fixed right-6 top-24 z-50 animate-[slideDown_0.3s_ease] rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
+      toast.type === "error" ? "border-rose-400/20 bg-rose-500/15 text-rose-700" : "border-emerald-400/20 bg-emerald-500/15 text-emerald-700"
+    }`}>
+      <div className="flex items-center gap-2">
+        {toast.type === "error" ? <X size={16} /> : <Check size={16} />}
+        <span className="text-sm font-medium">{toast.message}</span>
       </div>
     </div>
   );

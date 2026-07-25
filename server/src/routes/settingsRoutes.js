@@ -57,6 +57,19 @@ router.post("/logout-all", settingsController.logoutAll);
 // Audit Logs
 router.get("/audit-logs", settingsController.getAuditLogs);
 
+// Subscription Settings
+router.get("/subscription", settingsController.getSubscriptionSettings);
+router.put("/subscription", settingsController.updateSubscriptionSettings);
+
+// Payment Settings
+router.get("/payment", settingsController.getPaymentSettings);
+router.put("/payment", settingsController.updatePaymentSettings);
+
+// Email Settings
+router.get("/email", settingsController.getEmailSettings);
+router.put("/email", settingsController.updateEmailSettings);
+router.post("/email/test", settingsController.sendTestEmail);
+
 // Appearance & Language
 router.get("/appearance", settingsController.getAppearance);
 router.put("/appearance", settingsController.updateAppearance);

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Check, Download, Eye, EyeOff, Key, Loader2, Shield, Smartphone, X } from "lucide-react";
+import { Check, Download, Eye, EyeOff, Key, Loader2, Monitor, Shield, Smartphone, X } from "lucide-react";
 import { changePassword, fetch2FA, update2FA, generateRecoveryCodes } from "../../../services/settingsService.js";
 import { reportSettingsSaveResult } from "../../../services/settingsEvents.js";
+import { getStoredSession } from "../../../services/sessionService.js";
 
-export default function SecuritySection() {
+export default function FinanceSecuritySection({ onDirty }) {
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [recoveryEmail, setRecoveryEmail] = useState("");
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -13,9 +15,10 @@ export default function SecuritySection() {
   const [recoveryCodes, setRecoveryCodes] = useState(null);
   const [loadingCodes, setLoadingCodes] = useState(false);
 
-  useEffect(() => {
-    load2FA();
-  }, []);
+  const session = getStoredSession();
+  const lastLogin = session?.user?.last_login || "N/A";
+
+  useEffect(() => { load2FA(); }, []);
 
   async function load2FA() {
     try {
@@ -80,6 +83,7 @@ export default function SecuritySection() {
       await update2FA(newState);
       setTwoFa(newState);
       showToast(newState.two_fa_enabled ? "2FA enabled" : "2FA disabled");
+      onDirty?.();
     } catch (err) {
       showToast(err.message, "error");
     }
@@ -125,11 +129,11 @@ export default function SecuritySection() {
 
         <form onSubmit={handleChangePassword} className="mt-5 max-w-md space-y-4">
           <PasswordField label="Current Password" value={form.currentPassword}
-            onChange={(e) => setForm((p) => ({ ...p, currentPassword: e.target.value }))}
+            onChange={(e) => { setForm((p) => ({ ...p, currentPassword: e.target.value })); onDirty?.(); }}
             show={showCurrent} onToggle={() => setShowCurrent(!showCurrent)} />
 
           <PasswordField label="New Password" value={form.newPassword}
-            onChange={(e) => setForm((p) => ({ ...p, newPassword: e.target.value }))}
+            onChange={(e) => { setForm((p) => ({ ...p, newPassword: e.target.value })); onDirty?.(); }}
             show={showNew} onToggle={() => setShowNew(!showNew)} />
 
           {form.newPassword && (
@@ -142,7 +146,7 @@ export default function SecuritySection() {
           )}
 
           <PasswordField label="Confirm New Password" value={form.confirmPassword}
-            onChange={(e) => setForm((p) => ({ ...p, confirmPassword: e.target.value }))}
+            onChange={(e) => { setForm((p) => ({ ...p, confirmPassword: e.target.value })); onDirty?.(); }}
             show={showNew} onToggle={() => setShowNew(!showNew)} />
 
           <button type="submit" data-settings-save disabled={saving}
@@ -162,7 +166,7 @@ export default function SecuritySection() {
         <p className="mt-1 text-sm text-[#7b6660]">Add an extra layer of security to your account.</p>
 
         <div className="mt-5 space-y-3">
-          {["Google Authenticator", "Microsoft Authenticator", "Email OTP", "SMS OTP"].map((method) => (
+          {["Google Authenticator", "Email OTP", "SMS OTP"].map((method) => (
             <div key={method} className="flex items-center justify-between rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 p-4">
               <div className="flex items-center gap-3">
                 <Smartphone size={18} className="text-[#7b6660]" />
@@ -203,6 +207,39 @@ export default function SecuritySection() {
               ))}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Recovery Email */}
+      <div className="app-panel rounded-2xl p-6">
+        <h3 className="text-base font-semibold text-[#251E1F]">Recovery Email</h3>
+        <p className="mt-1 text-xs text-[#7b6660]">Used to recover your account if you lose access.</p>
+        <div className="mt-3 max-w-md">
+          <input
+            type="email"
+            value={recoveryEmail}
+            onChange={(e) => { setRecoveryEmail(e.target.value); onDirty?.(); }}
+            placeholder="recovery@example.com"
+            className="w-full rounded-lg border border-[#ead3cc] bg-white px-3 py-2.5 text-sm text-[#251E1F] outline-none transition placeholder:text-[#7b6660]/40 focus:border-[#F38978]/50 focus:ring-1 focus:ring-[#F38978]/30"
+          />
+        </div>
+      </div>
+
+      {/* Session Info */}
+      <div className="app-panel rounded-2xl p-6">
+        <div className="flex items-center gap-3">
+          <Monitor size={20} className="text-[#F38978]" />
+          <h2 className="text-base font-semibold text-[#251E1F]">Session Information</h2>
+        </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 p-4">
+            <p className="text-xs text-[#7b6660]">Last Login</p>
+            <p className="mt-1 text-sm font-medium text-[#251E1F]">{lastLogin}</p>
+          </div>
+          <div className="rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 p-4">
+            <p className="text-xs text-[#7b6660]">Active Device</p>
+            <p className="mt-1 text-sm font-medium text-[#251E1F]">Current Browser Session</p>
+          </div>
         </div>
       </div>
     </div>

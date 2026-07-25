@@ -651,6 +651,72 @@ async function resetUserSettings(userId) {
   ]);
 }
 
+// ─── Subscription Settings ──────────────────────────────────────────────────
+
+async function getSubscriptionSettings(userId) {
+  const [rows] = await pool.query(
+    "SELECT subscription_settings_json FROM user WHERE user_id = ?",
+    [userId]
+  );
+  if (!rows[0] || !rows[0].subscription_settings_json) return null;
+  let config = rows[0].subscription_settings_json;
+  if (typeof config === "string") {
+    try { return JSON.parse(config); } catch { return null; }
+  }
+  return config;
+}
+
+async function upsertSubscriptionSettings(userId, data) {
+  await pool.query(
+    "UPDATE user SET subscription_settings_json = ? WHERE user_id = ?",
+    [JSON.stringify(data), userId]
+  );
+}
+
+// ─── Payment Settings ───────────────────────────────────────────────────────
+
+async function getPaymentSettings(userId) {
+  const [rows] = await pool.query(
+    "SELECT payment_settings_json FROM user WHERE user_id = ?",
+    [userId]
+  );
+  if (!rows[0] || !rows[0].payment_settings_json) return null;
+  let config = rows[0].payment_settings_json;
+  if (typeof config === "string") {
+    try { return JSON.parse(config); } catch { return null; }
+  }
+  return config;
+}
+
+async function upsertPaymentSettings(userId, data) {
+  await pool.query(
+    "UPDATE user SET payment_settings_json = ? WHERE user_id = ?",
+    [JSON.stringify(data), userId]
+  );
+}
+
+// ─── Email Settings ─────────────────────────────────────────────────────────
+
+async function getEmailSettings(userId) {
+  const [rows] = await pool.query(
+    "SELECT email_settings_json FROM user WHERE user_id = ?",
+    [userId]
+  );
+  if (!rows[0] || !rows[0].email_settings_json) return null;
+  let config = rows[0].email_settings_json;
+  if (typeof config === "string") {
+    try { return JSON.parse(config); } catch { return null; }
+  }
+  return config;
+}
+
+async function upsertEmailSettings(userId, data) {
+  await pool.query(
+    "UPDATE user SET email_settings_json = ? WHERE user_id = ?",
+    [JSON.stringify(data), userId]
+  );
+}
+
 module.exports = {
   getProfile,
   upsertProfile,
@@ -669,6 +735,12 @@ module.exports = {
   upsertPayrollSettings,
   getCompanySettings,
   upsertCompanySettings,
+  getSubscriptionSettings,
+  upsertSubscriptionSettings,
+  getPaymentSettings,
+  upsertPaymentSettings,
+  getEmailSettings,
+  upsertEmailSettings,
   getLoginSessions,
   createLoginSession,
   deleteSession,
