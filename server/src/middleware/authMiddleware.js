@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const { pool } = require("../config/db");
+const { findUserById } = require("../models/authModel");
 
 /**
  * JWT authentication middleware.
@@ -19,21 +20,7 @@ async function authenticateToken(req, res, next) {
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const [rows] = await pool.execute(
-      `SELECT
-        user.user_id AS userId,
-        user.email,
-        user.status,
-        user.must_change_password,
-        user.account_locked_at,
-        user.role_name AS role,
-        user.company_id AS companyId
-      FROM user
-      WHERE user.user_id = ?`,
-      [payload.userId]
-    );
-
-    const user = rows[0];
+    const user = await findUserById(payload.userId);
 
     if (user?.account_locked_at) {
       return res.status(423).json({
@@ -59,8 +46,8 @@ async function authenticateToken(req, res, next) {
     req.user = {
       ...payload,
       email: user.email,
-      role: user.role,
-      companyId: user.companyId || payload.companyId || null
+      role: user.role_name,
+      companyId: user.company_id || payload.companyId || null
     };
 
     // Resolve staffId (employee_id) for Staff users from the staff table
