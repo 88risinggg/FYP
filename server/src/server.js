@@ -1,5 +1,9 @@
 require("dotenv").config();
 
+// Keep server-side calendar operations and scheduler boundaries aligned with
+// the application's operating timezone. ISO timestamps remain UTC by design.
+process.env.TZ = process.env.APP_TIMEZONE || "Asia/Singapore";
+
 const port = process.env.PORT || 5000;
 const host = process.env.HOST || "0.0.0.0";
 const { waitForDatabase } = require("./config/db");
@@ -28,7 +32,7 @@ async function startServer() {
   const { startSubscriptionScheduler } = require("./workers/subscriptionScheduler");
 
   const server = app.listen(port, host, async () => {
-    console.log(`Server listening on ${host}:${port}`);
+    console.log(`Server listening on ${host}:${port} (${process.env.TZ})`);
 
     if (!schedulersEnabled()) {
       console.log("Background schedulers disabled.");

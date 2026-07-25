@@ -9,6 +9,7 @@ export const FINANCE_WORKFLOW_TRACKER_PATHS = Object.freeze([
   "/dashboard/payroll/finance/payslip-delivery",
   "/dashboard/payroll/finance/statutory-ledger",
   "/dashboard/payroll/finance/reconciliation-reports",
+  "/dashboard/payroll/finance/payroll-completion",
   "/dashboard/payroll/finance/payslips-approval",
   "/dashboard/payroll/finance/payroll-reports",
   "/dashboard/payroll/finance/payroll-summaries"

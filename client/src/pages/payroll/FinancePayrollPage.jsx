@@ -164,6 +164,7 @@ const payrollSidebarSections = [
   {
     label: "REPORT & AUDIT",
     items: [
+      { label: "Payroll Run History", icon: ClipboardList, path: "/dashboard/payroll/finance/payroll-run-history" },
       {
         label: "Finance Reports",
         icon: FileBarChart,
@@ -186,6 +187,8 @@ const routeHeadings = {
   "/dashboard/payroll/finance/payslip-delivery": "Payslip Delivery",
   "/dashboard/payroll/finance/statutory-ledger": "Statutory & Ledger",
   "/dashboard/payroll/finance/reconciliation-reports": "Reconciliation & Reports",
+  "/dashboard/payroll/finance/payroll-completion": "Payroll Run Completed",
+  "/dashboard/payroll/finance/payroll-run-history": "Payroll Run History",
   "/dashboard/payroll/finance/staff-records": "Staff Records",
   "/dashboard/payroll/finance/compliance-rules": "Compliance Rules",
   "/dashboard/payroll/finance/activity-log": "Payroll Activity Log",
@@ -542,6 +545,14 @@ function formatPayrollPeriod(run) {
     month: "long",
     year: "numeric"
   }).format(new Date(run.year, run.month - 1, 1));
+}
+
+function formatPayrollRunId(run) {
+  if (!run) return "No run ID";
+  if (run.runReference || run.run_reference) return String(run.runReference || run.run_reference);
+  const rawId = String(run.id || "0");
+  const suffix = /^\d+$/.test(rawId) ? rawId.padStart(4, "0") : rawId.replace(/[^a-z0-9-]/gi, "-").toUpperCase();
+  return `PAY-${run.year}-${String(run.month).padStart(2, "0")}-${suffix}`;
 }
 
 function padDatePart(value) {
@@ -1712,7 +1723,7 @@ function RunSelector({ payrollRuns, selectedRunId, onSelectRun }) {
       >
         {payrollRuns.map((run) => (
           <option key={run.id} value={run.id} className="bg-[#ffffff]">
-            {formatPayrollPeriod(run)} - {run.status}
+            {formatPayrollPeriod(run)} · {formatPayrollRunId(run)} · {run.status}
           </option>
         ))}
       </select>
@@ -1727,21 +1738,22 @@ function FinancePayrollJourney({ run, isLiveUpdating = false, lastSyncAt = null,
   const approvedStaff = (run?.employees || []).filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length;
   const allStaffReviewed = Boolean(run?.employees?.length) && approvedStaff === run.employees.length && exceptions === 0;
   const recipientsReady = Number(run?.paymentRecipientsConfigured || 0) >= (run?.employees?.length || 0);
+  const finalised = completed.reconciled;
   const stages = [
-    ["Claim requests", "/dashboard/payroll/finance/employee-requests", Boolean(run?.submittedAt), false, "Snapshotted"],
-    ["Payroll run review", "/dashboard/payroll/finance/payroll-runs", completed.reviewed, Boolean(run?.rulesChanged), "Review"],
-    ["Staff review", "/dashboard/payroll/finance/staff-payroll-details", allStaffReviewed, exceptions > 0, "Adjust"],
-    ["Payroll approval", "/dashboard/payroll/finance/payroll-approval", completed.approved, !completed.reviewed || !allStaffReviewed, "Approve"],
-    ["Payment preparation", "/dashboard/payroll/finance/payment-preparation", Boolean(run?.paymentFileGeneratedAt && recipientsReady), !completed.approved, "Prepare"],
-    ["Payment release", "/dashboard/payroll/finance/payment-release", completed.paid, !run?.paymentFileGeneratedAt, run?.paymentStatus === "Processing" ? "Processing" : run?.paymentStatus === "Failed" ? "Failed" : "Release"],
-    ["Payslip delivery", "/dashboard/payroll/finance/payslip-delivery", completed.payslipsSent, !completed.paid, "Deliver"],
-    ["Statutory & ledger", "/dashboard/payroll/finance/statutory-ledger", completed.ledgerRecorded && completed.cpfLogged && completed.otherDeductionsLogged, !completed.payslipsSent, "Record"],
+    ["Claim requests", "/dashboard/payroll/finance/employee-requests", finalised || Boolean(run?.submittedAt), false, "Snapshotted"],
+    ["Payroll run review", "/dashboard/payroll/finance/payroll-runs", finalised || completed.reviewed, !finalised && Boolean(run?.rulesChanged), "Review"],
+    ["Staff review", "/dashboard/payroll/finance/staff-payroll-details", finalised || allStaffReviewed, !finalised && exceptions > 0, "Adjust"],
+    ["Payroll approval", "/dashboard/payroll/finance/payroll-approval", finalised || completed.approved, !finalised && (!completed.reviewed || !allStaffReviewed), "Approve"],
+    ["Payment preparation", "/dashboard/payroll/finance/payment-preparation", finalised || Boolean(run?.paymentFileGeneratedAt && recipientsReady), !finalised && !completed.approved, "Prepare"],
+    ["Payment release", "/dashboard/payroll/finance/payment-release", finalised || completed.paid, !finalised && !run?.paymentFileGeneratedAt, run?.paymentStatus === "Processing" ? "Processing" : run?.paymentStatus === "Failed" ? "Failed" : "Release"],
+    ["Payslip delivery", "/dashboard/payroll/finance/payslip-delivery", finalised || completed.payslipsSent, !finalised && !completed.paid, "Deliver"],
+    ["Statutory & ledger", "/dashboard/payroll/finance/statutory-ledger", finalised || completed.ledgerRecorded && completed.cpfLogged && completed.otherDeductionsLogged, !finalised && !completed.payslipsSent, "Record"],
     ["Reconcile & report", "/dashboard/payroll/finance/reconciliation-reports", completed.reconciled, !completed.ledgerRecorded, "Reconcile"]
   ];
   const currentIndex = stages.findIndex((stage) => !stage[2] && !stage[3]);
   return (
     <nav aria-label="Finance payroll progress" className="app-panel mb-5 rounded-2xl px-4 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-semibold text-[#251E1F]">Payroll progress</p><div className="flex items-center gap-2"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${isLiveUpdating ? "bg-blue-100 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}><span className={`h-2 w-2 rounded-full ${isLiveUpdating ? "bg-blue-500 motion-safe:animate-pulse" : "bg-emerald-500"}`}/>{isLiveUpdating ? activityLabel || "Updating workflow…" : `Live${lastSyncAt ? ` · ${lastSyncAt.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}`}</span><span className="text-xs font-medium text-[#7b6660]">{formatPayrollPeriod(run)}</span></div></div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-semibold text-[#251E1F]">Payroll Run Progress</p><p className="mt-0.5 text-[11px] font-medium text-[#7b6660]">{formatPayrollRunId(run)}</p></div><div className="flex items-center gap-2"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${isLiveUpdating ? "bg-blue-100 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}><span className={`h-2 w-2 rounded-full ${isLiveUpdating ? "bg-blue-500 motion-safe:animate-pulse" : "bg-emerald-500"}`}/>{isLiveUpdating ? activityLabel || "Updating workflow…" : `Live${lastSyncAt ? ` · ${lastSyncAt.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}`}</span><span className="text-xs font-medium text-[#7b6660]">{formatPayrollPeriod(run)}</span></div></div>
       <ol className="mt-3 flex min-w-max items-center overflow-x-auto pb-2">
         {stages.map(([label, path, done, blocked, fallback], index) => {
           const current = index === currentIndex;
@@ -3745,6 +3757,41 @@ function FinanceStaffRecordsView() {
   </PageShell>;
 }
 
+function PayrollRunCompletionView({ selectedRun }) {
+  const navigate = useNavigate();
+  const totals = getRunTotals(selectedRun);
+  return <PageShell heading="Payroll run completed">
+    <section className="app-panel overflow-hidden rounded-3xl text-center">
+      <div className="bg-gradient-to-br from-emerald-50 via-white to-[#fff8f5] px-6 py-10"><span className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-600 text-white shadow-xl shadow-emerald-200"><CheckCircle2 size={42}/></span><p className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Workflow complete</p><h2 className="mt-2 text-3xl font-semibold text-[#251E1F]">{formatPayrollPeriod(selectedRun)} payroll is complete</h2><p className="mt-2 font-mono text-sm font-semibold text-[#2D7C83]">Run ID: {formatPayrollRunId(selectedRun)}</p><p className="mx-auto mt-3 max-w-2xl text-sm text-[#7b6660]">Payment, payslip delivery, statutory posting, ledger recording, and reconciliation have been saved for this payroll run.</p></div>
+      <div className="grid gap-px border-y border-[#f0d2ca] bg-[#f0d2ca] sm:grid-cols-4">{[["Employees", selectedRun.employees.length], ["Gross payroll", formatMoney(totals.grossPay + totals.allowances)], ["Net paid", formatMoney(totals.netPay)], ["Payment reference", selectedRun.bankReference || "Recorded"]].map(([label,value]) => <div key={label} className="bg-white p-5"><p className="text-xs font-semibold uppercase tracking-wide text-[#7b6660]">{label}</p><strong className="mt-2 block text-lg text-[#251E1F]">{value}</strong></div>)}</div>
+      <div className="flex flex-col items-center justify-center gap-3 p-6 sm:flex-row"><button type="button" onClick={() => navigate("/dashboard/payroll/finance/payroll-run-history")} className="primary-button inline-flex items-center gap-2 px-5 py-3 font-semibold"><ClipboardList size={17}/>View payroll run history</button><button type="button" onClick={() => navigate("/dashboard/payroll/finance")} className="rounded-xl border border-[#f0d2ca] bg-white px-5 py-3 font-semibold text-[#7b6660]">Return to dashboard</button></div>
+    </section>
+  </PageShell>;
+}
+
+function PayrollRunHistoryView({ payrollRuns, selectedRun, onSelectRun }) {
+  const [detailsId, setDetailsId] = useState("");
+  const [query, setQuery] = useState("");
+  const detailsRun = payrollRuns.find((run) => run.id === detailsId) || null;
+  const filtered = payrollRuns.filter((run) => `${formatPayrollPeriod(run)} ${formatPayrollRunId(run)} ${run.status} ${run.bankReference || ""}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const openDetails = (run) => { setDetailsId(run.id); onSelectRun(run.id); };
+  return <PageShell heading="Payroll Run History" actions={<label className="flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5"><Search size={16} className="text-[#F38978]"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search period, status, or reference" className="w-64 bg-transparent text-sm outline-none"/></label>}>
+    <div className="mb-5 rounded-2xl border border-[#2D7C83]/20 bg-[#2D7C83]/10 p-4 text-sm text-[#2D7C83]"><strong>Database payroll archive.</strong> Each entry is loaded from the stored payroll run and its related employee payroll records. Select a row to inspect the saved result.</div>
+    <div className="app-panel overflow-x-auto rounded-2xl"><table className="min-w-[64rem] w-full text-left text-sm"><thead className="bg-[#fff8f5] text-xs uppercase tracking-wide text-[#7b6660]"><tr><th className="px-5 py-4">Payroll period</th><th>Run ID</th><th>Status</th><th>Employees</th><th>Gross payroll</th><th>Net payment</th><th>Completed</th><th className="pr-5 text-right">Action</th></tr></thead><tbody className="divide-y divide-[#f0d2ca]">{filtered.map((run) => { const totals = getRunTotals(run); return <tr key={run.id} className="cursor-pointer transition hover:bg-[#fff8f5]" onClick={() => openDetails(run)}><td className="px-5 py-4"><strong className="text-[#251E1F]">{formatPayrollPeriod(run)}</strong><small className="mt-1 block text-[#7b6660]">{run.bankReference || "No payment reference"}</small></td><td className="font-mono text-xs font-semibold text-[#2D7C83]">{formatPayrollRunId(run)}</td><td><span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getStatusClass(run.status)}`}>{run.status}</span></td><td>{run.employees.length}</td><td className="font-semibold">{formatMoney(totals.grossPay + totals.allowances)}</td><td className="font-semibold text-emerald-700">{formatMoney(totals.netPay)}</td><td>{run.reconciledAt ? formatDateTime(run.reconciledAt) : "In progress"}</td><td className="pr-5 text-right"><button type="button" onClick={(event) => { event.stopPropagation(); openDetails(run); }} className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-xs font-semibold">View details</button></td></tr>; })}</tbody></table>{!filtered.length ? <div className="p-10 text-center text-sm text-[#7b6660]">No payroll runs match your search.</div> : null}</div>
+    {detailsRun ? <PayrollRunDetailsDrawer run={detailsRun} onClose={() => setDetailsId("")}/> : null}
+  </PageShell>;
+}
+
+function PayrollRunDetailsDrawer({ run, onClose }) {
+  const totals = getRunTotals(run);
+  useEffect(() => { const before = document.body.style.overflow; document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = before; }; }, []);
+  return <div className="fixed inset-0 z-[1000] flex justify-end bg-[#251E1F]/45" onMouseDown={onClose}><aside role="dialog" aria-modal="true" aria-labelledby="payroll-run-details-title" onMouseDown={(event) => event.stopPropagation()} className="h-full w-full max-w-4xl overflow-y-auto bg-[#fffdfc] shadow-2xl"><header className="sticky top-0 z-10 flex items-start justify-between border-b border-[#f0d2ca] bg-white/95 p-6 backdrop-blur"><div><p className="text-xs font-semibold uppercase tracking-wider text-[#F38978]">Stored payroll run</p><h2 id="payroll-run-details-title" className="mt-1 text-2xl font-semibold text-[#251E1F]">{formatPayrollPeriod(run)}</h2><p className="mt-1 font-mono text-xs font-semibold text-[#2D7C83]">Run ID: {formatPayrollRunId(run)}</p><p className="mt-1 text-sm text-[#7b6660]">{run.status} · {run.bankReference || "No payment reference"}</p></div><button type="button" onClick={onClose} className="rounded-xl border border-[#f0d2ca] p-2"><X size={20}/></button></header>
+    <div className="space-y-5 p-6"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[["Employees", run.employees.length], ["Gross payroll", formatMoney(totals.grossPay + totals.allowances)], ["Total deductions", formatMoney(totals.totalDeductions)], ["Net paid", formatMoney(totals.netPay)]].map(([label,value]) => <div key={label} className="rounded-2xl border border-[#f0d2ca] bg-white p-4"><p className="text-xs uppercase tracking-wide text-[#7b6660]">{label}</p><strong className="mt-2 block text-xl text-[#251E1F]">{value}</strong></div>)}</div>
+      <section className="rounded-2xl border border-[#f0d2ca] bg-white p-5"><h3 className="font-semibold text-[#251E1F]">Completion record</h3><dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">{[["Payroll approved", run.approvedAt], ["Payment confirmed", run.paidAt], ["Payslips delivered", run.payslipsSentAt], ["Ledger recorded", run.ledgerRecordedAt || run.xeroRecordedAt], ["Reconciled", run.reconciledAt], ["Payment reference", run.bankReference]].map(([label,value]) => <div key={label}><dt className="text-xs uppercase text-[#7b6660]">{label}</dt><dd className="mt-1 font-semibold">{value && label !== "Payment reference" ? formatDateTime(value) : value || "Not completed"}</dd></div>)}</dl></section>
+      <section className="overflow-hidden rounded-2xl border border-[#f0d2ca] bg-white"><div className="border-b border-[#f0d2ca] p-5"><h3 className="font-semibold text-[#251E1F]">Employee payroll records</h3><p className="mt-1 text-xs text-[#7b6660]">{run.employees.length} records stored for this period</p></div><div className="overflow-x-auto"><table className="min-w-[48rem] w-full text-left text-sm"><thead className="bg-[#fff8f5] text-xs uppercase text-[#7b6660]"><tr><th className="px-5 py-3">Employee</th><th>Department</th><th>Gross pay</th><th>Deductions</th><th>Net pay</th><th>Finance status</th></tr></thead><tbody className="divide-y divide-[#f0d2ca]">{run.employees.map((employee) => <tr key={employee.id || employee.payrollId || employee.employeeId}><td className="px-5 py-3 font-semibold">{employee.name || employee.employeeName}</td><td>{employee.department || "—"}</td><td>{formatMoney(employee.grossPay || employee.basicPay)}</td><td>{formatMoney(getEmployeeTotalDeductions(employee))}</td><td className="font-semibold text-emerald-700">{formatMoney(getEmployeeNetPay(employee))}</td><td>{getEmployeeFinanceStatus(employee)}</td></tr>)}</tbody></table></div></section>
+    </div><footer className="sticky bottom-0 flex justify-end border-t border-[#f0d2ca] bg-white p-5"><button type="button" onClick={onClose} className="rounded-xl border border-[#f0d2ca] px-5 py-2.5 font-semibold">Close</button></footer></aside></div>;
+}
+
 function GuidedWorkflowStageView({ stage, selectedRun, payrollRuns, onSelectRun, onAction, onGeneratePaymentFile, onSetupRecipients, onSubmitPayment, onRecalculate, busy, error }) {
   const state = getCompletedSteps(selectedRun);
   const approvedStaff = selectedRun.employees.filter((employee) => employee.financeStatus === "Approved").length;
@@ -3762,7 +3809,7 @@ function GuidedWorkflowStageView({ stage, selectedRun, payrollRuns, onSelectRun,
   const runAction = async (action, payload) => { try { await onAction(action, payload); } catch { /* error banner is shared */ } };
   return <PageShell heading={item.title} actions={<RunSelector payrollRuns={payrollRuns} selectedRunId={selectedRun.id} onSelectRun={onSelectRun} />}>
     <div className="grid gap-5 lg:grid-cols-[1fr_22rem]">
-      <section className="app-panel rounded-2xl p-6"><p className="text-sm text-[#7b6660]">{item.description}</p><div className="mt-5 rounded-xl border border-[#f0d2ca] bg-[#fff8f5] p-4"><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Selected payroll period</p><h3 className="mt-1 text-xl font-semibold text-[#251E1F]">{formatPayrollPeriod(selectedRun)}</h3><p className="mt-1 text-sm text-[#7b6660]">{selectedRun.status}</p></div>
+      <section className="app-panel rounded-2xl p-6"><p className="text-sm text-[#7b6660]">{item.description}</p><div className="mt-5 rounded-xl border border-[#f0d2ca] bg-[#fff8f5] p-4"><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Selected payroll period</p><h3 className="mt-1 text-xl font-semibold text-[#251E1F]">{formatPayrollPeriod(selectedRun)}</h3><p className="mt-1 font-mono text-xs font-semibold text-[#2D7C83]">Run ID: {formatPayrollRunId(selectedRun)}</p><p className="mt-1 text-sm text-[#7b6660]">{selectedRun.status}</p></div>
         {stage === "payment" && selectedRun.paymentStatus ? <div className={`mt-4 rounded-xl border p-4 text-sm ${["Failed", "Partially Submitted"].includes(selectedRun.paymentStatus) ? "border-red-200 bg-red-50 text-red-700" : "border-blue-200 bg-blue-50 text-blue-700"}`}><div className="flex items-center justify-between gap-3"><strong>Modern Treasury: {selectedRun.paymentStatus}</strong>{["Submitting", "Processing", "Partially Submitted"].includes(selectedRun.paymentStatus) ? <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2 py-1 text-[11px] font-semibold text-blue-700"><span className="h-2 w-2 rounded-full bg-blue-500 motion-safe:animate-pulse"/>Live</span> : null}</div><p className="mt-1">{selectedRun.bankReference || selectedRun.paymentFailureReason || "Awaiting provider reference"}</p>{selectedRun.paymentBatch ? <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs"><span><b className="block text-base">{selectedRun.paymentBatch.total || 0}</b>Total</span><span><b className="block text-base">{selectedRun.paymentBatch.succeeded || 0}</b>Submitted</span><span><b className="block text-base">{selectedRun.paymentBatch.failed || 0}</b>Failed</span><span><b className="block text-base">{selectedRun.paymentBatch.remaining || 0}</b>Remaining</span></div> : null}</div> : null}
         {stage === "payslips" && selectedRun.payslipDelivery ? <div className={`mt-4 rounded-xl border p-4 text-sm ${selectedRun.payslipDelivery.failed ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}><strong>Payslip delivery result</strong><div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs"><span><b className="block text-base">{selectedRun.payslipDelivery.sent || 0}</b>Sent now</span><span><b className="block text-base">{selectedRun.payslipDelivery.skipped || 0}</b>Already sent</span><span><b className="block text-base">{selectedRun.payslipDelivery.failed || 0}</b>Failed</span></div>{selectedRun.payslipDelivery.errors?.map((item) => <div key={item.payrollId} className="mt-3 rounded-lg bg-white/70 p-3"><b>{item.employee || item.employeeId || `Payroll ${item.payrollId}`}</b><p>{item.message}</p>{item.correctiveAction ? <p className="mt-1 font-medium">Required: {item.correctiveAction}</p> : null}</div>)}</div> : null}
         {error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
@@ -3859,6 +3906,8 @@ function FinancePayrollContent({
     );
   }
   if (pathname.endsWith("/payroll-summaries")) return <PayrollSummariesView payrollRuns={payrollRuns} selectedRun={selectedRun} />;
+  if (pathname.endsWith("/payroll-completion")) return <PayrollRunCompletionView selectedRun={selectedRun} />;
+  if (pathname.endsWith("/payroll-run-history")) return <PayrollRunHistoryView payrollRuns={payrollRuns} selectedRun={selectedRun} onSelectRun={onSelectRun} />;
   const guidedStage = ({
     "/payroll-approval": "approval", "/payment-preparation": "preparation", "/payment-release": "payment",
     "/payslip-delivery": "payslips", "/statutory-ledger": "statutory", "/reconciliation-reports": "reconciliation"

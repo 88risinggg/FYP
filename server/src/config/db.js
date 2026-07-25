@@ -9,6 +9,7 @@ const pool = mysql.createPool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
+  timezone: process.env.DB_TIMEZONE || "+08:00",
   ssl: useSsl ? { rejectUnauthorized: false } : undefined,
   connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT_MS || 10000),
   waitForConnections: true,
@@ -18,6 +19,15 @@ const pool = mysql.createPool({
   keepAliveInitialDelay: 30000,
   maxIdle: 5,
   idleTimeout: 60000
+});
+
+// MySQL NOW()/CURRENT_TIMESTAMP calls use the connection session timezone.
+// Apply Singapore time to every pooled connection, including connections used
+// directly through pool.query rather than pool.getConnection.
+pool.on("connection", (connection) => {
+  connection.query(`SET time_zone = '${process.env.DB_TIMEZONE || "+08:00"}'`, (error) => {
+    if (error) console.error("Unable to set database session timezone:", error.message);
+  });
 });
 
 async function testDatabaseConnection() {
