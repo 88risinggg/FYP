@@ -6,12 +6,13 @@
  * payroll_run is the canonical source for run status, approval, configuration and payment reference.
  */
 
+const crypto = require("crypto");
 const { pool } = require("../config/db");
 const {
-  DEFAULT_PAYROLL_RULES_2026,
   calculateEmployeePayroll
 } = require("../services/statutoryPayrollEngine");
 const { getActivePayrollRules } = require("../services/payrollRuleConfigService");
+const { postPayrollRecoveries } = require("../services/payrollRecoveryPostingService");
 
 const WORKFLOW_FIELDS = [
   "reviewedAt",
@@ -51,14 +52,19 @@ function toMoney(value) {
   return Math.round(Number(value || 0) * 100) / 100;
 }
 
+function getRulesHash(rules) {
+  return crypto.createHash("sha256").update(JSON.stringify(rules || {})).digest("hex");
+}
+
 function pickWorkflow(run) {
   return Object.fromEntries(WORKFLOW_FIELDS.filter((field) => run[field] !== undefined).map((field) => [field, run[field]]));
 }
 
-function buildEmployeeFromPayroll(row) {
+function buildEmployeeFromPayroll(row, paymentRecipient = {}) {
   const breakdown = parseJson(row.deduction_breakdown, {});
   const selfHelpGroups = Array.isArray(breakdown.selfHelpGroups) ? breakdown.selfHelpGroups : [];
   const otherDeductions = Array.isArray(breakdown.otherDeductions) ? breakdown.otherDeductions : [];
+  const reimbursements = Array.isArray(breakdown.reimbursements) ? breakdown.reimbursements : [];
   const totalAllowances = toMoney(row.total_allowances);
   const grossSalary = toMoney(row.gross_salary || (Number(row.net_salary) + Number(row.total_deductions)));
   const basicSalary = toMoney(grossSalary - totalAllowances);
@@ -66,6 +72,7 @@ function buildEmployeeFromPayroll(row) {
 
   return {
     id: employeeId,
+    recordSource: "staff_db",
     staffEmployeeId: row.employee_id,
     payrollId: row.payroll_id,
     name: row.name,
@@ -76,6 +83,9 @@ function buildEmployeeFromPayroll(row) {
     noPayLeave: 0,
     cpfAgeGroup: breakdown.cpfTier || "Manual review",
     cpfWageBase: toMoney(breakdown.cpfWageBase),
+    storedGrossPay: grossSalary,
+    storedTotalDeductions: toMoney(row.total_deductions),
+    storedNetPay: toMoney(row.net_salary),
     grossPay: basicSalary,
     previousGrossPay: basicSalary,
     religion: row.religion || "",
@@ -86,7 +96,16 @@ function buildEmployeeFromPayroll(row) {
     employerCpf: toMoney(row.employer_cpf),
     earningItems: [
       { label: "Basic salary", rate: "1 Month", amount: basicSalary },
-      ...(totalAllowances ? [{ label: "Allowance", rate: "-", amount: totalAllowances }] : [])
+      ...(totalAllowances - reimbursements.reduce((sum, item) => sum + Number(item.amount || 0), 0) > 0
+        ? [{ label: "Allowance", rate: "-", amount: toMoney(totalAllowances - reimbursements.reduce((sum, item) => sum + Number(item.amount || 0), 0)) }]
+        : []),
+      ...reimbursements.map((item) => ({
+        label: item.label || "Claim reimbursement",
+        rate: item.expenseDate ? `Expense ${String(item.expenseDate).slice(0, 10)}` : "Non-CPF",
+        amount: toMoney(item.amount),
+        claimId: item.claimId,
+        cpfApplicable: false
+      }))
     ],
     deductionItems: [
       ...(toMoney(row.employee_cpf) ? [{ label: "CPF (Employee)", amount: toMoney(row.employee_cpf) }] : []),
@@ -99,6 +118,8 @@ function buildEmployeeFromPayroll(row) {
     financeStatus: row.payslip_status || "Draft",
     bank: row.bank || "",
     accountNo: row.account_no || "",
+    modernTreasuryCounterpartyId: paymentRecipient.modernTreasuryCounterpartyId || "",
+    modernTreasuryReceivingAccountId: paymentRecipient.modernTreasuryReceivingAccountId || "",
     complianceExceptions: breakdown.complianceExceptions || []
   };
 }
@@ -106,11 +127,14 @@ function buildEmployeeFromPayroll(row) {
 async function getPayrollRows(connection, month, year) {
   const [rows] = await connection.execute(
     `SELECT
-      p.*, s.employee_id, s.employee_code, s.name, s.email, s.department_name,
+      p.*, s.employee_id, s.employee_code, s.name, s.email, s.base_salary, s.department_name,
       s.date_of_birth, s.race, s.religion, s.bank, s.account_no,
       pr.status AS header_run_status, pr.configuration_json AS header_configuration_json,
       pr.approved_by AS header_approved_by, pr.approved_at AS header_approved_at,
       pr.payment_reference AS header_payment_reference,
+      pr.effective_claim_cutoff_at, pr.scheduled_release_at, pr.release_schedule_status,
+      pr.release_confirmed_by, pr.release_confirmed_at, pr.payment_attempted_at,
+      pr.release_failure_reason,
       pr.created_at AS header_created_at, pr.updated_at AS header_updated_at,
       pc.configuration_value AS rules_snapshot_json
      FROM payroll p
@@ -125,12 +149,14 @@ async function getPayrollRows(connection, month, year) {
   return rows;
 }
 
-function mapRun(rows) {
+function mapRun(rows, activeRulesHash = null) {
   if (!rows.length) return null;
   const first = rows[0];
   const stored = parseJson(first.header_configuration_json || first.configuration_json, {});
   if (!stored.rules && first.rules_snapshot_json) stored.rules = parseJson(first.rules_snapshot_json, {});
   const workflow = stored.workflow || {};
+  const rulesHash = stored.rulesHash || getRulesHash(stored.rules);
+  const paymentRecipients = stored.paymentRecipients || {};
   // Use a composite ID: month_year
   const runId = `${first.payroll_month}_${first.payroll_year}`;
   return {
@@ -143,14 +169,28 @@ function mapRun(rows) {
     approvedAt: first.header_approved_at || first.run_approved_at || workflow.approvedAt,
     bankReference: first.header_payment_reference || first.payment_reference || "",
     source: "staff_db",
-    rulesVersion: stored.rules?.version || DEFAULT_PAYROLL_RULES_2026.version,
-    employees: rows.map(buildEmployeeFromPayroll),
+    databaseRecordSource: first.source || "payroll",
+    rulesVersion: stored.rules?.version || "Stored snapshot",
+    rulesHash,
+    rulesChanged: Boolean(!first.header_approved_at && activeRulesHash && rulesHash !== activeRulesHash),
+    recalculatedAt: stored.recalculatedAt || null,
+    recalculatedBy: stored.recalculatedBy || null,
+    effectiveClaimCutoffAt: first.effective_claim_cutoff_at || null,
+    scheduledReleaseAt: first.scheduled_release_at || null,
+    releaseScheduleStatus: first.release_schedule_status || "Unscheduled",
+    releaseConfirmedBy: first.release_confirmed_by || null,
+    releaseConfirmedAt: first.release_confirmed_at || null,
+    paymentAttemptedAt: first.payment_attempted_at || null,
+    releaseFailureReason: first.release_failure_reason || null,
+    updatedAt: first.header_updated_at || first.header_created_at || null,
+    employees: rows.map((row) => buildEmployeeFromPayroll(row, paymentRecipients[String(row.employee_id)] || {})),
     ...workflow
   };
 }
 
 async function listFinancePayrollRuns() {
   await ensureFinancePayrollTables();
+  const activeRulesHash = getRulesHash(await getActivePayrollRules());
   // Get distinct runs by month/year
   const [periods] = await pool.execute(
     `SELECT DISTINCT payroll_month, payroll_year FROM payroll ORDER BY payroll_year DESC, payroll_month DESC`
@@ -158,7 +198,7 @@ async function listFinancePayrollRuns() {
   const result = [];
   for (const period of periods) {
     const rows = await getPayrollRows(pool, period.payroll_month, period.payroll_year);
-    const run = mapRun(rows);
+    const run = mapRun(rows, activeRulesHash);
     if (run) result.push(run);
   }
   return result;
@@ -168,20 +208,81 @@ async function getPayrollRunComplianceErrors(runId) {
   // runId format: "month_year"
   const [month, year] = String(runId).split("_").map(Number);
   const [rows] = await pool.execute(
-    `SELECT p.payroll_id, p.deduction_breakdown, s.name
+    `SELECT p.payroll_id, p.deduction_breakdown, p.configuration_json, s.name,
+            pr.configuration_json AS run_configuration_json, pr.approved_at,
+            pc.configuration_value AS rules_snapshot_json
      FROM payroll p
      JOIN staff s ON s.employee_id = p.staff_employee_id
+     LEFT JOIN payroll_run pr ON pr.payroll_run_id = p.payroll_run_id
+     LEFT JOIN payroll_configuration pc
+       ON pc.configuration_id = pr.configuration_id AND pc.configuration_type = 'rules_snapshot'
      WHERE p.payroll_month = ? AND p.payroll_year = ?`,
     [month, year]
   );
-  return rows.flatMap((row) => {
+  if (!rows.length) return [];
+  const stored = parseJson(rows[0].run_configuration_json || rows[0].configuration_json, {});
+  if (!stored.rules && rows[0].rules_snapshot_json) {
+    stored.rules = parseJson(rows[0].rules_snapshot_json, null);
+  }
+  if (!stored.rules || typeof stored.rules !== "object") {
+    return [{
+      employee: null,
+      payrollId: null,
+      ruleCode: "ADMIN_RULE_SNAPSHOT_REQUIRED",
+      actualValue: "Unavailable",
+      expectedValue: "Stored Admin-rule snapshot",
+      message: "This payroll run has no stored Admin rules snapshot.",
+      correctiveAction: "Recalculate the pending run from the authoritative Admin payroll configuration before approval."
+    }];
+  }
+  const activeRules = await getActivePayrollRules();
+  const errors = [];
+  if (!rows[0].approved_at && getRulesHash(stored.rules) !== getRulesHash(activeRules)) {
+    errors.push({
+      employee: null,
+      payrollId: null,
+      ruleCode: "ADMIN_RULES_CHANGED",
+      actualValue: stored.rules?.version || stored.rulesHash || "Previous snapshot",
+      expectedValue: activeRules.version || getRulesHash(activeRules),
+      message: "Admin payroll rules changed after this run was calculated.",
+      correctiveAction: "Recalculate with the latest Admin payroll rules, review the employee results, then save the Finance review again."
+    });
+  }
+  errors.push(...rows.flatMap((row) => {
     const breakdown = parseJson(row.deduction_breakdown, {});
     return (breakdown.complianceExceptions || []).map((message) => ({
       employee: row.name,
       payrollId: row.payroll_id,
-      message
+      ruleCode: String(message).toLowerCase().includes("bank") ? "BANK_ACCOUNT_REQUIRED"
+        : String(message).toLowerCase().includes("department") ? "DEPARTMENT_REQUIRED"
+          : String(message).toLowerCase().includes("cpf") ? "CPF_CALCULATION"
+            : String(message).toLowerCase().includes("deduction") ? "DEDUCTION_LIMIT"
+              : "PAYROLL_VALIDATION",
+      actualValue: "Failed",
+      expectedValue: "Pass",
+      message,
+      correctiveAction: String(message).toLowerCase().includes("bank")
+        ? "Complete the employee bank and account details, then rerun payroll validation."
+        : String(message).toLowerCase().includes("department")
+          ? "Assign the employee department, then rerun payroll validation."
+          : "Correct the employee or payroll rule source data, then rerun payroll validation."
     }));
-  });
+  }));
+  return errors;
+}
+
+async function getQueuedClaims(connection, month, year) {
+  const [rows] = await connection.execute(
+    `SELECT record_id, staff_employee_id, claim_category, amount, expense_date
+     FROM claims_and_loans
+     WHERE type = 'expense_claim'
+       AND status = 'payroll_approved'
+       AND payroll_inclusion_status = 'queued'
+       AND payroll_target_month = ? AND payroll_target_year = ?
+     FOR UPDATE`,
+    [month, year]
+  );
+  return rows;
 }
 
 async function getApprovedRecoveries(connection) {
@@ -200,6 +301,21 @@ async function getApprovedRecoveries(connection) {
   }
 }
 
+async function getApprovedAdjustmentOverrides(connection, payrollRunId) {
+  const [rows] = await connection.execute(
+    "SELECT staff_employee_id, configuration_json FROM payroll WHERE payroll_run_id = ?",
+    [payrollRunId]
+  );
+  const overrides = new Map();
+  for (const row of rows) {
+    const approved = (parseJson(row.configuration_json, {}).financeAdjustments || [])
+      .filter((item) => item.status === "Approved" && item.actionable && item.proposedValue)
+      .sort((a, b) => new Date(b.reviewedAt || 0) - new Date(a.reviewedAt || 0))[0];
+    if (approved) overrides.set(Number(row.staff_employee_id), parseJson(approved.proposedValue, {})?.otherDeductions || []);
+  }
+  return overrides;
+}
+
 async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail }) {
   await ensureFinancePayrollTables();
   const activeRules = await getActivePayrollRules();
@@ -207,13 +323,12 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
   try {
     await connection.beginTransaction();
     const [[existing]] = await connection.execute(
-      `SELECT (
-        EXISTS(SELECT 1 FROM payroll WHERE payroll_month = ? AND payroll_year = ?)
-        OR EXISTS(SELECT 1 FROM payroll_run WHERE payroll_month = ? AND payroll_year = ?)
-       ) AS run_exists`,
+      `SELECT
+         EXISTS(SELECT 1 FROM payroll WHERE payroll_month = ? AND payroll_year = ?) AS payroll_exists,
+         (SELECT payroll_run_id FROM payroll_run WHERE payroll_month = ? AND payroll_year = ? LIMIT 1) AS empty_run_id`,
       [month, year, month, year]
     );
-    if (Number(existing.run_exists) === 1) {
+    if (Number(existing.payroll_exists) === 1) {
       const error = new Error("A payroll run already exists for this period.");
       error.code = "DUPLICATE_PAYROLL_RUN";
       throw error;
@@ -234,6 +349,7 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
     const now = new Date().toISOString();
     const configuration = {
       rules: activeRules,
+      rulesHash: getRulesHash(activeRules),
       submittedBy: userEmail || "Finance",
       submittedAt: now,
       workflow: {
@@ -243,6 +359,7 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
     };
 
     const recoveries = await getApprovedRecoveries(connection);
+    const queuedClaims = await getQueuedClaims(connection, month, year);
     const rulesSnapshot = JSON.stringify(activeRules);
     const [configurationResult] = await connection.execute(
       `INSERT INTO payroll_configuration
@@ -251,25 +368,48 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
        ON DUPLICATE KEY UPDATE configuration_id = LAST_INSERT_ID(configuration_id)`,
       [rulesSnapshot, rulesSnapshot, userId || null]
     );
-    const [runResult] = await connection.execute(
-      `INSERT INTO payroll_run
-        (payroll_month, payroll_year, status, configuration_id, configuration_json, created_at, updated_at)
-       VALUES (?, ?, 'Submitted for Finance Review', ?, ?, NOW(), NOW())`,
-      [month, year, configurationResult.insertId, JSON.stringify(configuration)]
-    );
-    const payrollRunId = runResult.insertId;
+    let payrollRunId = Number(existing.empty_run_id || 0);
+    if (payrollRunId) {
+      await connection.execute(
+        `UPDATE payroll_run SET status = 'Submitted for Finance Review', configuration_id = ?,
+           configuration_json = ?, approved_by = NULL, approved_at = NULL, payment_reference = NULL,
+           updated_at = NOW()
+         WHERE payroll_run_id = ?`,
+        [configurationResult.insertId, JSON.stringify(configuration), payrollRunId]
+      );
+    } else {
+      const [runResult] = await connection.execute(
+        `INSERT INTO payroll_run
+          (payroll_month, payroll_year, status, configuration_id, configuration_json, created_at, updated_at)
+         VALUES (?, ?, 'Submitted for Finance Review', ?, ?, NOW(), NOW())`,
+        [month, year, configurationResult.insertId, JSON.stringify(configuration)]
+      );
+      payrollRunId = runResult.insertId;
+    }
 
     for (const staff of staffRows) {
+      const staffClaims = queuedClaims.filter((claim) => Number(claim.staff_employee_id) === Number(staff.employee_id));
+      const reimbursements = staffClaims.map((claim) => ({
+        claimId: claim.record_id,
+        label: `${claim.claim_category || "Expense"} reimbursement · ${claim.record_id}`,
+        amount: Number(claim.amount),
+        expenseDate: claim.expense_date,
+        cpfApplicable: false
+      }));
       const otherDeductions = recoveries
         .filter((item) => Number(item.staff_employee_id) === Number(staff.employee_id))
         .map((item) => ({
+          sourceRecordId: item.record_id,
           label: item.type === "loan" ? `Loan repayment ${item.record_id}` : `Salary advance ${item.record_id}`,
-          amount: Math.min(Number(item.monthly_installment), Number(item.outstanding_balance))
+          amount: Math.min(Number(item.monthly_installment), Number(item.outstanding_balance)),
+          scheduledAmount: Math.min(Number(item.monthly_installment), Number(item.outstanding_balance)),
+          outstandingBefore: Number(item.outstanding_balance)
         }));
       const calculation = calculateEmployeePayroll({
         staff,
         month,
         year,
+        reimbursements,
         otherDeductions,
         configuration: activeRules
       });
@@ -290,7 +430,7 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
       if (existingPayslip.length > 0) {
         continue;
       }
-      await connection.execute(
+      const [payrollResult] = await connection.execute(
         `INSERT INTO payroll (
           staff_employee_id, payroll_month, payroll_year, payroll_run_id, gross_salary,
           total_allowances, total_deductions, employee_cpf, employer_cpf, mbmf_amount,
@@ -307,6 +447,15 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
           userId || null, JSON.stringify(configuration)
         ]
       );
+      if (staffClaims.length) {
+        await connection.execute(
+          `UPDATE claims_and_loans
+           SET payroll_inclusion_status = 'included', included_payroll_id = ?, payroll_included_at = NOW()
+           WHERE record_id IN (${staffClaims.map(() => "?").join(",")})
+             AND payroll_inclusion_status = 'queued'`,
+          [payrollResult.insertId, ...staffClaims.map((claim) => claim.record_id)]
+        );
+      }
     }
 
     await connection.commit();
@@ -320,6 +469,120 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
   }
 }
 
+async function recalculateFinancePayrollRun({ runId, userId, userEmail, connection: suppliedConnection = null, rulesOverride = null, adjustmentReview = false }) {
+  await ensureFinancePayrollTables();
+  const [month, year] = String(runId).split("_").map(Number);
+  if (!month || !year) throw new Error("Invalid payroll run ID format. Expected 'month_year'.");
+  const activeRules = rulesOverride || await getActivePayrollRules();
+  const connection = suppliedConnection || await pool.getConnection();
+  const ownsTransaction = !suppliedConnection;
+  try {
+    if (ownsTransaction) await connection.beginTransaction();
+    const rows = await getPayrollRows(connection, month, year);
+    if (!rows.length) throw new Error("Payroll run not found.");
+    const first = rows[0];
+    const oldConfiguration = parseJson(first.header_configuration_json || first.configuration_json, {});
+    const oldWorkflow = oldConfiguration.workflow || {};
+    if (first.header_approved_at || oldWorkflow.paidAt || oldWorkflow.paymentFileGeneratedAt || oldWorkflow.payslipsSentAt) {
+      const error = new Error("Approved, payment-generated or paid payroll runs cannot be recalculated.");
+      error.code = "PAYROLL_RUN_LOCKED";
+      throw error;
+    }
+
+    const recoveries = await getApprovedRecoveries(connection);
+    const adjustmentOverrides = await getApprovedAdjustmentOverrides(connection, first.payroll_run_id);
+    const rulesSnapshot = JSON.stringify(activeRules);
+    const [configurationResult] = await connection.execute(
+      `INSERT INTO payroll_configuration
+        (configuration_type, configuration_key, configuration_value, description, updated_by)
+       VALUES ('rules_snapshot', SHA2(?, 256), ?, 'Immutable rules used by a recalculated payroll run', ?)
+       ON DUPLICATE KEY UPDATE configuration_id = LAST_INSERT_ID(configuration_id)`,
+      [rulesSnapshot, rulesSnapshot, userId || null]
+    );
+    const now = new Date().toISOString();
+    const configuration = {
+      ...oldConfiguration,
+      rules: activeRules,
+      rulesHash: getRulesHash(activeRules),
+      recalculatedAt: now,
+      recalculatedBy: userEmail || "Finance",
+      workflow: {
+        paymentMethod: oldWorkflow.paymentMethod || "GIRO",
+        timeline: [
+          { action: "Payroll recalculated using the latest Admin payroll rules", at: now, owner: userEmail || "Finance" },
+          ...(Array.isArray(oldWorkflow.timeline) ? oldWorkflow.timeline : [])
+        ]
+      }
+    };
+
+    for (const row of rows) {
+      const oldBreakdown = parseJson(row.deduction_breakdown, {});
+      const reimbursements = Array.isArray(oldBreakdown.reimbursements) ? oldBreakdown.reimbursements : [];
+      const reimbursementTotal = reimbursements.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const otherAllowanceTotal = Math.max(0, Number(row.total_allowances || 0) - reimbursementTotal);
+      const allowances = otherAllowanceTotal ? [{ label: "Allowance", amount: otherAllowanceTotal }] : [];
+      const calculatedRecoveries = recoveries
+        .filter((item) => Number(item.staff_employee_id) === Number(row.employee_id))
+        .map((item) => ({
+          sourceRecordId: item.record_id,
+          label: item.type === "loan" ? `Loan repayment ${item.record_id}` : `Salary advance ${item.record_id}`,
+          amount: Math.min(Number(item.monthly_installment), Number(item.outstanding_balance)),
+          scheduledAmount: Math.min(Number(item.monthly_installment), Number(item.outstanding_balance)),
+          outstandingBefore: Number(item.outstanding_balance)
+        }));
+      const otherDeductions = adjustmentOverrides.has(Number(row.employee_id))
+        ? adjustmentOverrides.get(Number(row.employee_id))
+        : calculatedRecoveries;
+      const calculation = calculateEmployeePayroll({
+        staff: row,
+        month,
+        year,
+        allowances,
+        reimbursements,
+        otherDeductions,
+        configuration: activeRules
+      });
+      const breakdown = {
+        ...calculation.deductionBreakdown,
+        complianceExceptions: calculation.complianceExceptions,
+        cpfTier: calculation.cpfTier,
+        cpfWageBase: calculation.cpfWageBase,
+        sdl: calculation.sdl
+      };
+      await connection.execute(
+        `UPDATE payroll SET gross_salary = ?, total_allowances = ?, total_deductions = ?,
+           employee_cpf = ?, employer_cpf = ?, mbmf_amount = ?, deduction_breakdown = ?,
+           net_salary = ?, payslip_status = ?, run_status = 'Recalculated - Finance Review Required',
+           run_approved_by = NULL, run_approved_at = NULL, payment_reference = NULL,
+           configuration_json = ?, run_updated_at = NOW()
+         WHERE payroll_id = ?`,
+        [calculation.grossSalary, calculation.allowanceTotal, calculation.totalDeductions,
+          calculation.cpfEmployee, calculation.cpfEmployer, calculation.mbmfAmount,
+          JSON.stringify(breakdown), calculation.netSalary,
+          calculation.complianceExceptions.length ? "Hold" : "Draft",
+          JSON.stringify({ ...configuration, financeAdjustments: parseJson(row.configuration_json, {}).financeAdjustments || [] }), row.payroll_id]
+      );
+    }
+    await connection.execute(
+      `UPDATE payroll_run SET status = 'Recalculated - Finance Review Required', configuration_id = ?,
+         configuration_json = ?, approved_by = NULL, approved_at = NULL, payment_reference = NULL, updated_at = NOW()
+       WHERE payroll_run_id = ?`,
+      [configurationResult.insertId, JSON.stringify(configuration), first.payroll_run_id]
+    );
+    const mapped = mapRun(await getPayrollRows(connection, month, year), getRulesHash(activeRules));
+    if (adjustmentReview) {
+      mapped.timeline = [{ action: "Approved payroll adjustments applied and run recalculated", at: now, owner: userEmail || "Finance" }, ...(mapped.timeline || [])];
+    }
+    if (ownsTransaction) await connection.commit();
+    return mapped;
+  } catch (error) {
+    if (ownsTransaction) await connection.rollback();
+    throw error;
+  } finally {
+    if (ownsTransaction) connection.release();
+  }
+}
+
 async function upsertFinancePayrollRun({ run, userId }) {
   await ensureFinancePayrollTables();
   // Parse run ID (format: "month_year")
@@ -330,31 +593,64 @@ async function upsertFinancePayrollRun({ run, userId }) {
   if (!rows.length) throw new Error("Payroll run not found.");
 
   const stored = parseJson(rows[0].header_configuration_json || rows[0].configuration_json, {});
+  if (!stored.rules && rows[0].rules_snapshot_json) {
+    stored.rules = parseJson(rows[0].rules_snapshot_json, null);
+  }
+  if (!stored.rules || typeof stored.rules !== "object") {
+    const error = new Error("This payroll run has no stored Admin rules snapshot and cannot be updated safely.");
+    error.code = "PAYROLL_RULE_SNAPSHOT_REQUIRED";
+    throw error;
+  }
   const configuration = {
     ...stored,
-    rules: stored.rules || DEFAULT_PAYROLL_RULES_2026,
-    workflow: { ...(stored.workflow || {}), ...pickWorkflow(run), approvedAt: run.approvedAt || stored.workflow?.approvedAt }
+    rules: stored.rules,
+    workflow: { ...(stored.workflow || {}), ...pickWorkflow(run), approvedAt: run.approvedAt || stored.workflow?.approvedAt },
+    paymentRecipients: Object.fromEntries((run.employees || []).map((employee) => [String(employee.staffEmployeeId), {
+      modernTreasuryCounterpartyId: employee.modernTreasuryCounterpartyId || "",
+      modernTreasuryReceivingAccountId: employee.modernTreasuryReceivingAccountId || ""
+    }]))
   };
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+    if (run.paidAt && !stored.workflow?.paidAt) {
+      const recoveryPostings = await postPayrollRecoveries({
+        connection,
+        payrollRunId: rows[0].payroll_run_id,
+        userId
+      });
+      configuration.workflow.recoveryPostings = {
+        postedAt: run.paidAt,
+        count: recoveryPostings.length,
+        appliedAmount: recoveryPostings.reduce((sum, item) => sum + Number(item.appliedAmount || 0), 0),
+        deferredAmount: recoveryPostings.reduce((sum, item) => sum + Number(item.deferredAmount || 0), 0)
+      };
+    }
     await connection.execute(
       `UPDATE payroll_run
-       SET status = ?, approved_by = ?, approved_at = ?, payment_reference = ?,
+       SET status = ?,
+           approved_by = CASE WHEN approved_at IS NULL AND ? IS NOT NULL THEN ? ELSE approved_by END,
+           approved_at = COALESCE(approved_at, ?), payment_reference = ?,
+           release_schedule_status = CASE WHEN ? IS NOT NULL THEN 'Released' ELSE release_schedule_status END,
+           payment_attempted_at = CASE WHEN ? IS NOT NULL THEN COALESCE(payment_attempted_at, NOW()) ELSE payment_attempted_at END,
            configuration_json = ?, updated_at = NOW()
        WHERE payroll_run_id = ?`,
-      [run.status, run.approvedAt ? userId || null : null, run.approvedAt || null,
-        run.bankReference || null, JSON.stringify(configuration), rows[0].payroll_run_id]
+      [run.status, run.approvedAt || null, userId || null, run.approvedAt || null,
+        run.bankReference || null, run.bankReference || null, run.bankReference || null,
+        JSON.stringify(configuration), rows[0].payroll_run_id]
     );
     // Update all payroll rows for this period
     await connection.execute(
       `UPDATE payroll
-       SET run_status = ?, run_approved_by = ?, run_approved_at = ?, payment_reference = ?, configuration_json = ?
+       SET run_status = ?,
+           run_approved_by = CASE WHEN run_approved_at IS NULL AND ? IS NOT NULL THEN ? ELSE run_approved_by END,
+           run_approved_at = COALESCE(run_approved_at, ?), payment_reference = ?, configuration_json = ?
        WHERE payroll_month = ? AND payroll_year = ?`,
       [
         run.status,
-        run.approvedAt ? userId || null : null,
+        run.approvedAt || null,
+        userId || null,
         run.approvedAt || null,
         run.bankReference || null,
         JSON.stringify(configuration),
@@ -397,5 +693,6 @@ module.exports = {
   ensureFinancePayrollTables,
   getPayrollRunComplianceErrors,
   listFinancePayrollRuns,
+  recalculateFinancePayrollRun,
   upsertFinancePayrollRun
 };

@@ -6,6 +6,7 @@ const { addAudit } = require("../services/audit");
 const { authenticateToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/rolesMiddleware");
 const { notifyRoles } = require("../services/payrollNotificationService");
+const { logAuditEvent, getClientIp, getDeviceInfo } = require("../models/auditLogModel");
 
 const router = express.Router();
 
@@ -75,6 +76,17 @@ router.put("/payslips/:id/finance-approve", authenticateToken, allowRoles("Finan
     );
 
     addAudit(req.user.email, `Finance approved payslip ${payslipId}`, "Payroll");
+    await logAuditEvent({
+      userId: req.user.userId,
+      userName: req.user.email,
+      module: "Payroll",
+      activityType: "Payslip Approval",
+      actionDescription: `Finance approved payslip ${payslipId}`,
+      affectedRecord: String(payslipId),
+      status: "Success",
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req)
+    });
     await notifyRoles("HR", {
       type: "payslip_approved", title: "Payslip approved by Finance",
       message: `Payslip ${payslipId} is approved and ready for the next HR action.`,
@@ -194,6 +206,18 @@ router.put("/payslips/:id/finance-reject", authenticateToken, allowRoles("Financ
     );
 
     addAudit(req.user.email, `Finance rejected payslip ${payslipId}: ${reason}`, "Payroll");
+    await logAuditEvent({
+      userId: req.user.userId,
+      userName: req.user.email,
+      module: "Payroll",
+      activityType: "Payslip Rejection",
+      actionDescription: `Finance returned payslip ${payslipId} for correction`,
+      affectedRecord: String(payslipId),
+      status: "Warning",
+      newValue: JSON.stringify({ reason }),
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req)
+    });
     await notifyRoles("HR", {
       type: "payslip_rejected", title: "Payslip returned by Finance",
       message: `Payslip ${payslipId} was returned for correction: ${reason}`,

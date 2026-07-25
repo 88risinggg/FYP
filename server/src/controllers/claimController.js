@@ -5,6 +5,7 @@ const { pool } = require("../config/db");
 const { notifyRoles: notifyPayrollRoles, notifyUser } = require("../services/payrollNotificationService");
 const { getClaimTransition } = require("../services/claimWorkflow");
 const { writeAuditLog } = require("../services/auditService");
+const { claimTargetForApproval } = require("../services/financePayrollScheduleService");
 
 const CLAIM_TYPES = ["Medical", "Transport", "Meal", "Internet", "Office Purchase", "Business Travel", "Other"];
 const SERVER_ROOT = path.resolve(__dirname, "..", "..");
@@ -29,6 +30,12 @@ const selectClaim = `
     c.finance_processed_at,
     JSON_UNQUOTE(JSON_EXTRACT(c.request_metadata, '$.finance_comments')) AS finance_comments,
     c.payment_reference
+    ,c.payroll_target_month,
+    c.payroll_target_year,
+    c.payroll_inclusion_status,
+    c.included_payroll_id,
+    c.payroll_approved_at,
+    c.payroll_included_at
   FROM claims_and_loans c
   JOIN staff s ON s.employee_id = c.staff_employee_id`;
 
@@ -202,7 +209,7 @@ async function listClaims(req, res) {
       sql += " AND c.staff_employee_id = ?";
       params.push(req.user.staffId || -1);
     } else if (req.user.role === "Finance") {
-      sql += " AND c.status IN ('hr_approved', 'released', 'finance_rejected')";
+      sql += " AND c.status IN ('hr_approved', 'payroll_approved', 'released', 'finance_rejected')";
     }
     sql += " ORDER BY c.submitted_at DESC";
     const [rows] = await pool.query(sql, params);
@@ -274,30 +281,86 @@ async function processByFinance(req, res) {
   const transition = getClaimTransition("Finance", action);
   if (!transition) return res.status(404).json({ message: "Invalid Finance claim action" });
   const comments = String(req.body?.comments || "").trim();
-  const paymentReference = String(req.body?.payment_reference || "").trim();
-  if (action === "release" && !paymentReference) return res.status(400).json({ message: "Payment reference is required" });
+  let targetMonth = null;
+  let targetYear = null;
+  let targetCutoffAt = null;
   if (action === "reject" && !comments) return res.status(400).json({ message: "A rejection reason is required" });
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+    const [[claim]] = await connection.query(
+      `SELECT staff_employee_id, claim_category, amount, expense_date
+       FROM claims_and_loans WHERE type = 'expense_claim' AND record_id = ? AND status = 'hr_approved'
+       LIMIT 1 FOR UPDATE`,
+      [req.params.id]
+    );
+    if (!claim) {
+      await connection.rollback();
+      return res.status(409).json({ message: "Claim is missing or is not awaiting Finance" });
+    }
+    let openRuns = [];
+    if (action === "release") {
+      const target = await claimTargetForApproval(connection);
+      targetMonth = target.month;
+      targetYear = target.year;
+      targetCutoffAt = target.cutoffAt;
+      [openRuns] = await connection.query(
+        `SELECT payroll_month, payroll_year FROM payroll_run
+         WHERE payroll_month = ? AND payroll_year = ? AND approved_at IS NULL
+           AND LOWER(status) NOT IN ('payment processed', 'payslips sent', 'reconciled') LIMIT 1 FOR UPDATE`,
+        [targetMonth, targetYear]
+      );
+    }
     const [result] = await connection.query(
       `UPDATE claims_and_loans
-       SET status = ?, finance_processed_at = NOW(), payment_reference = ?,
+       SET status = ?, finance_processed_at = NOW(), payment_reference = NULL,
+           payroll_target_month = ?, payroll_target_year = ?,
+           payroll_inclusion_status = ?, payroll_approved_at = CASE WHEN ? = 'release' THEN NOW() ELSE NULL END,
            request_metadata = JSON_SET(
              COALESCE(request_metadata, JSON_OBJECT()),
              '$.finance_processed_by', ?,
              '$.finance_action', ?,
-             '$.finance_comments', ?
+             '$.finance_comments', ?,
+             '$.effective_claim_cutoff_at', ?
            )
        WHERE type = 'expense_claim' AND record_id = ? AND status = 'hr_approved'`,
-      [transition.to, paymentReference || null, req.user.userId, action, comments || "", req.params.id]
+      [action === "release" ? "payroll_approved" : transition.to,
+        targetMonth, targetYear, action === "release" ? "queued" : null, action,
+        req.user.userId, action, comments || "", targetCutoffAt, req.params.id]
     );
     if (!result.affectedRows) {
       await connection.rollback();
       return res.status(409).json({ message: "Claim is missing or is not awaiting Finance" });
     }
-    const actionLabel = action === "release" ? "released" : "rejected";
+    if (action === "release" && openRuns.length) {
+      const [[payroll]] = await connection.query(
+        `SELECT payroll_id, gross_salary, total_allowances, net_salary, deduction_breakdown
+         FROM payroll WHERE staff_employee_id = ? AND payroll_month = ? AND payroll_year = ?
+         LIMIT 1 FOR UPDATE`,
+        [claim.staff_employee_id, targetMonth, targetYear]
+      );
+      if (payroll) {
+        let breakdown = {};
+        try { breakdown = typeof payroll.deduction_breakdown === "object" ? payroll.deduction_breakdown : JSON.parse(payroll.deduction_breakdown || "{}"); } catch { breakdown = {}; }
+        const reimbursements = Array.isArray(breakdown.reimbursements) ? breakdown.reimbursements : [];
+        if (!reimbursements.some((item) => item.claimId === req.params.id)) {
+          reimbursements.push({ claimId: req.params.id, label: `${claim.claim_category || "Expense"} reimbursement · ${req.params.id}`, amount: Number(claim.amount), expenseDate: claim.expense_date, cpfApplicable: false });
+          breakdown.reimbursements = reimbursements;
+          await connection.query(
+            `UPDATE payroll SET gross_salary = gross_salary + ?, total_allowances = total_allowances + ?,
+               net_salary = net_salary + ?, deduction_breakdown = ? WHERE payroll_id = ?`,
+            [claim.amount, claim.amount, claim.amount, JSON.stringify(breakdown), payroll.payroll_id]
+          );
+          await connection.query(
+            `UPDATE claims_and_loans SET payroll_inclusion_status = 'included', included_payroll_id = ?, payroll_included_at = NOW()
+             WHERE record_id = ? AND payroll_inclusion_status = 'queued'`,
+            [payroll.payroll_id, req.params.id]
+          );
+        }
+      }
+    }
+    const actionLabel = action === "release" ? `approved for ${targetMonth}/${targetYear} payroll` : "rejected";
     await logClaimAudit(connection, req, req.params.id, `Finance ${actionLabel} expense claim ${req.params.id}`);
     await connection.commit();
   } catch (error) {
@@ -310,15 +373,15 @@ async function processByFinance(req, res) {
   try {
     await notifyClaimOwner(
       req.params.id,
-      action === "release" ? "Claim reimbursement released" : "Claim rejected by Finance",
-      action === "release" ? `Your reimbursement was released. Reference: ${paymentReference}` : comments
+      action === "release" ? "Claim approved for payroll" : "Claim rejected by Finance",
+      action === "release" ? "Your reimbursement was approved and will be included in the next open payroll." : comments
       , { actorUserId: req.user.userId }
     );
     await notifyRoles(
       ["HR"],
-      action === "release" ? "Expense claim reimbursed" : "Expense claim rejected by Finance",
+      action === "release" ? "Expense claim approved for payroll" : "Expense claim rejected by Finance",
       action === "release"
-        ? `Claim ${req.params.id} was released with reference ${paymentReference}.`
+        ? `Claim ${req.params.id} was assigned to ${targetMonth}/${targetYear} payroll.`
         : `Claim ${req.params.id} was rejected by Finance.`,
       req.user.userId
       , { actorUserId: req.user.userId, entityId: req.params.id, actionPath: "/dashboard/payroll/hr/claims" }

@@ -11,6 +11,7 @@ import {
   Edit3,
   FileBarChart,
   FileText,
+  History,
   LayoutDashboard,
   ListChecks,
   Lock,
@@ -18,6 +19,7 @@ import {
   Plus,
   ReceiptText,
   RefreshCw,
+  CalendarClock,
   Search,
   Send,
   ShieldCheck,
@@ -26,14 +28,26 @@ import {
   X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getPayrollRuleConfig } from "../../services/adminPayrollService.js";
 import {
   createFinancePayrollRunFromStaff,
+  generateFinancePayrollAdjustments,
+  getFinancePayrollAdjustments,
+  getFinancePayrollActivity,
+  getFinancePayrollSchedule,
+  getFinancePayrollSchedulePreview,
   getFinancePayrollRuns,
-  saveFinancePayrollRun
+  getPayslipPeriodSummary,
+  performFinancePayrollScheduleAction,
+  recalculateFinancePayrollRun,
+  reviewFinancePayrollAdjustments,
+  saveFinancePayrollRun,
+  updateFinancePayrollRunSchedule,
+  updateFinancePayrollSchedule,
+  validateFinancePayrollRun
 } from "../../services/financePayrollService.js";
 import {
   canAdvanceFinancePayrollRun,
@@ -50,6 +64,8 @@ import {
   resolveFinancePayrollConfig
 } from "../../utils/payrollRules.js";
 import { createPayrollReportPdf } from "../../utils/payrollReportPdf.js";
+import { normalizeFinancePayrollRuns } from "../../utils/financePayrollData.js";
+import { getMissingScheduleFields, shouldShowFinanceTracker } from "../../utils/financePayrollNavigation.js";
 import FinanceRequestsPage from "./FinanceRequestsPage.jsx";
 import PayrollNotificationsView from "../../components/payroll/PayrollNotificationsView.jsx";
 
@@ -80,8 +96,8 @@ client/src/pages/payroll/FinancePayrollPage.guide.md
 // -----------------------------------------------------------------------------
 
 const pageTitle = "Automated Payroll System - Finance Payroll Dashboard";
-const FINANCE_PAYROLL_STORAGE_KEY = "financePayrollWorkflowStateV3";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const FINANCE_SELECTED_RUN_KEY = "financePayrollSelectedRunId";
 
 const payrollSidebarSections = [
   {
@@ -100,53 +116,42 @@ const payrollSidebarSections = [
     ]
   },
   {
-    label: "PAYROLL",
+    label: "GUIDED WORKFLOW",
     items: [
+      { label: "Schedule & Cut-off", icon: CalendarClock, path: "/dashboard/payroll/finance/payroll-schedule" },
+      { label: "Claim Requests", icon: ReceiptText, path: "/dashboard/payroll/finance/employee-requests" },
       {
         label: "Payroll Runs",
         icon: ClipboardList,
         path: "/dashboard/payroll/finance/payroll-runs"
       },
       {
+        label: "Staff Review & Adjustments",
+        icon: Users,
+        path: "/dashboard/payroll/finance/staff-payroll-details"
+      },
+      {
         label: "Payslips Approval",
         icon: CheckCircle2,
         path: "/dashboard/payroll/finance/payslips-approval"
-      },
-      {
-        label: "Staff Payroll Details",
-        icon: Users,
-        path: "/dashboard/payroll/finance/staff-payroll-details"
       }
     ]
   },
   {
-    label: "REQUESTS",
+    label: "REFERENCE",
     items: [
-      {
-        label: "Employee Requests",
-        icon: ReceiptText,
-        path: "/dashboard/payroll/finance/employee-requests"
-      }
+      { label: "Compliance Rules", icon: ShieldCheck, path: "/dashboard/payroll/finance/compliance-rules" }
     ]
   },
   {
-    label: "MONITORING",
-    items: [
-      {
-        label: "Payslip Notifications",
-        icon: Bell,
-        path: "/dashboard/payroll/finance/notification-records"
-      }
-    ]
-  },
-  {
-    label: "REPORTS",
+    label: "REPORT & AUDIT",
     items: [
       {
         label: "Finance Reports",
         icon: FileBarChart,
         path: "/dashboard/payroll/finance/payroll-reports"
-      }
+      },
+      { label: "Payroll Activity Log", icon: History, path: "/dashboard/payroll/finance/activity-log" }
     ]
   }
 ];
@@ -155,9 +160,11 @@ const routeHeadings = {
   "/dashboard/payroll/finance": "Dashboard",
   "/dashboard/payroll/finance/payroll-runs": "Payroll Runs",
   "/dashboard/payroll/finance/payslips-approval": "Payslips Approval",
-  "/dashboard/payroll/finance/employee-requests": "Employee Requests",
+  "/dashboard/payroll/finance/employee-requests": "Claim Requests",
   "/dashboard/payroll/finance/staff-payroll-details": "Staff Payroll Details",
-  "/dashboard/payroll/finance/notification-records": "Payslip Notifications",
+  "/dashboard/payroll/finance/compliance-rules": "Compliance Rules",
+  "/dashboard/payroll/finance/activity-log": "Payroll Activity Log",
+  "/dashboard/payroll/finance/payroll-schedule": "Payroll Schedule",
   "/dashboard/payroll/finance/payroll-reports": "Finance Reports",
   "/dashboard/payroll/finance/payroll-summaries": "Finance Summary"
 };
@@ -167,43 +174,50 @@ let adminCpfConfiguration = createDefaultFinancePayrollConfig();
 const workflowStepDefinitions = [
   {
     key: "reviewed",
-    title: "Exception Review",
+    title: "Cut-off, Snapshot & Compliance",
+    owner: "System / Finance",
     icon: FileText,
     details: ["System checks completed", "Exceptions reviewed", "Staff records approved or held"]
   },
   {
     key: "approved",
     title: "Approve Payroll",
+    owner: "Finance approver",
     icon: ClipboardCheck,
     details: ["Pay run approved", "Payroll locked for payment processing"]
   },
   {
     key: "paid",
     title: "Generate & Confirm Payment",
+    owner: "Finance payments",
     icon: Banknote,
     details: ["Bank payment file generated", "Bank reference recorded", "Payment status confirmed"]
   },
   {
     key: "payslipsSent",
     title: "Generate Payslips",
+    owner: "System",
     icon: Mail,
     details: ["Final PDF payslips generated", "Payslips sent to employees"]
   },
   {
     key: "statutoryDeductionsLogged",
     title: "CPF & Deduction Logs",
+    owner: "Finance operations",
     icon: ReceiptText,
     details: ["CPF payable recorded", "Other deductions logged", "Recovery accounts prepared"]
   },
   {
     key: "ledgerRecorded",
     title: "Record in Ledger",
+    owner: "Finance accounting",
     icon: RefreshCw,
     details: ["Payroll journal created", "Internal general ledger updated"]
   },
   {
     key: "reconciled",
     title: "Reports & Reconciliation",
+    owner: "Finance accounting",
     icon: FileBarChart,
     details: ["Payroll reports generated", "Bank payment reconciled"]
   }
@@ -470,26 +484,7 @@ function createMockFinancePayrollRun(existingRuns = []) {
 }
 
 function getInitialPayrollRuns() {
-  try {
-    const stored = localStorage.getItem(FINANCE_PAYROLL_STORAGE_KEY);
-    const parsedRuns = stored ? JSON.parse(stored) : initialPayrollRuns;
-
-    if (!Array.isArray(parsedRuns)) return initialPayrollRuns;
-
-    const normalizedRuns = parsedRuns
-      .filter((run) => run && run.id && run.month && run.year)
-      .map((run) => ({
-        ...run,
-        employees: Array.isArray(run.employees)
-          ? run.employees.map(normalizeDemoEmployeeBankDetails)
-          : [],
-        timeline: Array.isArray(run.timeline) ? run.timeline : []
-      }));
-
-    return normalizedRuns.length ? normalizedRuns : initialPayrollRuns;
-  } catch {
-    return initialPayrollRuns;
-  }
+  return [];
 }
 
 // -----------------------------------------------------------------------------
@@ -529,7 +524,7 @@ function padDatePart(value) {
 }
 
 function getPayrollRunDate(run) {
-  return new Date(run?.submittedAt || run?.approvedAt || new Date(run?.year || 2026, (run?.month || 1) - 1, 1));
+  return new Date(run?.year || 2026, (run?.month || 1) - 1, 1);
 }
 
 function getMonthFilterValue(date) {
@@ -554,10 +549,9 @@ function getDefaultStatsFilter(run) {
 }
 
 function isRunInStatsFilter(run, filter) {
-  const runDate = getPayrollRunDate(run);
-
-  if (filter.mode === "week") return getWeekFilterValue(runDate) === filter.value;
-  return getMonthFilterValue(runDate) === filter.value;
+  const runPeriod = getMonthFilterValue(getPayrollRunDate(run));
+  if (filter.mode === "range") return runPeriod >= filter.start && runPeriod <= filter.end;
+  return runPeriod === filter.value;
 }
 
 function getFilteredPayrollRuns(payrollRuns, filter) {
@@ -742,15 +736,18 @@ function getMbmfDeductionAmount(employee) {
 
 function getMbmfReview(employee) {
   const eligible = isEmployeeMbmfEligible(employee);
+  const uploadedEmployeeAmount = getMbmfDeductionAmount(employee);
+  const hasStoredPayrollResult = Object.prototype.hasOwnProperty.call(employee, "mbmf");
+  const storedEmployeeAmount = hasStoredPayrollResult ? Number(employee.mbmf || 0) : uploadedEmployeeAmount;
 
   return {
     eligible,
     religionSource: employee.religion || "Not recorded",
     skipReason: eligible ? "" : getMbmfSkipReason(employee),
     wageBase: eligible ? getMbmfWageBase(employee) : 0,
-    employeeAmount: getExpectedMbmfEmployeeAmount(employee),
+    employeeAmount: hasStoredPayrollResult ? storedEmployeeAmount : getExpectedMbmfEmployeeAmount(employee),
     employerAmount: getExpectedMbmfEmployerAmount(employee),
-    uploadedEmployeeAmount: getMbmfDeductionAmount(employee)
+    uploadedEmployeeAmount: hasStoredPayrollResult ? storedEmployeeAmount : uploadedEmployeeAmount
   };
 }
 
@@ -830,30 +827,39 @@ function getEmployeeReviewEmployerItems(employee) {
 }
 
 function getEmployeeTotalEarnings(employee) {
+  if (employee.recordSource === "staff_db" && employee.storedGrossPay != null) {
+    return Number(employee.storedGrossPay);
+  }
   return sumPayrollItems(getEmployeeEarningItems(employee));
 }
 
 function getEmployeeTotalDeductions(employee) {
+  if (employee.recordSource === "staff_db" && employee.storedTotalDeductions != null) {
+    return Number(employee.storedTotalDeductions);
+  }
   return sumPayrollItems(getEmployeeReviewDeductionItems(employee));
 }
 
 function getEmployeeCpfAmount(employee) {
-  const cpfItem = getEmployeeDeductionItems(employee).find((item) => item.label.toLowerCase().includes("cpf"));
+  const cpfItem = getEmployeeDeductionItems(employee).find((item) => normalizePayrollLabel(item.label).includes("cpf"));
   return Number(cpfItem?.amount ?? employee.employeeCpf ?? 0);
 }
 
 function getEmployerCpfAmount(employee) {
-  const cpfItem = getEmployeeEmployerItems(employee).find((item) => item.label.toLowerCase().includes("cpf"));
+  const cpfItem = getEmployeeEmployerItems(employee).find((item) => normalizePayrollLabel(item.label).includes("cpf"));
   return Number(cpfItem?.amount ?? employee.employerCpf ?? 0);
 }
 
 function getEmployerSdlAmount(employee) {
   const sdlItem = getEmployeeEmployerItems(employee).find((item) => normalizePayrollLabel(item.label).includes("sdl"));
-  return Number(sdlItem?.amount || 0);
+  return Number(sdlItem?.amount ?? employee.sdl ?? 0);
 }
 
 function getEmployeeOtherDeductions(employee) {
-  return getEmployeeTotalDeductions(employee) - getEmployeeCpfAmount(employee) - getExpectedMbmfEmployeeAmount(employee);
+  const mbmfAmount = employee.recordSource === "staff_db"
+    ? Number(employee.mbmf || 0)
+    : getExpectedMbmfEmployeeAmount(employee);
+  return getEmployeeTotalDeductions(employee) - getEmployeeCpfAmount(employee) - mbmfAmount;
 }
 
 function getRunTotals(run) {
@@ -862,12 +868,14 @@ function getRunTotals(run) {
       const netPay = getEmployeeNetPay(employee);
       const totalEarnings = getEmployeeTotalEarnings(employee);
       const basicPay = getEmployeeEarningItems(employee)
-        .filter((item) => item.label.toLowerCase().includes("basic"))
+        .filter((item) => normalizePayrollLabel(item.label).includes("basic"))
         .reduce((total, item) => total + Number(item.amount || 0), 0);
       const totalDeductions = getEmployeeTotalDeductions(employee);
       const employeeCpf = getEmployeeCpfAmount(employee);
       const employerCpf = getEmployerCpfAmount(employee);
-      const employeeMbmf = getExpectedMbmfEmployeeAmount(employee);
+      const employeeMbmf = employee.recordSource === "staff_db"
+        ? Number(employee.mbmf || 0)
+        : getExpectedMbmfEmployeeAmount(employee);
       const employerMbmf = getExpectedMbmfEmployerAmount(employee);
       const sdl = getEmployerSdlAmount(employee);
 
@@ -907,6 +915,9 @@ function getRunTotals(run) {
 }
 
 function getEmployeeNetPay(employee) {
+  if (employee.recordSource === "staff_db" && employee.storedNetPay != null) {
+    return Number(employee.storedNetPay);
+  }
   return getEmployeeTotalEarnings(employee) - getEmployeeTotalDeductions(employee);
 }
 
@@ -931,6 +942,7 @@ function getComplianceRules() {
 
 function getEmployeeExceptions(employee) {
   const exceptions = [...(employee.complianceExceptions || [])];
+  if (employee.recordSource === "staff_db") return [...new Set(exceptions)];
   const complianceRules = getComplianceRules();
   const netPay = getEmployeeNetPay(employee);
   const totalEarnings = getEmployeeTotalEarnings(employee);
@@ -997,13 +1009,14 @@ function getRunExceptions(run) {
 function getComplianceChecks(run) {
   const complianceRules = getComplianceRules();
   const exceptions = getRunExceptions(run);
-  const hasException = (keyword) => exceptions.some((item) => item.message.toLowerCase().includes(keyword));
+  const hasException = (keyword) => exceptions.some((item) => normalizePayrollLabel(item.message).includes(keyword));
   const allEmployees = run?.employees || [];
   const allHaveSdl = allEmployees.every((employee) =>
-    getEmployeeEmployerItems(employee).some((item) => item.label.toLowerCase().includes("sdl"))
+    Object.prototype.hasOwnProperty.call(employee, "sdl") ||
+    getEmployeeEmployerItems(employee).some((item) => normalizePayrollLabel(item.label).includes("sdl"))
   );
   const hasLoanDeductions = allEmployees.some((employee) =>
-    getEmployeeDeductionItems(employee).some((item) => item.label.toLowerCase().includes("loan"))
+    getEmployeeDeductionItems(employee).some((item) => normalizePayrollLabel(item.label).includes("loan"))
   );
   const maxOtherDeductionRatio = Number(complianceRules.maxOtherDeductionPercent || 30) / 100;
   const allLoansWithinLimit = allEmployees.every((employee) =>
@@ -1260,7 +1273,7 @@ function PageShell({ heading, children, actions }) {
   );
 }
 
-function ActionButton({ children, disabled = false, disabledReason = "", icon: Icon, onClick, variant = "primary" }) {
+function ActionButton({ children, disabled = false, disabledReason = "", icon: Icon, onClick, type = "button", variant = "primary" }) {
   const isBlockedWithReason = Boolean(disabled && disabledReason);
   const className =
     variant === "secondary"
@@ -1277,7 +1290,7 @@ function ActionButton({ children, disabled = false, disabledReason = "", icon: I
 
   return (
     <button
-      type="button"
+      type={type}
       className={`${className} ${(disabled || isBlockedWithReason) ? "cursor-not-allowed opacity-60" : ""} disabled:cursor-not-allowed disabled:opacity-60`}
       onClick={handleClick}
       disabled={disabled && !isBlockedWithReason}
@@ -1301,11 +1314,21 @@ function EmptyState({ message }) {
 function WorkflowCard({ run, step }) {
   const Icon = step.icon;
   const completed = getCompletedSteps(run)[step.key];
+  const tones = {
+    reviewed: ["bg-[#e7effd] text-[#3564a4] ring-[#4778ba]/25", "text-[#4778ba]"],
+    approved: ["bg-[#eee9fb] text-[#6348a2] ring-[#7156b2]/25", "text-[#7156b2]"],
+    paid: ["bg-[#eaf8f0] text-[#28724d] ring-[#36855d]/25", "text-[#36855d]"],
+    payslipsSent: ["bg-[#fce9e4] text-[#a84f37] ring-[#bd684f]/25", "text-[#bd684f]"],
+    statutoryDeductionsLogged: ["bg-[#fdf2dc] text-[#9f6519] ring-[#bd7b22]/25", "text-[#bd7b22]"],
+    ledgerRecorded: ["bg-[#e3f4f4] text-[#286f75] ring-[#2d7c83]/25", "text-[#2d7c83]"],
+    reconciled: ["bg-[#eee9fb] text-[#6348a2] ring-[#7156b2]/25", "text-[#7156b2]"]
+  };
+  const [iconTone, checkTone] = tones[step.key] || ["bg-[#fce9e4] text-[#a84f37] ring-[#bd684f]/25", "text-[#bd684f]"];
 
   return (
     <article className="app-panel rounded-2xl p-5">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F38978]/12 text-[#F38978] ring-1 ring-[#F38978]/25">
+        <div className={`flex h-12 w-12 items-center justify-center rounded-xl ring-1 ${iconTone}`}>
           <Icon size={24} />
         </div>
         <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${completed ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"}`}>
@@ -1313,10 +1336,12 @@ function WorkflowCard({ run, step }) {
         </span>
       </div>
       <h3 className="mt-5 text-base font-semibold text-[#251E1F]">{step.title}</h3>
+      <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-[#F38978]">Owner: {step.owner}</p>
+      <p className="mt-2 text-xs text-[#7b6660]">{completed ? `Completed ${formatDateTime(run?.[`${step.key}At`] || run?.updatedAt)}` : getRunExceptions(run).length ? `${getRunExceptions(run).length} blocker(s) require correction` : "Ready when the previous stage is complete"}</p>
       <ul className="mt-3 space-y-2 text-sm text-[#7b6660]">
         {step.details.map((detail) => (
           <li key={detail} className="flex gap-2">
-            <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#F38978]" />
+            <CheckCircle2 size={16} className={`mt-0.5 shrink-0 ${checkTone}`} />
             <span>{detail}</span>
           </li>
         ))}
@@ -1397,7 +1422,7 @@ function ExceptionPanel({ run }) {
 
 function AdminCpfConfigPanel() {
   const updatedAt = adminCpfConfiguration.updatedAt;
-  const lastUpdatedLabel = updatedAt ? formatDateTime(updatedAt) : "Fallback defaults";
+  const lastUpdatedLabel = updatedAt ? formatDateTime(updatedAt) : "Database timestamp not recorded";
   const rows = [
     ["CPF Rate Tiers", `${adminCpfConfiguration.rateTiers.length} age group(s)`],
     ["Rate Source", adminCpfConfiguration.source],
@@ -1516,17 +1541,16 @@ function AdminCpfConfigPanel() {
 
 function CompliancePanel({ run }) {
   const { checks, failed, passed, total } = getComplianceSummary(run);
-  const updatedAt = adminCpfConfiguration.updatedAt;
-  const lastUpdatedLabel = updatedAt ? formatDateTime(updatedAt) : "Fallback defaults";
+  const lastUpdatedLabel = run?.rulesVersion || "Stored snapshot";
 
   return (
     <div className="app-panel rounded-2xl p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[#251E1F]">Compliance Checklist</h3>
-          <p className="mt-1 text-sm text-[#7b6660]">Finance compliance checks from Admin rules.</p>
+          <p className="mt-1 text-sm text-[#7b6660]">Read-only results from the run snapshot; final validation is enforced by the server.</p>
           <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
-            Last updated: <span className="normal-case tracking-normal text-[#251E1F]">{lastUpdatedLabel}</span>
+            Rule version: <span className="normal-case tracking-normal text-[#251E1F]">{lastUpdatedLabel}</span>
           </p>
         </div>
         <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${failed ? "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]" : "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]"}`}>
@@ -1591,7 +1615,12 @@ function StatCard({ detail, label, tone = "text-[#251E1F]", value }) {
   );
 }
 
-function PayrollStatsFilter({ filter, onFilterChange, onModeChange, resultCount }) {
+function PayrollStatsFilter({ filter, onFilterChange, resultCount }) {
+  const anchor = filter.mode === "month" ? filter.value : filter.end;
+  const usePreset = (months) => {
+    if (months === 1) onFilterChange({ mode: "month", value: anchor });
+    else onFilterChange({ mode: "range", months, start: shiftMonth(anchor, -(months - 1)), end: anchor });
+  };
   return (
     <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#f0d2ca] bg-white/80 p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-3">
@@ -1605,23 +1634,18 @@ function PayrollStatsFilter({ filter, onFilterChange, onModeChange, resultCount 
       </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="inline-flex rounded-xl border border-[#f0d2ca] bg-white/80 p-1">
-          {["month", "week"].map((mode) => (
+          {[1, 3, 6, 12].map((months) => (
             <button
-              key={mode}
+              key={months}
               type="button"
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition ${filter.mode === mode ? "bg-[#F38978] text-white" : "text-[#7b6660] hover:bg-white/80"}`}
-              onClick={() => onModeChange(mode)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${(months === 1 ? filter.mode === "month" : filter.mode === "range" && filter.months === months) ? "bg-[#F38978] text-white" : "text-[#7b6660] hover:bg-white/80"}`}
+              onClick={() => usePreset(months)}
             >
-              {mode}
+              {months === 1 ? "Month" : `${months}M`}
             </button>
           ))}
         </div>
-        <input
-          type={filter.mode === "week" ? "week" : "month"}
-          value={filter.value}
-          onChange={(event) => onFilterChange({ ...filter, value: event.target.value })}
-          className="rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm font-semibold text-[#251E1F] outline-none"
-        />
+        {filter.mode === "month" ? <input type="month" value={filter.value} onChange={(event) => onFilterChange({ mode: "month", value: event.target.value })} className="rounded-xl border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm font-semibold text-[#251E1F] outline-none"/> : <div className="flex items-center gap-2"><input aria-label="Payroll range start" type="month" value={filter.start} onChange={(event) => onFilterChange({ ...filter, months: 0, start: event.target.value })} className="rounded-xl border border-[#f0d2ca] bg-white px-3 py-2 text-sm font-semibold"/><span className="text-xs text-[#7b6660]">to</span><input aria-label="Payroll range end" type="month" value={filter.end} onChange={(event) => onFilterChange({ ...filter, months: 0, end: event.target.value })} className="rounded-xl border border-[#f0d2ca] bg-white px-3 py-2 text-sm font-semibold"/></div>}
       </div>
     </div>
   );
@@ -1646,9 +1670,42 @@ function RunSelector({ payrollRuns, selectedRunId, onSelectRun }) {
   );
 }
 
+function FinancePayrollJourney({ run }) {
+  const navigate = useNavigate();
+  const completed = getCompletedSteps(run);
+  const exceptions = getRunExceptions(run).length;
+  const approvedStaff = (run?.employees || []).filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length;
+  const allStaffReviewed = Boolean(run?.employees?.length) && approvedStaff === run.employees.length && exceptions === 0;
+  const stages = [
+    ["Schedule & cut-off", "/dashboard/payroll/finance/payroll-schedule", Boolean(run?.effectiveClaimCutoffAt && run?.scheduledReleaseAt), false, "Optional"],
+    ["Claim requests", "/dashboard/payroll/finance/employee-requests", Boolean(run?.submittedAt), false, "Snapshotted"],
+    ["Payroll run review", "/dashboard/payroll/finance/payroll-runs", completed.reviewed, Boolean(run?.rulesChanged), "Review"],
+    ["Staff review", "/dashboard/payroll/finance/staff-payroll-details", allStaffReviewed, exceptions > 0, "Adjust"],
+    ["Payroll approval", "/dashboard/payroll/finance/payroll-runs", completed.approved, !completed.reviewed || !allStaffReviewed, "Approve"],
+    ["Payment & payslips", "/dashboard/payroll/finance/payslips-approval", completed.paid && completed.payslipsSent, !completed.approved, "Release"],
+    ["Reports & reconciliation", "/dashboard/payroll/finance/payroll-reports", completed.reconciled, !completed.ledgerRecorded, "Reconcile"]
+  ];
+  const currentIndex = stages.findIndex((stage, index) => index > 0 && !stage[2] && !stage[3]);
+  return (
+    <nav aria-label="Finance payroll progress" className="app-panel mb-5 rounded-2xl px-4 py-3">
+      <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-[#251E1F]">Payroll progress</p><span className="text-xs font-medium text-[#7b6660]">{formatPayrollPeriod(run)}</span></div>
+      <ol className="mt-3 flex min-w-max items-stretch gap-2 overflow-x-auto pb-1">
+        {stages.map(([label, path, done, blocked, fallback], index) => {
+          const current = index === currentIndex;
+          const status = blocked ? "Blocked" : done ? "Complete" : current ? "Current" : fallback || "Upcoming";
+          return <li key={label}><button type="button" onClick={() => navigate(path)} aria-label={`${label}: ${status}`} className={`flex h-full w-44 items-center gap-2 rounded-xl border px-3 py-2 text-left transition motion-reduce:transition-none ${blocked ? "border-amber-300 bg-amber-50" : done ? "border-emerald-200 bg-emerald-50" : current ? "border-[#F38978] bg-[#F38978]/10" : "border-[#f0d2ca] bg-white"}`}><span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${done ? "bg-emerald-600 text-white" : blocked ? "bg-amber-500 text-white" : current ? "bg-[#F38978] text-white" : "bg-[#f0d2ca] text-[#7b6660]"}`}>{done ? "✓" : index + 1}</span><span className="min-w-0"><strong className="block truncate text-xs text-[#251E1F]">{label}</strong><small className="block text-[11px] text-[#7b6660]">{status}</small></span></button></li>;
+        })}
+      </ol>
+    </nav>
+  );
+}
+
 function AccountingImpact({ payrollRuns = [], run }) {
   const availableRuns = payrollRuns.length ? payrollRuns : [run].filter(Boolean);
   const [accountingFilter, setAccountingFilter] = useState(() => getDefaultStatsFilter(run || availableRuns[0]));
+  useEffect(() => {
+    if (run || availableRuns[0]) setAccountingFilter(getDefaultStatsFilter(run || availableRuns[0]));
+  }, [run?.id]);
   const filteredRuns = getFilteredPayrollRuns(availableRuns, accountingFilter);
   const totals = getAggregateAccountingTotals(filteredRuns);
   const mbmf = adminCpfConfiguration.mbmf || {};
@@ -1791,14 +1848,84 @@ function CpfDeductionProcessPanel({ onAdvanceRun, run }) {
 // 8. Dashboard and payroll-run workflow views
 // -----------------------------------------------------------------------------
 
-function DashboardView({ onAdvanceRun, onSelectRun, payrollRuns, selectedRun }) {
+function DashboardMetricCard({ icon: Icon, iconClass, label, value, detail, valueClass = "text-[#251E1F]" }) {
+  return <article className="app-panel flex items-center gap-4 rounded-2xl p-5"><span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${iconClass}`}><Icon size={23}/></span><div className="min-w-0"><p className="text-sm text-[#7b6660]">{label}</p><p className={`mt-1 truncate text-2xl font-semibold ${valueClass}`}>{value}</p><p className="mt-1 text-xs text-[#7b6660]">{detail}</p></div></article>;
+}
+
+function monthKey(year, month) { return `${year}-${String(month).padStart(2, "0")}`; }
+function shiftMonth(key, offset) { const [year, month] = key.split("-").map(Number); const date = new Date(year, month - 1 + offset, 1); return monthKey(date.getFullYear(), date.getMonth() + 1); }
+function monthRange(start, end) { const result = []; let cursor = start; while (cursor <= end && result.length < 24) { result.push(cursor); cursor = shiftMonth(cursor, 1); } return result; }
+
+function MonthlyPayrollBarChart({ payrollRuns, selectedRun }) {
+  const selectedKey = monthKey(selectedRun.year, selectedRun.month);
+  const [metric, setMetric] = useState("totalFunding");
+  const [preset, setPreset] = useState(6);
+  const [start, setStart] = useState(shiftMonth(selectedKey, -5));
+  const [end, setEnd] = useState(selectedKey);
+  const applyPreset = (months) => { setPreset(months); setEnd(selectedKey); setStart(shiftMonth(selectedKey, -(months - 1))); };
+  const periods = monthRange(start, end);
+  const values = periods.map((key) => {
+    const runs = payrollRuns.filter((run) => monthKey(run.year, run.month) === key);
+    const totals = runs.reduce((sum, run) => { const item = getRunTotals(run); return { netPay: sum.netPay + item.netPay, gross: sum.gross + item.grossPay + item.allowances, totalFunding: sum.totalFunding + item.netPay + item.employeeCpf + item.employeeMbmf + item.employerCpf + item.employerMbmf + item.sdl }; }, { netPay: 0, gross: 0, totalFunding: 0 });
+    return { key, value: totals[metric] };
+  });
+  const max = Math.max(...values.map((item) => item.value), 1);
+  const metricLabels = { netPay: "Net Pay", gross: "Gross Earnings", totalFunding: "Total Funding" };
+  return <section className="app-panel rounded-2xl p-6 lg:col-span-2"><div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Monthly payroll trend</p><h3 className="mt-1 text-lg font-semibold text-[#251E1F]">{metricLabels[metric]} by pay run</h3><p className="mt-1 text-sm text-[#7b6660]">Database-backed totals across the selected month range.</p></div><div className="flex flex-wrap gap-2">{Object.entries(metricLabels).map(([key, label]) => <button key={key} onClick={() => setMetric(key)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${metric === key ? "bg-[#F38978] text-white" : "border border-[#f0d2ca] bg-white"}`}>{label}</button>)}</div></div>
+    <div className="mt-5 flex flex-wrap items-end gap-3"><div className="flex rounded-xl border border-[#f0d2ca] bg-white p-1">{[3,6,12].map((months) => <button key={months} onClick={() => applyPreset(months)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${preset === months ? "bg-[#fce9e4] text-[#a84f37]" : "text-[#7b6660]"}`}>{months} months</button>)}</div><label className="text-xs text-[#7b6660]">From<input type="month" value={start} onChange={(e) => { setStart(e.target.value); setPreset(0); }} className="ml-2 rounded-lg border border-[#f0d2ca] px-2 py-1.5"/></label><label className="text-xs text-[#7b6660]">To<input type="month" value={end} onChange={(e) => { setEnd(e.target.value); setPreset(0); }} className="ml-2 rounded-lg border border-[#f0d2ca] px-2 py-1.5"/></label></div>
+    {periods.length ? <><div className="mt-8 overflow-x-auto"><div className="flex h-64 min-w-[620px] items-end gap-3 border-b border-[#f0d2ca] px-3">{values.map((item) => <div key={item.key} className="group flex h-full min-w-0 flex-1 flex-col items-center justify-end"><div className="mb-2 hidden whitespace-nowrap rounded-lg bg-[#251E1F] px-2 py-1 text-xs text-white group-hover:block">{formatMoney(item.value)}</div><div role="img" aria-label={`${item.key}: ${formatMoney(item.value)}`} className="w-full max-w-14 rounded-t-lg bg-gradient-to-t from-[#bd684f] to-[#F38978] transition hover:from-[#2d7c83] hover:to-[#54aab1]" style={{ height: `${item.value ? Math.max((item.value / max) * 190, 8) : 3}px` }}/><span className="mt-2 text-[11px] text-[#7b6660]">{new Intl.DateTimeFormat("en-SG", { month: "short", year: "2-digit" }).format(new Date(`${item.key}-01T00:00:00`))}</span></div>)}</div></div><table className="sr-only"><caption>{metricLabels[metric]} by month</caption><tbody>{values.map((item) => <tr key={item.key}><th>{item.key}</th><td>{item.value}</td></tr>)}</tbody></table></> : <EmptyState message="Choose a valid month range of up to 24 months."/>}
+  </section>;
+}
+
+function DashboardView({ onAdvanceRun, onRecalculateRun, onSelectRun, payrollRuns, selectedRun }) {
+  const navigate = useNavigate();
+  const [validationStatus, setValidationStatus] = useState(null);
+  const [validationLoading, setValidationLoading] = useState(false);
+  useEffect(() => setValidationStatus(null), [selectedRun.id]);
   const [statsFilter, setStatsFilter] = useState(() => getDefaultStatsFilter(selectedRun));
+  useEffect(() => setStatsFilter(getDefaultStatsFilter(selectedRun)), [selectedRun.id]);
   const filteredRuns = getFilteredPayrollRuns(payrollRuns, statsFilter);
   const stats = getAggregatePayrollStats(filteredRuns);
-  const selectedTotals = getRunTotals(selectedRun);
-  const selectedApprovedStaff = selectedRun.employees.filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length;
-  const selectedExceptionCount = getRunExceptions(selectedRun).length;
   const completedSteps = getCompletedSteps(selectedRun);
+  const rulesChangedRuns = filteredRuns.filter((run) => run.rulesChanged);
+  const exceptionRuns = filteredRuns.filter((run) => getRunExceptions(run).length > 0);
+  const reviewRuns = filteredRuns.filter((run) => !run.rulesChanged && !getCompletedSteps(run).reviewed);
+  const approvalRuns = filteredRuns.filter((run) => getCompletedSteps(run).reviewed && !getCompletedSteps(run).approved);
+  const missingPaymentRuns = filteredRuns.filter((run) => getMissingModernTreasuryRecipientCount(run) > 0);
+  const openRun = (run) => {
+    onSelectRun(run.id);
+    navigate("/dashboard/payroll/finance/payroll-runs");
+  };
+  const refreshServerValidation = async () => {
+    setValidationLoading(true);
+    try {
+      const result = await validateFinancePayrollRun(selectedRun.id);
+      setValidationStatus({ passed: true, checkedAt: result.checkedAt, errors: [] });
+    } catch (error) {
+      setValidationStatus({ passed: false, checkedAt: new Date().toISOString(), errors: error.details || [] });
+    } finally {
+      setValidationLoading(false);
+    }
+  };
+  const actionItems = [
+    { label: "Rules changed — recalculate", runs: rulesChangedRuns, tone: "text-amber-700" },
+    { label: "Compliance exceptions", runs: exceptionRuns, tone: "text-[#D97706]" },
+    { label: "Awaiting Finance review", runs: reviewRuns, tone: "text-[#2D7C83]" },
+    { label: "Awaiting approval", runs: approvalRuns, tone: "text-[#F38978]" },
+    { label: "Missing payment recipients", runs: missingPaymentRuns, tone: "text-[#9A6412]" }
+  ];
+  const activeActionItems = actionItems.filter((item) => item.runs.length > 0);
+  const clearedActionCount = actionItems.length - activeActionItems.length;
+  const selectedRunEmployees = selectedRun.employees || [];
+  const selectedRunApprovedCount = selectedRunEmployees.filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length;
+  const selectedRunExceptions = getRunExceptions(selectedRun).length;
+  const nextAction = selectedRun.rulesChanged
+    ? { label: "Recalculate with current Admin rules", onClick: onRecalculateRun, className: "bg-amber-600 hover:bg-amber-700" }
+    : !completedSteps.reviewed
+      ? { label: "Continue Finance review", onClick: () => openRun(selectedRun), className: "bg-[#2D7C83] hover:bg-[#24676c]" }
+      : !completedSteps.approved
+        ? { label: "Review and approve run", onClick: () => openRun(selectedRun), className: "bg-[#F38978] hover:bg-[#dc7566]" }
+        : { label: "Open payroll workflow", onClick: () => openRun(selectedRun), className: "bg-[#2f8758] hover:bg-[#267149]" };
   const workflowChecklist = [
     { label: "Payroll reviewed and approved", completed: completedSteps.reviewed && completedSteps.approved },
     { label: "Payment processed", completed: completedSteps.paid },
@@ -1816,23 +1943,101 @@ function DashboardView({ onAdvanceRun, onSelectRun, payrollRuns, selectedRun }) 
 
   return (
     <PageShell heading="Dashboard">
+      <section className="relative mb-6 overflow-hidden rounded-2xl border border-[#efc8bd] bg-gradient-to-r from-white via-[#fffaf8] to-[#fdf0eb] p-5 shadow-[0_10px_30px_rgba(128,72,54,0.08)] sm:p-6">
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#F38978] via-[#D97706] to-[#2D7C83]" />
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#fce9e4] text-[#c85f4e]"><LayoutDashboard size={23} /></span>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#F38978]">Finance payroll control centre</p>
+              <h2 className="mt-1 text-2xl font-semibold text-[#251E1F]">{formatPayrollPeriod(selectedRun)}</h2>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#7b6660]">
+                <span>{selectedRunEmployees.length || stats.employees} staff in this run</span>
+                <span className="hidden h-1 w-1 rounded-full bg-[#c9aaa2] sm:block" />
+                <span>Database-backed rules snapshot</span>
+                <span className="hidden h-1 w-1 rounded-full bg-[#c9aaa2] sm:block" />
+                <span>Last activity {formatDateTime(selectedRun.updatedAt || selectedRun.submittedAt)}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <span className={`w-fit rounded-full px-3 py-1.5 text-xs font-semibold ${selectedRun.rulesChanged ? "bg-amber-100 text-amber-800" : completedSteps.approved ? "bg-emerald-100 text-emerald-700" : "bg-[#e3f4f4] text-[#286f75]"}`}>
+              {selectedRun.rulesChanged ? "Recalculation required" : completedSteps.approved ? "Finance approved" : "Finance review in progress"}
+            </span>
+            <RunSelector payrollRuns={payrollRuns} selectedRunId={selectedRun?.id} onSelectRun={onSelectRun} />
+          </div>
+        </div>
+      </section>
+      {selectedRun.rulesChanged ? (
+        <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-amber-400/40 bg-amber-50 p-5 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-semibold">Admin payroll rules changed — recalculation required</p>
+            <p className="mt-1 text-sm">{formatPayrollPeriod(selectedRun)} uses an older rules snapshot and cannot be approved until Finance recalculates and reviews it again.</p>
+          </div>
+          <ActionButton icon={RefreshCw} onClick={onRecalculateRun}>Recalculate now</ActionButton>
+        </div>
+      ) : null}
       <PayrollStatsFilter
         filter={statsFilter}
         resultCount={filteredRuns.length}
         onFilterChange={setStatsFilter}
         onModeChange={updateStatsMode}
       />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Pending Approval" value={selectedRun.employees.length - selectedApprovedStaff} detail={`${selectedApprovedStaff}/${selectedRun.employees.length} staff approved`} tone="text-[#D97706]" />
-        <StatCard label="Net Pay To Process" value={formatMoney(selectedTotals.netPay)} tone="text-[#2f8758]" />
-        <StatCard label="Payment File" value={selectedRun.paymentFileGeneratedAt ? "Generated" : "Pending"} detail={selectedRun.bankReference || "No bank reference yet"} tone={selectedRun.paymentFileGeneratedAt ? "text-[#F38978]" : "text-[#D97706]"} />
-        <StatCard
-          label="Exceptions"
-          value={selectedExceptionCount}
-          detail={`${stats.pendingRuns} pending run(s) in filter`}
-          tone={selectedExceptionCount ? "text-[#D97706]" : "text-[#2f8758]"}
-        />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><DashboardMetricCard icon={Users} iconClass="bg-[#fce9e4] text-[#a84f37]" label="Staff Awaiting Review" value={Math.max(stats.employees - stats.approvedStaff, 0)} detail={`${stats.approvedStaff}/${stats.employees} staff approved`} valueClass="text-[#D97706]"/><DashboardMetricCard icon={Banknote} iconClass="bg-[#eaf8f0] text-[#28724d]" label="Net Pay To Process" value={formatMoney(stats.netPay)} detail={`${stats.runs} payroll run(s)`} valueClass="text-[#2f8758]"/><DashboardMetricCard icon={FileText} iconClass="bg-[#e7effd] text-[#3564a4]" label="Payment Files" value={`${filteredRuns.filter((run) => run.paymentFileGeneratedAt).length}/${stats.runs}`} detail="Generated for filtered runs" valueClass="text-[#4778ba]"/><DashboardMetricCard icon={AlertCircle} iconClass="bg-[#fdf2dc] text-[#9f6519]" label="Compliance Exceptions" value={stats.exceptions} detail={`${stats.pendingRuns} pending run(s)`} valueClass={stats.exceptions ? "text-[#D97706]" : "text-[#2f8758]"}/><DashboardMetricCard icon={CalendarClock} iconClass="bg-[#eee9fb] text-[#6348a2]" label="Scheduled Release" value={selectedRun.scheduledReleaseAt ? new Intl.DateTimeFormat("en-SG", { day: "numeric", month: "short" }).format(new Date(selectedRun.scheduledReleaseAt)) : "Not set"} detail={selectedRun.releaseScheduleStatus || "Unscheduled"} valueClass="text-[#6348a2]"/></div>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <section className="app-panel rounded-2xl p-6 lg:col-span-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-[#251E1F]">Action Required</h3>
+              <p className="mt-1 text-sm text-[#7b6660]">Outstanding work for the selected dashboard period.</p>
+            </div>
+            <div className="text-right"><span className="rounded-full border border-[#f0d2ca] bg-white/80 px-3 py-1 text-xs font-semibold text-[#7b6660]">{activeActionItems.reduce((sum, item) => sum + item.runs.length, 0)} item(s)</span><p className="mt-2 text-xs text-[#2f8758]">{clearedActionCount} checks clear</p></div>
+          </div>
+          {activeActionItems.length ? <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            {activeActionItems.map((item) => (
+              <div key={item.label} className="rounded-xl border border-amber-200 bg-gradient-to-br from-white to-amber-50/70 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-[#7b6660]">{item.label}</span>
+                  <span className={`text-lg font-semibold ${item.tone}`}>{item.runs.length}</span>
+                </div>
+                <p className="mt-2 text-xs text-[#9a7d75]">{item.runs.slice(0, 3).map(formatPayrollPeriod).join(" • ")}</p>
+                <button type="button" className="mt-3 text-xs font-semibold text-[#F38978] hover:underline" onClick={() => openRun(item.runs[0])}>Open first affected run</button>
+              </div>
+            ))}
+          </div> : <div className="mt-5 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700"><CheckCircle2 size={19}/><span>No action is required for the selected period.</span></div>}
+        </section>
+        <aside className="app-panel rounded-2xl p-6">
+          <div className="flex items-center gap-3"><span className="admin-report-icon admin-report-icon--teal"><ClipboardCheck size={20}/></span><div><h3 className="text-lg font-semibold text-[#251E1F]">Current Pay Run</h3><p className="text-sm text-[#7b6660]">What Finance should do next.</p></div></div>
+          <div className="mt-5 grid grid-cols-2 gap-3 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm">
+            <div><p className="text-xs text-[#7b6660]">Staff approved</p><p className="mt-1 font-semibold text-[#251E1F]">{selectedRunApprovedCount}/{selectedRunEmployees.length || stats.employees}</p></div>
+            <div><p className="text-xs text-[#7b6660]">Exceptions</p><p className={`mt-1 font-semibold ${selectedRunExceptions ? "text-amber-700" : "text-emerald-700"}`}>{selectedRunExceptions}</p></div>
+            <div><p className="text-xs text-[#7b6660]">Claim cutoff</p><p className="mt-1 font-semibold text-[#251E1F]">{selectedRun.effectiveClaimCutoffAt ? formatDateTime(selectedRun.effectiveClaimCutoffAt) : "Not set"}</p></div>
+            <div><p className="text-xs text-[#7b6660]">Final approval</p><p className="mt-1 font-semibold text-[#251E1F]">{selectedRun.approvedAt ? "Approved" : "Pending"}</p></div>
+          </div>
+          <button type="button" onClick={nextAction.onClick} className={`mt-4 w-full rounded-xl px-4 py-3 text-sm font-semibold text-white transition ${nextAction.className}`}>{nextAction.label}</button>
+          <details className="mt-4 rounded-xl border border-[#f0d2ca] bg-white/70 p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-[#7b6660]">Rules snapshot and audit details</summary>
+          <div className="mt-4 space-y-3 text-sm">
+            {[
+              ["Rule version", selectedRun.rulesVersion || "Stored snapshot"],
+              ["Snapshot identity", selectedRun.rulesHash ? `${selectedRun.rulesHash.slice(0, 12)}…` : "Stored in database"],
+              ["Rules status", selectedRun.rulesChanged ? "Recalculation required" : "Matches current Admin rules"],
+              ["Server validation", validationStatus ? `${validationStatus.passed ? "Passed" : `${validationStatus.errors.length || "One or more"} issue(s)`} · ${formatDateTime(validationStatus.checkedAt)}` : "Not checked in this session"],
+              ["Recalculated", selectedRun.recalculatedAt ? formatDateTime(selectedRun.recalculatedAt) : "Not recalculated"],
+              ["Recalculated by", selectedRun.recalculatedBy || "—"],
+              ["Approved", selectedRun.approvedAt ? formatDateTime(selectedRun.approvedAt) : "Pending"]
+            ].map(([label, value]) => <div key={label} className="flex items-start justify-between gap-3 border-b border-[#f0d2ca] pb-3"><span className="text-[#7b6660]">{label}</span><span className="text-right font-semibold text-[#251E1F]">{value}</span></div>)}
+          </div>
+          </details>
+          <button type="button" disabled={validationLoading} className="mt-4 mr-4 text-sm font-semibold text-[#2D7C83] hover:underline disabled:opacity-60" onClick={refreshServerValidation}>{validationLoading ? "Checking…" : "Run server validation"}</button>
+          <button type="button" className="mt-4 text-sm font-semibold text-[#F38978] hover:underline" onClick={() => navigate("/dashboard/payroll/finance/compliance-rules")}>View current compliance rules</button>
+        </aside>
       </div>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><DashboardMetricCard icon={Users} iconClass="bg-[#eaf8f0] text-[#28724d]" label="Employee CPF" value={formatMoney(stats.totals.employeeCpf)} detail="Filtered payroll liability"/><DashboardMetricCard icon={Building2} iconClass="bg-[#eee9fb] text-[#6348a2]" label="Employer CPF" value={formatMoney(stats.totals.employerCpf)} detail="Filtered employer contribution"/><DashboardMetricCard icon={ReceiptText} iconClass="bg-[#e3f4f4] text-[#286f75]" label="SDL & MBMF" value={formatMoney(stats.totals.sdl + stats.totals.employeeMbmf + stats.totals.employerMbmf)} detail="Filtered statutory amounts"/><DashboardMetricCard icon={Banknote} iconClass="bg-[#eaf8f0] text-[#28724d]" label="Total Payroll Funding" value={formatMoney(stats.totals.netPay + stats.totals.employeeCpf + stats.totals.employeeMbmf + stats.totals.employerCpf + stats.totals.employerMbmf + stats.totals.sdl)} detail="Net pay plus statutory liabilities" valueClass="text-[#2f8758]"/></div>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-3"><MonthlyPayrollBarChart payrollRuns={payrollRuns} selectedRun={selectedRun}/><aside className="app-panel rounded-2xl p-6"><span className="admin-report-icon admin-report-icon--amber"><CalendarClock size={22}/></span><h3 className="mt-4 text-lg font-semibold text-[#251E1F]">Upcoming Payroll Schedule</h3><p className="mt-1 text-sm text-[#7b6660]">Effective operational dates saved with {formatPayrollPeriod(selectedRun)}.</p><div className="mt-5 space-y-3 text-sm">{[["Claim cutoff", selectedRun.effectiveClaimCutoffAt ? formatDateTime(selectedRun.effectiveClaimCutoffAt) : "Not configured"],["Salary release", selectedRun.scheduledReleaseAt ? formatDateTime(selectedRun.scheduledReleaseAt) : "Not configured"],["Schedule state", selectedRun.releaseScheduleStatus || "Unscheduled"],["Confirmed", selectedRun.releaseConfirmedAt ? formatDateTime(selectedRun.releaseConfirmedAt) : "Pending"]].map(([label,value]) => <div key={label} className="flex justify-between gap-3 border-b border-[#f0d2ca] pb-3"><span className="text-[#7b6660]">{label}</span><strong className="text-right">{value}</strong></div>)}</div><button onClick={() => navigate("/dashboard/payroll/finance/payroll-schedule")} className="mt-5 text-sm font-semibold text-[#F38978] hover:underline">Open Payroll Schedule →</button></aside></div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -1841,7 +2046,6 @@ function DashboardView({ onAdvanceRun, onSelectRun, payrollRuns, selectedRun }) 
               <h3 className="text-lg font-semibold text-[#251E1F]">{formatPayrollPeriod(selectedRun)}</h3>
               <p className="mt-1 text-sm text-[#7b6660]">Finance review, approval, payment and accounting workflow.</p>
             </div>
-            <RunSelector payrollRuns={payrollRuns} selectedRunId={selectedRun?.id} onSelectRun={onSelectRun} />
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {workflowStepDefinitions.map((step) => (
@@ -1893,17 +2097,21 @@ function DashboardView({ onAdvanceRun, onSelectRun, payrollRuns, selectedRun }) 
 function PayrollRunsView({
   onAdvanceRun,
   onCreateDbRun,
-  onCreateMockRun,
   onGeneratePaymentFile,
+  onRecalculateRun,
+  onSaveRun,
   onSelectRun,
   onSetupModernTreasuryRecipients,
   onSubmitModernTreasuryTransfer,
   paymentError,
   paymentProcessing,
   payrollRuns,
+  recalculationProcessing,
+  saveProcessing,
   recipientSetupProcessing,
   selectedRun
 }) {
+  const navigate = useNavigate();
   const steps = getCompletedSteps(selectedRun);
   const canApprove = canApprovePayrollRun(selectedRun);
   const exceptionCount = getRunExceptions(selectedRun).length;
@@ -1911,6 +2119,7 @@ function PayrollRunsView({
   const missingRecipientCount = getMissingModernTreasuryRecipientCount(selectedRun);
   const getApprovalBlockedReason = () => {
     if (steps.approved) return "This payroll run has already been approved.";
+    if (selectedRun.rulesChanged) return "Admin payroll rules changed. Recalculate and review the run again before approval.";
     if (!steps.reviewed) return "Review Payroll must be completed before approval.";
     if (!canApprove) {
       return `All staff must be approved before payroll approval. Current approved staff: ${approvedStaffCount}/${selectedRun.employees.length}.`;
@@ -1966,33 +2175,29 @@ function PayrollRunsView({
           <ActionButton icon={Users} variant="secondary" onClick={onCreateDbRun}>
             Staff DB Run
           </ActionButton>
-          <ActionButton icon={Plus} variant="secondary" onClick={onCreateMockRun}>
-            Mock Run
-          </ActionButton>
           <RunSelector payrollRuns={payrollRuns} selectedRunId={selectedRun?.id} onSelectRun={onSelectRun} />
-          <ActionButton
-            icon={ClipboardCheck}
-            disabled={steps.reviewed}
-            disabledReason={steps.reviewed ? "This payroll run has already been reviewed." : ""}
-            onClick={() => onAdvanceRun("reviewed")}
-          >
-            Review Payroll
-          </ActionButton>
-          <ActionButton
-            icon={ShieldCheck}
-            disabled={!steps.reviewed || !canApprove || steps.approved}
-            disabledReason={getApprovalBlockedReason()}
-            onClick={() => onAdvanceRun("approved")}
-          >
-            Approve
-          </ActionButton>
         </>
       }
     >
+      {selectedRun.rulesChanged ? (
+        <div className="mb-5 flex flex-col gap-4 rounded-2xl border border-amber-400/40 bg-amber-50 p-5 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-semibold">Admin payroll rules changed — recalculation required</p>
+            <p className="mt-1 text-sm">This pending run uses an older Admin rule snapshot. Recalculate before Finance reviews or approves it.</p>
+          </div>
+          <ActionButton icon={recalculationProcessing ? Loader2 : RefreshCw} disabled={recalculationProcessing} onClick={onRecalculateRun}>
+            {recalculationProcessing ? "Recalculating..." : "Recalculate with latest Admin rules"}
+          </ActionButton>
+        </div>
+      ) : selectedRun.recalculatedAt && !steps.reviewed ? (
+        <div className="mb-5 rounded-2xl border border-[#2f8758]/25 bg-[#2f8758]/10 p-5 text-sm text-[#256b48]">
+          Recalculated using the latest Admin rules on {formatDateTime(selectedRun.recalculatedAt)}. Review employee results, save any permitted corrections, then select Review Payroll again.
+        </div>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <div className="app-panel overflow-hidden rounded-2xl">
-            <div className="grid grid-cols-5 gap-4 border-b border-[#f0d2ca] px-6 py-4 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
+            <div className="hidden grid-cols-[1.1fr_1.5fr_.65fr_1fr_1.15fr] gap-4 border-b border-[#f0d2ca] px-6 py-4 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80 md:grid">
               <span>Period</span>
               <span>Status</span>
               <span>Employees</span>
@@ -2006,12 +2211,12 @@ function PayrollRunsView({
                 <button
                   key={run.id}
                   type="button"
-                  className={`grid w-full grid-cols-5 gap-4 border-b border-[#f0d2ca] px-6 py-4 text-left text-sm last:border-b-0 ${run.id === selectedRun?.id ? "bg-[#F38978]/10" : "hover:bg-[#FDD9CD]/45"}`}
+                  className={`hidden w-full grid-cols-[1.1fr_1.5fr_.65fr_1fr_1.15fr] items-center gap-4 border-b border-[#f0d2ca] px-6 py-4 text-left text-sm last:border-b-0 md:grid ${run.id === selectedRun?.id ? "bg-[#F38978]/10" : "hover:bg-[#FDD9CD]/45"}`}
                   onClick={() => onSelectRun(run.id)}
                 >
                   <span className="font-semibold text-[#251E1F]">{formatPayrollPeriod(run)}</span>
                   <span>
-                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${getStatusClass(run.status)}`}>
+                    <span title={run.status} className={`block max-w-[13rem] truncate rounded-full border px-3 py-1 text-xs font-semibold ${getStatusClass(run.status)}`}>
                       {run.status}
                     </span>
                   </span>
@@ -2021,6 +2226,7 @@ function PayrollRunsView({
                 </button>
               );
             })}
+            <div className="divide-y divide-[#f0d2ca] md:hidden">{payrollRuns.map((run) => { const totals = getRunTotals(run); return <button key={run.id} type="button" onClick={() => onSelectRun(run.id)} className={`w-full p-4 text-left ${run.id === selectedRun?.id ? "bg-[#F38978]/10" : "bg-white"}`}><div className="flex items-start justify-between gap-3"><strong>{formatPayrollPeriod(run)}</strong><span className={`max-w-[10rem] truncate rounded-full border px-2 py-1 text-xs ${getStatusClass(run.status)}`}>{run.status}</span></div><dl className="mt-3 grid grid-cols-3 gap-2 text-xs"><div><dt className="text-[#7b6660]">Employees</dt><dd className="mt-1 font-semibold">{run.employees.length}</dd></div><div><dt className="text-[#7b6660]">Net pay</dt><dd className="mt-1 font-semibold">{formatMoney(totals.netPay)}</dd></div><div><dt className="text-[#7b6660]">Submitted</dt><dd className="mt-1 font-semibold">{formatDateTime(run.submittedAt)}</dd></div></dl></button>; })}</div>
           </div>
         </div>
 
@@ -2042,6 +2248,9 @@ function PayrollRunsView({
             </div>
           </div>
           <div className="mt-5 grid gap-3">
+            {!steps.reviewed ? <><ActionButton icon={ClipboardCheck} disabled={selectedRun.rulesChanged} disabledReason={selectedRun.rulesChanged ? "Recalculate this run using the latest Admin rules first." : ""} onClick={() => onAdvanceRun("reviewed")}>Next: Validate & review payroll</ActionButton><p className="text-xs text-[#7b6660]">Stage 1: validate the run and record Finance review.</p></> : exceptionCount ? <><ActionButton icon={ListChecks} onClick={() => navigate("/dashboard/payroll/finance/staff-payroll-details")}>Next: Review suggested adjustments</ActionButton><p className="text-xs text-amber-700">Stage 2 is blocked by {exceptionCount} exception(s).</p></> : !steps.approved ? <><ActionButton icon={ShieldCheck} disabled={!canApprove} disabledReason={getApprovalBlockedReason()} onClick={() => onAdvanceRun("approved")}>Next: Approve payroll</ActionButton><p className="text-xs text-[#7b6660]">Stage 3 locks the reviewed payroll run.</p></> : null}
+            <div className="rounded-xl border border-[#f0d2ca] bg-[#fff8f5] p-4"><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Workflow stages</p><ol className="mt-3 space-y-2 text-sm">{[["1","Validate & review",steps.reviewed],["2","Suggested adjustments",!exceptionCount],["3","Approve payroll",steps.approved],["4","Generate payment PDF",Boolean(selectedRun.paymentFileGeneratedAt)],["5","Submit / confirm payment",steps.paid],["6","Send payslips",steps.payslipsSent],["7","Statutory logs & ledger",steps.ledgerRecorded],["8","Reconcile & report",steps.reconciled]].map(([number,label,done]) => <li key={number} className="flex items-center gap-2"><span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${done ? "bg-emerald-600 text-white" : "bg-[#f0d2ca] text-[#7b6660]"}`}>{done ? "✓" : number}</span><span className={done ? "text-[#2f8758]" : "text-[#7b6660]"}>{label}</span></li>)}</ol></div>
+            <ActionButton icon={ShieldCheck} variant="secondary" disabled={saveProcessing || selectedRun.rulesChanged} onClick={onSaveRun}>{saveProcessing ? "Saving..." : "Save Review Changes"}</ActionButton>
             <ActionButton
               icon={Download}
               disabled={!steps.approved || selectedRun.paymentFileGeneratedAt}
@@ -2178,6 +2387,7 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
   const cpfTier = getEmployeeCpfRateTier(draft);
   const mbmfReview = getMbmfReview(draft);
   const numberFields = ["workingDays", "noPayLeave", "previousGrossPay"];
+  const isDatabaseBacked = employee.recordSource === "staff_db";
 
   const updateField = (field, value) => {
     setDraft((current) => ({
@@ -2236,6 +2446,8 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
           <StatCard label="Net Pay" value={formatMoney(getEmployeeNetPay(draft))} tone="text-[#2f8758]" />
           <StatCard label="Other Deductions" value={formatMoney(getEmployeeOtherDeductions(draft))} tone="text-[#F38978]" />
         </div>
+
+        {isDatabaseBacked ? <div className="mt-5 rounded-xl border border-[#2D7C83]/25 bg-[#2D7C83]/10 p-4 text-sm text-[#2D7C83]">Calculated pay, CPF and statutory values come from this run's stored Admin rules snapshot and are read-only here. Correct the source staff or claim record, then use payroll recalculation so the database and audit snapshot remain consistent.</div> : null}
 
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
           <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
@@ -2336,7 +2548,7 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
               </ActionButton>
             </>
           ) : (
-            <ActionButton icon={Edit3} disabled={isLocked} onClick={() => setIsEditing(true)}>
+            <ActionButton icon={Edit3} disabled={isLocked || isDatabaseBacked} disabledReason={isDatabaseBacked ? "Database payroll results must be corrected at source and recalculated." : "Approved payroll runs are locked."} onClick={() => setIsEditing(true)}>
               Edit Details
             </ActionButton>
           )}
@@ -2359,10 +2571,118 @@ function formatPayslipMoney(value) {
 }
 
 function getPayslipPeriod(payslip) {
-  return [payslip.period_month, payslip.period_year].filter(Boolean).join(" ") || "Not recorded";
+  const month = Number(payslip.period_month);
+  const year = Number(payslip.period_year);
+  if (!month || !year) return "Not recorded";
+  return new Intl.DateTimeFormat("en-SG", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
 }
 
-function PayslipsApprovalView() {
+function FinancePayrollActivityView() {
+  const [filters, setFilters] = useState({ startDate: "", endDate: "", eventType: "", status: "", actor: "", keyword: "", page: 1 });
+  const [data, setData] = useState({ logs: [], total: 0, eventTypes: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const load = async (next = filters) => {
+    setLoading(true);
+    try { setData(await getFinancePayrollActivity({ ...next, limit: 25 })); setError(""); }
+    catch (loadError) { setError(loadError.message || "Unable to load payroll activity."); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(filters); }, [filters.page]);
+  const apply = (event) => { event.preventDefault(); setFilters((current) => ({ ...current, page: 1 })); load({ ...filters, page: 1 }); };
+  const reset = () => { const cleared = { startDate: "", endDate: "", eventType: "", status: "", actor: "", keyword: "", page: 1 }; setFilters(cleared); load(cleared); };
+  const activeFilters = Object.entries(filters).filter(([key, value]) => key !== "page" && value);
+  const pages = Math.max(1, Math.ceil(Number(data.total || 0) / 25));
+  return <PageShell heading="Payroll Activity Log">
+    <div className="mb-5 rounded-2xl border border-[#2D7C83]/25 bg-[#2D7C83]/10 p-5 text-sm text-[#2D7C83]">Personal alerts and unread actions remain in the header bell. This page is the Finance-safe operational history for payroll, claims, payslips, compliance and payment events.</div>
+    <div className="app-panel rounded-2xl p-5"><div className="mb-2 hidden grid-cols-7 gap-3 px-1 text-xs font-semibold uppercase tracking-wide text-[#7b6660] xl:grid"><span>Date From</span><span>Date To</span><span>Event Type</span><span>Outcome</span><span>Actor</span><span>Record / Keyword</span><span>Actions</span></div><form onSubmit={apply} className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+      <input type="date" value={filters.startDate} onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} className="rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm" aria-label="Activity start date" />
+      <input type="date" value={filters.endDate} onChange={(e) => setFilters({ ...filters, endDate: e.target.value })} className="rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm" aria-label="Activity end date" />
+      <select value={filters.eventType} onChange={(e) => setFilters({ ...filters, eventType: e.target.value })} className="rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm"><option value="">All event types</option>{data.eventTypes.map((value) => <option key={value}>{value}</option>)}</select>
+      <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm"><option value="">All outcomes</option><option>Success</option><option>Failed</option><option>Warning</option></select>
+      <input value={filters.actor} onChange={(e) => setFilters({ ...filters, actor: e.target.value })} placeholder="Actor" className="rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm" />
+      <input value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })} placeholder="Search activity…" className="rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm" />
+      <ActionButton icon={Search} type="submit">Apply filters</ActionButton>
+    </form><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2">{activeFilters.map(([key,value]) => <span key={key} className="rounded-full bg-[#fce9e4] px-3 py-1 text-xs font-semibold text-[#9f5142]">{key}: {value}</span>)}{!activeFilters.length ? <span className="text-sm text-[#7b6660]">No filters applied · {data.total} event(s)</span> : null}</div><ActionButton icon={X} type="button" variant="secondary" onClick={reset}>Clear filters</ActionButton></div></div>
+    {error ? <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
+    <div className="app-panel mt-5 overflow-hidden rounded-2xl">
+      {loading ? <div className="flex items-center gap-2 p-8 text-sm text-[#7b6660]"><Loader2 className="animate-spin" size={18}/>Loading activity…</div> : !data.logs.length ? <EmptyState message="No payroll activity matches these filters."/> : <div className="overflow-x-auto"><table className="min-w-[62rem] w-full text-left text-sm"><thead className="border-b border-[#f0d2ca] bg-white/80 text-xs uppercase tracking-wide text-[#F38978]"><tr><th className="px-4 py-3">Time</th><th className="px-4 py-3">Area</th><th className="px-4 py-3">Event</th><th className="px-4 py-3">Action</th><th className="px-4 py-3">Actor</th><th className="px-4 py-3">Record</th><th className="px-4 py-3">Outcome</th></tr></thead><tbody>{data.logs.map((log) => <tr key={log.id} className="border-b border-[#f0d2ca] last:border-0"><td className="px-4 py-4 text-[#7b6660]">{formatDateTime(log.createdAt)}</td><td className="px-4 py-4"><span className="rounded-full bg-[#e3f4f4] px-3 py-1 text-xs font-semibold text-[#286f75]">{log.area}</span></td><td className="px-4 py-4 font-semibold">{log.eventType || "Payroll"}</td><td className="px-4 py-4 text-[#7b6660]">{log.action}</td><td className="px-4 py-4">{log.actor}</td><td className="px-4 py-4 text-[#7b6660]">{log.affectedRecord || "—"}</td><td className="px-4 py-4"><span className={`font-semibold ${log.outcome === "Failed" ? "text-red-700" : "text-[#2f8758]"}`}>{log.outcome}</span></td></tr>)}</tbody></table></div>}
+      <div className="flex items-center justify-between border-t border-[#f0d2ca] px-5 py-4 text-sm"><span className="text-[#7b6660]">{data.total} event(s)</span><div className="flex items-center gap-3"><button disabled={filters.page <= 1} onClick={() => setFilters({ ...filters, page: filters.page - 1 })} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">Previous</button><span>{filters.page}/{pages}</span><button disabled={filters.page >= pages} onClick={() => setFilters({ ...filters, page: filters.page + 1 })} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">Next</button></div></div>
+    </div>
+  </PageShell>;
+}
+
+function datetimeLocalValue(value) {
+  if (!value) return "";
+  const text = String(value).replace(" ", "T");
+  return text.slice(0, 16);
+}
+
+function PayrollScheduleView({ payrollRuns, onRunUpdated, onSelectRun, selectedGlobalRun }) {
+  const [tab, setTab] = useState("defaults");
+  const [schedule, setSchedule] = useState({ enabled: false, salaryReleaseDay: "", salaryReleaseTime: "09:00", claimCutoffDay: "", claimCutoffTime: "23:59", timezone: "Asia/Singapore" });
+  const [selectedRunId, setSelectedRunId] = useState(selectedGlobalRun?.id || payrollRuns[0]?.id || "");
+  const selectedRun = payrollRuns.find((run) => run.id === selectedRunId) || payrollRuns[0];
+  const [runDates, setRunDates] = useState({ claimCutoffAt: "", scheduledReleaseAt: "" });
+  const [overrideEnabled, setOverrideEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [preview, setPreview] = useState(null);
+  const missingDefaultFields = getMissingScheduleFields(schedule);
+  const completeDefaults = Boolean(schedule.enabled && missingDefaultFields.length === 0);
+
+  useEffect(() => { getFinancePayrollSchedule().then((result) => setSchedule(result.schedule)).catch((e) => setError(e.message)).finally(() => setLoading(false)); }, []);
+  useEffect(() => {
+    if (!selectedRun) return;
+    setRunDates({ claimCutoffAt: datetimeLocalValue(selectedRun.effectiveClaimCutoffAt), scheduledReleaseAt: datetimeLocalValue(selectedRun.scheduledReleaseAt) });
+    setOverrideEnabled(false);
+  }, [selectedRun?.id, selectedRun?.effectiveClaimCutoffAt, selectedRun?.scheduledReleaseAt]);
+  useEffect(() => {
+    if (!selectedRun || !completeDefaults) { setPreview(null); return; }
+    const timer = setTimeout(() => getFinancePayrollSchedulePreview({ year: selectedRun.year, month: selectedRun.month, ...schedule }).then((result) => setPreview(result.preview)).catch(() => setPreview(null)), 250);
+    return () => clearTimeout(timer);
+  }, [selectedRun?.id, completeDefaults, schedule.salaryReleaseDay, schedule.salaryReleaseTime, schedule.claimCutoffDay, schedule.claimCutoffTime]);
+
+  const saveDefaults = async () => {
+    if (schedule.enabled && missingDefaultFields.length) { setError(`Complete the following monthly fields before saving: ${missingDefaultFields.join(", ")}.`); return; }
+    setProcessing("defaults");
+    try { const result = await updateFinancePayrollSchedule(schedule); setSchedule(result.schedule); setMessage("Monthly schedule defaults saved for future payroll runs."); setError(""); }
+    catch (e) { setError(e.message); } finally { setProcessing(""); }
+  };
+  const saveRun = async () => {
+    if (!selectedRun || !runDates.claimCutoffAt || !runDates.scheduledReleaseAt) { setError("Enter both override dates before saving this payroll run."); return; }
+    setProcessing("run");
+    try { const result = await updateFinancePayrollRunSchedule(selectedRun.id, runDates); onRunUpdated(result.run); setMessage("Run-specific dates saved. The schedule is not authorised until you confirm it."); setError(""); setOverrideEnabled(false); }
+    catch (e) { setError(e.message); } finally { setProcessing(""); }
+  };
+  const action = async (name) => {
+    setProcessing(name);
+    try { const result = await performFinancePayrollScheduleAction(selectedRun.id, name); onRunUpdated(result.run); setMessage(name === "confirm" ? "Scheduled release confirmed." : name === "cancel" ? "Schedule cancelled." : "Manual retry authorised."); setError(""); }
+    catch (e) { setError(e.message); } finally { setProcessing(""); }
+  };
+  const updateScheduleField = (key, value, type) => setSchedule((current) => ({ ...current, [key]: type === "number" ? (value === "" ? "" : Number(value)) : value }));
+  const defaultFields = [
+    { key: "salaryReleaseDay", label: "Salary release day", type: "number", placeholder: "25", help: "Calendar day from 1–31. Shorter months use their final valid day." },
+    { key: "salaryReleaseTime", label: "Release time", type: "time", placeholder: "09:00", help: "Singapore time when automatic salary release may begin." },
+    { key: "claimCutoffDay", label: "Claim cut-off day", type: "number", placeholder: "20", help: "Final calendar day for approved claims to enter this payroll period." },
+    { key: "claimCutoffTime", label: "Claim cut-off time", type: "time", placeholder: "23:59", help: "Singapore time when claim inclusion closes on the cut-off day." }
+  ];
+
+  if (loading) return <PageShell heading="Schedule & Cut-off"><div className="flex gap-2 p-8 text-sm text-[#7b6660]"><Loader2 className="animate-spin"/>Loading schedule…</div></PageShell>;
+  return <PageShell heading="Schedule & Cut-off">
+    <section className="app-panel rounded-2xl p-5"><h3 className="text-lg font-semibold text-[#251E1F]">Plan payroll dates with confidence</h3><p className="mt-1 text-sm leading-6 text-[#7b6660]">Set monthly defaults, review the server-calculated business dates, then save or confirm one payroll run. All times use Asia/Singapore; weekends and active public holidays move dates backward.</p><div className="mt-4 flex flex-wrap gap-4 text-sm">{["1. Configure dates","2. Review preview","3. Save or confirm"].map((step) => <span key={step} className="rounded-full bg-[#fff8f5] px-3 py-1.5 font-medium text-[#7b6660]">{step}</span>)}</div></section>
+    <div className="mt-5 inline-flex rounded-xl border border-[#f0d2ca] bg-white p-1" role="tablist" aria-label="Schedule configuration"><button type="button" role="tab" aria-selected={tab === "defaults"} onClick={() => setTab("defaults")} className={`rounded-lg px-4 py-2 text-sm font-semibold ${tab === "defaults" ? "bg-[#F38978] text-white" : "text-[#7b6660]"}`}>Monthly Defaults</button><button type="button" role="tab" aria-selected={tab === "run"} onClick={() => setTab("run")} className={`rounded-lg px-4 py-2 text-sm font-semibold ${tab === "run" ? "bg-[#F38978] text-white" : "text-[#7b6660]"}`}>Selected Payroll Run</button></div>
+    {error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}{message ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{message}</div> : null}
+
+    {tab === "defaults" ? <section className="app-panel mt-5 rounded-2xl p-6" role="tabpanel"><div><h3 className="text-lg font-semibold text-[#251E1F]">Monthly schedule defaults</h3><p className="mt-1 text-sm text-[#7b6660]">These values apply only to newly created payroll runs. Existing runs remain unchanged.</p></div><label className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-[#f0d2ca] bg-[#fff8f5] p-4"><span><strong className="block text-sm font-semibold">Enable automatic scheduling</strong><small className="mt-1 block text-xs leading-5 text-[#7b6660]">Turn this on to calculate default claim cut-off and salary release dates for future runs.</small></span><input aria-label="Enable automatic scheduling" type="checkbox" checked={schedule.enabled} onChange={(e) => setSchedule({ ...schedule, enabled: e.target.checked })}/></label><div className="mt-5 grid gap-5 md:grid-cols-2">{defaultFields.map((field) => <label key={field.key} className="block"><span className="text-sm font-semibold text-[#251E1F]">{field.label}</span><span className="mt-1 block min-h-10 text-xs leading-5 text-[#7b6660]">{field.help}</span><input aria-label={field.label} disabled={!schedule.enabled} type={field.type} min={field.type === "number" ? 1 : undefined} max={field.type === "number" ? 31 : undefined} placeholder={field.placeholder} value={schedule[field.key] ?? ""} onChange={(e) => updateScheduleField(field.key, e.target.value, field.type)} className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm disabled:cursor-not-allowed disabled:bg-[#f5f1ef] disabled:text-[#a79791]"/></label>)}</div><div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#f0d2ca] pt-5"><p className="max-w-2xl text-xs leading-5 text-[#7b6660]">Example: if day 25 is Sunday and Friday 23 is a holiday, the date moves to Thursday 22.</p><ActionButton icon={ShieldCheck} disabled={processing === "defaults"} onClick={saveDefaults}>{processing === "defaults" ? "Saving…" : "Save monthly defaults"}</ActionButton></div></section> : null}
+
+    {tab === "run" ? <section className="app-panel mt-5 rounded-2xl p-6" role="tabpanel"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><h3 className="text-lg font-semibold text-[#251E1F]">Selected payroll run</h3><p className="mt-1 text-sm text-[#7b6660]">Review calculated dates, optionally override them, then confirm when payroll is approved.</p></div><span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${getStatusClass(selectedRun?.releaseScheduleStatus || "Unscheduled")}`}>{selectedRun?.releaseScheduleStatus || "Unscheduled"}</span></div><label className="mt-5 block"><span className="text-sm font-semibold text-[#251E1F]">Payroll period</span><span className="mt-1 block text-xs text-[#7b6660]">Choose the database-backed run whose release dates you want to manage.</span><select value={selectedRun?.id || ""} onChange={(e) => { setSelectedRunId(e.target.value); onSelectRun(e.target.value); }} className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm font-medium">{payrollRuns.map((run) => <option key={run.id} value={run.id}>{formatPayrollPeriod(run)} · {run.releaseScheduleStatus || "Unscheduled"}</option>)}</select></label>{selectedRun ? <><div className="mt-5 rounded-xl border border-[#2D7C83]/20 bg-[#2D7C83]/10 p-4"><p className="text-sm font-semibold text-[#2D7C83]">Policy-derived preview · Asia/Singapore</p>{preview?.claimCutoffAt && preview?.scheduledReleaseAt ? <div className="mt-3 grid gap-3 sm:grid-cols-2"><div><span className="text-xs text-[#7b6660]">Claim cut-off</span><strong className="mt-1 block text-sm">{formatDateTime(preview.claimCutoffAt)}</strong></div><div><span className="text-xs text-[#7b6660]">Salary release</span><strong className="mt-1 block text-sm">{formatDateTime(preview.scheduledReleaseAt)}</strong></div></div> : <div className="mt-3 rounded-lg bg-white/70 p-3 text-sm text-[#7b6660]">Complete and enable all four Monthly Defaults fields to calculate a preview for this period.</div>}{preview?.holidays?.length ? <p className="mt-3 text-xs text-[#7b6660]">Public holidays considered: {preview.holidays.join(", ")}</p> : null}</div><label className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-[#f0d2ca] p-4"><span><strong className="block text-sm font-semibold">Override dates for this run</strong><small className="mt-1 block text-xs text-[#7b6660]">Use exact dates for this period without changing Monthly Defaults.</small></span><input aria-label="Override dates for this run" type="checkbox" checked={overrideEnabled} onChange={(e) => setOverrideEnabled(e.target.checked)}/></label>{overrideEnabled ? <div className="mt-4 grid gap-5 md:grid-cols-2"><label><span className="text-sm font-semibold">Effective claim cut-off</span><span className="mt-1 block text-xs text-[#7b6660]">Exact final date and time for including approved claims.</span><input aria-label="Effective claim cut-off" type="datetime-local" value={runDates.claimCutoffAt} onChange={(e) => setRunDates({ ...runDates, claimCutoffAt: e.target.value })} className="mt-2 w-full rounded-xl border border-[#f0d2ca] px-3 py-2.5 text-sm"/></label><label><span className="text-sm font-semibold">Scheduled salary release</span><span className="mt-1 block text-xs text-[#7b6660]">Exact date and time when automatic release may begin.</span><input aria-label="Scheduled salary release" type="datetime-local" value={runDates.scheduledReleaseAt} onChange={(e) => setRunDates({ ...runDates, scheduledReleaseAt: e.target.value })} className="mt-2 w-full rounded-xl border border-[#f0d2ca] px-3 py-2.5 text-sm"/></label></div> : null}{selectedRun.releaseFailureReason ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><strong>Previous release failed:</strong> {selectedRun.releaseFailureReason}</div> : null}<div className="mt-6 grid gap-3 border-t border-[#f0d2ca] pt-5 lg:grid-cols-2"><div className="rounded-xl bg-[#fff8f5] p-4"><strong className="text-sm">Save dates</strong><p className="mt-1 text-xs leading-5 text-[#7b6660]">Stores the override only. It does not authorise payment release.</p>{overrideEnabled ? <div className="mt-3"><ActionButton icon={ShieldCheck} variant="secondary" disabled={processing === "run"} onClick={saveRun}>Save run dates</ActionButton></div> : null}</div><div className="rounded-xl bg-[#fff8f5] p-4"><strong className="text-sm">Confirm release</strong><p className="mt-1 text-xs leading-5 text-[#7b6660]">Authorises the schedule after Finance approves payroll. Cancel stops an unprocessed schedule.</p><div className="mt-3 flex flex-wrap gap-2"><ActionButton icon={CalendarClock} disabled={!selectedRun.approvedAt || processing === "confirm"} disabledReason={!selectedRun.approvedAt ? "Approve the payroll run before confirming release." : ""} onClick={() => action("confirm")}>Confirm schedule</ActionButton><ActionButton icon={X} variant="secondary" onClick={() => action("cancel")}>Cancel</ActionButton>{selectedRun.releaseScheduleStatus === "Release Failed" ? <ActionButton icon={RefreshCw} onClick={() => action("retry")}>Authorise retry</ActionButton> : null}</div></div></div></> : <EmptyState message="No database payroll runs are available."/>}</section> : null}
+  </PageShell>;
+}
+
+function PayslipsApprovalView({ selectedRun, onSelectRun, payrollRuns }) {
   const session = getStoredSession();
   const [payslips, setPayslips] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2371,12 +2691,18 @@ function PayslipsApprovalView() {
   const [actionInProgress, setActionInProgress] = useState(null);
   const [rejectingPayslipId, setRejectingPayslipId] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [periods, setPeriods] = useState([]);
+  const [selectedPeriod, setSelectedPeriod] = useState(() => selectedRun ? `${selectedRun.year}-${selectedRun.month}` : "");
 
-  const fetchPayslips = async () => {
+  const selectedSummary = periods.find((period) => `${period.year}-${period.month}` === selectedPeriod);
+
+  const fetchPayslips = async (periodValue = selectedPeriod) => {
     try {
       setLoading(true);
       setError("");
-      const response = await fetch(`${API_BASE_URL}/api/hr/payslips`, {
+      const [year, month] = String(periodValue || "").split("-");
+      const query = year && month ? `?month=${month}&year=${year}` : "";
+      const response = await fetch(`${API_BASE_URL}/api/hr/payslips${query}`, {
         headers: getAuthHeaders(session?.token)
       });
 
@@ -2386,12 +2712,28 @@ function PayslipsApprovalView() {
       }
 
       const data = await response.json();
-      setPayslips(data.filter((payslip) => ["draft", "finance_pending"].includes(payslip.status)));
+      setPayslips(data);
     } catch (err) {
       setError(err.message || "Failed to load payslips");
       setPayslips([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPeriodSummary = async () => {
+    const result = await getPayslipPeriodSummary();
+    const nextPeriods = Array.isArray(result.periods) ? result.periods : [];
+    setPeriods(nextPeriods);
+    if (!nextPeriods.length) {
+      setSelectedPeriod("");
+      setPayslips([]);
+      setLoading(false);
+      return;
+    }
+    if (!nextPeriods.some((period) => `${period.year}-${period.month}` === selectedPeriod) && nextPeriods.length) {
+      const preferred = nextPeriods.find((period) => `${period.year}-${period.month}` === `${selectedRun?.year}-${selectedRun?.month}`) || nextPeriods.find((period) => period.financePending > 0) || nextPeriods[0];
+      setSelectedPeriod(`${preferred.year}-${preferred.month}`);
     }
   };
 
@@ -2415,6 +2757,7 @@ function PayslipsApprovalView() {
 
       setSuccessMessage("Payslip approved successfully");
       await fetchPayslips();
+      await fetchPeriodSummary();
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
       setError(err.message || "Failed to approve payslip");
@@ -2451,6 +2794,7 @@ function PayslipsApprovalView() {
       setRejectingPayslipId(null);
       setRejectReason("");
       await fetchPayslips();
+      await fetchPeriodSummary();
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
       setError(err.message || "Failed to reject payslip");
@@ -2460,25 +2804,40 @@ function PayslipsApprovalView() {
   };
 
   useEffect(() => {
-    fetchPayslips();
+    fetchPeriodSummary().catch((err) => { setError(err.message); setLoading(false); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.token]);
+  useEffect(() => { if (selectedPeriod) fetchPayslips(selectedPeriod); }, [selectedPeriod]);
+  useEffect(() => {
+    if (!selectedPeriod) return;
+    const [year, month] = selectedPeriod.split("-").map(Number);
+    const run = payrollRuns.find((item) => item.year === year && item.month === month);
+    if (run && run.id !== selectedRun?.id) onSelectRun(run.id);
+  }, [selectedPeriod]);
+
+  const stageLabels = { prepared: "Payroll prepared", sentToFinance: "Sent to Finance", financeReview: "Finance review", financeApproved: "Finance approved", delivered: "Sent to employees" };
+  const workflowStages = (selectedSummary?.workflowStages || []).map((stage) => ({
+    ...stage, label: stageLabels[stage.key] || stage.key,
+    active: !stage.complete && (stage.count > 0 || stage.blocked > 0)
+  }));
 
   return (
     <PageShell
       heading="Payslips Approval"
       actions={
-        <ActionButton icon={RefreshCw} variant="secondary" onClick={fetchPayslips}>
-          Refresh
-        </ActionButton>
+        <div className="flex flex-wrap gap-2"><select value={selectedPeriod} onChange={(e) => setSelectedPeriod(e.target.value)} className="rounded-xl border border-[#f0d2ca] bg-white px-4 py-2.5 text-sm font-semibold">{periods.map((period) => <option key={`${period.year}-${period.month}`} value={`${period.year}-${period.month}`}>{new Intl.DateTimeFormat("en-SG", { month: "long", year: "numeric" }).format(new Date(period.year, period.month - 1, 1))}</option>)}</select><ActionButton icon={RefreshCw} variant="secondary" onClick={() => { fetchPayslips(); fetchPeriodSummary(); }}>Refresh</ActionButton></div>
       }
     >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Pending Review" value={payslips.length} tone="text-[#D97706]" />
-        <StatCard label="Total Gross" value={formatPayslipMoney(payslips.reduce((sum, payslip) => sum + Number(payslip.gross_salary || 0), 0))} />
-        <StatCard label="Net Pay" value={formatPayslipMoney(payslips.reduce((sum, payslip) => sum + Number(payslip.net_pay || 0), 0))} tone="text-[#2f8758]" />
-        <StatCard label="Next Step" value="HR sends" detail="Finance approval completes review" tone="text-[#F38978]" />
+        <StatCard label="Pending Review" value={selectedSummary?.financePending || 0} detail={selectedSummary?.held ? `${selectedSummary.held} record(s) blocked by exceptions` : "Selected payroll period"} tone="text-[#D97706]" />
+        <StatCard label="Period Gross" value={formatPayslipMoney(selectedSummary?.totalGross)} detail="All payslips in selected period" />
+        <StatCard label="Period Net Pay" value={formatPayslipMoney(selectedSummary?.totalNet)} detail={`${selectedSummary?.exceptionCount || 0} compliance exception(s)`} tone="text-[#2f8758]" />
+        <StatCard label="Approval Progress" value={selectedSummary ? `${selectedSummary.financeApproved + selectedSummary.sent}/${selectedSummary.total}` : "0/0"} detail="Finance-approved payslips in period" tone="text-[#F38978]" />
       </div>
+
+      {selectedSummary ? <div className="app-panel mt-5 flex flex-col gap-4 rounded-2xl border-l-4 border-l-[#F38978] p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Payroll period under review</p><h3 className="mt-1 text-2xl font-semibold text-[#251E1F]">{new Intl.DateTimeFormat("en-SG", { month: "long", year: "numeric" }).format(new Date(selectedSummary.year, selectedSummary.month - 1, 1))}</h3><p className="mt-1 text-sm text-[#7b6660]">{selectedSummary.total} staff payslip(s) in this database-backed payroll run.</p></div><span className="rounded-full bg-[#fdf2dc] px-4 py-2 text-sm font-semibold text-[#9f6519]">{selectedSummary.financePending} awaiting Finance</span></div> : null}
+
+      {workflowStages.length ? <section className="app-panel mt-5 overflow-x-auto rounded-2xl p-6"><h3 className="font-semibold text-[#251E1F]">Payslip process status</h3><p className="mt-1 text-sm text-[#7b6660]">Complete-period progress; approved historical records remain visible below.</p><ol className="mt-6 flex min-w-[760px] items-start">{workflowStages.map((stage, index) => <li key={stage.label} className="relative flex-1 text-center">{index ? <span className={`absolute right-1/2 top-5 h-1 w-full transition-colors duration-700 motion-reduce:transition-none ${stage.complete || stage.active ? "bg-[#2f8758]" : stage.blocked ? "bg-amber-400" : "bg-[#f0d2ca]"}`}/> : null}<span className={`relative z-10 mx-auto flex h-11 w-11 items-center justify-center rounded-full border-4 border-white font-semibold ${stage.active ? "animate-pulse bg-[#fdf2dc] text-[#9f6519] motion-reduce:animate-none" : stage.complete ? "bg-[#2f8758] text-white" : stage.blocked ? "bg-amber-500 text-white" : "bg-[#f0d2ca] text-[#7b6660]"}`}>{stage.complete ? <CheckCircle2 size={20}/> : index + 1}</span><p className="relative z-10 mt-3 text-sm font-semibold text-[#251E1F]">{stage.label}</p><p className="mt-1 text-xs text-[#7b6660]">{stage.count} record(s){stage.blocked ? ` · ${stage.blocked} blocked` : ""}{stage.at ? ` · ${formatDateTime(stage.at)}` : ""}</p></li>)}</ol></section> : null}
 
       {error ? (
         <div className="app-panel mt-5 rounded-2xl border-red-500/40 p-4 text-sm text-red-700">
@@ -2499,7 +2858,7 @@ function PayslipsApprovalView() {
             Loading payslips...
           </div>
         ) : payslips.length === 0 ? (
-          <EmptyState message="No payslips pending finance approval." />
+          <EmptyState message="No payslips exist for this payroll period." />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
@@ -2507,9 +2866,11 @@ function PayslipsApprovalView() {
                 <tr>
                   <th className="px-4 py-3">Staff</th>
                   <th className="px-4 py-3">Period</th>
+                  <th className="px-4 py-3">Department</th>
                   <th className="px-4 py-3">Gross</th>
                   <th className="px-4 py-3">Net Pay</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Exceptions</th>
                   <th className="px-4 py-3">Action</th>
                 </tr>
               </thead>
@@ -2521,15 +2882,17 @@ function PayslipsApprovalView() {
                       <span className="block text-xs text-[#7b6660]">Payslip #{payslip.payslip_id}</span>
                     </td>
                     <td className="px-4 py-3 text-[#7b6660]">{getPayslipPeriod(payslip)}</td>
+                    <td className="px-4 py-3 text-[#7b6660]">{payslip.department_name || "—"}</td>
                     <td className="px-4 py-3 text-[#7b6660]">{formatPayslipMoney(payslip.gross_salary)}</td>
                     <td className="px-4 py-3 font-semibold text-[#2f8758]">{formatPayslipMoney(payslip.net_pay)}</td>
                     <td className="px-4 py-3">
-                      <span className="rounded-full border border-[#D97706]/25 bg-[#D97706]/10 px-3 py-1 text-xs font-semibold text-[#9A6412]">
-                        Pending Finance
+                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${["approved","finance_approved","sent","sent_to_staff"].includes(String(payslip.status).toLowerCase()) ? "border-emerald-300 bg-emerald-50 text-emerald-700" : String(payslip.status).toLowerCase() === "hold" ? "border-amber-300 bg-amber-50 text-amber-800" : "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]"}`}>
+                        {String(payslip.status || "Draft").replaceAll("_", " ")}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-xs text-[#7b6660]">{(() => { try { const value = typeof payslip.deduction_breakdown === "object" ? payslip.deduction_breakdown : JSON.parse(payslip.deduction_breakdown || "{}"); const exceptions = value.complianceExceptions || []; return exceptions.length ? `${exceptions.length} issue(s)` : "Clear"; } catch { return "Review"; } })()}</td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
+                      {["draft", "finance_pending"].includes(String(payslip.status).toLowerCase()) ? <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() => handleApprove(payslip.payslip_id)}
@@ -2546,7 +2909,7 @@ function PayslipsApprovalView() {
                         >
                           Reject
                         </button>
-                      </div>
+                      </div> : <span className="text-xs font-semibold text-[#7b6660]">Completed record</span>}
                     </td>
                   </tr>
                 ))}
@@ -2601,29 +2964,105 @@ function PayslipsApprovalView() {
 // 11. Staff details, reports and summaries
 // -----------------------------------------------------------------------------
 
-function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, payrollRuns, selectedRun }) {
-  const [statsFilter, setStatsFilter] = useState(() => getDefaultStatsFilter(selectedRun));
-  const filteredRuns = getFilteredPayrollRuns(payrollRuns, statsFilter);
-  const stats = getAggregatePayrollStats(filteredRuns);
+function PayrollAdjustmentReview({ selectedRun, onRunUpdated }) {
+  const [proposals, setProposals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState("");
+  const [error, setError] = useState("");
+  const load = async () => {
+    setLoading(true);
+    try { const result = await getFinancePayrollAdjustments(selectedRun.id); setProposals(result.proposals || []); setError(""); }
+    catch (loadError) { setError(loadError.message); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, [selectedRun.id, selectedRun.updatedAt]);
+  const generate = async () => {
+    setProcessing("generate");
+    try { const result = await generateFinancePayrollAdjustments(selectedRun.id); setProposals(result.proposals || []); setError(""); }
+    catch (actionError) { setError(actionError.message); }
+    finally { setProcessing(""); }
+  };
+  const review = async (ids, action) => {
+    const reason = action === "reject" ? window.prompt("Reason for rejecting the suggested adjustment") : "";
+    if (action === "reject" && !reason?.trim()) return;
+    setProcessing(`${action}-${ids.join("-")}`);
+    try {
+      const result = await reviewFinancePayrollAdjustments(selectedRun.id, { ids, action, reason });
+      setProposals(result.proposals || []);
+      if (result.run) onRunUpdated(normalizeFinancePayrollRuns([result.run])[0]);
+      setError("");
+    } catch (actionError) { setError(actionError.message); }
+    finally { setProcessing(""); }
+  };
+  const pendingActionable = proposals.filter((item) => item.status === "Pending" && item.actionable);
+  return <section className="app-panel mt-6 rounded-2xl p-6">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Automated exception adjustment</p><h3 className="mt-1 text-lg font-semibold">Finance suggestion review</h3><p className="mt-1 max-w-3xl text-sm text-[#7b6660]">Safe proposals use this run’s stored Admin-rule snapshot. Missing staff master data remains blocked for HR/Admin correction.</p></div><div className="flex flex-wrap gap-2"><ActionButton icon={RefreshCw} variant="secondary" disabled={Boolean(processing)} onClick={generate}>{processing === "generate" ? "Generating…" : "Generate suggestions"}</ActionButton>{pendingActionable.length ? <ActionButton icon={ShieldCheck} disabled={Boolean(processing)} onClick={() => review(pendingActionable.map((item) => item.id), "approve")}>Approve all safe ({pendingActionable.length})</ActionButton> : null}</div></div>
+    {error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+    {loading ? <div className="mt-5 flex items-center gap-2 text-sm text-[#7b6660]"><Loader2 size={16} className="animate-spin"/>Loading suggestions…</div> : !proposals.length ? <div className="mt-5 rounded-xl border border-dashed border-[#f0d2ca] p-5 text-sm text-[#7b6660]">No proposals generated for this period. Generate suggestions after payroll calculation or source-data changes.</div> : <div className="mt-5 space-y-3">{proposals.map((proposal) => {
+      const before = proposal.originalValue || {}; const after = proposal.proposedValue || {};
+      return <article key={proposal.id} className={`rounded-xl border p-4 ${proposal.actionable ? "border-[#2D7C83]/25 bg-[#2D7C83]/5" : "border-amber-300 bg-amber-50"}`}><div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div><div className="flex flex-wrap items-center gap-2"><strong>{proposal.employee}</strong><span className={`rounded-full px-2 py-1 text-xs font-semibold ${proposal.actionable ? "bg-[#e3f4f4] text-[#286f75]" : "bg-amber-100 text-amber-800"}`}>{proposal.actionable ? "Safe suggestion" : "Source blocker"}</span><span className="text-xs text-[#7b6660]">{proposal.status}</span></div><p className="mt-2 text-sm text-[#7b6660]">{proposal.reason}</p><p className="mt-1 text-xs font-semibold text-[#F38978]">Rule: {proposal.ruleReference}</p></div>{proposal.status === "Pending" && proposal.actionable ? <div className="flex gap-2"><ActionButton icon={ShieldCheck} onClick={() => review([proposal.id], "approve")}>Approve</ActionButton><ActionButton icon={X} variant="secondary" onClick={() => review([proposal.id], "reject")}>Reject</ActionButton></div> : null}</div>{proposal.actionable ? <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[42rem] text-sm"><thead><tr className="text-left text-xs uppercase text-[#7b6660]"><th className="py-2">Value</th><th>Before</th><th>Suggested</th><th>Impact</th></tr></thead><tbody>{[["Gross pay","grossPay"],["Deductions","totalDeductions"],["Employee CPF","employeeCpf"],["Employer CPF","employerCpf"],["MBMF","mbmf"],["SDL","sdl"],["Net pay","netPay"]].map(([label,key]) => <tr key={key} className="border-t border-[#f0d2ca]"><td className="py-2 font-medium">{label}</td><td>{formatMoney(before[key])}</td><td>{formatMoney(after[key])}</td><td className={Number(after[key]) === Number(before[key]) ? "text-[#7b6660]" : "font-semibold text-[#2D7C83]"}>{formatMoney(Number(after[key] || 0)-Number(before[key] || 0))}</td></tr>)}</tbody></table></div> : null}</article>;
+    })}</div>}
+  </section>;
+}
+
+function ExplainablePayrollAdjustmentReview({ selectedRun, onRunUpdated }) {
+  const [proposals, setProposals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState("");
+  const [error, setError] = useState("");
+  const [confirmBulk, setConfirmBulk] = useState(false);
+  const load = async () => {
+    setLoading(true);
+    try { const result = await getFinancePayrollAdjustments(selectedRun.id); setProposals(result.proposals || []); setError(""); }
+    catch (loadError) { setError(loadError.message); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, [selectedRun.id, selectedRun.updatedAt]);
+  const generate = async () => {
+    setProcessing("generate");
+    try { const result = await generateFinancePayrollAdjustments(selectedRun.id); setProposals(result.proposals || []); setError(""); }
+    catch (actionError) { setError(actionError.message); }
+    finally { setProcessing(""); }
+  };
+  const review = async (ids, action) => {
+    const reason = action === "reject" ? window.prompt("Reason for rejecting the suggested adjustment") : "";
+    if (action === "reject" && !reason?.trim()) return;
+    setProcessing(`${action}-${ids.join("-")}`);
+    try {
+      const result = await reviewFinancePayrollAdjustments(selectedRun.id, { ids, action, reason });
+      setProposals(result.proposals || []);
+      if (result.run) onRunUpdated(normalizeFinancePayrollRuns([result.run])[0]);
+      setError("");
+    } catch (actionError) { setError(actionError.message); }
+    finally { setProcessing(""); }
+  };
+  const pending = proposals.filter((item) => item.status === "Pending" && item.actionable);
+  const employeeCount = new Set(pending.map((item) => item.staffEmployeeId)).size;
+  const sections = [["Why this was flagged", "flaggedBecause"], ["Compliance rule checked", "ruleApplied"], ["Suggested correction", "changeMade"], ["What happens if approved", "expectedOutcome"]];
+  return <section className="app-panel mt-6 rounded-2xl p-6">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Automated exception adjustment</p><h3 className="mt-1 text-lg font-semibold">Finance suggestion review</h3><p className="mt-1 max-w-3xl text-sm text-[#7b6660]">Every explanation and amount uses this run's stored Admin-rule snapshot. No change is applied until Finance approves it.</p></div><div className="flex flex-wrap gap-2"><ActionButton icon={RefreshCw} variant="secondary" disabled={Boolean(processing)} onClick={generate}>{processing === "generate" ? "Generating..." : "Generate suggestions"}</ActionButton>{pending.length ? <ActionButton icon={ShieldCheck} disabled={Boolean(processing)} onClick={() => setConfirmBulk(true)}>Approve all safe ({pending.length})</ActionButton> : null}</div></div>
+    {confirmBulk ? <div className="mt-4 rounded-xl border border-[#2D7C83]/30 bg-[#eaf6f6] p-4 text-sm"><strong>Confirm bulk approval</strong><p className="mt-1 text-[#47676a]">Approve {pending.length} safe {pending.length === 1 ? "proposal" : "proposals"} for {employeeCount} {employeeCount === 1 ? "employee" : "employees"}, then recalculate the complete pending run.</p><div className="mt-3 flex gap-2"><ActionButton icon={ShieldCheck} onClick={() => { setConfirmBulk(false); review(pending.map((item) => item.id), "approve"); }}>Confirm bulk approval</ActionButton><ActionButton variant="secondary" onClick={() => setConfirmBulk(false)}>Cancel</ActionButton></div></div> : null}
+    {error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+    {loading ? <div className="mt-5 flex items-center gap-2 text-sm text-[#7b6660]"><Loader2 size={16} className="animate-spin"/>Loading suggestions...</div> : !proposals.length ? <div className="mt-5 rounded-xl border border-dashed border-[#f0d2ca] p-5 text-sm text-[#7b6660]">No proposals generated for this period. Generate suggestions after payroll calculation or source-data changes.</div> : <div className="mt-5 space-y-4">{proposals.map((proposal) => {
+      const before = proposal.originalValue || {}; const after = proposal.proposedValue || {}; const explanation = proposal.explanation || {};
+      return <article key={proposal.id} className={`rounded-xl border p-4 ${proposal.actionable ? "border-[#2D7C83]/25 bg-[#2D7C83]/5" : "border-amber-300 bg-amber-50"}`}>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div className="flex flex-wrap items-center gap-2"><strong>{proposal.employee}</strong><span className={`rounded-full px-2 py-1 text-xs font-semibold ${proposal.actionable ? "bg-[#e3f4f4] text-[#286f75]" : "bg-amber-100 text-amber-800"}`}>{proposal.actionable ? "Safe suggestion" : "Source blocker"}</span><span className="text-xs text-[#7b6660]">{proposal.status}</span></div>{proposal.status === "Pending" && proposal.actionable ? <div className="flex gap-2"><ActionButton icon={ShieldCheck} onClick={() => review([proposal.id], "approve")}>Approve</ActionButton><ActionButton icon={X} variant="secondary" onClick={() => review([proposal.id], "reject")}>Reject</ActionButton></div> : null}</div>
+        {proposal.legacyExplanation ? <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">This older proposal has no stored calculation detail. Regenerate pending suggestions to see the exact snapshot formula and inputs.</div> : null}
+        <div className="mt-4 grid gap-3 md:grid-cols-2">{sections.map(([label, key]) => <div key={key} className="rounded-lg border border-black/5 bg-white/75 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">{label}</p><p className="mt-1 text-sm leading-6 text-[#554945]">{explanation[key] || proposal.reason}</p></div>)}</div>
+        {!proposal.actionable ? <div className="mt-3 rounded-lg border border-amber-300 bg-white/70 p-3"><p className="text-xs font-semibold uppercase text-amber-800">Required source action</p><p className="mt-1 text-sm">{explanation.sourceActionRequired || proposal.reason}</p><p className="mt-1 text-xs text-[#7b6660]">Finance cannot approve an automatic amendment until HR/Admin corrects the source record.</p></div> : <details className="mt-4 rounded-lg border border-[#2D7C83]/20 bg-white/80 p-3"><summary className="cursor-pointer text-sm font-semibold text-[#2D7C83]">Show calculation</summary><div className="mt-3">{explanation.calculationSteps?.length ? <ol className="list-decimal space-y-1 pl-5 text-sm text-[#554945]">{explanation.calculationSteps.map((step, index) => <li key={index}>{step}</li>)}</ol> : <p className="text-sm text-[#7b6660]">Regenerate this proposal to retrieve exact calculation details.</p>}<p className="mt-3 text-xs text-[#7b6660]"><strong>Changed components:</strong> {explanation.affectedComponents?.length ? explanation.affectedComponents.join(", ") : "None identified"}. Other values are unaffected.</p><div className="mt-3 overflow-x-auto"><table className="w-full min-w-[42rem] text-sm"><thead><tr className="text-left text-xs uppercase text-[#7b6660]"><th className="py-2">Value</th><th>Before</th><th>Suggested</th><th>Impact</th></tr></thead><tbody>{[["Gross pay","grossPay"],["Deductions","totalDeductions"],["Employee CPF","employeeCpf"],["Employer CPF","employerCpf"],["MBMF","mbmf"],["SDL","sdl"],["Net pay","netPay"]].map(([label,key]) => { const changed = Number(after[key]) !== Number(before[key]); return <tr key={key} className={`border-t border-[#f0d2ca] ${changed ? "bg-[#eaf6f6]" : ""}`}><td className="py-2 font-medium">{label}</td><td>{formatMoney(before[key])}</td><td>{formatMoney(after[key])}</td><td className={changed ? "font-semibold text-[#2D7C83]" : "text-[#7b6660]"}>{changed ? formatMoney(Number(after[key] || 0) - Number(before[key] || 0)) : "Unaffected"}</td></tr>; })}</tbody></table></div></div></details>}
+      </article>;
+    })}</div>}
+  </section>;
+}
+
+function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, onRunUpdated, onSelectRun, payrollRuns, selectedRun }) {
+  const stats = getAggregatePayrollStats([selectedRun]);
   const isLocked = getCompletedSteps(selectedRun).approved;
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const selectedEmployee = selectedRun.employees.find((employee) => employee.id === selectedEmployeeId);
-  const updateStatsMode = (mode) => {
-    const runDate = getPayrollRunDate(selectedRun);
-    setStatsFilter({
-      mode,
-      value: mode === "week" ? getWeekFilterValue(runDate) : getMonthFilterValue(runDate)
-    });
-  };
-
   return (
-    <PageShell heading="Staff Payroll Details">
-      <PayrollStatsFilter
-        filter={statsFilter}
-        resultCount={filteredRuns.length}
-        onFilterChange={setStatsFilter}
-        onModeChange={updateStatsMode}
-      />
+    <PageShell heading="Staff Review & Adjustments" actions={<RunSelector payrollRuns={payrollRuns} selectedRunId={selectedRun.id} onSelectRun={onSelectRun} />}>
+      <div className="mb-4 rounded-2xl border border-[#2D7C83]/20 bg-[#2D7C83]/10 p-4 text-sm text-[#2D7C83]"><strong>{formatPayrollPeriod(selectedRun)}</strong> is the only period included in the employee table and totals below.</div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Gross Pay" value={formatMoney(stats.totals.grossPay)} />
         <StatCard label="Net Pay" value={formatMoney(stats.totals.netPay)} tone="text-[#2f8758]" />
@@ -2633,6 +3072,7 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, payrol
       <div className="mt-6">
         <ExceptionPanel run={selectedRun} />
       </div>
+      <ExplainablePayrollAdjustmentReview selectedRun={selectedRun} onRunUpdated={onRunUpdated} />
       <div className="app-panel mt-6 overflow-hidden rounded-2xl">
         <div className="grid grid-cols-8 gap-4 border-b border-[#f0d2ca] px-6 py-4 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
           <span>Employee</span>
@@ -2919,7 +3359,7 @@ function getCostReportRows(selectedRun) {
 
         const totalEarnings = getEmployeeTotalEarnings(employee);
         const basicPay = getEmployeeEarningItems(employee)
-          .filter((item) => item.label.toLowerCase().includes("basic"))
+          .filter((item) => normalizePayrollLabel(item.label).includes("basic"))
           .reduce((total, item) => total + Number(item.amount || 0), 0);
 
         current.grossPay += basicPay;
@@ -2940,7 +3380,7 @@ function getCostReportRows(selectedRun) {
   ];
 }
 
-function downloadReport(selectedRun, reportTitle) {
+function createFinanceReportPdf(selectedRun, reportTitle) {
   const totals = getRunTotals(selectedRun);
   const exceptionCount = getRunExceptions(selectedRun).length;
   const approvedStaffCount = selectedRun.employees.filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length;
@@ -3076,50 +3516,95 @@ function downloadReport(selectedRun, reportTitle) {
 
   if (!config) return;
 
-  downloadPdf(
-    `${String(selectedRun.id).toLowerCase()}-${config.filename}.pdf`,
-    createPdfBlob({
+  return {
+    filename: `${String(selectedRun.id).toLowerCase()}-${config.filename}.pdf`,
+    blob: createPdfBlob({
       title: reportTitle,
       subtitle: `${formatPayrollPeriod(selectedRun)} / ${selectedRun.status}`,
       summaryRows: config.summaryRows,
       tableRows: config.tableRows,
       footer: config.footer
     })
+  };
+}
+
+function downloadReport(selectedRun, reportTitle) {
+  const report = createFinanceReportPdf(selectedRun, reportTitle);
+  if (report) downloadPdf(report.filename, report.blob);
+}
+
+function FinanceReportPreviewModal({ reportTitle, selectedRun, onClose }) {
+  const report = useMemo(() => createFinanceReportPdf(selectedRun, reportTitle), [reportTitle, selectedRun]);
+  const [pdfUrl, setPdfUrl] = useState("");
+  useEffect(() => {
+    if (!report?.blob) return undefined;
+    const url = URL.createObjectURL(report.blob);
+    setPdfUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [report]);
+  if (!report) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#251E1F]/45 p-4 backdrop-blur-sm">
+      <section className="app-panel flex max-h-[94vh] w-full max-w-6xl flex-col rounded-2xl p-5">
+        <header className="flex flex-col gap-3 border-b border-[#f0d2ca] pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Report preview</p><h3 className="mt-1 text-lg font-semibold text-[#251E1F]">{reportTitle}</h3><p className="mt-1 text-sm text-[#7b6660]">{formatPayrollPeriod(selectedRun)} · database-backed payroll snapshot</p></div>
+          <div className="flex gap-2"><ActionButton icon={Download} onClick={() => downloadPdf(report.filename, report.blob)}>Export PDF</ActionButton><ActionButton icon={X} variant="secondary" onClick={onClose}>Close</ActionButton></div>
+        </header>
+        <div className="mt-5 min-h-0 flex-1 overflow-hidden rounded-xl border border-[#f0d2ca] bg-white">{pdfUrl ? <iframe title={`${reportTitle} preview`} src={pdfUrl} className="h-[68vh] w-full" /> : null}</div>
+      </section>
+    </div>
   );
 }
 
 function PayrollReportsView({ onSelectRun, payrollRuns, selectedRun }) {
-  const reportCards = buildReportRows(selectedRun);
+  const [selectedReport, setSelectedReport] = useState("");
+  const toneClasses = [
+    ["admin-report-card--coral", "admin-report-icon--coral"], ["admin-report-card--teal", "admin-report-icon--teal"],
+    ["admin-report-card--purple", "admin-report-icon--purple"], ["admin-report-card--amber", "admin-report-icon--amber"],
+    ["admin-report-card--blue", "admin-report-icon--blue"], ["admin-report-card--green", "admin-report-icon--green"]
+  ];
+  const reportCards = buildReportRows(selectedRun).map(([title, detail, value], index) => ({
+    title, description: detail, value,
+    category: index < 3 ? "Payroll oversight" : index < 7 ? "Compliance & deductions" : "Payment, audit & cost",
+    contains: detail,
+    purpose: index < 3 ? "Finance review and approval" : index < 7 ? "Compliance evidence and statutory review" : "Payment, reconciliation and management reporting",
+    filter: formatPayrollPeriod(selectedRun),
+    cardClass: toneClasses[index % toneClasses.length][0], iconClass: toneClasses[index % toneClasses.length][1]
+  }));
+  const reportGroups = ["Payroll oversight", "Compliance & deductions", "Payment, audit & cost"].map((category) => ({ category, reports: reportCards.filter((report) => report.category === category) }));
+  const lastRefresh = formatDateTime(selectedRun.updatedAt || selectedRun.recalculatedAt || selectedRun.approvedAt || selectedRun.submittedAt);
 
   return (
     <PageShell
       heading="Finance Reports"
       actions={<RunSelector payrollRuns={payrollRuns} selectedRunId={selectedRun?.id} onSelectRun={onSelectRun} />}
     >
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {reportCards.map(([title, detail, value]) => (
-          <article key={title} className="app-panel rounded-2xl p-6">
-            <FileBarChart size={24} className="text-[#F38978]" />
-            <h3 className="mt-4 font-semibold text-[#251E1F]">{title}</h3>
-            <p className="mt-2 text-sm text-[#7b6660]">{detail}</p>
-            <p className="mt-5 text-sm font-semibold text-[#251E1F]">{value}</p>
-            <button
-              type="button"
-              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
-              onClick={() => downloadReport(selectedRun, title)}
-            >
-              <Download size={16} />
-              Download PDF
-            </button>
+      <div className="space-y-7">{reportGroups.map((group) => <section key={group.category}>
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-[#7b6660]">{group.category}</h3>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{group.reports.map((report) => (
+          <article key={report.title} className={`app-panel admin-report-card ${report.cardClass}`}>
+            <span className={`admin-report-icon ${report.iconClass}`}><FileBarChart size={22} /></span>
+            <h3 className="mt-4 font-semibold text-[#251E1F]">{report.title}</h3>
+            <p className="mt-2 text-sm text-[#7b6660]">{report.description}</p>
+            <dl className="mt-4 space-y-3 rounded-xl bg-[#fff8f5] p-4 text-sm">
+              <div><dt className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Contains</dt><dd className="mt-1 text-[#7b6660]">{report.contains}</dd></div>
+              <div><dt className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Best used for</dt><dd className="mt-1 text-[#7b6660]">{report.purpose}</dd></div>
+              <div><dt className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Filter</dt><dd className="mt-1 text-[#7b6660]">{report.filter}</dd></div>
+              <div><dt className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Last refreshed</dt><dd className="mt-1 text-[#7b6660]">{lastRefresh}</dd></div>
+              <div><dt className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Current result</dt><dd className="mt-1 font-semibold text-[#251E1F]">{report.value}</dd></div>
+            </dl>
+            <button type="button" className="mt-auto pt-5 text-left text-sm font-semibold text-[#F38978] hover:underline" onClick={() => setSelectedReport(report.title)}>Preview report →</button>
           </article>
-        ))}
-      </div>
+        ))}</div>
+      </section>)}</div>
+      {selectedReport ? <FinanceReportPreviewModal reportTitle={selectedReport} selectedRun={selectedRun} onClose={() => setSelectedReport("")} /> : null}
     </PageShell>
   );
 }
 
 function PayrollSummariesView({ payrollRuns, selectedRun }) {
   const [statsFilter, setStatsFilter] = useState(() => getDefaultStatsFilter(selectedRun));
+  useEffect(() => setStatsFilter(getDefaultStatsFilter(selectedRun)), [selectedRun.id]);
   const filteredRuns = getFilteredPayrollRuns(payrollRuns, statsFilter);
   const stats = getAggregatePayrollStats(filteredRuns);
   const totals = stats.totals;
@@ -3181,10 +3666,13 @@ function PayrollSummariesView({ payrollRuns, selectedRun }) {
 // -----------------------------------------------------------------------------
 
 function FinancePayrollContent({
+  configError,
   onAdvanceRun,
   onCreateDbRun,
-  onCreateMockRun,
   onGeneratePaymentFile,
+  onRecalculateRun,
+  onRunUpdated,
+  onSaveRun,
   onSelectRun,
   onSetupModernTreasuryRecipients,
   onSubmitModernTreasuryTransfer,
@@ -3194,10 +3682,24 @@ function FinancePayrollContent({
   paymentError,
   paymentProcessing,
   payrollRuns,
+  recalculationProcessing,
+  saveProcessing,
   recipientSetupProcessing,
   selectedRun
 }) {
   if (pathname.endsWith("/employee-requests")) return <FinanceRequestsPage />;
+  if (pathname.endsWith("/activity-log")) return <FinancePayrollActivityView />;
+  if (pathname.endsWith("/payroll-schedule")) return <PayrollScheduleView payrollRuns={payrollRuns} selectedGlobalRun={selectedRun} onSelectRun={onSelectRun} onRunUpdated={onRunUpdated} />;
+  if (pathname.endsWith("/compliance-rules")) {
+    return (
+      <PageShell heading="Compliance Rules">
+        <div className="mb-5 rounded-2xl border border-[#2D7C83]/25 bg-[#2D7C83]/10 p-5 text-sm text-[#2D7C83]">
+          Finance has read-only access. All values below come from Admin Payroll configuration in the connected database; changes must be made by an authorised Admin.
+        </div>
+        {configError ? <div className="rounded-2xl border border-red-300 bg-red-50 p-4 text-sm text-red-700">Unable to load the current Admin rules from the database. No fallback Finance rule set is shown. {configError}</div> : <AdminCpfConfigPanel />}
+      </PageShell>
+    );
+  }
   if (pathname.endsWith("/payroll-runs")) {
     return (
       <PayrollRunsView
@@ -3205,14 +3707,17 @@ function FinancePayrollContent({
         selectedRun={selectedRun}
         onAdvanceRun={onAdvanceRun}
         onCreateDbRun={onCreateDbRun}
-        onCreateMockRun={onCreateMockRun}
         onGeneratePaymentFile={onGeneratePaymentFile}
+        onRecalculateRun={onRecalculateRun}
+        onSaveRun={onSaveRun}
         onSelectRun={onSelectRun}
         onSetupModernTreasuryRecipients={onSetupModernTreasuryRecipients}
         onSubmitModernTreasuryTransfer={onSubmitModernTreasuryTransfer}
         paymentError={paymentError}
         paymentProcessing={paymentProcessing}
         recipientSetupProcessing={recipientSetupProcessing}
+        recalculationProcessing={recalculationProcessing}
+        saveProcessing={saveProcessing}
       />
     );
   }
@@ -3222,12 +3727,13 @@ function FinancePayrollContent({
       <StaffPayrollDetailsView
         payrollRuns={payrollRuns}
         selectedRun={selectedRun}
+        onSelectRun={onSelectRun}
+        onRunUpdated={onRunUpdated}
         onUpdateEmployee={onUpdateEmployee}
         onUpdateStaffStatus={onUpdateStaffStatus}
       />
     );
   }
-  if (pathname.endsWith("/notification-records")) return <PayrollNotificationsView />;
   if (pathname.endsWith("/payroll-reports")) {
     return (
       <PayrollReportsView
@@ -3242,6 +3748,7 @@ function FinancePayrollContent({
   return (
     <DashboardView
       onAdvanceRun={onAdvanceRun}
+      onRecalculateRun={onRecalculateRun}
       payrollRuns={payrollRuns}
       selectedRun={selectedRun}
       onSelectRun={onSelectRun}
@@ -3257,8 +3764,8 @@ export default function FinancePayrollPage() {
   const session = getStoredSession();
   const location = useLocation();
   const heading = routeHeadings[location.pathname] || "Dashboard";
-  const [payrollRuns, setPayrollRuns] = useState(getInitialPayrollRuns);
-  const [selectedRunId, setSelectedRunId] = useState(() => getInitialPayrollRuns()[0]?.id || "");
+  const [payrollRuns, setPayrollRuns] = useState([]);
+  const [selectedRunId, setSelectedRunId] = useState("");
   const [payrollRuleConfig, setPayrollRuleConfig] = useState(createDefaultFinancePayrollConfig);
   const [configError, setConfigError] = useState("");
   const [financeDbError, setFinanceDbError] = useState("");
@@ -3266,12 +3773,11 @@ export default function FinancePayrollPage() {
   const [paymentError, setPaymentError] = useState("");
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [recipientSetupProcessing, setRecipientSetupProcessing] = useState(false);
+  const [recalculationProcessing, setRecalculationProcessing] = useState(false);
+  const [saveProcessing, setSaveProcessing] = useState(false);
+  const [pendingSaveRunId, setPendingSaveRunId] = useState("");
 
   adminCpfConfiguration = payrollRuleConfig;
-
-  useEffect(() => {
-    localStorage.setItem(FINANCE_PAYROLL_STORAGE_KEY, JSON.stringify(payrollRuns));
-  }, [payrollRuns]);
 
   useEffect(() => {
     async function loadFinancePayrollRuns() {
@@ -3280,13 +3786,12 @@ export default function FinancePayrollPage() {
         const data = await getFinancePayrollRuns();
         const dbRuns = Array.isArray(data.runs) ? data.runs : [];
 
-        if (dbRuns.length) {
-          setPayrollRuns(dbRuns);
-          setSelectedRunId(dbRuns[0].id);
-        }
+        setPayrollRuns(normalizeFinancePayrollRuns(dbRuns));
+        const storedRunId = sessionStorage.getItem(FINANCE_SELECTED_RUN_KEY);
+        setSelectedRunId(dbRuns.some((run) => run.id === storedRunId) ? storedRunId : dbRuns[0]?.id || "");
         setFinanceDbLoaded(true);
       } catch (error) {
-        setFinanceDbError(`Finance payroll DB unavailable. Using local demo data. ${error.message}`);
+        setFinanceDbError(`Finance payroll database unavailable. ${error.message}`);
       }
     }
 
@@ -3294,23 +3799,26 @@ export default function FinancePayrollPage() {
   }, []);
 
   useEffect(() => {
-    if (!financeDbLoaded) return undefined;
-
+    if (!financeDbLoaded || !pendingSaveRunId) return undefined;
     const timer = setTimeout(() => {
-      payrollRuns
-        .filter((run) => run.source === "staff_db")
-        .forEach((run) => {
-          saveFinancePayrollRun(run).catch((error) => {
-            setFinanceDbError(`Finance payroll DB save failed. ${error.message}`);
-          });
+      const run = payrollRuns.find((item) => item.id === pendingSaveRunId && item.source === "staff_db");
+      if (run) {
+        saveFinancePayrollRun(run).then((result) => {
+          const savedRun = normalizeFinancePayrollRuns([result.run])[0];
+          setPayrollRuns((currentRuns) => currentRuns.map((item) => item.id === savedRun.id ? savedRun : item));
+          setPendingSaveRunId("");
+        }).catch((error) => {
+          setFinanceDbError(`Finance payroll DB save failed. ${error.message}`);
+          setPendingSaveRunId("");
         });
+      } else setPendingSaveRunId("");
     }, 600);
-
     return () => clearTimeout(timer);
-  }, [financeDbLoaded, payrollRuns]);
+  }, [financeDbLoaded, payrollRuns, pendingSaveRunId]);
 
   useEffect(() => {
     setPaymentError("");
+    if (selectedRunId) sessionStorage.setItem(FINANCE_SELECTED_RUN_KEY, selectedRunId);
   }, [selectedRunId]);
 
   useEffect(() => {
@@ -3336,6 +3844,7 @@ export default function FinancePayrollPage() {
     setPayrollRuns((currentRuns) =>
       currentRuns.map((run) => (run.id === selectedRun.id ? updater(run) : run))
     );
+    if (selectedRun?.source === "staff_db") setPendingSaveRunId(selectedRun.id);
   };
 
   const handleUpdateStaffStatus = (employeeId, financeStatus) => {
@@ -3400,12 +3909,59 @@ export default function FinancePayrollPage() {
     }
   };
 
-  const handleGeneratePaymentFile = () => {
+  const handleRecalculateRun = async () => {
+    if (!selectedRun?.id || selectedRun.source !== "staff_db") {
+      setPaymentError("Only database-backed pending payroll runs can be recalculated.");
+      return;
+    }
+    setRecalculationProcessing(true);
+    setPaymentError("");
+    try {
+      const result = await recalculateFinancePayrollRun(selectedRun.id);
+      const refreshedRun = normalizeFinancePayrollRuns([result.run])[0];
+      setPayrollRuns((runs) => runs.map((run) => run.id === refreshedRun.id ? refreshedRun : run));
+      setFinanceDbError("");
+    } catch (error) {
+      setPaymentError(error.message || "Payroll recalculation failed.");
+    } finally {
+      setRecalculationProcessing(false);
+    }
+  };
+
+  const handleSaveRun = async () => {
+    if (!selectedRun?.id || selectedRun.source !== "staff_db") return;
+    setPendingSaveRunId("");
+    setSaveProcessing(true);
+    setFinanceDbError("");
+    try {
+      const result = await saveFinancePayrollRun(selectedRun);
+      const savedRun = normalizeFinancePayrollRuns([result.run])[0];
+      setPayrollRuns((runs) => runs.map((run) => run.id === savedRun.id ? savedRun : run));
+    } catch (error) {
+      setFinanceDbError(`Finance payroll DB save failed. ${formatComplianceFailure(error)}`);
+    } finally {
+      setSaveProcessing(false);
+    }
+  };
+
+  const formatComplianceFailure = (error) => {
+    const details = Array.isArray(error?.details) ? error.details : [];
+    if (!details.length) return error?.message || "Payroll compliance validation failed.";
+    return `${error.message} ${details.map((item) => `${item.employee || "Run"}: ${item.message}${item.correctiveAction ? ` — ${item.correctiveAction}` : ""}`).join(" ")}`;
+  };
+
+  const handleGeneratePaymentFile = async () => {
+    try {
+      await validateFinancePayrollRun(selectedRun.id);
+    } catch (error) {
+      setPaymentError(formatComplianceFailure(error));
+      return;
+    }
     const now = new Date().toISOString();
     const totals = getRunTotals(selectedRun);
 
     downloadPdf(
-      `${selectedRun.id.toLowerCase()}-payment-file.pdf`,
+      `${String(selectedRun.id).toLowerCase()}-payment-file.pdf`,
       createPdfBlob({
         title: "Payment File",
         subtitle: `${formatPayrollPeriod(selectedRun)} / ${selectedRun.paymentMethod}`,
@@ -3442,6 +3998,7 @@ export default function FinancePayrollPage() {
     setPaymentError("");
 
     try {
+      await validateFinancePayrollRun(selectedRun.id);
       const result = await submitModernTreasuryTransfer({
         payrollRunId: selectedRun.id,
         payrollPeriod: formatPayrollPeriod(selectedRun),
@@ -3463,7 +4020,7 @@ export default function FinancePayrollPage() {
         ]
       }));
     } catch (error) {
-      setPaymentError(error.message || "Modern Treasury submission failed.");
+      setPaymentError(formatComplianceFailure(error));
     } finally {
       setPaymentProcessing(false);
     }
@@ -3515,7 +4072,7 @@ export default function FinancePayrollPage() {
     }
   };
 
-  const handleAdvanceRun = (stepKey) => {
+  const handleAdvanceRun = async (stepKey) => {
     const now = new Date().toISOString();
     const defaultBankReference = `GIRO-${selectedRun.year}${String(selectedRun.month).padStart(2, "0")}-${Math.floor(1000 + Math.random() * 9000)}`;
     let manualBankReference = "";
@@ -3583,6 +4140,16 @@ export default function FinancePayrollPage() {
       allEmployeesApproved: canApprovePayrollRun(selectedRun)
     })) return;
 
+    if (["approved", "paid", "payslipsSent"].includes(stepKey)) {
+      try {
+        await validateFinancePayrollRun(selectedRun.id);
+        setPaymentError("");
+      } catch (error) {
+        setPaymentError(formatComplianceFailure(error));
+        return;
+      }
+    }
+
     updateSelectedRun((run) => ({
       ...run,
       ...transition.fields,
@@ -3610,11 +4177,19 @@ export default function FinancePayrollPage() {
         moduleClassName="payroll-module"
       >
         <section>
-          <PayslipsApprovalView />
+          {selectedRun ? <FinancePayrollJourney run={selectedRun} /> : null}
+          <PayslipsApprovalView selectedRun={selectedRun} payrollRuns={payrollRuns} onSelectRun={setSelectedRunId} />
         </section>
       </DashboardLayout>
     );
   }
+
+  const runIndependentRoute = [
+    "/dashboard/payroll/finance/employee-requests",
+    "/dashboard/payroll/finance/activity-log",
+    "/dashboard/payroll/finance/payroll-schedule",
+    "/dashboard/payroll/finance/compliance-rules"
+  ].includes(location.pathname);
 
   return (
     <DashboardLayout
@@ -3627,7 +4202,7 @@ export default function FinancePayrollPage() {
     >
       {configError ? (
         <div className="mb-4 rounded-xl border border-[#D97706]/25 bg-[#D97706]/10 p-4 text-sm text-[#9A6412]">
-          Admin payroll settings could not be loaded. Finance is using fallback payroll rules. {configError}
+          Admin payroll settings could not be loaded. Rule details are unavailable; server-side approval and payment gates continue to require the database-backed run snapshot. {configError}
         </div>
       ) : null}
       {financeDbError ? (
@@ -3635,16 +4210,25 @@ export default function FinancePayrollPage() {
           {financeDbError}
         </div>
       ) : null}
-      {selectedRun ? (
+      <div className="admin-payroll-page">
+      {selectedRun && shouldShowFinanceTracker(location.pathname) ? <FinancePayrollJourney run={selectedRun} /> : null}
+      {selectedRun || runIndependentRoute ? (
         <FinancePayrollContent
+          configError={configError}
           heading={heading}
           pathname={location.pathname}
           payrollRuns={payrollRuns}
           selectedRun={selectedRun}
           onAdvanceRun={handleAdvanceRun}
           onCreateDbRun={handleCreateDbRun}
-          onCreateMockRun={handleCreateMockRun}
           onGeneratePaymentFile={handleGeneratePaymentFile}
+          onRecalculateRun={handleRecalculateRun}
+          onRunUpdated={(updatedRun) => {
+            if (!updatedRun) return;
+            const normalized = normalizeFinancePayrollRuns([updatedRun])[0];
+            setPayrollRuns((runs) => runs.map((run) => run.id === normalized.id ? normalized : run));
+          }}
+          onSaveRun={handleSaveRun}
           onSelectRun={setSelectedRunId}
           onSetupModernTreasuryRecipients={handleSetupModernTreasuryRecipients}
           onSubmitModernTreasuryTransfer={handleSubmitModernTreasuryTransfer}
@@ -3653,12 +4237,19 @@ export default function FinancePayrollPage() {
           paymentError={paymentError}
           paymentProcessing={paymentProcessing}
           recipientSetupProcessing={recipientSetupProcessing}
+          recalculationProcessing={recalculationProcessing}
+          saveProcessing={saveProcessing}
         />
+      ) : !financeDbLoaded && !financeDbError ? (
+        <PageShell heading={heading}>
+          <div className="flex items-center gap-3 rounded-2xl border border-[#f0d2ca] bg-white/80 p-6 text-sm text-[#7b6660]"><Loader2 className="animate-spin" size={18}/>Loading database payroll records...</div>
+        </PageShell>
       ) : (
         <PageShell heading={heading}>
           <EmptyState message="No payroll runs are ready for Finance review." />
         </PageShell>
       )}
+      </div>
     </DashboardLayout>
   );
 }

@@ -11,6 +11,8 @@
     "db:support-tables": "node scripts/run-support-migration.js",
     "db:payroll-user-workflow": "node scripts/run-payroll-user-workflow-migration.js",
     "db:payroll-rule-metadata": "node scripts/run-payroll-rule-metadata-migration.js",
+    "db:claim-payroll-inclusion": "node scripts/run-claim-payroll-inclusion-migration.js",
+    "db:finance-payroll-schedule": "node scripts/run-finance-payroll-schedule-migration.js",
     "db:account-lockout": "node scripts/run-account-lockout-migration.js",
     "db:migrate-workflow": "node scripts/migrate-complete-workflow.js",
     "db:migrate-auth": "node scripts/migrate-auth-otp-registration.js",

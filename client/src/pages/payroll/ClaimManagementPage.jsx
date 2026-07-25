@@ -11,7 +11,6 @@ export default function ClaimManagementPage({ role }) {
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
   const [comments, setComments] = useState({});
-  const [references, setReferences] = useState({});
 
   async function load() {
     setLoading(true);
@@ -28,12 +27,10 @@ export default function ClaimManagementPage({ role }) {
       return setError(`This claim is no longer awaiting ${role} action. Refresh the queue and try again.`);
     }
     const note = comments[claim.claim_id] || "";
-    const reference = references[claim.claim_id] || "";
     if (action === "reject" && !note.trim()) return setError("Enter a reason before rejecting a claim.");
-    if (isFinance && action === "release" && !reference.trim()) return setError("Enter a payment reference before releasing funds.");
     setBusyId(claim.claim_id);
     try {
-      if (isFinance) await processClaimByFinance(claim.claim_id, action, { comments: note, payment_reference: reference });
+      if (isFinance) await processClaimByFinance(claim.claim_id, action, { comments: note });
       else await reviewClaimByHr(claim.claim_id, action, note);
       await load();
     } catch (err) { setError(err.message); }
@@ -51,7 +48,7 @@ export default function ClaimManagementPage({ role }) {
               <h3 className="font-semibold text-[#251E1F]">{isFinance ? "Claim approval & reimbursement" : "Employee claim review"}</h3>
               <p className="text-sm text-[#7b6660]">
                 {isFinance
-                  ? "Approve HR-reviewed claims and record the reimbursement."
+                  ? "Approve HR-reviewed claims for inclusion in the next open payroll."
                   : "Check the supporting proof before sending a claim to Finance for approval."}
               </p>
             </div>
@@ -107,25 +104,18 @@ export default function ClaimManagementPage({ role }) {
                 <p className="mt-4 rounded-lg border border-[#f0d2ca] bg-white/50 p-3 text-sm text-[#7b6660]">{claim.description}</p>
 
                 {/* Proof Link */}
-                <button onClick={() => openClaimProof(claim.claim_id).catch((err) => setError(err.message))} className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-[#F38978] hover:text-[#F38978] transition">
-                  <ExternalLink size={15} />Review proof: {claim.proof_original_name}
+                <button disabled={!claim.proof_original_name} onClick={() => openClaimProof(claim.claim_id).catch((err) => setError(`Proof unavailable: ${err.message}`))} className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-[#F38978] hover:text-[#F38978] transition disabled:cursor-not-allowed disabled:text-[#7b6660]/60">
+                  <ExternalLink size={15} />{claim.proof_original_name ? `Review proof: ${claim.proof_original_name}` : "Supporting proof unavailable"}
                 </button>
 
                 {/* Comments */}
                 {claim.hr_comments && <p className="mt-3 text-xs text-[#7b6660]">HR comments: {claim.hr_comments}</p>}
                 {claim.finance_comments && <p className="mt-1 text-xs text-[#7b6660]">Finance comments: {claim.finance_comments}</p>}
+                {claim.payroll_target_month && claim.payroll_target_year && <p className="mt-1 text-xs font-medium text-[#F38978]">Payroll: {claim.payroll_target_month}/{claim.payroll_target_year} · {claim.payroll_inclusion_status === "included" ? "Included" : "Queued"}</p>}
 
                 {/* Action Area */}
                 {actionable && (
                   <div className="mt-5 grid gap-3 border-t border-[#f0d2ca] pt-4 md:grid-cols-2">
-                    {isFinance && (
-                      <input
-                        value={references[claim.claim_id] || ""}
-                        onChange={(e) => setReferences({ ...references, [claim.claim_id]: e.target.value })}
-                        placeholder="Payment / bank reference (required to release)"
-                        className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm text-[#251E1F] placeholder-[#7b6660]/50 outline-none focus:border-[#F38978]"
-                      />
-                    )}
                     <input
                       value={comments[claim.claim_id] || ""}
                       onChange={(e) => setComments({ ...comments, [claim.claim_id]: e.target.value })}
@@ -139,7 +129,7 @@ export default function ClaimManagementPage({ role }) {
                         className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 disabled:opacity-50"
                       >
                         {busyId === claim.claim_id ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
-                        {isFinance ? "Approve & release" : "Send to Finance"}
+                        {isFinance ? "Approve for payroll" : "Send to Finance"}
                       </button>
                       <button
                         disabled={busyId === claim.claim_id}

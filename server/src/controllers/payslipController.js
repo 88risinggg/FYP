@@ -48,7 +48,13 @@ function toDeductionItems(value) {
     items.push({ deduction_type: item.fund || "Self-help group", amount: Number(item.amount || 0) });
   }
   for (const item of breakdown.otherDeductions || []) {
-    items.push({ deduction_type: item.label || "Other deduction", amount: Number(item.amount || 0) });
+    const deferredAmount = Number(item.deferredAmount || 0);
+    items.push({
+      deduction_type: item.label || "Other deduction",
+      amount: Number(item.amount || 0),
+      deferred_amount: deferredAmount,
+      recovery_note: deferredAmount > 0 ? `${deferredAmount.toFixed(2)} deferred to a later payroll period` : null
+    });
   }
   return items.map((item, index) => ({ deduction_id: index + 1, ...item }));
 }

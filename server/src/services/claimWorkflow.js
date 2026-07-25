@@ -12,7 +12,7 @@ const TRANSITIONS = Object.freeze({
     reject: Object.freeze({ from: CLAIM_STATUSES.PENDING_HR, to: CLAIM_STATUSES.HR_REJECTED })
   }),
   Finance: Object.freeze({
-    release: Object.freeze({ from: CLAIM_STATUSES.HR_APPROVED, to: CLAIM_STATUSES.RELEASED }),
+    release: Object.freeze({ from: CLAIM_STATUSES.HR_APPROVED, to: "payroll_approved" }),
     reject: Object.freeze({ from: CLAIM_STATUSES.HR_APPROVED, to: CLAIM_STATUSES.FINANCE_REJECTED })
   })
 });

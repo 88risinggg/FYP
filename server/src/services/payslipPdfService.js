@@ -87,18 +87,26 @@ function buildPayslipHtml(payslip) {
     : "Payroll period";
   const allowanceItems = parseJson(payslip.allowance_breakdown, []);
   const deductionBreakdown = parseJson(payslip.deduction_breakdown, {});
+  const reimbursements = Array.isArray(deductionBreakdown.reimbursements) ? deductionBreakdown.reimbursements : [];
   const baseSalary = number(payslip.base_salary || (number(payslip.gross_salary) - number(payslip.total_allowances)));
   const earnings = [{ label: "Basic salary", rate: "1 Month", amount: baseSalary }];
   if (Array.isArray(allowanceItems) && allowanceItems.length) {
     allowanceItems.forEach((item) => earnings.push({ label: item.label || item.allowance_type || "Allowance", rate: item.rate || "-", amount: item.amount }));
   } else if (number(payslip.total_allowances) > 0) {
-    earnings.push({ label: "Allowances and commissions", rate: "-", amount: payslip.total_allowances });
+    const reimbursementTotal = reimbursements.reduce((sum, item) => sum + number(item.amount), 0);
+    const otherAllowances = Math.max(0, number(payslip.total_allowances) - reimbursementTotal);
+    if (otherAllowances > 0.005) earnings.push({ label: "Allowances and commissions", rate: "-", amount: otherAllowances });
   }
+  reimbursements.forEach((item) => earnings.push({ label: item.label || `Claim reimbursement ${item.claimId || ""}`, rate: item.expenseDate ? `Expense ${String(item.expenseDate).slice(0, 10)} · Non-CPF` : "Non-CPF", amount: item.amount }));
   const deductions = [];
   const employeeCpf = number(payslip.employee_cpf || deductionBreakdown.employeeCpf);
   if (employeeCpf > 0) deductions.push({ label: "Employee CPF", rate: payslip.cpf_rate || "Applied rate", amount: employeeCpf });
   (deductionBreakdown.selfHelpGroups || []).forEach((item) => deductions.push({ label: item.fund || "Self-help fund", rate: "Wage band", amount: item.amount }));
-  (deductionBreakdown.otherDeductions || []).forEach((item) => deductions.push({ label: item.label || "Other deduction", rate: "-", amount: item.amount }));
+  (deductionBreakdown.otherDeductions || []).forEach((item) => deductions.push({
+    label: item.label || "Other deduction",
+    rate: number(item.deferredAmount) > 0 ? `SGD ${number(item.deferredAmount).toFixed(2)} deferred` : "-",
+    amount: item.amount
+  }));
   const listedDeductions = deductions.reduce((sum, item) => sum + number(item.amount), 0);
   const deductionRemainder = Math.max(0, number(payslip.total_deductions) - listedDeductions);
   if (deductionRemainder > 0.005) deductions.push({ label: "Other deductions", rate: "-", amount: deductionRemainder });
@@ -108,8 +116,7 @@ function buildPayslipHtml(payslip) {
   const employerCpf = number(payslip.employer_cpf);
   const sdl = number(payslip.sdl || deductionBreakdown.sdl);
   const claims = parseJson(payslip.claims, []);
-  const releasedClaims = Array.isArray(claims) ? claims : [];
-  const totalClaims = releasedClaims.reduce((sum, claim) => sum + number(claim.amount), 0);
+  const includedClaims = Array.isArray(claims) ? claims : [];
   const employeeName = payslip.employee_name || payslip.staff_name || "Employee";
   const companyName = payslip.company_name || "Vaniday Singapore Pte. Ltd.";
   const rowsHtml = (rows, emptyLabel) => (rows.length ? rows : [{ label: emptyLabel, rate: "-", amount: 0 }])
@@ -171,7 +178,7 @@ function buildPayslipHtml(payslip) {
     <section class="pay-grid"><div class="pay-column"><table><thead><tr><th>Earnings</th><th class="rate">Rate</th><th class="amount">Amount</th></tr></thead><tbody class="items">${rowsHtml(earnings, "No earnings")}</tbody></table></div><div class="pay-column"><table><thead><tr><th>Deductions</th><th class="rate">Rate</th><th class="amount">Amount</th></tr></thead><tbody class="items">${rowsHtml(deductions, "No deductions")}</tbody></table></div></section>
     <section class="totals"><div class="total"><span>Total earnings:</span><span>${money(totalEarnings)}</span></div><div class="total"><span>Total deductions:</span><span>${money(totalDeductions)}</span></div></section>
     <section class="summary"><div class="summary-row net"><span class="summary-label">Net pay</span><span class="summary-value">${money(netSalary)}</span></div>${employerCpf ? `<div class="summary-row"><span class="summary-label">Employer CPF contribution</span><span class="summary-value">${money(employerCpf)}</span></div>` : ""}${sdl ? `<div class="summary-row"><span class="summary-label">Skills Development Levy (SDL)</span><span class="summary-value">${money(sdl)}</span></div>` : ""}</section>
-    ${releasedClaims.length ? `<section class="claims"><h3>Claim reimbursements (released separately)</h3>${releasedClaims.map((claim) => `<div class="claim-row"><span>${escapeHtml(claim.claim_type || "Expense claim")} · ${escapeHtml(claim.claim_id || "")}</span><span>${escapeHtml(claim.expense_date ? new Date(claim.expense_date).toLocaleDateString("en-SG") : "")}</span><span>${money(claim.amount)}</span></div>`).join("")}<div class="claim-row claim-total"><span>Total released claims</span><span></span><span>${money(totalClaims)}</span></div></section>` : ""}
+    ${includedClaims.length ? `<section class="claims"><h3>Payroll reimbursement audit references</h3>${includedClaims.map((claim) => `<div class="claim-row"><span>${escapeHtml(claim.claim_type || "Expense claim")} · ${escapeHtml(claim.claim_id || "")}</span><span>${escapeHtml(claim.expense_date ? new Date(claim.expense_date).toLocaleDateString("en-SG") : "")}</span><span>Included above</span></div>`).join("")}</section>` : ""}
     <section class="notes"><strong>Note:</strong> ${escapeHtml(payslip.notes || "This is a computer-generated payslip. No signature is required.")}</section>
     <footer class="footer">Confidential payroll document issued by ${escapeHtml(companyName)}${payslip.layout?.layout_name ? ` · Layout: ${escapeHtml(payslip.layout.layout_name)}` : ""}</footer>
   </main>

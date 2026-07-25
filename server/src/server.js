@@ -24,6 +24,7 @@ async function startServer() {
   const { startReminderScheduler } = require("./services/reminderScheduler");
   const { startOverdueScheduler } = require("./workers/overdueScheduler");
   const { startReminderNotificationScheduler } = require("./workers/reminderNotificationScheduler");
+  const { startPayrollReleaseScheduler } = require("./workers/payrollReleaseScheduler");
 
   const server = app.listen(port, host, async () => {
     console.log(`Server listening on ${host}:${port}`);
@@ -37,6 +38,7 @@ async function startServer() {
     await startReminderScheduler();
     startOverdueScheduler();
     startReminderNotificationScheduler();
+    startPayrollReleaseScheduler();
   });
 
   server.on("error", (error) => {
@@ -51,4 +53,3 @@ async function startServer() {
 }
 
 startServer();
-

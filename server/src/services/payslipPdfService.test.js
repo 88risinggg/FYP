@@ -17,7 +17,8 @@ describe("Vaniday payslip PDF template", () => {
       deduction_breakdown: JSON.stringify({
         employeeCpf: 702.4,
         selfHelpGroups: [{ fund: "MBMF", amount: 6.5 }],
-        sdl: 8.78
+        sdl: 8.78,
+        reimbursements: [{ claimId: "CLM-001", label: "Transport reimbursement · CLM-001", amount: 42.5, expenseDate: "2026-07-10", cpfApplicable: false }]
       }),
       claims: [{ claim_id: "CLM-001", claim_type: "Transport", amount: 42.5, expense_date: "2026-07-10" }],
       layout: { layout_name: "Vaniday Default" }
@@ -29,7 +30,8 @@ describe("Vaniday payslip PDF template", () => {
     expect(html).toContain("Total earnings:");
     expect(html).toContain("Employer CPF contribution");
     expect(html).toContain("Skills Development Levy (SDL)");
-    expect(html).toContain("Claim reimbursements (released separately)");
+    expect(html).toContain("Transport reimbursement · CLM-001");
+    expect(html).toContain("Payroll reimbursement audit references");
     expect(html).toContain("CLM-001");
     expect(html).toContain("Layout: Vaniday Default");
   });

@@ -7,18 +7,16 @@ const { generatePayslipPDF } = require("./payslipPdfService");
 
 const OUTPUT_ROOT = path.join(__dirname, "..", "..", "uploads", "payslips");
 
-async function getReleasedClaims(staffEmployeeId, month, year) {
+async function getIncludedClaims(payrollId) {
   const [rows] = await pool.query(
     `SELECT record_id AS claim_id, claim_category AS claim_type, amount,
-            description, expense_date, finance_processed_at, payment_reference
+            description, expense_date, payroll_approved_at, included_payroll_id
      FROM claims_and_loans
      WHERE type = 'expense_claim'
-       AND staff_employee_id = ?
-       AND status = 'released'
-       AND MONTH(COALESCE(finance_processed_at, submitted_at)) = ?
-       AND YEAR(COALESCE(finance_processed_at, submitted_at)) = ?
-     ORDER BY COALESCE(finance_processed_at, submitted_at), record_id`,
-    [staffEmployeeId, month, year]
+       AND payroll_inclusion_status = 'included'
+       AND included_payroll_id = ?
+     ORDER BY payroll_approved_at, record_id`,
+    [payrollId]
   );
   return rows;
 }
@@ -37,11 +35,7 @@ async function getPayslipDataset(payrollId) {
   );
   if (!rows.length) return null;
   const payslip = rows[0];
-  payslip.claims = await getReleasedClaims(
-    payslip.staff_employee_id,
-    Number(payslip.payroll_month),
-    Number(payslip.payroll_year)
-  );
+  payslip.claims = await getIncludedClaims(payslip.payroll_id);
   const layouts = await listPayslipLayouts();
   payslip.layout = layouts.find((layout) => Number(layout.is_default) === 1) || null;
   return payslip;
@@ -98,4 +92,4 @@ async function generateAndSendPayslip(payrollId, options = {}) {
   return { status: 200, message: "Payslip generated and sent to the linked employee", payslip: { ...payslip, file_path: publicPath } };
 }
 
-module.exports = { generateAndSendPayslip, getPayslipDataset, getReleasedClaims };
+module.exports = { generateAndSendPayslip, getIncludedClaims, getPayslipDataset };

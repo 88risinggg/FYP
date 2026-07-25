@@ -43,7 +43,11 @@ export async function apiRequest(path, options = {}) {
     }
 
     if (!response.ok) {
-      throw new Error(data.detail ? `${data.message}: ${data.detail}` : (data.message || "Request failed"));
+      const error = new Error(data.detail ? `${data.message}: ${data.detail}` : (data.message || "Request failed"));
+      error.code = data.code;
+      error.details = data.errors || [];
+      error.status = response.status;
+      throw error;
     }
 
     return data;

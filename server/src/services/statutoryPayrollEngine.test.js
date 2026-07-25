@@ -111,4 +111,17 @@ describe("2026 statutory payroll engine", () => {
     expect(result.sdl).toBe(0);
     expect(result.complianceExceptions).toEqual([]);
   });
+
+  test("adds claim reimbursements to net salary without increasing CPF wages", () => {
+    const baseline = calculateEmployeePayroll({ staff: staff({ base_salary: 4000 }), month: 7, year: 2026 });
+    const result = calculateEmployeePayroll({
+      staff: staff({ base_salary: 4000 }), month: 7, year: 2026,
+      reimbursements: [{ claimId: "CLM-1", label: "Transport reimbursement", amount: 125 }]
+    });
+    expect(result.grossSalary).toBe(baseline.grossSalary + 125);
+    expect(result.netSalary).toBe(baseline.netSalary + 125);
+    expect(result.cpfEmployee).toBe(baseline.cpfEmployee);
+    expect(result.cpfEmployer).toBe(baseline.cpfEmployer);
+    expect(result.deductionBreakdown.reimbursements[0]).toMatchObject({ claimId: "CLM-1", cpfApplicable: false, amount: 125 });
+  });
 });

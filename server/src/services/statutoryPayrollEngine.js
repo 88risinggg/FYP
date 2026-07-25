@@ -128,10 +128,14 @@ function calculateCpf({ wages, age, rules }) {
   };
 }
 
-function calculateEmployeePayroll({ staff, month, year, allowances = [], otherDeductions = [], configuration = {} }) {
+function calculateEmployeePayroll({ staff, month, year, allowances = [], reimbursements = [], otherDeductions = [], configuration = {} }) {
   const rules = { ...DEFAULT_PAYROLL_RULES_2026, ...configuration };
   const basicSalary = roundMoney(staff.base_salary);
-  const allowanceTotal = roundMoney(allowances.reduce((sum, item) => sum + Number(item.amount || 0), 0));
+  const payrollEarnings = [
+    ...allowances,
+    ...reimbursements.map((item) => ({ ...item, label: item.label || "Claim reimbursement", cpfApplicable: false }))
+  ];
+  const allowanceTotal = roundMoney(payrollEarnings.reduce((sum, item) => sum + Number(item.amount || 0), 0));
   const grossSalary = roundMoney(basicSalary + allowanceTotal);
   const componentRules = rules.componentCpfApplicable || {};
   const componentKey = (label) => {
@@ -143,7 +147,8 @@ function calculateEmployeePayroll({ staff, month, year, allowances = [], otherDe
   };
   const defaultCpfApplicability = { reimbursement: false, tips: false };
   const basicCpfApplicable = componentRules.basic_salary ?? true;
-  const cpfApplicableAllowances = allowances.filter((item) => {
+  const cpfApplicableAllowances = payrollEarnings.filter((item) => {
+    if (item.cpfApplicable === false) return false;
     const key = componentKey(item.label);
     return componentRules[key] ?? defaultCpfApplicability[key] ?? true;
   });
@@ -223,6 +228,13 @@ function calculateEmployeePayroll({ staff, month, year, allowances = [], otherDe
       otherDeductions: appliedOtherDeductions.map((item) => ({
         label: item.label || "Other deduction",
         amount: roundMoney(item.amount)
+      })),
+      reimbursements: reimbursements.map((item) => ({
+        claimId: item.claimId,
+        label: item.label || "Claim reimbursement",
+        amount: roundMoney(item.amount),
+        expenseDate: item.expenseDate || null,
+        cpfApplicable: false
       }))
     }
   };
