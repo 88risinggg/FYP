@@ -46,7 +46,8 @@ const DEFAULT_VANIDAY_MAPPING = {
   vanidayShare: "vanidayShare",
   salonShare: "salonshare",
   cashbackDiscount: "cashbackDiscount",
-  productType: "productType"
+  productType: "productType",
+  subscription: "subscription"
 };
 
 // =====================================================
@@ -78,7 +79,8 @@ const FIELD_ALIASES = {
   vanidayShare:    ["vanidayshare", "vaniday_share", "platform_share", "platformshare", "net_revenue", "netrevenue"],
   salonShare:      ["salonshare", "salon_share", "salon share", "merchant_share", "merchantshare", "payout"],
   cashbackDiscount:["cashbackdiscount", "cashback_discount", "cashback", "discount"],
-  productType:     ["producttype", "product_type", "type", "category", "service_type", "servicetype"]
+  productType:     ["producttype", "product_type", "type", "category", "service_type", "servicetype"],
+  subscription:    ["subscription", "subscription_plan", "plan", "plan_name", "planname", "subscription_name"]
 };
 
 function getFieldValue(row, mapping, fieldName) {
@@ -414,6 +416,7 @@ async function validateVanidayImport(rows, options = {}) {
     salonShare: getFieldValue(row, mapping, "salonShare"),
     cashbackDiscount: getFieldValue(row, mapping, "cashbackDiscount"),
     productType: getFieldValue(row, mapping, "productType"),
+    subscription: getFieldValue(row, mapping, "subscription"),
     _rawRow: row,
     _sourceIndex: sourceIndex
   }));
@@ -557,6 +560,25 @@ async function processVanidayImport(validationResult, userId, companyId = null) 
       // Step 1: Find or create customer by email
       const customerId = await findOrCreateCustomer(connection, primaryRecord, companyId);
 
+      // Step 1b: Resolve subscription if provided
+      let subscriptionId = null;
+      if (primaryRecord.subscription) {
+        try {
+          const [subRows] = await connection.query(
+            `SELECT subscription_id FROM subscriptions
+             WHERE customer_id = ? AND LOWER(plan_name) = ? AND status = 'Active'
+             ${companyId ? "AND company_id = ?" : ""}
+             LIMIT 1`,
+            companyId
+              ? [customerId, primaryRecord.subscription.toLowerCase(), companyId]
+              : [customerId, primaryRecord.subscription.toLowerCase()]
+          );
+          if (subRows.length > 0) {
+            subscriptionId = subRows[0].subscription_id;
+          }
+        } catch { /* subscriptions table may not exist yet */ }
+      }
+
       // Step 2: Generate invoice number
       const { invoiceId } = await reserveNextInvoiceNumber(connection, new Date(), companyId);
 
@@ -599,10 +621,10 @@ async function processVanidayImport(validationResult, userId, companyId = null) 
       try {
         [invoiceResult] = await connection.query(
           `INSERT INTO invoice
-            (status, issue_date, due_date, invoiceId, total_amount, customer_id, company_id, created_at,
+            (status, issue_date, due_date, invoiceId, total_amount, customer_id, company_id, subscription_id, created_at,
              vaniday_order_id, shop_title, seller_id, payment_method, service_provider,
              vaniday_share, salon_share, vaniday_commission)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             invoiceStatus,
             bookedDate,
@@ -611,6 +633,7 @@ async function processVanidayImport(validationResult, userId, companyId = null) 
             totalAmount,
             customerId,
             companyId,
+            subscriptionId,
             orderId,
             primaryRecord.shopTitle || null,
             primaryRecord.sellerId || null,
@@ -625,9 +648,9 @@ async function processVanidayImport(validationResult, userId, companyId = null) 
         // Fallback: insert with core columns only if extended columns don't exist
         [invoiceResult] = await connection.query(
           `INSERT INTO invoice
-            (status, issue_date, due_date, invoiceId, total_amount, customer_id, company_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
-          [invoiceStatus, bookedDate, dueDate, invoiceId, totalAmount, customerId, companyId]
+            (status, issue_date, due_date, invoiceId, total_amount, customer_id, company_id, subscription_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+          [invoiceStatus, bookedDate, dueDate, invoiceId, totalAmount, customerId, companyId, subscriptionId]
         );
         // Try updating extended columns one by one (best-effort)
         const invPk = invoiceResult.insertId;

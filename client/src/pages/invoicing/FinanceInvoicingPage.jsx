@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
   Banknote,
+  Bell,
   Building2,
   CalendarClock,
   CheckCircle2,
@@ -76,6 +77,7 @@ import {
   GRAY_COLOR
 } from "../../services/pdfExportService.js";
 import VanidayImportPage from "./VanidayImportPage.jsx";
+import SubscriptionsView from "../../components/invoicing/SubscriptionsView.jsx";
 
 const financeSidebarSections = [
   {
@@ -99,6 +101,10 @@ const financeSidebarSections = [
           {
             label: "Invoices",
             path: "/dashboard/invoicing/finance/invoices"
+          },
+          {
+            label: "Subscriptions",
+            path: "/dashboard/invoicing/finance/subscriptions"
           },
           {
             label: "Payments",
@@ -130,14 +136,19 @@ const financeSidebarSections = [
         path: "/dashboard/invoicing/finance/invoices"
       },
       {
-        label: "Bulk Upload",
-        icon: Upload,
-        path: "/dashboard/invoicing/finance/vaniday-import"
+        label: "Subscriptions",
+        icon: CalendarClock,
+        path: "/dashboard/invoicing/finance/subscriptions"
       },
       {
         label: "Payments",
         icon: CreditCard,
         path: "/dashboard/invoicing/finance/payments"
+      },
+      {
+        label: "Bulk Upload",
+        icon: Upload,
+        path: "/dashboard/invoicing/finance/vaniday-import"
       },
       {
         label: "Fraud Detection",
@@ -188,7 +199,8 @@ const invoiceTemplateHeaders = [
   "Customer Name",
   "Invoice Date",
   "Due Date",
-  "Amount"
+  "Amount",
+  "Subscription"
 ];
 
 const DEMO_INVOICES = [
@@ -2542,9 +2554,17 @@ function BulkUploadView({ onProcessed }) {
     <SectionShell
       eyebrow="Bulk Upload"
       title="Mass Invoice Import"
-      description={`Template columns: ${invoiceTemplateHeaders.join(", ")}.`}
+      description={`Template columns: ${invoiceTemplateHeaders.join(", ")}. The Subscription column is optional — leave blank for non-subscription invoices.`}
       action={
         <div className="flex flex-col items-end gap-3 sm:flex-row sm:items-center">
+          <a
+            href="/api/bulk-invoices/template"
+            download="sample_invoice_upload_template.xlsx"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#f2d5cc] px-4 py-2.5 text-sm font-medium text-[#6f4f47] hover:bg-[#fff3ee] transition"
+          >
+            <Download size={15} />
+            Download Template
+          </a>
           <button
             type="button"
             onClick={processRows}
@@ -3683,6 +3703,10 @@ export default function FinanceInvoicingPage() {
       return "reports";
     }
 
+    if (location.pathname.includes("/subscriptions")) {
+      return "subscriptions";
+    }
+
     return "dashboard";
   }, [location.pathname]);
 
@@ -3756,6 +3780,13 @@ export default function FinanceInvoicingPage() {
     };
   }, []);
 
+  // Refresh invoice data when navigating back to the invoices view
+  useEffect(() => {
+    if (activeView === "invoices") {
+      loadWorkspaceData().catch(() => {});
+    }
+  }, [activeView]);
+
   async function handleSendInvoice(invoiceId) {
     setError("");
     try {
@@ -3815,6 +3846,10 @@ export default function FinanceInvoicingPage() {
 
     if (activeView === "reports") {
       return <ReportsView />;
+    }
+
+    if (activeView === "subscriptions") {
+      return <SubscriptionsView />;
     }
 
     return (

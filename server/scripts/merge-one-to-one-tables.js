@@ -70,8 +70,8 @@ async function run() {
 
     // Step 4: Add columns from appearance_settings
     console.log("4. Adding appearance_settings columns to user table...");
-    await addColumn(pool, "user", "theme", "VARCHAR(20) DEFAULT 'system'");
-    await addColumn(pool, "user", "accent_color", "VARCHAR(20) DEFAULT '#7B2FF7'");
+    await addColumn(pool, "user", "theme", "VARCHAR(20) DEFAULT 'light'");
+    await addColumn(pool, "user", "accent_color", "VARCHAR(20) DEFAULT '#F38978'");
     await addColumn(pool, "user", "compact_mode", "TINYINT(1) DEFAULT 0");
     await addColumn(pool, "user", "font_size", "VARCHAR(20) DEFAULT 'medium'");
     await addColumn(pool, "user", "ui_language", "VARCHAR(10) DEFAULT 'en'");
