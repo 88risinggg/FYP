@@ -40,8 +40,10 @@ import {
   getFinancePayrollSchedule,
   getFinancePayrollSchedulePreview,
   getFinancePayrollRuns,
+  getFinancePayrollWorkflow,
   getPayslipPeriodSummary,
   performFinancePayrollScheduleAction,
+  performFinancePayrollWorkflowAction,
   recalculateFinancePayrollRun,
   reviewFinancePayrollAdjustments,
   saveFinancePayrollRun,
@@ -51,11 +53,11 @@ import {
 } from "../../services/financePayrollService.js";
 import {
   canAdvanceFinancePayrollRun,
-  getFinanceWorkflowState
+  getFinanceWorkflowState,
+  getFinanceAutoAdvance
 } from "../../utils/financePayrollWorkflow.js";
 import {
-  setupModernTreasuryRecipients,
-  submitModernTreasuryTransfer
+  setupModernTreasuryRecipients
 } from "../../services/payrollPaymentService.js";
 import { getStoredSession } from "../../services/sessionService.js";
 import {
@@ -118,10 +120,9 @@ const payrollSidebarSections = [
   {
     label: "GUIDED WORKFLOW",
     items: [
-      { label: "Schedule & Cut-off", icon: CalendarClock, path: "/dashboard/payroll/finance/payroll-schedule" },
       { label: "Claim Requests", icon: ReceiptText, path: "/dashboard/payroll/finance/employee-requests" },
       {
-        label: "Payroll Runs",
+        label: "Payroll Run Review",
         icon: ClipboardList,
         path: "/dashboard/payroll/finance/payroll-runs"
       },
@@ -131,10 +132,27 @@ const payrollSidebarSections = [
         path: "/dashboard/payroll/finance/staff-payroll-details"
       },
       {
-        label: "Payslips Approval",
+        label: "Payroll Approval",
         icon: CheckCircle2,
-        path: "/dashboard/payroll/finance/payslips-approval"
-      }
+        path: "/dashboard/payroll/finance/payroll-approval"
+      },
+      { label: "Payment Preparation", icon: FileText, path: "/dashboard/payroll/finance/payment-preparation" },
+      { label: "Payment Release", icon: Banknote, path: "/dashboard/payroll/finance/payment-release" },
+      { label: "Payslip Delivery", icon: Mail, path: "/dashboard/payroll/finance/payslip-delivery" },
+      { label: "Statutory & Ledger", icon: ReceiptText, path: "/dashboard/payroll/finance/statutory-ledger" },
+      { label: "Reconciliation & Reports", icon: FileBarChart, path: "/dashboard/payroll/finance/reconciliation-reports" }
+    ]
+  },
+  {
+    label: "STAFF DATA",
+    items: [
+      { label: "Staff Records", icon: Users, path: "/dashboard/payroll/finance/staff-records" }
+    ]
+  },
+  {
+    label: "CONFIGURATION",
+    items: [
+      { label: "Schedule & Cut-off", icon: CalendarClock, path: "/dashboard/payroll/finance/payroll-schedule" }
     ]
   },
   {
@@ -162,6 +180,13 @@ const routeHeadings = {
   "/dashboard/payroll/finance/payslips-approval": "Payslips Approval",
   "/dashboard/payroll/finance/employee-requests": "Claim Requests",
   "/dashboard/payroll/finance/staff-payroll-details": "Staff Payroll Details",
+  "/dashboard/payroll/finance/payroll-approval": "Payroll Approval",
+  "/dashboard/payroll/finance/payment-preparation": "Payment Preparation",
+  "/dashboard/payroll/finance/payment-release": "Payment Release",
+  "/dashboard/payroll/finance/payslip-delivery": "Payslip Delivery",
+  "/dashboard/payroll/finance/statutory-ledger": "Statutory & Ledger",
+  "/dashboard/payroll/finance/reconciliation-reports": "Reconciliation & Reports",
+  "/dashboard/payroll/finance/staff-records": "Staff Records",
   "/dashboard/payroll/finance/compliance-rules": "Compliance Rules",
   "/dashboard/payroll/finance/activity-log": "Payroll Activity Log",
   "/dashboard/payroll/finance/payroll-schedule": "Payroll Schedule",
@@ -1278,6 +1303,10 @@ function ActionButton({ children, disabled = false, disabledReason = "", icon: I
   const className =
     variant === "secondary"
       ? "inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/45"
+      : variant === "success"
+        ? "inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-600 bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+        : variant === "warning"
+          ? "inline-flex items-center justify-center gap-2 rounded-xl border border-orange-500 bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600"
       : "primary-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold";
   const handleClick = () => {
     if (isBlockedWithReason) {
@@ -1353,6 +1382,25 @@ function WorkflowCard({ run, step }) {
 function ExceptionPanel({ run }) {
   const exceptions = getRunExceptions(run);
   const [expandedException, setExpandedException] = useState("");
+  const [review, setReview] = useState({ completed: false, running: false, checkedAt: "", serverErrors: [], error: "" });
+  useEffect(() => {
+    setExpandedException("");
+    setReview({ completed: false, running: false, checkedAt: "", serverErrors: [], error: "" });
+  }, [run.id, run.updatedAt]);
+  const runReview = async () => {
+    setReview((current) => ({ ...current, running: true, error: "" }));
+    try {
+      await validateFinancePayrollRun(run.id);
+      setReview({ completed: true, running: false, checkedAt: new Date().toISOString(), serverErrors: [], error: "" });
+    } catch (reviewError) {
+      const serverErrors = Array.isArray(reviewError.details) ? reviewError.details : [];
+      setReview({ completed: Boolean(serverErrors.length), running: false, checkedAt: new Date().toISOString(), serverErrors, error: serverErrors.length ? "" : reviewError.message });
+    }
+  };
+  useEffect(() => {
+    runReview();
+  }, [run.id]);
+  const runWarnings = review.serverErrors.filter((item) => !item.payrollId);
   const groupedExceptions = Object.values(
     exceptions.reduce((groups, item) => {
       const group = groups[item.message] || {
@@ -1376,11 +1424,12 @@ function ExceptionPanel({ run }) {
           <h3 className="text-lg font-semibold text-[#251E1F]">Automated Exception Review</h3>
           <p className="mt-1 text-sm text-[#7b6660]">System validation before Finance approves payment.</p>
         </div>
-        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${exceptions.length ? "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]" : "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]"}`}>
-          {exceptions.length ? `${exceptions.length} exception(s)` : "No exceptions"}
-        </span>
+        <div className="flex flex-wrap items-center gap-2"><span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${!review.completed ? "border-[#f0d2ca] bg-white text-[#7b6660]" : exceptions.length ? "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]" : "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]"}`}>{!review.completed ? "Not checked" : exceptions.length ? `${exceptions.length} exception(s)` : "No exceptions"}</span><ActionButton icon={review.running ? Loader2 : RefreshCw} variant="secondary" disabled={review.running} onClick={runReview}>{review.running ? "Running review..." : review.completed ? "Run review again" : "Run automated review"}</ActionButton></div>
       </div>
-      <div className="mt-5 grid gap-3">
+      {!review.completed && !review.error ? <div className="mt-5 rounded-xl border border-dashed border-[#f0d2ca] bg-[#fff8f5] p-5 text-sm text-[#7b6660]"><strong className="block text-[#251E1F]">Review has not been run for this page session.</strong><span className="mt-1 block">Select Run automated review to check the stored payroll snapshot and show affected staff.</span></div> : null}
+      {review.error ? <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{review.error}</div> : null}
+      {review.completed && runWarnings.length ? <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><strong>Run-level warning:</strong> {runWarnings.map((item) => item.message).join(" ")}</div> : null}
+      {review.completed ? <div className="mt-5 grid gap-3">
         {groupedExceptions.length ? (
           groupedExceptions.map((group) => (
             <div key={group.message} className="rounded-xl border border-[#D97706]/20 bg-[#D97706]/10 p-4 text-sm">
@@ -1415,7 +1464,8 @@ function ExceptionPanel({ run }) {
         ) : (
           <EmptyState message="All selected payroll records passed automated checks." />
         )}
-      </div>
+      </div> : null}
+      {review.checkedAt ? <p className="mt-3 text-right text-xs text-[#7b6660]">Last checked {formatDateTime(review.checkedAt)}</p> : null}
     </div>
   );
 }
@@ -1670,30 +1720,33 @@ function RunSelector({ payrollRuns, selectedRunId, onSelectRun }) {
   );
 }
 
-function FinancePayrollJourney({ run }) {
+function FinancePayrollJourney({ run, isLiveUpdating = false, lastSyncAt = null, activityLabel = "" }) {
   const navigate = useNavigate();
   const completed = getCompletedSteps(run);
   const exceptions = getRunExceptions(run).length;
   const approvedStaff = (run?.employees || []).filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length;
   const allStaffReviewed = Boolean(run?.employees?.length) && approvedStaff === run.employees.length && exceptions === 0;
+  const recipientsReady = Number(run?.paymentRecipientsConfigured || 0) >= (run?.employees?.length || 0);
   const stages = [
-    ["Schedule & cut-off", "/dashboard/payroll/finance/payroll-schedule", Boolean(run?.effectiveClaimCutoffAt && run?.scheduledReleaseAt), false, "Optional"],
     ["Claim requests", "/dashboard/payroll/finance/employee-requests", Boolean(run?.submittedAt), false, "Snapshotted"],
     ["Payroll run review", "/dashboard/payroll/finance/payroll-runs", completed.reviewed, Boolean(run?.rulesChanged), "Review"],
     ["Staff review", "/dashboard/payroll/finance/staff-payroll-details", allStaffReviewed, exceptions > 0, "Adjust"],
-    ["Payroll approval", "/dashboard/payroll/finance/payroll-runs", completed.approved, !completed.reviewed || !allStaffReviewed, "Approve"],
-    ["Payment & payslips", "/dashboard/payroll/finance/payslips-approval", completed.paid && completed.payslipsSent, !completed.approved, "Release"],
-    ["Reports & reconciliation", "/dashboard/payroll/finance/payroll-reports", completed.reconciled, !completed.ledgerRecorded, "Reconcile"]
+    ["Payroll approval", "/dashboard/payroll/finance/payroll-approval", completed.approved, !completed.reviewed || !allStaffReviewed, "Approve"],
+    ["Payment preparation", "/dashboard/payroll/finance/payment-preparation", Boolean(run?.paymentFileGeneratedAt && recipientsReady), !completed.approved, "Prepare"],
+    ["Payment release", "/dashboard/payroll/finance/payment-release", completed.paid, !run?.paymentFileGeneratedAt, run?.paymentStatus === "Processing" ? "Processing" : run?.paymentStatus === "Failed" ? "Failed" : "Release"],
+    ["Payslip delivery", "/dashboard/payroll/finance/payslip-delivery", completed.payslipsSent, !completed.paid, "Deliver"],
+    ["Statutory & ledger", "/dashboard/payroll/finance/statutory-ledger", completed.ledgerRecorded && completed.cpfLogged && completed.otherDeductionsLogged, !completed.payslipsSent, "Record"],
+    ["Reconcile & report", "/dashboard/payroll/finance/reconciliation-reports", completed.reconciled, !completed.ledgerRecorded, "Reconcile"]
   ];
-  const currentIndex = stages.findIndex((stage, index) => index > 0 && !stage[2] && !stage[3]);
+  const currentIndex = stages.findIndex((stage) => !stage[2] && !stage[3]);
   return (
     <nav aria-label="Finance payroll progress" className="app-panel mb-5 rounded-2xl px-4 py-3">
-      <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-[#251E1F]">Payroll progress</p><span className="text-xs font-medium text-[#7b6660]">{formatPayrollPeriod(run)}</span></div>
-      <ol className="mt-3 flex min-w-max items-stretch gap-2 overflow-x-auto pb-1">
+      <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-semibold text-[#251E1F]">Payroll progress</p><div className="flex items-center gap-2"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${isLiveUpdating ? "bg-blue-100 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}><span className={`h-2 w-2 rounded-full ${isLiveUpdating ? "bg-blue-500 motion-safe:animate-pulse" : "bg-emerald-500"}`}/>{isLiveUpdating ? activityLabel || "Updating workflow…" : `Live${lastSyncAt ? ` · ${lastSyncAt.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}`}</span><span className="text-xs font-medium text-[#7b6660]">{formatPayrollPeriod(run)}</span></div></div>
+      <ol className="mt-3 flex min-w-max items-center overflow-x-auto pb-2">
         {stages.map(([label, path, done, blocked, fallback], index) => {
           const current = index === currentIndex;
           const status = blocked ? "Blocked" : done ? "Complete" : current ? "Current" : fallback || "Upcoming";
-          return <li key={label}><button type="button" onClick={() => navigate(path)} aria-label={`${label}: ${status}`} className={`flex h-full w-44 items-center gap-2 rounded-xl border px-3 py-2 text-left transition motion-reduce:transition-none ${blocked ? "border-amber-300 bg-amber-50" : done ? "border-emerald-200 bg-emerald-50" : current ? "border-[#F38978] bg-[#F38978]/10" : "border-[#f0d2ca] bg-white"}`}><span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${done ? "bg-emerald-600 text-white" : blocked ? "bg-amber-500 text-white" : current ? "bg-[#F38978] text-white" : "bg-[#f0d2ca] text-[#7b6660]"}`}>{done ? "✓" : index + 1}</span><span className="min-w-0"><strong className="block truncate text-xs text-[#251E1F]">{label}</strong><small className="block text-[11px] text-[#7b6660]">{status}</small></span></button></li>;
+          return <li key={label} className="flex items-center"><button type="button" onClick={() => navigate(path)} aria-label={`${label}: ${status}`} className={`relative flex h-full w-44 items-center gap-2 rounded-xl border px-3 py-2 text-left transition-all duration-500 motion-reduce:transition-none ${blocked ? "border-red-300 bg-red-50" : done ? "border-emerald-200 bg-emerald-50" : current ? "border-[#F38978] bg-[#F38978]/10 shadow-lg shadow-[#F38978]/20" : "border-[#f0d2ca] bg-white"}`}><span className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${done ? "bg-emerald-600 text-white" : blocked ? "bg-red-500 text-white" : current ? "bg-[#F38978] text-white motion-safe:animate-pulse" : "bg-[#f0d2ca] text-[#7b6660]"}`}>{current ? <span aria-hidden="true" className="absolute inset-0 rounded-full border-2 border-[#F38978] motion-safe:animate-ping"/> : null}<span className="relative">{done ? "✓" : blocked ? "!" : index + 1}</span></span><span className="min-w-0"><strong className="block truncate text-xs text-[#251E1F]">{label}</strong><small className={`block text-[11px] ${blocked ? "text-red-700" : current ? "font-semibold text-[#F38978]" : "text-[#7b6660]"}`}>{status}</small></span></button>{index < stages.length - 1 ? <span aria-hidden="true" className={`h-1 w-8 overflow-hidden rounded-full ${done ? "bg-emerald-200" : "bg-[#f0d2ca]"}`}><span className={`block h-full rounded-full transition-all duration-700 motion-reduce:transition-none ${done ? "w-full bg-emerald-500" : current ? "w-1/2 bg-[#F38978] motion-safe:animate-pulse" : "w-0"}`}/></span> : null}</li>;
         })}
       </ol>
     </nav>
@@ -2101,6 +2154,7 @@ function PayrollRunsView({
   onRecalculateRun,
   onSaveRun,
   onSelectRun,
+  onSystemCheckApproveAll,
   onSetupModernTreasuryRecipients,
   onSubmitModernTreasuryTransfer,
   paymentError,
@@ -2108,6 +2162,7 @@ function PayrollRunsView({
   payrollRuns,
   recalculationProcessing,
   saveProcessing,
+  simulationProcessing,
   recipientSetupProcessing,
   selectedRun
 }) {
@@ -2185,8 +2240,8 @@ function PayrollRunsView({
             <p className="font-semibold">Admin payroll rules changed — recalculation required</p>
             <p className="mt-1 text-sm">This pending run uses an older Admin rule snapshot. Recalculate before Finance reviews or approves it.</p>
           </div>
-          <ActionButton icon={recalculationProcessing ? Loader2 : RefreshCw} disabled={recalculationProcessing} onClick={onRecalculateRun}>
-            {recalculationProcessing ? "Recalculating..." : "Recalculate with latest Admin rules"}
+          <ActionButton icon={simulationProcessing ? Loader2 : RefreshCw} disabled={simulationProcessing} onClick={onSystemCheckApproveAll}>
+            {simulationProcessing ? "Refreshing and checking..." : "Recalculate & recheck salaries"}
           </ActionButton>
         </div>
       ) : selectedRun.recalculatedAt && !steps.reviewed ? (
@@ -2248,21 +2303,20 @@ function PayrollRunsView({
             </div>
           </div>
           <div className="mt-5 grid gap-3">
-            {!steps.reviewed ? <><ActionButton icon={ClipboardCheck} disabled={selectedRun.rulesChanged} disabledReason={selectedRun.rulesChanged ? "Recalculate this run using the latest Admin rules first." : ""} onClick={() => onAdvanceRun("reviewed")}>Next: Validate & review payroll</ActionButton><p className="text-xs text-[#7b6660]">Stage 1: validate the run and record Finance review.</p></> : exceptionCount ? <><ActionButton icon={ListChecks} onClick={() => navigate("/dashboard/payroll/finance/staff-payroll-details")}>Next: Review suggested adjustments</ActionButton><p className="text-xs text-amber-700">Stage 2 is blocked by {exceptionCount} exception(s).</p></> : !steps.approved ? <><ActionButton icon={ShieldCheck} disabled={!canApprove} disabledReason={getApprovalBlockedReason()} onClick={() => onAdvanceRun("approved")}>Next: Approve payroll</ActionButton><p className="text-xs text-[#7b6660]">Stage 3 locks the reviewed payroll run.</p></> : null}
+            {!steps.reviewed ? <><ActionButton icon={ClipboardCheck} disabled={selectedRun.rulesChanged || saveProcessing} disabledReason={selectedRun.rulesChanged ? "Recalculate this run using the latest Admin rules first." : saveProcessing ? "Saving the current workflow change." : ""} onClick={() => onAdvanceRun("reviewed")}>Next: Validate & review payroll</ActionButton><p className="text-xs text-[#7b6660]">Stage 1: validate the run and record Finance review.</p></> : exceptionCount ? <><ActionButton icon={ListChecks} onClick={() => navigate("/dashboard/payroll/finance/staff-payroll-details")}>Next: Review suggested adjustments</ActionButton><p className="text-xs text-amber-700">Stage 2 is blocked by {exceptionCount} exception(s).</p></> : !steps.approved ? <><ActionButton icon={ShieldCheck} disabled={!canApprove || saveProcessing} disabledReason={saveProcessing ? "Saving the current workflow change." : getApprovalBlockedReason()} onClick={() => onAdvanceRun("approved")}>{saveProcessing ? "Approving payroll..." : "Next: Approve payroll"}</ActionButton><p className="text-xs text-[#7b6660]">Stage 3 locks the reviewed payroll run.</p></> : null}
             <div className="rounded-xl border border-[#f0d2ca] bg-[#fff8f5] p-4"><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Workflow stages</p><ol className="mt-3 space-y-2 text-sm">{[["1","Validate & review",steps.reviewed],["2","Suggested adjustments",!exceptionCount],["3","Approve payroll",steps.approved],["4","Generate payment PDF",Boolean(selectedRun.paymentFileGeneratedAt)],["5","Submit / confirm payment",steps.paid],["6","Send payslips",steps.payslipsSent],["7","Statutory logs & ledger",steps.ledgerRecorded],["8","Reconcile & report",steps.reconciled]].map(([number,label,done]) => <li key={number} className="flex items-center gap-2"><span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${done ? "bg-emerald-600 text-white" : "bg-[#f0d2ca] text-[#7b6660]"}`}>{done ? "✓" : number}</span><span className={done ? "text-[#2f8758]" : "text-[#7b6660]"}>{label}</span></li>)}</ol></div>
-            <ActionButton icon={ShieldCheck} variant="secondary" disabled={saveProcessing || selectedRun.rulesChanged} onClick={onSaveRun}>{saveProcessing ? "Saving..." : "Save Review Changes"}</ActionButton>
-            <ActionButton
+            {steps.approved && !selectedRun.paymentFileGeneratedAt ? <ActionButton
               icon={Download}
-              disabled={!steps.approved || selectedRun.paymentFileGeneratedAt}
+              disabled={saveProcessing}
               disabledReason={getPaymentPdfBlockedReason()}
               onClick={onGeneratePaymentFile}
             >
-              Generate Payment PDF
-            </ActionButton>
-            <ActionButton
+              Next: Generate Payment PDF
+            </ActionButton> : null}
+            {selectedRun.paymentFileGeneratedAt && !steps.paid ? <><div className="rounded-xl border border-[#2D7C83]/20 bg-[#2D7C83]/10 p-3 text-xs text-[#2D7C83]">Payment stage: configure recipients, then submit through Modern Treasury or use manual confirmation.</div><ActionButton
               icon={Users}
               variant="secondary"
-              disabled={!steps.approved || !approvedStaffCount || recipientSetupProcessing}
+              disabled={!approvedStaffCount || recipientSetupProcessing}
               disabledReason={getRecipientSetupBlockedReason()}
               onClick={onSetupModernTreasuryRecipients}
             >
@@ -2284,34 +2338,30 @@ function PayrollRunsView({
               onClick={() => onAdvanceRun("paid")}
             >
               Manual Confirm
-            </ActionButton>
-            <ActionButton
+            </ActionButton></> : null}
+            {steps.paid && !steps.payslipsSent ? <ActionButton
               icon={Mail}
-              variant="secondary"
-              disabled={!steps.paid || steps.payslipsSent}
+              disabled={false}
               disabledReason={getPayslipBlockedReason()}
               onClick={() => onAdvanceRun("payslipsSent")}
             >
-              Send Payslips
-            </ActionButton>
-            <ActionButton
+              Next: Send Payslips
+            </ActionButton> : null}
+            {steps.payslipsSent && !steps.statutoryDeductionsLogged ? <ActionButton icon={Building2} onClick={() => onAdvanceRun("statutoryLogged")}>Next: Record statutory deductions</ActionButton> : null}
+            {steps.payslipsSent && steps.statutoryDeductionsLogged && !steps.ledgerRecorded ? <ActionButton
               icon={Building2}
-              variant="secondary"
-              disabled={!steps.payslipsSent || !steps.statutoryDeductionsLogged || steps.ledgerRecorded}
               disabledReason={getLedgerBlockedReason()}
               onClick={() => onAdvanceRun("ledgerRecorded")}
             >
-              Record in Ledger
-            </ActionButton>
-            <ActionButton
+              Next: Record in Ledger
+            </ActionButton> : null}
+            {steps.ledgerRecorded && !steps.reconciled ? <ActionButton
               icon={FileBarChart}
-              variant="secondary"
-              disabled={!steps.ledgerRecorded || steps.reconciled}
               disabledReason={getReconciliationBlockedReason()}
               onClick={() => onAdvanceRun("reconciled")}
             >
-              Reconcile
-            </ActionButton>
+              Next: Reconcile and report
+            </ActionButton> : null}
           </div>
           <div className="mt-6 rounded-xl border border-[#f0d2ca] bg-white/80 p-4 text-sm text-[#7b6660]">
             Bank reference: <span className="font-semibold text-[#251E1F]">{selectedRun.bankReference || "Pending payment"}</span>
@@ -2360,27 +2410,28 @@ function PayrollRunsView({
 // -----------------------------------------------------------------------------
 
 function PayrollItemList({ items, title }) {
+  const total = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   return (
-    <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
-      <h4 className="text-sm font-semibold text-[#251E1F]">{title}</h4>
-      <div className="mt-3 space-y-2">
+    <div className="flex min-h-56 flex-col rounded-xl border border-[#f0d2ca] bg-white/80 p-4">
+      <div className="flex items-center justify-between gap-3 border-b border-[#f0d2ca] pb-3"><h4 className="text-sm font-semibold text-[#251E1F]">{title}</h4><span className="rounded-full bg-[#fff8f5] px-2 py-1 text-[11px] font-semibold text-[#7b6660]">{items.length} {items.length === 1 ? "item" : "items"}</span></div>
+      <div className="flex-1 divide-y divide-[#f0d2ca]">
         {items.length ? (
           items.map((item, index) => (
-            <div key={`${item.label}-${index}`} className="grid grid-cols-[1fr_5rem_7rem] gap-3 text-sm">
-              <span className="text-[#7b6660]">{item.label}</span>
-              <span className="text-[#7b6660]">{item.rate || "-"}</span>
-              <span className="text-right font-semibold text-[#251E1F]">{formatMoney(item.amount)}</span>
+            <div key={`${item.label}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 py-3 text-sm first:pt-3">
+              <div className="min-w-0"><span title={item.label} className="block break-words font-medium leading-5 text-[#554945]">{item.label}</span>{item.rate && item.rate !== "-" ? <span className="mt-1 inline-flex rounded-md bg-[#f5efec] px-2 py-0.5 text-[11px] leading-4 text-[#7b6660]">{item.rate}</span> : null}</div>
+              <span className="whitespace-nowrap text-right font-semibold tabular-nums text-[#251E1F]">{formatMoney(item.amount)}</span>
             </div>
           ))
         ) : (
-          <p className="text-sm text-[#7b6660]">No items recorded.</p>
+          <div className="flex min-h-24 items-center justify-center text-sm text-[#7b6660]">No items recorded.</div>
         )}
       </div>
+      <div className="mt-2 flex items-center justify-between border-t-2 border-[#f0d2ca] pt-3"><span className="text-xs font-semibold uppercase tracking-wide text-[#7b6660]">Total</span><strong className="text-base tabular-nums text-[#251E1F]">{formatMoney(total)}</strong></div>
     </div>
   );
 }
 
-function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
+function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave, onStatusChange }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(employee);
   const exceptions = getEmployeeExceptions(draft);
@@ -2388,6 +2439,7 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
   const mbmfReview = getMbmfReview(draft);
   const numberFields = ["workingDays", "noPayLeave", "previousGrossPay"];
   const isDatabaseBacked = employee.recordSource === "staff_db";
+  const financeStatus = getEmployeeFinanceStatus(draft);
 
   const updateField = (field, value) => {
     setDraft((current) => ({
@@ -2515,13 +2567,15 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+        <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.2fr_0.9fr]">
           <PayrollItemList title="Earnings" items={getEmployeeEarningItems(draft)} />
           <PayrollItemList title="Deductions" items={getEmployeeReviewDeductionItems(draft)} />
           <PayrollItemList title="Employer Expenses" items={getEmployeeReviewEmployerItems(draft)} />
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-3 border-t border-[#f0d2ca] pt-5">
+        <div className="mt-5 flex flex-col gap-4 border-t border-[#f0d2ca] pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <div><p className="text-xs font-semibold uppercase tracking-wide text-[#7b6660]">Finance decision</p><div className="mt-2 flex items-center gap-2"><span className={`rounded-full border px-3 py-1 text-xs font-semibold ${financeStatus === "Approved" ? "border-emerald-300 bg-emerald-50 text-emerald-700" : financeStatus === "Hold" ? "border-amber-300 bg-amber-50 text-amber-800" : "border-[#f0d2ca] bg-white text-[#7b6660]"}`}>{financeStatus}</span>{exceptions.length ? <span className="text-xs text-red-700">Approval unavailable until {exceptions.length} exception(s) are resolved.</span> : null}</div></div>
+          <div className="flex flex-wrap gap-3">
           {isEditing ? (
             <>
               <ActionButton icon={Plus} variant="secondary" onClick={() => addPayrollItem("earningItems", "Earning")}>
@@ -2548,10 +2602,9 @@ function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave }) {
               </ActionButton>
             </>
           ) : (
-            <ActionButton icon={Edit3} disabled={isLocked || isDatabaseBacked} disabledReason={isDatabaseBacked ? "Database payroll results must be corrected at source and recalculated." : "Approved payroll runs are locked."} onClick={() => setIsEditing(true)}>
-              Edit Details
-            </ActionButton>
+            <><ActionButton icon={Edit3} variant="secondary" disabled={isLocked || isDatabaseBacked} disabledReason={isDatabaseBacked ? "Database payroll results must be corrected at source and recalculated." : "Approved payroll runs are locked."} onClick={() => setIsEditing(true)}>Edit Details</ActionButton><ActionButton icon={ShieldCheck} variant="success" disabled={isLocked || Boolean(exceptions.length) || financeStatus === "Approved"} disabledReason={exceptions.length ? "Resolve automated compliance exceptions before approval." : isLocked ? "Approved payroll runs are locked." : ""} onClick={() => { onStatusChange(employee.id, "Approved"); onClose(); }}>Approve salary</ActionButton><ActionButton icon={X} variant="warning" disabled={isLocked || financeStatus === "Hold"} disabledReason={isLocked ? "Approved payroll runs are locked." : ""} onClick={() => { onStatusChange(employee.id, "Hold"); onClose(); }}>Place on hold</ActionButton></>
           )}
+          </div>
         </div>
       </section>
     </div>
@@ -3055,11 +3108,12 @@ function ExplainablePayrollAdjustmentReview({ selectedRun, onRunUpdated }) {
   </section>;
 }
 
-function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, onRunUpdated, onSelectRun, payrollRuns, selectedRun }) {
+function StaffPayrollDetailsView({ onSystemCheckApproveAll, onUpdateEmployee, onUpdateStaffStatus, onRunUpdated, onSelectRun, payrollRuns, selectedRun, simulationProcessing, simulationResult }) {
   const stats = getAggregatePayrollStats([selectedRun]);
   const isLocked = getCompletedSteps(selectedRun).approved;
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const selectedEmployee = selectedRun.employees.find((employee) => employee.id === selectedEmployeeId);
+  const salaryApprovalCount = selectedRun.employees.filter((employee) => getEmployeeFinanceStatus(employee) === "Approved").length;
   return (
     <PageShell heading="Staff Review & Adjustments" actions={<RunSelector payrollRuns={payrollRuns} selectedRunId={selectedRun.id} onSelectRun={onSelectRun} />}>
       <div className="mb-4 rounded-2xl border border-[#2D7C83]/20 bg-[#2D7C83]/10 p-4 text-sm text-[#2D7C83]"><strong>{formatPayrollPeriod(selectedRun)}</strong> is the only period included in the employee table and totals below.</div>
@@ -3074,6 +3128,8 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, onRunU
       </div>
       <ExplainablePayrollAdjustmentReview selectedRun={selectedRun} onRunUpdated={onRunUpdated} />
       <div className="app-panel mt-6 overflow-hidden rounded-2xl">
+        <div className="flex flex-col gap-3 border-b border-[#f0d2ca] bg-[#fff8f5] px-6 py-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold text-[#251E1F]">Salary approval simulation</p><span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-[#2D7C83]">{salaryApprovalCount}/{selectedRun.employees.length} approved</span></div><p className="mt-1 text-xs text-[#7b6660]">For presentation use: runs the automated system check, approves every eligible salary row below, and keeps flagged staff on hold.</p></div><ActionButton icon={ShieldCheck} disabled={isLocked || simulationProcessing} disabledReason={isLocked ? "Approved payroll runs are locked." : ""} onClick={onSystemCheckApproveAll}>{simulationProcessing ? "Checking and approving salaries..." : "System Check & Approve All Salaries"}</ActionButton></div>
+        {simulationResult ? <div className={`border-b px-6 py-3 text-sm ${simulationResult.error ? "border-red-200 bg-red-50 text-red-700" : simulationResult.held ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{simulationResult.message}</div> : null}
         <div className="grid grid-cols-8 gap-4 border-b border-[#f0d2ca] px-6 py-4 text-xs font-semibold uppercase tracking-wide text-[#F38978]/80">
           <span>Employee</span>
           <span>Department</span>
@@ -3090,7 +3146,7 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, onRunU
           const status = getEmployeeFinanceStatus(employee);
 
           return (
-            <div key={employee.id} className="grid grid-cols-8 gap-4 border-b border-[#f0d2ca] px-6 py-4 text-sm last:border-b-0">
+            <div key={employee.id} className={`grid grid-cols-8 gap-4 border-b px-6 py-4 text-sm last:border-b-0 ${exceptions.length ? "border-l-4 border-l-red-500 border-b-red-200 bg-red-50" : "border-[#f0d2ca]"}`}>
               <span>
                 <button
                   type="button"
@@ -3099,7 +3155,7 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, onRunU
                 >
                   {employee.name}
                 </button>
-                {exceptions.length ? <span className="mt-1 block text-xs text-[#9A6412]">{exceptions.join(", ")}</span> : null}
+                {exceptions.length ? <><span className="mt-1 block w-fit rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Flagged by automated review</span><span className="mt-1 block text-xs font-medium text-red-700">{exceptions.join(", ")}</span></> : null}
               </span>
               <span className="text-[#7b6660]">
                 <span className="block">{employee.department || "Missing"}</span>
@@ -3117,7 +3173,7 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, onRunU
                 <span className="block text-xs">{employee.bankAccount || "Missing account"}</span>
               </span>
               <span>
-                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${status === "Approved" ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : status === "Hold" ? "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]" : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"}`}>
+                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${exceptions.length ? "border-red-300 bg-red-100 text-red-700" : status === "Approved" ? "border-[#2f8758]/25 bg-[#2f8758]/10 text-[#2f8758]" : status === "Hold" ? "border-[#D97706]/25 bg-[#D97706]/10 text-[#9A6412]" : "border-[#f0d2ca] bg-white/80 text-[#7b6660]"}`}>
                   {status}
                 </span>
               </span>
@@ -3157,6 +3213,7 @@ function StaffPayrollDetailsView({ onUpdateEmployee, onUpdateStaffStatus, onRunU
           employee={selectedEmployee}
           isLocked={isLocked}
           onClose={() => setSelectedEmployeeId("")}
+          onStatusChange={onUpdateStaffStatus}
           onSave={(updatedEmployee) => onUpdateEmployee(updatedEmployee.id, updatedEmployee)}
         />
       ) : null}
@@ -3665,6 +3722,76 @@ function PayrollSummariesView({ payrollRuns, selectedRun }) {
 // 12. View router
 // -----------------------------------------------------------------------------
 
+function FinanceStaffRecordsView() {
+  const session = getStoredSession();
+  const [staff, setStaff] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    let active = true;
+    fetch(`${API_BASE_URL}/api/hr/staff`, { headers: getAuthHeaders(session?.token) })
+      .then(async (response) => { const body = await response.json(); if (!response.ok) throw new Error(body.message || "Unable to load HR staff records."); return body; })
+      .then((rows) => { if (active) { setStaff(Array.isArray(rows) ? rows : []); setError(""); } })
+      .catch((loadError) => { if (active) setError(loadError.message); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [session?.token]);
+  const query = search.trim().toLowerCase();
+  const filtered = staff.filter((item) => [item.employee_code, item.name, item.department_name, item.email, item.bank].some((value) => String(value || "").toLowerCase().includes(query)));
+  return <PageShell heading="Staff Records" actions={<label className="flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white px-3 py-2"><Search size={16} className="text-[#F38978]"/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search staff records" className="w-56 bg-transparent text-sm outline-none"/></label>}>
+    <div className="mb-5 rounded-2xl border border-[#2D7C83]/25 bg-[#2D7C83]/10 p-5 text-sm text-[#2D7C83]"><strong>Read-only HR staff data for Finance.</strong><p className="mt-1">Use these records to verify payroll identity, salary basis, CPF eligibility, department allocation and payment readiness. HR remains responsible for corrections.</p></div>
+    {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : loading ? <div className="flex items-center gap-2 p-8 text-sm text-[#7b6660]"><Loader2 size={17} className="animate-spin"/>Loading HR staff records...</div> : <div className="app-panel overflow-x-auto rounded-2xl"><table className="min-w-[60rem] w-full text-left text-sm"><thead><tr className="border-b border-[#f0d2ca] text-xs uppercase tracking-wide text-[#F38978]"><th className="px-5 py-4">Employee</th><th>Department</th><th>Base salary</th><th>CPF verification</th><th>Payment details</th><th>Status</th></tr></thead><tbody>{filtered.map((item) => <tr key={item.employee_id} className="border-b border-[#f0d2ca] last:border-0"><td className="px-5 py-4"><strong className="block text-[#251E1F]">{item.name}</strong><span className="text-xs text-[#7b6660]">{item.employee_code || item.employee_id} · {item.email || "No email"}</span></td><td>{item.department_name || <span className="font-semibold text-red-600">Missing</span>}</td><td className="font-semibold">{formatMoney(item.base_salary)}</td><td><span className={item.date_of_birth ? "text-[#2f8758]" : "font-semibold text-red-600"}>{item.date_of_birth ? `DOB recorded · ${item.race || "Race not recorded"}` : "DOB missing"}</span></td><td><strong className="block">{item.bank || "Missing bank"}</strong><span className="text-xs text-[#7b6660]">{item.account_no ? `Account ending ${String(item.account_no).slice(-4)}` : "Account number missing"}</span></td><td><span className={`rounded-full px-2 py-1 text-xs font-semibold ${Number(item.status) === 1 ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{Number(item.status) === 1 ? "Active" : "Inactive"}</span></td></tr>)}</tbody></table>{!filtered.length ? <div className="p-8 text-center text-sm text-[#7b6660]">No staff records match this search.</div> : null}</div>}
+  </PageShell>;
+}
+
+function GuidedWorkflowStageView({ stage, selectedRun, payrollRuns, onSelectRun, onAction, onGeneratePaymentFile, onSetupRecipients, onSubmitPayment, onRecalculate, busy, error }) {
+  const state = getCompletedSteps(selectedRun);
+  const approvedStaff = selectedRun.employees.filter((employee) => employee.financeStatus === "Approved").length;
+  const allStaffApproved = approvedStaff === selectedRun.employees.length && approvedStaff > 0;
+  const definitions = {
+    review: { title: "Payroll Run Review", description: "Run database-backed compliance checks against the immutable rule snapshot before reviewing employees.", checks: [["Admin rules snapshot is current", !selectedRun.rulesChanged], ["Automated compliance review completed", state.reviewed]], action: "review", label: "Run compliance review", ready: !selectedRun.rulesChanged, done: state.reviewed },
+    approval: { title: "Payroll Approval", description: "Confirm the reviewed employee results and lock this payroll period for payment.", checks: [["Compliance review completed", state.reviewed], [`All staff approved (${approvedStaff}/${selectedRun.employees.length})`, allStaffApproved], ["No active rule change", !selectedRun.rulesChanged]], action: "approve-payroll", label: "Approve and lock payroll", ready: state.reviewed && allStaffApproved && !selectedRun.rulesChanged, done: state.approved },
+    preparation: { title: "Payment Preparation", description: "Create the Finance payment document and configure every approved Modern Treasury recipient.", checks: [["Payroll approved", state.approved], ["Payment PDF generated", Boolean(selectedRun.paymentFileGeneratedAt)], ["Recipients configured", Number(selectedRun.paymentRecipientsConfigured || 0) >= selectedRun.employees.length]], ready: state.approved, done: Boolean(selectedRun.paymentFileGeneratedAt) && Number(selectedRun.paymentRecipientsConfigured || 0) >= selectedRun.employees.length },
+    payment: { title: "Payment Release", description: "Submit the approved batch to Modern Treasury, then confirm settlement before delivery.", checks: [["Payment PDF generated", Boolean(selectedRun.paymentFileGeneratedAt)], ["Recipients configured", Number(selectedRun.paymentRecipientsConfigured || 0) >= selectedRun.employees.length], ["Batch submitted", Boolean(selectedRun.paymentSubmittedAt)], ["Settlement confirmed", state.paid]], ready: Boolean(selectedRun.paymentFileGeneratedAt) && Number(selectedRun.paymentRecipientsConfigured || 0) >= selectedRun.employees.length, done: state.paid },
+    payslips: { title: "Payslip Delivery", description: "Generate and deliver employee payslips after payment settlement. Successful deliveries are never resent.", checks: [["Payment confirmed", state.paid], ["All payslips delivered", state.payslipsSent]], action: "send-payslips", label: state.payslipsSent ? "Payslips delivered" : "Send pending payslips", ready: state.paid, done: state.payslipsSent },
+    statutory: { title: "Statutory & Ledger", description: "Record CPF, MBMF, SDL, recoveries, and the balanced payroll journal.", checks: [["Payslips delivered", state.payslipsSent], ["Statutory deductions logged", state.cpfLogged && state.otherDeductionsLogged], ["Payroll ledger recorded", state.ledgerRecorded]], action: "record-statutory-ledger", label: "Record statutory items and ledger", ready: state.payslipsSent, done: state.ledgerRecorded && state.cpfLogged && state.otherDeductionsLogged },
+    reconciliation: { title: "Reconciliation & Reports", description: "Match the confirmed payment reference to payroll totals and complete the period.", checks: [["Payment confirmed", state.paid], ["Ledger recorded", state.ledgerRecorded], ["Payroll reconciled", state.reconciled]], action: "reconcile", label: "Reconcile and complete reporting", ready: state.ledgerRecorded, done: state.reconciled }
+  };
+  const item = definitions[stage];
+  const runAction = async (action, payload) => { try { await onAction(action, payload); } catch { /* error banner is shared */ } };
+  return <PageShell heading={item.title} actions={<RunSelector payrollRuns={payrollRuns} selectedRunId={selectedRun.id} onSelectRun={onSelectRun} />}>
+    <div className="grid gap-5 lg:grid-cols-[1fr_22rem]">
+      <section className="app-panel rounded-2xl p-6"><p className="text-sm text-[#7b6660]">{item.description}</p><div className="mt-5 rounded-xl border border-[#f0d2ca] bg-[#fff8f5] p-4"><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Selected payroll period</p><h3 className="mt-1 text-xl font-semibold text-[#251E1F]">{formatPayrollPeriod(selectedRun)}</h3><p className="mt-1 text-sm text-[#7b6660]">{selectedRun.status}</p></div>
+        {stage === "payment" && selectedRun.paymentStatus ? <div className={`mt-4 rounded-xl border p-4 text-sm ${["Failed", "Partially Submitted"].includes(selectedRun.paymentStatus) ? "border-red-200 bg-red-50 text-red-700" : "border-blue-200 bg-blue-50 text-blue-700"}`}><div className="flex items-center justify-between gap-3"><strong>Modern Treasury: {selectedRun.paymentStatus}</strong>{["Submitting", "Processing", "Partially Submitted"].includes(selectedRun.paymentStatus) ? <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2 py-1 text-[11px] font-semibold text-blue-700"><span className="h-2 w-2 rounded-full bg-blue-500 motion-safe:animate-pulse"/>Live</span> : null}</div><p className="mt-1">{selectedRun.bankReference || selectedRun.paymentFailureReason || "Awaiting provider reference"}</p>{selectedRun.paymentBatch ? <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs"><span><b className="block text-base">{selectedRun.paymentBatch.total || 0}</b>Total</span><span><b className="block text-base">{selectedRun.paymentBatch.succeeded || 0}</b>Submitted</span><span><b className="block text-base">{selectedRun.paymentBatch.failed || 0}</b>Failed</span><span><b className="block text-base">{selectedRun.paymentBatch.remaining || 0}</b>Remaining</span></div> : null}</div> : null}
+        {stage === "payslips" && selectedRun.payslipDelivery ? <div className={`mt-4 rounded-xl border p-4 text-sm ${selectedRun.payslipDelivery.failed ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}><strong>Payslip delivery result</strong><div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs"><span><b className="block text-base">{selectedRun.payslipDelivery.sent || 0}</b>Sent now</span><span><b className="block text-base">{selectedRun.payslipDelivery.skipped || 0}</b>Already sent</span><span><b className="block text-base">{selectedRun.payslipDelivery.failed || 0}</b>Failed</span></div>{selectedRun.payslipDelivery.errors?.map((item) => <div key={item.payrollId} className="mt-3 rounded-lg bg-white/70 p-3"><b>{item.employee || item.employeeId || `Payroll ${item.payrollId}`}</b><p>{item.message}</p>{item.correctiveAction ? <p className="mt-1 font-medium">Required: {item.correctiveAction}</p> : null}</div>)}</div> : null}
+        {error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
+      </section>
+      <aside className="app-panel rounded-2xl p-5"><h3 className="font-semibold text-[#251E1F]">Stage checklist</h3><ul className="mt-4 space-y-3">{item.checks.map(([label, complete]) => <li key={label} className="flex items-start gap-2 text-sm"><span className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold ${complete ? "bg-emerald-600 text-white" : "bg-[#f0d2ca] text-[#7b6660]"}`}>{complete ? "✓" : "·"}</span><span className={complete ? "text-emerald-700" : "text-[#7b6660]"}>{label}</span></li>)}</ul>
+        <div className="mt-6 space-y-2">{stage === "review" && selectedRun.rulesChanged ? <ActionButton icon={RefreshCw} disabled={busy} onClick={onRecalculate}>Recalculate with current rules</ActionButton> : stage === "preparation" ? <><ActionButton icon={Download} disabled={!state.approved || busy || Boolean(selectedRun.paymentFileGeneratedAt)} onClick={onGeneratePaymentFile}>{selectedRun.paymentFileGeneratedAt ? "Payment PDF generated" : "Generate payment PDF"}</ActionButton><ActionButton icon={Users} variant="secondary" disabled={!state.approved || busy} onClick={onSetupRecipients}>{selectedRun.paymentRecipientsConfigured >= selectedRun.employees.length ? "Recipients configured" : "Configure recipients"}</ActionButton></> : stage === "payment" ? <>{selectedRun.paymentStatus === "Submitting" ? <ActionButton icon={Loader2} disabled>Submission in progress</ActionButton> : ["Failed", "Partially Submitted"].includes(selectedRun.paymentStatus) ? <ActionButton icon={RefreshCw} disabled={!item.ready || busy} onClick={() => runAction("retry-payment")}>Retry remaining payments</ActionButton> : !selectedRun.paymentSubmittedAt ? <ActionButton icon={Send} disabled={!item.ready || busy} onClick={onSubmitPayment}>Submit to Modern Treasury</ActionButton> : !state.paid ? <ActionButton icon={CheckCircle2} disabled={busy} onClick={() => runAction("confirm-payment", { manual: true, batchReference: selectedRun.bankReference })}>Awaiting settlement confirmation</ActionButton> : null}</> : <ActionButton icon={CheckCircle2} disabled={!item.ready || item.done || busy} onClick={() => runAction(item.action)}>{item.done ? "Stage completed" : item.label}</ActionButton>}</div>
+        {!item.ready && !item.done ? <p className="mt-3 text-xs text-red-600">Complete the unchecked prerequisites before continuing.</p> : null}
+      </aside>
+    </div>
+  </PageShell>;
+}
+
+function RecipientProgressModal({ state, onClose, onRetry }) {
+  if (!state.open) return null;
+  const finished = !state.running;
+  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#251E1F]/45 p-4"><div className="w-full max-w-lg rounded-3xl border border-[#f0d2ca] bg-white p-7 shadow-2xl" role="dialog" aria-modal="true" aria-label="Modern Treasury recipient configuration progress">
+    <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#2D7C83]/10 text-[#2D7C83]">{state.running ? <Loader2 className="motion-safe:animate-spin"/> : state.error ? <AlertCircle/> : <CheckCircle2/>}</span><div><h3 className="font-semibold text-[#251E1F]">Configure Modern Treasury recipients</h3><p className="text-sm text-[#7b6660]">{state.phase}</p></div></div>
+    <div className="mt-6"><div className="mb-2 flex justify-between text-sm font-semibold"><span>Progress</span><span>{state.progress}%</span></div><div className="h-3 overflow-hidden rounded-full bg-[#f0d2ca]"><div className={`h-full rounded-full transition-all duration-500 ${state.error ? "bg-red-500" : "bg-gradient-to-r from-[#2D7C83] to-emerald-500"}`} style={{ width: `${state.progress}%` }}/></div></div>
+    {state.result ? <div className="mt-5 grid grid-cols-3 gap-3 text-center text-sm"><div className="rounded-xl bg-emerald-50 p-3"><b className="block text-lg text-emerald-700">{state.result.configured}</b>Configured</div><div className="rounded-xl bg-blue-50 p-3"><b className="block text-lg text-blue-700">{state.result.reused}</b>Reused</div><div className="rounded-xl bg-red-50 p-3"><b className="block text-lg text-red-700">{state.result.failed}</b>Failed</div></div> : null}
+    {state.error ? <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{state.error}</p> : null}
+    {finished ? <div className="mt-6 flex justify-end gap-2">{state.result?.failed ? <ActionButton variant="warning" icon={RefreshCw} onClick={onRetry}>Retry failed recipients</ActionButton> : null}<ActionButton variant="secondary" onClick={onClose}>Close</ActionButton></div> : <p className="mt-5 text-center text-xs text-[#7b6660]">Keep this window open while recipient mappings are saved.</p>}
+  </div></div>;
+}
+
+function AutoAdvanceNotice({ state, onStay }) {
+  if (!state) return null;
+  return <div className="fixed bottom-6 right-6 z-[90] w-[22rem] rounded-2xl border border-emerald-200 bg-white p-4 shadow-2xl"><div className="flex gap-3"><CheckCircle2 className="shrink-0 text-emerald-600"/><div><p className="font-semibold text-[#251E1F]">Stage completed</p><p className="mt-1 text-sm text-[#7b6660]">Moving to {state.label} in {state.seconds} second{state.seconds === 1 ? "" : "s"}.</p><button type="button" className="mt-2 text-sm font-semibold text-[#F38978] hover:underline" onClick={onStay}>Stay on this page</button></div></div></div>;
+}
+
 function FinancePayrollContent({
   configError,
   onAdvanceRun,
@@ -3674,20 +3801,25 @@ function FinancePayrollContent({
   onRunUpdated,
   onSaveRun,
   onSelectRun,
+  onSystemCheckApproveAll,
   onSetupModernTreasuryRecipients,
   onSubmitModernTreasuryTransfer,
   onUpdateEmployee,
   onUpdateStaffStatus,
+  onWorkflowAction,
   pathname,
   paymentError,
   paymentProcessing,
   payrollRuns,
   recalculationProcessing,
   saveProcessing,
+  simulationProcessing,
+  simulationResult,
   recipientSetupProcessing,
   selectedRun
 }) {
   if (pathname.endsWith("/employee-requests")) return <FinanceRequestsPage />;
+  if (pathname.endsWith("/staff-records")) return <FinanceStaffRecordsView />;
   if (pathname.endsWith("/activity-log")) return <FinancePayrollActivityView />;
   if (pathname.endsWith("/payroll-schedule")) return <PayrollScheduleView payrollRuns={payrollRuns} selectedGlobalRun={selectedRun} onSelectRun={onSelectRun} onRunUpdated={onRunUpdated} />;
   if (pathname.endsWith("/compliance-rules")) {
@@ -3700,27 +3832,7 @@ function FinancePayrollContent({
       </PageShell>
     );
   }
-  if (pathname.endsWith("/payroll-runs")) {
-    return (
-      <PayrollRunsView
-        payrollRuns={payrollRuns}
-        selectedRun={selectedRun}
-        onAdvanceRun={onAdvanceRun}
-        onCreateDbRun={onCreateDbRun}
-        onGeneratePaymentFile={onGeneratePaymentFile}
-        onRecalculateRun={onRecalculateRun}
-        onSaveRun={onSaveRun}
-        onSelectRun={onSelectRun}
-        onSetupModernTreasuryRecipients={onSetupModernTreasuryRecipients}
-        onSubmitModernTreasuryTransfer={onSubmitModernTreasuryTransfer}
-        paymentError={paymentError}
-        paymentProcessing={paymentProcessing}
-        recipientSetupProcessing={recipientSetupProcessing}
-        recalculationProcessing={recalculationProcessing}
-        saveProcessing={saveProcessing}
-      />
-    );
-  }
+  if (pathname.endsWith("/payroll-runs")) return <GuidedWorkflowStageView stage="review" selectedRun={selectedRun} payrollRuns={payrollRuns} onSelectRun={onSelectRun} onAction={onWorkflowAction} onRecalculate={onRecalculateRun} busy={saveProcessing || recalculationProcessing} error={paymentError} />;
 
   if (pathname.endsWith("/staff-payroll-details")) {
     return (
@@ -3729,8 +3841,11 @@ function FinancePayrollContent({
         selectedRun={selectedRun}
         onSelectRun={onSelectRun}
         onRunUpdated={onRunUpdated}
+        onSystemCheckApproveAll={onSystemCheckApproveAll}
         onUpdateEmployee={onUpdateEmployee}
         onUpdateStaffStatus={onUpdateStaffStatus}
+        simulationProcessing={simulationProcessing}
+        simulationResult={simulationResult}
       />
     );
   }
@@ -3744,6 +3859,11 @@ function FinancePayrollContent({
     );
   }
   if (pathname.endsWith("/payroll-summaries")) return <PayrollSummariesView payrollRuns={payrollRuns} selectedRun={selectedRun} />;
+  const guidedStage = ({
+    "/payroll-approval": "approval", "/payment-preparation": "preparation", "/payment-release": "payment",
+    "/payslip-delivery": "payslips", "/statutory-ledger": "statutory", "/reconciliation-reports": "reconciliation"
+  })[Object.keys({ "/payroll-approval": 1, "/payment-preparation": 1, "/payment-release": 1, "/payslip-delivery": 1, "/statutory-ledger": 1, "/reconciliation-reports": 1 }).find((suffix) => pathname.endsWith(suffix))];
+  if (guidedStage) return <GuidedWorkflowStageView stage={guidedStage} selectedRun={selectedRun} payrollRuns={payrollRuns} onSelectRun={onSelectRun} onAction={onWorkflowAction} onGeneratePaymentFile={onGeneratePaymentFile} onSetupRecipients={onSetupModernTreasuryRecipients} onSubmitPayment={onSubmitModernTreasuryTransfer} onRecalculate={onRecalculateRun} busy={saveProcessing || paymentProcessing || recipientSetupProcessing} error={paymentError} />;
 
   return (
     <DashboardView
@@ -3763,6 +3883,7 @@ function FinancePayrollContent({
 export default function FinancePayrollPage() {
   const session = getStoredSession();
   const location = useLocation();
+  const navigate = useNavigate();
   const heading = routeHeadings[location.pathname] || "Dashboard";
   const [payrollRuns, setPayrollRuns] = useState([]);
   const [selectedRunId, setSelectedRunId] = useState("");
@@ -3775,7 +3896,13 @@ export default function FinancePayrollPage() {
   const [recipientSetupProcessing, setRecipientSetupProcessing] = useState(false);
   const [recalculationProcessing, setRecalculationProcessing] = useState(false);
   const [saveProcessing, setSaveProcessing] = useState(false);
-  const [pendingSaveRunId, setPendingSaveRunId] = useState("");
+  const [simulationProcessing, setSimulationProcessing] = useState(false);
+  const [simulationResult, setSimulationResult] = useState(null);
+  const [recipientProgress, setRecipientProgress] = useState({ open: false, running: false, progress: 0, phase: "", result: null, error: "" });
+  const [autoAdvance, setAutoAdvance] = useState(null);
+  const [lastWorkflowSyncAt, setLastWorkflowSyncAt] = useState(null);
+  const livePaymentStatus = payrollRuns.find((run) => run.id === selectedRunId)?.paymentStatus;
+  const workflowActionActive = saveProcessing || paymentProcessing || recipientSetupProcessing || recalculationProcessing || simulationProcessing;
 
   adminCpfConfiguration = payrollRuleConfig;
 
@@ -3799,27 +3926,44 @@ export default function FinancePayrollPage() {
   }, []);
 
   useEffect(() => {
-    if (!financeDbLoaded || !pendingSaveRunId) return undefined;
-    const timer = setTimeout(() => {
-      const run = payrollRuns.find((item) => item.id === pendingSaveRunId && item.source === "staff_db");
-      if (run) {
-        saveFinancePayrollRun(run).then((result) => {
-          const savedRun = normalizeFinancePayrollRuns([result.run])[0];
-          setPayrollRuns((currentRuns) => currentRuns.map((item) => item.id === savedRun.id ? savedRun : item));
-          setPendingSaveRunId("");
-        }).catch((error) => {
-          setFinanceDbError(`Finance payroll DB save failed. ${error.message}`);
-          setPendingSaveRunId("");
-        });
-      } else setPendingSaveRunId("");
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [financeDbLoaded, payrollRuns, pendingSaveRunId]);
-
-  useEffect(() => {
     setPaymentError("");
     if (selectedRunId) sessionStorage.setItem(FINANCE_SELECTED_RUN_KEY, selectedRunId);
   }, [selectedRunId]);
+
+  useEffect(() => {
+    if (!selectedRunId || !financeDbLoaded) return;
+    let active = true;
+    getFinancePayrollWorkflow(selectedRunId).then((result) => {
+      if (!active || !result?.run) return;
+      const refreshed = normalizeFinancePayrollRuns([result.run])[0];
+      setPayrollRuns((runs) => runs.map((run) => run.id === refreshed.id ? refreshed : run));
+    }).catch((error) => { if (active) setFinanceDbError(`${error.code || "WORKFLOW_READ_FAILED"}: ${error.message}`); });
+    return () => { active = false; };
+  }, [selectedRunId, financeDbLoaded, location.pathname]);
+
+  useEffect(() => {
+    const liveStatuses = ["Submitting", "Processing", "Partially Submitted"];
+    const shouldPoll = shouldShowFinanceTracker(location.pathname) && selectedRunId && financeDbLoaded;
+    if (!shouldPoll) return undefined;
+    let active = true;
+    let requestInFlight = false;
+    const refreshWorkflow = async () => {
+      if (requestInFlight) return;
+      requestInFlight = true;
+      try {
+        const result = await getFinancePayrollWorkflow(selectedRunId);
+        if (!active || !result?.run) return;
+        const refreshed = normalizeFinancePayrollRuns([result.run])[0];
+        setPayrollRuns((runs) => runs.map((run) => run.id === refreshed.id ? refreshed : run));
+        setLastWorkflowSyncAt(new Date());
+      } catch (error) {
+        if (active) setPaymentError((current) => current || `Live payment status unavailable: ${error.message}`);
+      } finally { requestInFlight = false; }
+    };
+    refreshWorkflow();
+    const interval = window.setInterval(refreshWorkflow, workflowActionActive || liveStatuses.includes(livePaymentStatus) ? 1000 : 4000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [selectedRunId, financeDbLoaded, location.pathname, workflowActionActive, livePaymentStatus]);
 
   useEffect(() => {
     async function loadPayrollRuleConfig() {
@@ -3840,29 +3984,110 @@ export default function FinancePayrollPage() {
     [payrollRuns, selectedRunId]
   );
 
+  useEffect(() => {
+    if (!autoAdvance) return undefined;
+    const timer = setTimeout(() => {
+      if (autoAdvance.seconds <= 1) {
+        setRecipientProgress((current) => ({ ...current, open: false }));
+        navigate(autoAdvance.path);
+        setAutoAdvance(null);
+      } else setAutoAdvance((current) => current ? { ...current, seconds: current.seconds - 1 } : null);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [autoAdvance, navigate]);
+
+  const scheduleAutoAdvance = (path, label) => setAutoAdvance({ path, label, seconds: 2 });
+
+  const scheduleAfterAction = (action, run) => {
+    const destination = getFinanceAutoAdvance(action, run);
+    if (destination) scheduleAutoAdvance(destination.path, destination.label);
+  };
+
   const updateSelectedRun = (updater) => {
     setPayrollRuns((currentRuns) =>
       currentRuns.map((run) => (run.id === selectedRun.id ? updater(run) : run))
     );
-    if (selectedRun?.source === "staff_db") setPendingSaveRunId(selectedRun.id);
   };
 
-  const handleUpdateStaffStatus = (employeeId, financeStatus) => {
-    updateSelectedRun((run) => ({
-      ...run,
-      employees: run.employees.map((employee) =>
-        employee.id === employeeId
-          ? {
-              ...employee,
-              financeStatus
-            }
-          : employee
-      ),
-      timeline: [
-        createTimelineEntry(`Staff payment ${financeStatus.toLowerCase()} for ${employeeId}`),
-        ...(run.timeline || [])
-      ]
-    }));
+  const applyWorkflowResult = (result) => {
+    const refreshed = normalizeFinancePayrollRuns([result.run])[0];
+    setPayrollRuns((runs) => runs.map((run) => run.id === refreshed.id ? refreshed : run));
+    setFinanceDbError("");
+    return refreshed;
+  };
+
+  const executeWorkflowAction = async (action, payload = {}) => {
+    setSaveProcessing(true);
+    setPaymentError("");
+    try {
+      const result = await performFinancePayrollWorkflowAction(selectedRun.id, action, { expectedUpdatedAt: selectedRun.updatedAt, ...payload });
+      const refreshed = applyWorkflowResult(result);
+      scheduleAfterAction(action, refreshed);
+      return refreshed;
+    } catch (error) {
+      if (error.run) applyWorkflowResult({ run: error.run });
+      setFinanceDbError(`${error.code || "WORKFLOW_ACTION_FAILED"}: ${formatComplianceFailure(error)}`);
+      throw error;
+    } finally { setSaveProcessing(false); }
+  };
+
+  const persistSelectedRunImmediately = async (nextRun) => {
+    if (nextRun.source !== "staff_db") {
+      setPayrollRuns((runs) => runs.map((run) => run.id === nextRun.id ? nextRun : run));
+      return nextRun;
+    }
+    setSaveProcessing(true);
+    try {
+      const result = await saveFinancePayrollRun(nextRun);
+      const savedRun = normalizeFinancePayrollRuns([result.run])[0];
+      setPayrollRuns((runs) => runs.map((run) => run.id === savedRun.id ? savedRun : run));
+      setFinanceDbError("");
+      return savedRun;
+    } catch (error) {
+      setFinanceDbError(`Finance payroll DB save failed. ${formatComplianceFailure(error)}`);
+      throw error;
+    } finally {
+      setSaveProcessing(false);
+    }
+  };
+
+  const handleUpdateStaffStatus = async (employeeId, financeStatus) => {
+    const employee = selectedRun.employees.find((item) => item.id === employeeId);
+    if (!employee) return;
+    try { await executeWorkflowAction("employee-status", { staffEmployeeId: employee.staffEmployeeId, status: financeStatus }); }
+    catch { /* The persisted row remains authoritative; no optimistic state to revert. */ }
+  };
+
+  const handleSystemCheckApproveAll = async () => {
+    if (!selectedRun || getCompletedSteps(selectedRun).approved) return;
+    setSimulationProcessing(true);
+    setSimulationResult(null);
+    setPaymentError("");
+    try {
+      let workingRun = selectedRun;
+      let recalculated = false;
+      if (selectedRun.rulesChanged) {
+        const result = await recalculateFinancePayrollRun(selectedRun.id);
+        workingRun = normalizeFinancePayrollRuns([result.run])[0];
+        recalculated = true;
+        setPayrollRuns((runs) => runs.map((run) => run.id === workingRun.id ? workingRun : run));
+      }
+      const result = await performFinancePayrollWorkflowAction(workingRun.id, "bulk-approve", { expectedUpdatedAt: workingRun.updatedAt });
+      const saved = applyWorkflowResult(result);
+      const held = saved.employees.filter((employee) => employee.financeStatus === "Hold").length;
+      const approved = saved.employees.length - held;
+      setSimulationResult({
+        held,
+        message: `${recalculated ? "Payroll was recalculated with the latest Admin rules. " : ""}${approved} of ${saved.employees.length} salary rows approved${held ? `; ${held} flagged row(s) remain on hold` : ""}.`
+      });
+      if (!held) scheduleAutoAdvance("/dashboard/payroll/finance/payroll-approval", "Payroll Approval");
+      if (held) setPaymentError(`${held} staff record(s) remain on hold because automated compliance checks flagged them.`);
+    } catch (error) {
+      setPaymentError(formatComplianceFailure(error));
+      setSimulationResult({ error: true, message: formatComplianceFailure(error) });
+    } finally {
+      setSimulationProcessing(false);
+    }
   };
 
   const handleUpdateEmployee = (employeeId, updatedEmployee) => {
@@ -3930,7 +4155,6 @@ export default function FinancePayrollPage() {
 
   const handleSaveRun = async () => {
     if (!selectedRun?.id || selectedRun.source !== "staff_db") return;
-    setPendingSaveRunId("");
     setSaveProcessing(true);
     setFinanceDbError("");
     try {
@@ -3975,15 +4199,11 @@ export default function FinancePayrollPage() {
         footer: "Finance payment document generated from approved staff payroll records."
       })
     );
-    updateSelectedRun((run) => ({
-      ...run,
-      paymentFileGeneratedAt: now,
-      status: "Payment File Generated",
-      timeline: [
-        createTimelineEntry("Bank payment file generated", "System"),
-        ...(run.timeline || [])
-      ]
-    }));
+    try {
+      await executeWorkflowAction("payment-document");
+    } catch {
+      setPaymentError("The payment PDF was created, but its workflow state could not be saved. Retry after checking the database connection.");
+    }
   };
 
   const handleSubmitModernTreasuryTransfer = async () => {
@@ -3998,27 +4218,8 @@ export default function FinancePayrollPage() {
     setPaymentError("");
 
     try {
-      await validateFinancePayrollRun(selectedRun.id);
-      const result = await submitModernTreasuryTransfer({
-        payrollRunId: selectedRun.id,
-        payrollPeriod: formatPayrollPeriod(selectedRun),
-        employees: approvedRecipients
-      });
-
-      updateSelectedRun((run) => ({
-        ...run,
-        bankReference: result.batchReference,
-        paidAt: result.submittedAt,
-        paymentProvider: result.provider,
-        paymentTransferCount: result.transferCount,
-        paymentTransfers: result.transfers,
-        simulationAccount: result.simulationAccount,
-        status: "Payment Processed",
-        timeline: [
-          createTimelineEntry(`Modern Treasury payroll batch submitted: ${result.batchReference}`, result.provider),
-          ...(run.timeline || [])
-        ]
-      }));
+      const refreshed = await executeWorkflowAction("submit-payment");
+      if (refreshed.paymentBatch?.failed) setPaymentError(`${refreshed.paymentBatch.failed} payment(s) failed to submit. ${refreshed.paymentBatch.succeeded || 0} succeeded and will not be duplicated; retry the remaining payments.`);
     } catch (error) {
       setPaymentError(formatComplianceFailure(error));
     } finally {
@@ -4036,10 +4237,16 @@ export default function FinancePayrollPage() {
 
     setRecipientSetupProcessing(true);
     setPaymentError("");
+    setRecipientProgress({ open: true, running: true, progress: 1, phase: "Validating approved employee payment details…", result: null, error: "" });
+    const progressTimer = window.setInterval(() => setRecipientProgress((current) => current.running ? {
+      ...current,
+      progress: Math.min(90, current.progress + Math.max(1, Math.ceil((90 - current.progress) / 8))),
+      phase: current.progress < 25 ? "Validating approved employee payment details…" : current.progress < 70 ? "Configuring and reusing Modern Treasury recipients…" : "Saving recipient mappings to this payroll run…"
+    } : current), 350);
 
     try {
       const result = await setupModernTreasuryRecipients({
-        forceNew: true,
+        forceNew: false,
         payrollRunId: selectedRun.id,
         employees: approvedRecipients
       });
@@ -4047,27 +4254,20 @@ export default function FinancePayrollPage() {
         result.recipients.map((recipient) => [recipient.employeeId, recipient])
       );
 
-      updateSelectedRun((run) => ({
-        ...run,
-        employees: run.employees.map((employee) => {
-          const recipient = recipientByEmployeeId.get(employee.id);
-
-          if (!recipient) return employee;
-
-          return {
-            ...employee,
-            modernTreasuryCounterpartyId: recipient.modernTreasuryCounterpartyId,
-            modernTreasuryReceivingAccountId: recipient.modernTreasuryReceivingAccountId
-          };
-        }),
-        timeline: [
-          createTimelineEntry(`Modern Treasury recipients set up for ${result.recipientCount} staff`, result.provider),
-          ...(run.timeline || [])
-        ]
+      const paymentRecipients = Object.fromEntries(selectedRun.employees.map((employee) => {
+        const recipient = recipientByEmployeeId.get(employee.id);
+        return [String(employee.staffEmployeeId), {
+          modernTreasuryCounterpartyId: recipient?.modernTreasuryCounterpartyId || employee.modernTreasuryCounterpartyId || "",
+          modernTreasuryReceivingAccountId: recipient?.modernTreasuryReceivingAccountId || employee.modernTreasuryReceivingAccountId || ""
+        }];
       }));
+      await executeWorkflowAction("save-recipients", { paymentRecipients });
+      setRecipientProgress({ open: true, running: false, progress: 100, phase: result.failedCount ? "Recipient configuration completed with items requiring attention." : "All recipient mappings are configured and saved.", result: { configured: result.recipientCount, reused: result.reusedCount || 0, failed: result.failedCount || 0 }, error: result.failedCount ? `${result.failedCount} recipient(s) could not be configured. Retry will process only missing mappings.` : "" });
     } catch (error) {
       setPaymentError(error.message || "Modern Treasury recipient setup failed.");
+      setRecipientProgress((current) => ({ ...current, running: false, phase: "Recipient configuration stopped.", error: error.message || "Modern Treasury recipient setup failed." }));
     } finally {
+      window.clearInterval(progressTimer);
       setRecipientSetupProcessing(false);
     }
   };
@@ -4122,6 +4322,11 @@ export default function FinancePayrollPage() {
         fields: { otherDeductionsLoggedAt: now },
         timeline: createTimelineEntry("Other deduction recoveries logged")
       },
+      statutoryLogged: {
+        status: "Statutory Deductions Recorded",
+        fields: { cpfSubmissionLoggedAt: now, otherDeductionsLoggedAt: now },
+        timeline: createTimelineEntry("CPF, MBMF and other deduction recoveries recorded")
+      },
       ledgerRecorded: {
         status: "Recorded in Internal Ledger",
         fields: { ledgerRecordedAt: now },
@@ -4150,20 +4355,26 @@ export default function FinancePayrollPage() {
       }
     }
 
-    updateSelectedRun((run) => ({
-      ...run,
-      ...transition.fields,
-      employees:
-        stepKey === "reviewed"
-          ? run.employees.map((employee) => ({
-              ...employee,
-              financeStatus: employee.financeStatus || (getEmployeeExceptions(employee).length ? "Hold" : "Approved")
-            }))
-          : run.employees,
-      status: transition.status,
-      timeline: [transition.timeline, ...(run.timeline || [])]
-    }));
+    const actionByStep = {
+      reviewed: "review", approved: "approve-payroll", paid: "confirm-payment",
+      payslipsSent: "send-payslips", statutoryLogged: "record-statutory-ledger",
+      ledgerRecorded: "record-statutory-ledger", reconciled: "reconcile"
+    };
+    try {
+      await executeWorkflowAction(actionByStep[stepKey] || stepKey, stepKey === "paid" ? { manual: true, batchReference: manualBankReference } : {});
+      setPaymentError("");
+    } catch (error) {
+      setPaymentError(formatComplianceFailure(error));
+    }
   };
+
+  const workflowActivityLabel = recipientSetupProcessing ? "Configuring recipients…"
+    : paymentProcessing || ["Submitting", "Processing"].includes(livePaymentStatus) ? "Submitting payments…"
+      : recalculationProcessing ? "Recalculating payroll…"
+        : simulationProcessing ? "Running system checks…"
+          : saveProcessing && location.pathname.endsWith("/payslip-delivery") ? "Delivering payslips…"
+            : saveProcessing ? "Saving workflow changes…" : "";
+  const trackerIsUpdating = workflowActionActive || ["Submitting", "Processing"].includes(livePaymentStatus);
 
   // Show payslips approval view for the specific route
   if (location.pathname === "/dashboard/payroll/finance/payslips-approval") {
@@ -4177,7 +4388,7 @@ export default function FinancePayrollPage() {
         moduleClassName="payroll-module"
       >
         <section>
-          {selectedRun ? <FinancePayrollJourney run={selectedRun} /> : null}
+          {selectedRun ? <FinancePayrollJourney run={selectedRun} isLiveUpdating={trackerIsUpdating} lastSyncAt={lastWorkflowSyncAt} activityLabel={workflowActivityLabel} /> : null}
           <PayslipsApprovalView selectedRun={selectedRun} payrollRuns={payrollRuns} onSelectRun={setSelectedRunId} />
         </section>
       </DashboardLayout>
@@ -4188,7 +4399,8 @@ export default function FinancePayrollPage() {
     "/dashboard/payroll/finance/employee-requests",
     "/dashboard/payroll/finance/activity-log",
     "/dashboard/payroll/finance/payroll-schedule",
-    "/dashboard/payroll/finance/compliance-rules"
+    "/dashboard/payroll/finance/compliance-rules",
+    "/dashboard/payroll/finance/staff-records"
   ].includes(location.pathname);
 
   return (
@@ -4211,7 +4423,7 @@ export default function FinancePayrollPage() {
         </div>
       ) : null}
       <div className="admin-payroll-page">
-      {selectedRun && shouldShowFinanceTracker(location.pathname) ? <FinancePayrollJourney run={selectedRun} /> : null}
+      {selectedRun && shouldShowFinanceTracker(location.pathname) ? <FinancePayrollJourney run={selectedRun} isLiveUpdating={trackerIsUpdating} lastSyncAt={lastWorkflowSyncAt} activityLabel={workflowActivityLabel} /> : null}
       {selectedRun || runIndependentRoute ? (
         <FinancePayrollContent
           configError={configError}
@@ -4230,15 +4442,19 @@ export default function FinancePayrollPage() {
           }}
           onSaveRun={handleSaveRun}
           onSelectRun={setSelectedRunId}
+          onSystemCheckApproveAll={handleSystemCheckApproveAll}
           onSetupModernTreasuryRecipients={handleSetupModernTreasuryRecipients}
           onSubmitModernTreasuryTransfer={handleSubmitModernTreasuryTransfer}
           onUpdateEmployee={handleUpdateEmployee}
           onUpdateStaffStatus={handleUpdateStaffStatus}
+          onWorkflowAction={executeWorkflowAction}
           paymentError={paymentError}
           paymentProcessing={paymentProcessing}
           recipientSetupProcessing={recipientSetupProcessing}
           recalculationProcessing={recalculationProcessing}
           saveProcessing={saveProcessing}
+          simulationProcessing={simulationProcessing}
+          simulationResult={simulationResult}
         />
       ) : !financeDbLoaded && !financeDbError ? (
         <PageShell heading={heading}>
@@ -4250,6 +4466,8 @@ export default function FinancePayrollPage() {
         </PageShell>
       )}
       </div>
+      <RecipientProgressModal state={recipientProgress} onClose={() => setRecipientProgress((current) => ({ ...current, open: false }))} onRetry={handleSetupModernTreasuryRecipients} />
+      <AutoAdvanceNotice state={autoAdvance} onStay={() => setAutoAdvance(null)} />
     </DashboardLayout>
   );
 }

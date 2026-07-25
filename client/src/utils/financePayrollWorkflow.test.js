@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canAdvanceFinancePayrollRun,
+  getFinanceAutoAdvance,
   getFinanceWorkflowState
 } from "./financePayrollWorkflow.js";
 
@@ -33,11 +34,26 @@ describe("Finance payroll workflow", () => {
     };
 
     expect(canAdvanceFinancePayrollRun(run, "ledgerRecorded")).toBe(false);
+    expect(canAdvanceFinancePayrollRun(run, "statutoryLogged")).toBe(true);
     run.otherDeductionsLoggedAt = timestamp;
+    expect(canAdvanceFinancePayrollRun(run, "statutoryLogged")).toBe(false);
     expect(canAdvanceFinancePayrollRun(run, "ledgerRecorded")).toBe(true);
   });
 
   it("does not mark payment complete without a generated payment file", () => {
     expect(getFinanceWorkflowState({ paidAt: timestamp }).paid).toBe(false);
+  });
+});
+
+describe("Finance payroll automatic navigation", () => {
+  it("waits until both payment preparation tasks are complete", () => {
+    const run = { employees: [{}, {}], paymentFileGeneratedAt: timestamp, paymentRecipientsConfigured: 1 };
+    expect(getFinanceAutoAdvance("payment-document", run)).toBeNull();
+    expect(getFinanceAutoAdvance("save-recipients", { ...run, paymentRecipientsConfigured: 2 })?.path).toContain("payment-release");
+  });
+
+  it("stays on payment release until settlement is confirmed", () => {
+    expect(getFinanceAutoAdvance("submit-payment", {})).toBeNull();
+    expect(getFinanceAutoAdvance("confirm-payment", {})?.path).toContain("payslip-delivery");
   });
 });

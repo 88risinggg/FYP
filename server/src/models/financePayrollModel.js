@@ -27,6 +27,13 @@ const WORKFLOW_FIELDS = [
   "paymentMethod",
   "paymentProvider",
   "paymentTransferCount",
+  "paymentTransfers",
+  "paymentRecipientsConfigured",
+  "paymentSubmittedAt",
+  "paymentStatus",
+  "paymentFailureReason",
+  "paymentBatch",
+  "payslipDelivery",
   "timeline"
 ];
 
@@ -52,8 +59,23 @@ function toMoney(value) {
   return Math.round(Number(value || 0) * 100) / 100;
 }
 
+function toDatabaseDate(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) throw Object.assign(new Error("Invalid payroll workflow timestamp."), { code: "INVALID_WORKFLOW_TIMESTAMP" });
+  return date;
+}
+
 function getRulesHash(rules) {
-  return crypto.createHash("sha256").update(JSON.stringify(rules || {})).digest("hex");
+  const canonicalize = (value) => {
+    if (Array.isArray(value)) return value.map(canonicalize);
+    if (value && typeof value === "object") return Object.keys(value).sort().reduce((result, key) => {
+      result[key] = canonicalize(value[key]);
+      return result;
+    }, {});
+    return value;
+  };
+  return crypto.createHash("sha256").update(JSON.stringify(canonicalize(rules || {}))).digest("hex");
 }
 
 function pickWorkflow(run) {
@@ -155,7 +177,7 @@ function mapRun(rows, activeRulesHash = null) {
   const stored = parseJson(first.header_configuration_json || first.configuration_json, {});
   if (!stored.rules && first.rules_snapshot_json) stored.rules = parseJson(first.rules_snapshot_json, {});
   const workflow = stored.workflow || {};
-  const rulesHash = stored.rulesHash || getRulesHash(stored.rules);
+  const rulesHash = getRulesHash(stored.rules);
   const paymentRecipients = stored.paymentRecipients || {};
   // Use a composite ID: month_year
   const runId = `${first.payroll_month}_${first.payroll_year}`;
@@ -610,6 +632,7 @@ async function upsertFinancePayrollRun({ run, userId }) {
       modernTreasuryReceivingAccountId: employee.modernTreasuryReceivingAccountId || ""
     }]))
   };
+  const databaseApprovedAt = toDatabaseDate(run.approvedAt || stored.workflow?.approvedAt);
 
   const connection = await pool.getConnection();
   try {
@@ -636,7 +659,7 @@ async function upsertFinancePayrollRun({ run, userId }) {
            payment_attempted_at = CASE WHEN ? IS NOT NULL THEN COALESCE(payment_attempted_at, NOW()) ELSE payment_attempted_at END,
            configuration_json = ?, updated_at = NOW()
        WHERE payroll_run_id = ?`,
-      [run.status, run.approvedAt || null, userId || null, run.approvedAt || null,
+      [run.status, databaseApprovedAt, userId || null, databaseApprovedAt,
         run.bankReference || null, run.bankReference || null, run.bankReference || null,
         JSON.stringify(configuration), rows[0].payroll_run_id]
     );
@@ -649,9 +672,9 @@ async function upsertFinancePayrollRun({ run, userId }) {
        WHERE payroll_month = ? AND payroll_year = ?`,
       [
         run.status,
-        run.approvedAt || null,
+        databaseApprovedAt,
         userId || null,
-        run.approvedAt || null,
+        databaseApprovedAt,
         run.bankReference || null,
         JSON.stringify(configuration),
         month, year
@@ -688,11 +711,144 @@ async function upsertFinancePayrollRun({ run, userId }) {
   return mapRun(savedRows);
 }
 
+async function applyFinancePayrollWorkflowAction({ runId, action, payload = {}, userId }) {
+  const [month, year] = String(runId).split("_").map(Number);
+  if (!month || !year) throw Object.assign(new Error("Invalid payroll run ID."), { code: "INVALID_RUN_ID" });
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const rows = await getPayrollRows(connection, month, year);
+    if (!rows.length) throw Object.assign(new Error("Payroll run not found."), { code: "PAYROLL_RUN_NOT_FOUND" });
+    const current = mapRun(rows, getRulesHash(await getActivePayrollRules()));
+    if (payload.expectedUpdatedAt && current.updatedAt && new Date(payload.expectedUpdatedAt).getTime() !== new Date(current.updatedAt).getTime()) {
+      throw Object.assign(new Error("This payroll run changed in another session. Refresh it before continuing."), { code: "STALE_RUN" });
+    }
+    const stored = parseJson(rows[0].header_configuration_json || rows[0].configuration_json, {});
+    const workflow = { ...(stored.workflow || {}) };
+    const now = new Date().toISOString();
+    const timeline = (label) => { workflow.timeline = [{ action: label, at: now, owner: payload.actor || "Finance" }, ...(workflow.timeline || [])]; };
+    let status = current.status;
+    let approvedAt = current.approvedAt || null;
+    let paymentReference = current.bankReference || null;
+
+    if (action === "review") {
+      const errors = await getPayrollRunComplianceErrors(runId);
+      if (errors.some((item) => item.ruleCode === "ADMIN_RULES_CHANGED")) throw Object.assign(new Error(errors[0].message), { code: "RULES_CHANGED", details: errors });
+      workflow.reviewedAt = now; status = errors.length ? "Exceptions Require Review" : "Exceptions Reviewed"; timeline("Automated compliance review completed");
+    } else if (action === "employee-status") {
+      if (current.approvedAt) throw Object.assign(new Error("Approved payroll runs are locked."), { code: "PAYROLL_RUN_LOCKED" });
+      if (!["Approved", "Hold"].includes(payload.status)) throw Object.assign(new Error("Employee status must be Approved or Hold."), { code: "INVALID_EMPLOYEE_STATUS" });
+      const [result] = await connection.execute(
+        "UPDATE payroll SET payslip_status = ? WHERE payroll_run_id = ? AND staff_employee_id = ?",
+        [payload.status, rows[0].payroll_run_id, Number(payload.staffEmployeeId)]
+      );
+      if (!result.affectedRows) throw Object.assign(new Error("Employee payroll record not found."), { code: "EMPLOYEE_PAYROLL_NOT_FOUND" });
+      timeline(`${payload.status === "Approved" ? "Approved" : "Held"} employee payroll ${payload.staffEmployeeId}`);
+    } else if (action === "bulk-approve") {
+      if (current.approvedAt) throw Object.assign(new Error("Approved payroll runs are locked."), { code: "PAYROLL_RUN_LOCKED" });
+      for (const row of rows) {
+        const exceptions = parseJson(row.deduction_breakdown, {}).complianceExceptions || [];
+        await connection.execute("UPDATE payroll SET payslip_status = ? WHERE payroll_id = ?", [exceptions.length ? "Hold" : "Approved", row.payroll_id]);
+      }
+      workflow.reviewedAt = now; status = "System Check Completed"; timeline("System check approved all eligible employee salaries");
+    } else if (action === "approve-payroll") {
+      const errors = await getPayrollRunComplianceErrors(runId);
+      if (errors.some((item) => item.ruleCode === "ADMIN_RULES_CHANGED")) throw Object.assign(new Error(errors[0].message), { code: "RULES_CHANGED", details: errors });
+      if (errors.length) throw Object.assign(new Error("Compliance exceptions remain."), { code: "PAYROLL_COMPLIANCE_HOLD", details: errors });
+      if (!current.reviewedAt || current.employees.some((item) => item.financeStatus !== "Approved")) throw Object.assign(new Error("Every employee must be reviewed and approved first."), { code: "EMPLOYEES_NOT_APPROVED" });
+      approvedAt = now; workflow.approvedAt = now; status = "Approved for Payment"; timeline("Payroll approved and locked");
+    } else if (action === "payment-document") {
+      if (!current.approvedAt) throw Object.assign(new Error("Approve payroll before generating its payment document."), { code: "PAYROLL_NOT_APPROVED" });
+      workflow.paymentFileGeneratedAt ||= now; status = "Payment Prepared"; timeline("Payment PDF generated");
+    } else if (action === "save-recipients") {
+      stored.paymentRecipients = Object.fromEntries(Object.entries(payload.paymentRecipients || {}).filter(([, item]) => item?.modernTreasuryCounterpartyId && item?.modernTreasuryReceivingAccountId));
+      workflow.paymentRecipientsConfigured = Object.keys(stored.paymentRecipients).length;
+      timeline("Modern Treasury recipients configured");
+    } else if (action === "payment-initialize") {
+      if (!current.approvedAt || !current.paymentFileGeneratedAt) throw Object.assign(new Error("Approve payroll and generate the payment document first."), { code: "PAYMENT_NOT_PREPARED" });
+      const previous = workflow.paymentBatch || {};
+      workflow.paymentBatch = {
+        batchReference: previous.batchReference || payload.batchReference,
+        status: "Submitting",
+        total: Number(payload.total || previous.total || 0),
+        transfers: previous.transfers || {},
+        updatedAt: now
+      };
+      workflow.paymentStatus = "Submitting";
+      paymentReference = workflow.paymentBatch.batchReference;
+      status = "Payment Submitting";
+      timeline(`Modern Treasury submission started: ${paymentReference}`);
+    } else if (action === "payment-transfer-progress") {
+      const batch = workflow.paymentBatch || { batchReference: payload.batchReference, total: Number(payload.total || 0), transfers: {} };
+      batch.transfers = { ...(batch.transfers || {}), [String(payload.employeeKey)]: payload.transfer };
+      const values = Object.values(batch.transfers);
+      const succeeded = values.filter((item) => item.status === "Submitted").length;
+      const failed = values.filter((item) => item.status === "Failed").length;
+      batch.processed = values.length; batch.succeeded = succeeded; batch.failed = failed;
+      batch.remaining = Math.max(0, Number(batch.total || 0) - succeeded); batch.updatedAt = now;
+      batch.status = batch.remaining === 0 ? "Submitted" : failed ? "Partially Submitted" : "Submitting";
+      workflow.paymentBatch = batch; workflow.paymentStatus = batch.status;
+      workflow.paymentTransferCount = succeeded; workflow.paymentSubmittedAt = batch.remaining === 0 ? now : workflow.paymentSubmittedAt;
+      paymentReference = batch.batchReference || paymentReference;
+      status = batch.status === "Submitted" ? "Payment Processing" : batch.status === "Partially Submitted" ? "Payment Partially Submitted" : "Payment Submitting";
+    } else if (action === "payment-submitted") {
+      if (!current.approvedAt || !current.paymentFileGeneratedAt) throw Object.assign(new Error("Approve payroll and generate the payment document first."), { code: "PAYMENT_NOT_PREPARED" });
+      workflow.paymentStatus = "Processing"; workflow.paymentSubmittedAt = payload.submittedAt || now;
+      workflow.paymentProvider = payload.provider || "Modern Treasury"; workflow.paymentTransfers = payload.transfers || [];
+      workflow.paymentTransferCount = Number(payload.transferCount || 0); paymentReference = payload.batchReference;
+      status = "Payment Processing"; timeline(`Payment batch submitted: ${paymentReference}`);
+    } else if (action === "payment-confirmed") {
+      if (!current.paymentSubmittedAt && !payload.manual) throw Object.assign(new Error("Submit the payment batch before confirming settlement."), { code: "PAYMENT_NOT_SUBMITTED" });
+      if (!current.paidAt) {
+        const postings = await postPayrollRecoveries({ connection, payrollRunId: rows[0].payroll_run_id, userId });
+        workflow.recoveryPostings = { postedAt: now, count: postings.length, appliedAmount: postings.reduce((sum, item) => sum + Number(item.appliedAmount || 0), 0) };
+      }
+      workflow.paidAt = now; workflow.paymentStatus = "Confirmed"; paymentReference = payload.batchReference || paymentReference;
+      status = "Payment Confirmed"; timeline(`Payment confirmed: ${paymentReference || "manual reference"}`);
+    } else if (action === "payment-failed") {
+      workflow.paymentStatus = "Failed"; workflow.paymentFailureReason = payload.reason || "Payment provider reported a failure";
+      status = "Payment Failed"; timeline("Payment release failed");
+    } else if (action === "payslips-progress") {
+      workflow.payslipDelivery = payload.delivery || {};
+      status = Number(payload.delivery?.failed || 0) ? "Payslip Delivery Incomplete" : status;
+      timeline(`Payslip delivery attempted: ${payload.delivery?.sent || 0} sent, ${payload.delivery?.skipped || 0} already delivered, ${payload.delivery?.failed || 0} failed`);
+    } else if (action === "payslips-completed") {
+      workflow.payslipsSentAt = now; workflow.payslipDelivery = payload.delivery || {}; status = "Payslips Sent"; timeline("Employee payslip delivery completed");
+    } else if (action === "statutory-ledger") {
+      if (!current.payslipsSentAt) throw Object.assign(new Error("Complete payslip delivery first."), { code: "PAYSLIPS_NOT_DELIVERED" });
+      workflow.cpfSubmissionLoggedAt = now; workflow.otherDeductionsLoggedAt = now; workflow.ledgerRecordedAt = now;
+      status = "Statutory and Ledger Recorded"; timeline("Statutory deductions and payroll ledger recorded");
+    } else if (action === "reconcile") {
+      if (!current.ledgerRecordedAt && !current.xeroRecordedAt) throw Object.assign(new Error("Record statutory deductions and ledger first."), { code: "LEDGER_NOT_RECORDED" });
+      workflow.reconciledAt = now; status = "Reconciled"; timeline("Payroll reconciled and reporting completed");
+    } else throw Object.assign(new Error("Unsupported payroll workflow action."), { code: "INVALID_WORKFLOW_ACTION" });
+
+    stored.workflow = workflow;
+    const databaseApprovedAt = toDatabaseDate(approvedAt);
+    await connection.execute(
+      `UPDATE payroll_run SET status = ?, approved_by = CASE WHEN approved_at IS NULL AND ? IS NOT NULL THEN ? ELSE approved_by END,
+       approved_at = COALESCE(approved_at, ?), payment_reference = ?, configuration_json = ?, updated_at = NOW()
+       WHERE payroll_run_id = ?`,
+      [status, databaseApprovedAt, userId || null, databaseApprovedAt, paymentReference, JSON.stringify(stored), rows[0].payroll_run_id]
+    );
+    await connection.execute(
+      "UPDATE payroll SET run_status = ?, run_approved_at = COALESCE(run_approved_at, ?), payment_reference = ? WHERE payroll_run_id = ?",
+      [status, databaseApprovedAt, paymentReference, rows[0].payroll_run_id]
+    );
+    await connection.commit();
+    return mapRun(await getPayrollRows(pool, month, year), getRulesHash(await getActivePayrollRules()));
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally { connection.release(); }
+}
+
 module.exports = {
   createFinancePayrollRunFromStaff,
   ensureFinancePayrollTables,
   getPayrollRunComplianceErrors,
   listFinancePayrollRuns,
   recalculateFinancePayrollRun,
+  applyFinancePayrollWorkflowAction,
   upsertFinancePayrollRun
 };

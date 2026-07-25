@@ -22,6 +22,20 @@ export function validateFinancePayrollRun(runId) {
   return apiRequest(`/api/payroll/finance/runs/${runId}/validate`, { method: "POST" });
 }
 
+export function getFinancePayrollWorkflow(runId) {
+  return apiRequest(`/api/payroll/finance/runs/${runId}/workflow`);
+}
+
+export function performFinancePayrollWorkflowAction(runId, action, payload = {}) {
+  const path = action === "approve-payroll"
+    ? `/api/payroll/finance/runs/${runId}/approve`
+    : `/api/payroll/finance/runs/${runId}/workflow/${action}`;
+  return apiRequest(path, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function recalculateFinancePayrollRun(runId) {
   return apiRequest(`/api/payroll/finance/runs/${runId}/recalculate`, { method: "POST" });
 }

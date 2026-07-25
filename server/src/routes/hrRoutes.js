@@ -186,7 +186,7 @@ router.get("/search", authenticateToken, allowRoles("HR"), (req, res) => {
 });
 
 // ----- Parameterized routes (MUST come before generic /staff routes) -----
-router.get("/staff/:id", authenticateToken, allowRoles("HR"), (req, res) => {
+router.get("/staff/:id", authenticateToken, allowRoles("HR", "Finance"), (req, res) => {
   const { id } = req.params;
   // Prefer DB-backed lookup using `staff` table and `employee_id` column
   (async () => {
@@ -320,7 +320,7 @@ router.delete("/staff/:id", authenticateToken, allowRoles("HR"), (req, res) => {
 });
 // ----- End parameterized routes -----
 
-router.get("/staff", authenticateToken, allowRoles("HR"), (_req, res) => {
+router.get("/staff", authenticateToken, allowRoles("HR", "Finance"), (_req, res) => {
   (async () => {
     try {
       const [rows] = await pool.query(
@@ -2062,4 +2062,3 @@ router.get("/staff/export/excel", authenticateToken, allowRoles("HR"), async (re
 });
 
 module.exports = router;
-

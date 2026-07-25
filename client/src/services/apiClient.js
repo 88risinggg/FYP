@@ -46,6 +46,8 @@ export async function apiRequest(path, options = {}) {
       const error = new Error(data.detail ? `${data.message}: ${data.detail}` : (data.message || "Request failed"));
       error.code = data.code;
       error.details = data.errors || [];
+      error.run = data.run || null;
+      error.workflow = data.workflow || null;
       error.status = response.status;
       throw error;
     }

@@ -42,34 +42,47 @@ function ensureModernTreasuryCredentials(config) {
   }
 }
 
-async function modernTreasuryRequest(path, { method = "GET", body } = {}) {
+const TRANSIENT_STATUS = new Set([429, 500, 502, 503, 504]);
+
+async function modernTreasuryRequest(path, { method = "GET", body, idempotencyKey, maxAttempts = 3 } = {}) {
   const config = getModernTreasuryConfig();
 
   ensureModernTreasuryCredentials(config);
 
   const credentials = Buffer.from(`${config.organizationId}:${config.apiKey}`).toString("base64");
-  const response = await fetch(`${MODERN_TREASURY_API_URL}${path}`, {
-    method,
-    headers: {
-      Authorization: `Basic ${credentials}`,
-      "Content-Type": "application/json"
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const errorDetails = [
-      data.message,
-      data.error,
-      data.errors ? JSON.stringify(data.errors) : "",
-      data.details ? JSON.stringify(data.details) : ""
-    ].filter(Boolean).join(" ");
-
-    throw new Error(errorDetails || `Modern Treasury request failed: ${method} ${path}`);
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let response;
+    try {
+      response = await fetch(`${MODERN_TREASURY_API_URL}${path}`, {
+        method,
+        headers: {
+          Authorization: `Basic ${credentials}`,
+          "Content-Type": "application/json",
+          ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {})
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(60000)
+      });
+    } catch (error) {
+      if (attempt < maxAttempts && ["AbortError", "TimeoutError", "TypeError"].includes(error.name)) {
+        await new Promise((resolve) => setTimeout(resolve, 250 * (2 ** (attempt - 1))));
+        continue;
+      }
+      throw error;
+    }
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) return data;
+    const errorDetails = [data.message, data.error, data.errors ? JSON.stringify(data.errors) : "", data.details ? JSON.stringify(data.details) : ""].filter(Boolean).join(" ");
+    if (TRANSIENT_STATUS.has(response.status) && attempt < maxAttempts) {
+      const retryAfter = Number(response.headers.get("retry-after"));
+      await new Promise((resolve) => setTimeout(resolve, Number.isFinite(retryAfter) ? Math.min(retryAfter * 1000, 5000) : 250 * (2 ** (attempt - 1))));
+      continue;
+    }
+    const error = new Error(errorDetails || `Modern Treasury request failed: ${method} ${path}`);
+    error.status = response.status;
+    throw error;
   }
-
-  return data;
+  throw new Error(`Modern Treasury request failed: ${method} ${path}`);
 }
 
 function getSandboxAchDetails(employee, index) {
@@ -84,12 +97,14 @@ function getSandboxAchDetails(employee, index) {
 
 async function createModernTreasuryRecipient(employee, index) {
   const achDetails = getSandboxAchDetails(employee, index);
+  const idempotencyKey = `finance-recipient-${employee.employeeId}`;
   const counterparty = await modernTreasuryRequest("/counterparties", {
     method: "POST",
+    idempotencyKey,
     body: {
       name: employee.employeeName,
       email: employee.email || undefined,
-      external_id: `fyp-payroll-${employee.employeeId}-${Date.now()}-${index}`,
+      external_id: `fyp-payroll-${employee.employeeId}`,
       metadata: {
         source: "fyp_payroll_demo",
         employee_id: employee.employeeId
@@ -135,6 +150,7 @@ async function createModernTreasuryRecipient(employee, index) {
 
 async function setupModernTreasuryRecipients({ employees, forceNew = false }) {
   const mappings = [];
+  const failures = [];
 
   for (const [index, employee] of employees.entries()) {
     if (!forceNew && employee.modernTreasuryCounterpartyId && employee.modernTreasuryReceivingAccountId) {
@@ -148,13 +164,20 @@ async function setupModernTreasuryRecipients({ employees, forceNew = false }) {
       continue;
     }
 
-    mappings.push(await createModernTreasuryRecipient(employee, index));
+    try {
+      mappings.push(await createModernTreasuryRecipient(employee, index));
+    } catch (error) {
+      failures.push({ employeeId: employee.employeeId, employeeName: employee.employeeName, message: error.message || "Recipient configuration failed" });
+    }
   }
 
   return {
     provider: "Modern Treasury Sandbox",
     recipientCount: mappings.length,
-    recipients: mappings
+    reusedCount: mappings.filter((item) => item.reused).length,
+    failedCount: failures.length,
+    recipients: mappings,
+    failures
   };
 }
 
@@ -172,8 +195,10 @@ function createSimulationTransfer({ employee, batchReference, index }) {
 }
 
 async function createPaymentOrder({ employee, payrollRunId, payrollPeriod, batchReference, config }) {
+  const idempotencyKey = `finance-payroll-${payrollRunId}-${employee.payrollId || employee.employeeId}`;
   const data = await modernTreasuryRequest("/payment_orders", {
     method: "POST",
+    idempotencyKey,
     body: {
       amount: toSmallestCurrencyUnit(employee.amount),
       counterparty_id: employee.modernTreasuryCounterpartyId,
@@ -188,7 +213,8 @@ async function createPaymentOrder({ employee, payrollRunId, payrollPeriod, batch
         payroll_period: payrollPeriod,
         employee_id: employee.employeeId,
         payroll_batch_reference: batchReference,
-        payroll_display_currency: employee.currency || "SGD"
+        payroll_display_currency: employee.currency || "SGD",
+        idempotency_key: idempotencyKey
       }
     }
   });
@@ -202,13 +228,24 @@ async function createPaymentOrder({ employee, payrollRunId, payrollPeriod, batch
     currency: data.currency || config.paymentCurrency,
     status: data.status || "created",
     transferId: data.id,
-    modernTreasuryReference: data.reference_number || data.id
+    modernTreasuryReference: data.reference_number || data.id,
+    idempotencyKey
   };
 }
 
-async function submitModernTreasuryPayrollBatch({ payrollRunId, payrollPeriod, employees }) {
+async function submitModernTreasuryEmployeePayment({ payrollRunId, payrollPeriod, employee, batchReference }) {
   const config = getModernTreasuryConfig();
-  const batchReference = createReference("MT-PAYROLL");
+  if (!canUseModernTreasuryApi(employee, config)) {
+    const error = new Error("Modern Treasury live sandbox credentials, USD originating account, or recipient mappings are incomplete.");
+    error.code = "MODERN_TREASURY_NOT_READY";
+    throw error;
+  }
+  return createPaymentOrder({ employee, payrollRunId, payrollPeriod, batchReference, config });
+}
+
+async function submitModernTreasuryPayrollBatch({ payrollRunId, payrollPeriod, employees, batchReference: requestedBatchReference }) {
+  const config = getModernTreasuryConfig();
+  const batchReference = requestedBatchReference || createReference("MT-PAYROLL");
   const submittedAt = new Date().toISOString();
   const canSubmitLiveSandbox = employees.every((employee) => canUseModernTreasuryApi(employee, config));
   const transfers = [];
@@ -257,6 +294,7 @@ async function submitModernTreasuryPayrollBatch({ payrollRunId, payrollPeriod, e
 
 module.exports = {
   setupModernTreasuryRecipients,
+  submitModernTreasuryEmployeePayment,
   submitModernTreasuryPayrollBatch,
   toMoney
 };

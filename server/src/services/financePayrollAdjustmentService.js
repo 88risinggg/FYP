@@ -8,7 +8,15 @@ const parseJson = (value, fallback = {}) => {
   try { return JSON.parse(value); } catch { return fallback; }
 };
 const money = (value) => Math.round(Number(value || 0) * 100) / 100;
-const rulesHash = (rules) => crypto.createHash("sha256").update(JSON.stringify(rules || {})).digest("hex");
+const canonicalize = (value) => {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === "object") return Object.keys(value).sort().reduce((result, key) => {
+    result[key] = canonicalize(value[key]);
+    return result;
+  }, {});
+  return value;
+};
+const rulesHash = (rules) => crypto.createHash("sha256").update(JSON.stringify(canonicalize(rules || {}))).digest("hex");
 
 async function ensureAdjustmentTable(connection = pool) {
   return connection;
@@ -324,5 +332,5 @@ async function reviewAdjustmentProposals({ runId, ids, action, reason, userId, r
 
 module.exports = {
   ensureAdjustmentTable, generateAdjustmentProposals, listAdjustmentProposals, reviewAdjustmentProposals,
-  _test: { blockerFor, capDeductions, resultSummary, changedComponents, buildSourceBlockerExplanation, buildAdjustmentExplanation, fallbackExplanation }
+  _test: { blockerFor, capDeductions, resultSummary, changedComponents, buildSourceBlockerExplanation, buildAdjustmentExplanation, fallbackExplanation, rulesHash }
 };

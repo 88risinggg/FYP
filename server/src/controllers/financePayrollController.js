@@ -3,6 +3,7 @@ const {
   getPayrollRunComplianceErrors,
   listFinancePayrollRuns,
   recalculateFinancePayrollRun,
+  applyFinancePayrollWorkflowAction,
   upsertFinancePayrollRun
 } = require("../models/financePayrollModel");
 const { logAuditEvent, getClientIp, getDeviceInfo } = require("../models/auditLogModel");
@@ -10,6 +11,8 @@ const { validateFinancePayrollRun } = require("../services/financePayrollWorkflo
 const { generateAndSendPayslip } = require("../services/payslipDeliveryService");
 const { launchPayslipBrowser } = require("../services/payslipPdfService");
 const { pool } = require("../config/db");
+const { buildFinanceWorkflowState } = require("../services/financePayrollWorkflowState");
+const { submitModernTreasuryEmployeePayment } = require("../services/modernTreasuryPaymentService");
 const {
   applyScheduleDefaultsToRun,
   cancelRunSchedule,
@@ -262,37 +265,6 @@ async function saveFinancePayrollRun(req, res) {
       }
     }
 
-    if (run.payslipsSentAt) {
-      const [payslips] = await pool.query(
-        `SELECT payroll_id
-         FROM payroll
-         WHERE payroll_month = ? AND payroll_year = ?
-         ORDER BY staff_employee_id, payroll_id`,
-        [Number(run.month), Number(run.year)]
-      );
-      const deliveryErrors = [];
-      const browser = payslips.length ? await launchPayslipBrowser() : null;
-      try {
-        for (const payslip of payslips) {
-          try {
-            const delivery = await generateAndSendPayslip(payslip.payroll_id, { browser, actorUserId: req.user?.userId });
-            if (delivery.status !== 200) deliveryErrors.push(`Payslip ${payslip.payroll_id}: ${delivery.message}`);
-          } catch (error) {
-            deliveryErrors.push(`Payslip ${payslip.payroll_id}: ${error.message}`);
-          }
-        }
-      } finally {
-        if (browser) await browser.close();
-      }
-      if (deliveryErrors.length) {
-        return res.status(409).json({
-          code: "PAYSLIP_DELIVERY_INCOMPLETE",
-          message: "Some employee payslips could not be generated or delivered.",
-          errors: deliveryErrors
-        });
-      }
-    }
-
     const savedRun = await upsertFinancePayrollRun({
       run,
       userId: req.user?.userId
@@ -311,14 +283,107 @@ async function saveFinancePayrollRun(req, res) {
 
     res.json({ run: savedRun });
   } catch (error) {
+    console.error("Finance payroll legacy save failed", { runId: req.params.runId, code: error.code, message: error.message, sqlState: error.sqlState });
     if (error.code === "PAYROLL_RULE_SNAPSHOT_REQUIRED") {
       return res.status(409).json({ code: error.code, message: error.message });
     }
     if (error.message === "Payroll run not found.") {
       return res.status(404).json({ message: error.message });
     }
-    res.status(500).json({ message: "Failed to save Finance payroll run." });
+    res.status(500).json({ code: error.code || "PAYROLL_SAVE_FAILED", message: `Failed to save Finance payroll run at the database stage. ${error.message || "Check the server log for details."}` });
   }
+}
+
+async function findFinanceRun(runId) {
+  return (await listFinancePayrollRuns()).find((run) => run.id === runId) || null;
+}
+
+function workflowResponse(run, actionReference = null) {
+  return { run, workflow: buildFinanceWorkflowState(run), actionReference };
+}
+
+async function getRunWorkflow(req, res) {
+  try {
+    const run = await findFinanceRun(req.params.runId);
+    if (!run) return res.status(404).json({ code: "PAYROLL_RUN_NOT_FOUND", message: "Payroll run not found." });
+    return res.json(workflowResponse(run));
+  } catch (error) {
+    console.error("Finance payroll workflow read failed", { runId: req.params.runId, code: error.code, message: error.message });
+    return res.status(500).json({ code: "WORKFLOW_READ_FAILED", message: "Unable to restore payroll workflow state from the database." });
+  }
+}
+
+async function runWorkflowAction(req, res) {
+  const action = req.workflowAction || req.params.action;
+  const actionReference = `${req.params.runId}:${action}:${Date.now()}`;
+  try {
+    let payload = { ...(req.body || {}), actor: req.user?.email };
+    if (["submit-payment", "retry-payment"].includes(action)) {
+      let current = await findFinanceRun(req.params.runId);
+      if (!current) return res.status(404).json({ code: "PAYROLL_RUN_NOT_FOUND", message: "Payroll run not found." });
+      if (["Processing", "Submitted"].includes(current.paymentStatus) && current.bankReference) return res.json(workflowResponse(current, current.bankReference));
+      const employees = current.employees.filter((employee) => employee.financeStatus === "Approved").map((employee) => ({
+        employeeId: employee.id, payrollId: employee.payrollId, staffEmployeeId: employee.staffEmployeeId, employeeName: employee.name, bankName: employee.bank,
+        bankAccount: employee.accountNo, amount: employee.netPay, currency: "SGD",
+        modernTreasuryCounterpartyId: employee.modernTreasuryCounterpartyId,
+        modernTreasuryReceivingAccountId: employee.modernTreasuryReceivingAccountId
+      }));
+      const batchReference = current.paymentBatch?.batchReference || current.bankReference || `MT-PAYROLL-${current.id}`;
+      current = await applyFinancePayrollWorkflowAction({ runId: current.id, action: "payment-initialize", payload: { batchReference, total: employees.length, actor: req.user?.email }, userId: req.user?.userId });
+      const completed = current.paymentBatch?.transfers || {};
+      for (const employee of employees) {
+        const employeeKey = String(employee.payrollId || employee.staffEmployeeId);
+        if (completed[employeeKey]?.status === "Submitted") continue;
+        let transfer;
+        try {
+          const providerTransfer = await submitModernTreasuryEmployeePayment({ payrollRunId: current.id, payrollPeriod: `${current.month}/${current.year}`, employee, batchReference });
+          transfer = { status: "Submitted", transferId: providerTransfer.transferId, modernTreasuryReference: providerTransfer.modernTreasuryReference, idempotencyKey: providerTransfer.idempotencyKey, employeeId: employee.employeeId };
+        } catch (providerError) {
+          transfer = { status: "Failed", employeeId: employee.employeeId, message: String(providerError.message || "Provider submission failed").slice(0, 300) };
+        }
+        current = await applyFinancePayrollWorkflowAction({ runId: current.id, action: "payment-transfer-progress", payload: { batchReference, total: employees.length, employeeKey, transfer, actor: req.user?.email }, userId: req.user?.userId });
+      }
+      await logAuditEvent({ userId: req.user?.userId, userName: req.user?.email, activityType: "Payroll Workflow", actionDescription: `Modern Treasury batch ${current.paymentBatch?.status} for ${current.id}: ${current.paymentBatch?.succeeded || 0}/${employees.length}`, affectedRecord: current.id, status: current.paymentBatch?.failed ? "Partial" : "Success", ipAddress: getClientIp(req), deviceInfo: getDeviceInfo(req) });
+      return res.status(current.paymentBatch?.failed ? 207 : 200).json(workflowResponse(current, batchReference));
+    }
+    if (action === "send-payslips") {
+      const current = await findFinanceRun(req.params.runId);
+      if (!current?.paidAt) throw Object.assign(new Error("Confirm payment before sending payslips."), { code: "PAYMENT_NOT_CONFIRMED" });
+      const delivery = { sent: 0, failed: 0, skipped: 0, errors: [] };
+      const browser = current.employees.length ? await launchPayslipBrowser() : null;
+      try {
+        for (const employee of current.employees) {
+          try {
+            const result = await generateAndSendPayslip(employee.payrollId, { browser, actorUserId: req.user?.userId });
+            if (result.status === 200) result.message.includes("already") ? delivery.skipped++ : delivery.sent++;
+            else { delivery.failed++; delivery.errors.push({ employee: employee.name, employeeId: employee.id, payrollId: employee.payrollId, message: result.message, correctiveAction: result.message.includes("not linked to a user account") ? "Ask HR/Admin to link this staff record to its user account, then retry pending payslips." : "Correct the employee payslip source data, then retry pending payslips." }); }
+          } catch (error) { delivery.failed++; delivery.errors.push({ employee: employee.name, employeeId: employee.id, payrollId: employee.payrollId, message: error.message, correctiveAction: "Correct the employee payslip or user-account data, then retry pending payslips." }); }
+        }
+      } finally { if (browser) await browser.close(); }
+      if (delivery.failed) {
+        const run = await applyFinancePayrollWorkflowAction({ runId: current.id, action: "payslips-progress", payload: { delivery, actor: req.user?.email }, userId: req.user?.userId });
+        return res.status(409).json({ code: "PAYSLIP_DELIVERY_INCOMPLETE", message: `${delivery.failed} payslip(s) could not be delivered. Successful records were retained; retry sends only unsuccessful records.`, errors: delivery.errors, delivery, run, workflow: buildFinanceWorkflowState(run) });
+      }
+      payload.delivery = delivery;
+    }
+    const modelAction = ({
+      "submit-payment": "payment-submitted", "retry-payment": "payment-submitted", "confirm-payment": "payment-confirmed", "fail-payment": "payment-failed",
+      "send-payslips": "payslips-completed", "record-statutory-ledger": "statutory-ledger"
+    })[action] || action;
+    const run = await applyFinancePayrollWorkflowAction({ runId: req.params.runId, action: modelAction, payload, userId: req.user?.userId });
+    await logAuditEvent({ userId: req.user?.userId, userName: req.user?.email, activityType: "Payroll Workflow", actionDescription: `Completed ${action} for ${req.params.runId}`, affectedRecord: req.params.runId, status: "Success", ipAddress: getClientIp(req), deviceInfo: getDeviceInfo(req) });
+    return res.json(workflowResponse(run, actionReference));
+  } catch (error) {
+    console.error("Finance payroll workflow action failed", { runId: req.params.runId, action, code: error.code, message: error.message, sqlState: error.sqlState });
+    const conflictCodes = ["STALE_RUN", "RULES_CHANGED", "PAYROLL_RUN_LOCKED", "PAYROLL_COMPLIANCE_HOLD", "EMPLOYEES_NOT_APPROVED", "PAYMENT_NOT_CONFIRMED", "PAYMENT_NOT_PREPARED", "PAYSLIPS_NOT_DELIVERED", "LEDGER_NOT_RECORDED"];
+    const status = conflictCodes.includes(error.code) ? 409 : error.code?.includes("NOT_FOUND") ? 404 : error.sqlState ? 500 : 400;
+    return res.status(status).json({ code: error.code || (error.sqlState ? "WORKFLOW_DATABASE_FAILED" : "WORKFLOW_ACTION_FAILED"), message: error.sqlState ? `The ${action} database transaction failed and was rolled back.` : error.message || `Unable to complete ${action}.`, errors: error.details || [] });
+  }
+}
+
+function approvePayrollRun(req, res) {
+  req.workflowAction = "approve-payroll";
+  return runWorkflowAction(req, res);
 }
 
 async function getRunAdjustments(req, res) {
@@ -370,6 +435,8 @@ module.exports = {
   getFinanceActivity,
   getPayslipPeriodSummary,
   getRunAdjustments,
+  getRunWorkflow,
+  approvePayrollRun,
   generateRunAdjustments,
   getSchedule,
   getSchedulePreview,
@@ -381,5 +448,6 @@ module.exports = {
   confirmRunSchedule: (req, res) => runScheduleAction(req, res, "confirm"),
   cancelRunSchedule: (req, res) => runScheduleAction(req, res, "cancel"),
   retryRunSchedule: (req, res) => runScheduleAction(req, res, "retry"),
-  reviewRunAdjustments
+  reviewRunAdjustments,
+  runWorkflowAction
 };

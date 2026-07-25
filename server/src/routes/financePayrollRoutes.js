@@ -8,6 +8,8 @@ const {
   getFinancePayrollRuns,
   getPayslipPeriodSummary,
   getRunAdjustments,
+  getRunWorkflow,
+  approvePayrollRun,
   generateRunAdjustments,
   getSchedule,
   getSchedulePreview,
@@ -17,7 +19,8 @@ const {
   updateRunSchedule,
   updateSchedule,
   validateRunCompliance,
-  reviewRunAdjustments
+  reviewRunAdjustments,
+  runWorkflowAction
 } = require("../controllers/financePayrollController");
 const { authenticateToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/rolesMiddleware");
@@ -38,6 +41,9 @@ router.get("/runs/:runId/adjustments", allowRoles("Admin", "Finance"), getRunAdj
 router.post("/runs/:runId/adjustments/generate", allowRoles("Finance"), generateRunAdjustments);
 router.post("/runs/:runId/adjustments/review", allowRoles("Finance"), reviewRunAdjustments);
 router.post("/runs/:runId/validate", allowRoles("Admin", "Finance"), validateRunCompliance);
+router.get("/runs/:runId/workflow", allowRoles("Admin", "Finance"), getRunWorkflow);
+router.post("/runs/:runId/approve", allowRoles("Finance"), approvePayrollRun);
+router.post("/runs/:runId/workflow/:action", allowRoles("Finance"), runWorkflowAction);
 router.put("/runs/:runId", allowRoles("Admin", "Finance"), saveFinancePayrollRun);
 router.put("/runs/:runId/schedule", allowRoles("Finance"), updateRunSchedule);
 router.post("/runs/:runId/schedule/confirm", allowRoles("Finance"), confirmRunSchedule);

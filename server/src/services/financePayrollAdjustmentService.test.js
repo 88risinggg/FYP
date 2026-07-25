@@ -93,4 +93,9 @@ describe("Finance payroll adjustment proposal rules", () => {
     expect(explanation.changeMade).toContain("Regenerate");
     expect(explanation.ruleApplied).toBe("rules-v4");
   });
+
+  test("rules hash is stable when JSON object keys are reordered", () => {
+    expect(_test.rulesHash({ cpf: { rate: 20, enabled: true }, tiers: [{ maximumAge: 55, rate: 20 }] }))
+      .toBe(_test.rulesHash({ tiers: [{ rate: 20, maximumAge: 55 }], cpf: { enabled: true, rate: 20 } }));
+  });
 });
