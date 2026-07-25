@@ -89,7 +89,7 @@ function buildInvoiceEmailHtml(invoice, settings, options = {}) {
 }
 
 async function sendInvoiceEmail(invoice, options = {}) {
-  const settings = { ...defaultSettings, ...((await getInvoiceSettings()) || {}) };
+  const settings = { ...defaultSettings, ...((await getInvoiceSettings(invoice.company_id || invoice.companyId || null)) || {}) };
   const hydratedInvoice = await hydrateInvoice(invoice);
   const transporter = createTransporter();
   let pdfBuffer = options.pdfBuffer || null;
@@ -172,7 +172,7 @@ async function sendInvoiceSettingsTestEmail(recipient) {
 
 async function sendPaymentReceiptEmail(invoice, transactionId) {
   const transporter = createTransporter();
-  const settings = { ...defaultSettings, ...((await getInvoiceSettings()) || {}) };
+  const settings = { ...defaultSettings, ...((await getInvoiceSettings(invoice.company_id || invoice.companyId || null)) || {}) };
   const amount = Number(invoice.total_amount || 0).toFixed(2);
   const currency = settings.defaultCurrency || "SGD";
   const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px">
@@ -210,14 +210,16 @@ async function sendPaymentReceiptEmail(invoice, transactionId) {
 async function logPaymentReceiptDelivery(invoice, transactionId, deliveryStatus, metadata) {
   try {
     const { pool } = require("../config/db");
-    const [invoices] = await pool.query("SELECT invoice_id FROM invoice WHERE invoiceId = ? LIMIT 1", [invoice.invoiceId]);
+    const [invoices] = await pool.query("SELECT invoice_id, company_id FROM invoice WHERE invoiceId = ? LIMIT 1", [invoice.invoiceId]);
     const invoiceId = invoices[0]?.invoice_id;
+    const companyId = invoices[0]?.company_id || invoice.company_id || invoice.companyId || null;
     await pool.query(
       `INSERT INTO audit_logs (
-         module, activity_type, action_description, affected_record, status, created_at, new_value,
+         company_id, module, activity_type, action_description, affected_record, status, created_at, new_value,
          invoice_id, delivery_status, customer_email
-       ) VALUES ('Invoice', 'email_delivery', ?, ?, ?, NOW(), ?, ?, ?, ?)`,
+       ) VALUES (?, 'Invoice', 'email_delivery', ?, ?, ?, NOW(), ?, ?, ?, ?)`,
       [
+        companyId,
         deliveryStatus === "Sent" ? "payment_receipt_sent" : "payment_receipt_email_failed",
         invoiceId ? String(invoiceId) : null,
         deliveryStatus === "Sent" ? "Success" : "Failed",

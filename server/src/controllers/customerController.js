@@ -6,6 +6,7 @@
  */
 
 const { pool } = require("../config/db");
+const { getCompanyId } = require("../utils/companyScope");
 
 /**
  * GET /api/customers
@@ -18,6 +19,7 @@ const { pool } = require("../config/db");
  */
 async function getCustomers(req, res) {
   try {
+    const companyId = getCompanyId(req);
     const [rows] = await pool.query(`
       SELECT
         c.customer_id,
@@ -29,9 +31,11 @@ async function getCustomers(req, res) {
         COALESCE(SUM(i.total_amount), 0) AS total_invoiced
       FROM customer c
       LEFT JOIN invoice i ON i.customer_id = c.customer_id
+        ${companyId ? "AND i.company_id = ?" : ""}
+      ${companyId ? "WHERE c.company_id = ?" : ""}
       GROUP BY c.customer_id, c.name, c.email, c.address, c.created_at
       ORDER BY c.created_at DESC, c.customer_id DESC
-    `);
+    `, companyId ? [companyId, companyId] : []);
 
     res.json({ customers: rows });
   } catch (error) {

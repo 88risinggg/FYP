@@ -13,6 +13,7 @@
     "db:payroll-rule-metadata": "node scripts/run-payroll-rule-metadata-migration.js",
     "db:account-lockout": "node scripts/run-account-lockout-migration.js",
     "db:migrate-workflow": "node scripts/migrate-complete-workflow.js",
+    "db:migrate-auth": "node scripts/migrate-auth-otp-registration.js",
     "seed:fraud-test": "node scripts/seed-fraud-test-dataset.js",
     "verify:fraud-test": "node scripts/verify-fraud-test-dataset.js",
     "verify:invoice-pdf": "node scripts/verify-approved-invoice-pdf.js",

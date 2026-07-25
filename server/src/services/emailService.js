@@ -66,7 +66,23 @@ async function sendTestReminderEmail({ to, rule }) {
   });
 }
 
+async function sendAuthOtpEmail({ to, otp, purpose }) {
+  const transporter = createTransporter();
+  const isLogin = purpose === "login";
+  return transporter.sendMail({
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    to,
+    subject: isLogin ? "Your PayNivo login code" : "Verify your PayNivo email",
+    text: [
+      `Your six-digit verification code is: ${otp}`,
+      "This code expires in one minute and can only be used once.",
+      "If you did not request this code, you can ignore this email."
+    ].join("\n\n")
+  });
+}
+
 module.exports = {
+  sendAuthOtpEmail,
   sendReminderEmail,
   sendTestReminderEmail
 };

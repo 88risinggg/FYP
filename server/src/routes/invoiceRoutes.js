@@ -15,6 +15,7 @@ const { generateInvoicePDF } = require("../services/pdfService");
 const { sendWhatsAppReminder } = require("../services/whatsappService");
 const { sendManualReminder } = require("../services/invoiceReminderService");
 const { pool } = require("../config/db");
+const { getCompanyId } = require("../utils/companyScope");
 
 const router = express.Router();
 
@@ -37,13 +38,14 @@ router.patch("/:id/void", allowRoles("Admin", "Finance"), voidInvoice);
 router.get("/:id/pdf", async (req, res) => {
   try {
     const invoiceId = Number(req.params.id);
+    const companyId = getCompanyId(req);
     const [rows] = await pool.query(
       `SELECT i.invoice_id, i.invoiceId, i.status, i.issue_date, i.due_date, i.total_amount,
               i.payment_url, i.qr_code_url,
               c.name AS customer_name, c.email AS customer_email, c.address AS customer_address
        FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id
-       WHERE i.invoice_id = ? LIMIT 1`,
-      [invoiceId]
+       WHERE i.invoice_id = ? ${companyId ? "AND i.company_id = ?" : ""} LIMIT 1`,
+      companyId ? [invoiceId, companyId] : [invoiceId]
     );
 
     if (rows.length === 0) {
@@ -136,13 +138,14 @@ router.get("/:id/pdf", async (req, res) => {
 router.get("/:id/html", async (req, res) => {
   try {
     const invoiceId = Number(req.params.id);
+    const companyId = getCompanyId(req);
     const [rows] = await pool.query(
       `SELECT i.invoice_id, i.invoiceId, i.status, i.issue_date, i.due_date, i.total_amount,
               i.payment_url, i.qr_code_url, i.shop_title, i.service_provider,
               c.name AS customer_name, c.email AS customer_email, c.address AS customer_address
        FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id
-       WHERE i.invoice_id = ? LIMIT 1`,
-      [invoiceId]
+       WHERE i.invoice_id = ? ${companyId ? "AND i.company_id = ?" : ""} LIMIT 1`,
+      companyId ? [invoiceId, companyId] : [invoiceId]
     );
 
     if (rows.length === 0) {
@@ -193,7 +196,7 @@ router.get("/:id/html", async (req, res) => {
     const { buildInvoiceHtml } = require("../services/pdfService");
     const { getInvoiceSettings, defaultSettings } = require("../models/invoiceSettingsModel");
 
-    const settings = { ...defaultSettings, ...((await getInvoiceSettings()) || {}) };
+    const settings = { ...defaultSettings, ...((await getInvoiceSettings(companyId)) || {}) };
 
     // Resolve logo
     let logoDataUri = "";
@@ -243,11 +246,12 @@ router.get("/:id/html", async (req, res) => {
 router.post("/:id/whatsapp", async (req, res) => {
   try {
     const invoiceId = Number(req.params.id);
+    const companyId = getCompanyId(req);
     const [rows] = await pool.query(
       `SELECT i.invoiceId, i.total_amount, i.due_date, c.name AS customer_name, c.email AS customer_email
        FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id
-       WHERE i.invoice_id = ? LIMIT 1`,
-      [invoiceId]
+       WHERE i.invoice_id = ? ${companyId ? "AND i.company_id = ?" : ""} LIMIT 1`,
+      companyId ? [invoiceId, companyId] : [invoiceId]
     );
 
     if (rows.length === 0) {
@@ -300,6 +304,7 @@ router.post("/:id/reminder", async (req, res) => {
 router.get("/:id/reminders", async (req, res) => {
   try {
     const invoiceId = Number(req.params.id);
+    const companyId = getCompanyId(req);
     const [logs] = await pool.query(
       `SELECT
          audit_log_id AS log_id,
@@ -311,9 +316,10 @@ router.get("/:id/reminders", async (req, res) => {
        FROM audit_logs
        WHERE activity_type = 'invoice_reminder'
          AND invoice_id = ?
+         ${companyId ? "AND company_id = ?" : ""}
        ORDER BY created_at DESC
        LIMIT 50`,
-      [invoiceId]
+      companyId ? [invoiceId, companyId] : [invoiceId]
     );
     res.json({ reminders: logs });
   } catch (error) {
@@ -328,6 +334,7 @@ router.get("/:id/reminders", async (req, res) => {
 router.get("/:id/views", async (req, res) => {
   try {
     const invoiceId = Number(req.params.id);
+    const companyId = getCompanyId(req);
     const [views] = await pool.query(
       `SELECT
          audit_log_id AS view_id,
@@ -338,9 +345,10 @@ router.get("/:id/views", async (req, res) => {
        FROM audit_logs
        WHERE activity_type = 'invoice_view'
          AND invoice_id = ?
+         ${companyId ? "AND company_id = ?" : ""}
        ORDER BY created_at DESC
        LIMIT 50`,
-      [invoiceId]
+      companyId ? [invoiceId, companyId] : [invoiceId]
     );
     res.json({ views });
   } catch (error) {

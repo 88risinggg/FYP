@@ -386,10 +386,12 @@ function mapRawToSettings(raw) {
 
 // ─── DB Operations ───────────────────────────────────────────────────────────
 
-async function getInvoiceSettings() {
+async function getInvoiceSettings(companyId = null) {
+  const companySql = companyId ? " AND company_id = ?" : "";
+  const params = companyId ? [SETTINGS_ROW_ID, companyId] : [SETTINGS_ROW_ID];
   const [rows] = await pool.execute(
-    "SELECT items_json FROM invoice WHERE invoiceId = ? LIMIT 1",
-    [SETTINGS_ROW_ID]
+    `SELECT items_json FROM invoice WHERE invoiceId = ?${companySql} LIMIT 1`,
+    params
   );
 
   if (!rows[0] || !rows[0].items_json) return { ...defaultSettings, previewInvoiceNumber: buildInvoiceNumber(defaultSettings), sampleDueDate: calculateDueDate(defaultSettings) };
@@ -397,10 +399,12 @@ async function getInvoiceSettings() {
   return parseSettingsJson(rows[0].items_json);
 }
 
-async function getInvoiceSettingsForUpdate(connection) {
+async function getInvoiceSettingsForUpdate(connection, companyId = null) {
+  const companySql = companyId ? " AND company_id = ?" : "";
+  const params = companyId ? [SETTINGS_ROW_ID, companyId] : [SETTINGS_ROW_ID];
   const [rows] = await connection.execute(
-    "SELECT invoice_id, items_json FROM invoice WHERE invoiceId = ? LIMIT 1 FOR UPDATE",
-    [SETTINGS_ROW_ID]
+    `SELECT invoice_id, items_json FROM invoice WHERE invoiceId = ?${companySql} LIMIT 1 FOR UPDATE`,
+    params
   );
 
   if (rows[0] && rows[0].items_json) {
@@ -410,13 +414,13 @@ async function getInvoiceSettingsForUpdate(connection) {
   // Create the settings row if it doesn't exist
   const settingsJson = JSON.stringify(defaultSettings);
   await connection.execute(
-    "INSERT INTO invoice (invoiceId, status, issue_date, due_date, total_amount, customer_id, items_json, created_at) VALUES (?, 'Draft', '1970-01-01', '1970-01-01', 0, NULL, ?, NOW())",
-    [SETTINGS_ROW_ID, settingsJson]
+    "INSERT INTO invoice (invoiceId, status, issue_date, due_date, total_amount, customer_id, company_id, items_json, created_at) VALUES (?, 'Draft', '1970-01-01', '1970-01-01', 0, NULL, ?, ?, NOW())",
+    [SETTINGS_ROW_ID, companyId, settingsJson]
   );
   return { ...defaultSettings, previewInvoiceNumber: buildInvoiceNumber(defaultSettings), sampleDueDate: calculateDueDate(defaultSettings) };
 }
 
-async function saveInvoiceSettings(settings) {
+async function saveInvoiceSettings(settings, companyId = null) {
   const toSave = { ...defaultSettings, ...settings };
   // Remove computed fields before saving
   delete toSave.previewInvoiceNumber;
@@ -424,34 +428,38 @@ async function saveInvoiceSettings(settings) {
 
   const settingsJson = JSON.stringify(toSave);
 
+  const companySql = companyId ? " AND company_id = ?" : "";
+  const params = companyId ? [SETTINGS_ROW_ID, companyId] : [SETTINGS_ROW_ID];
   const [existing] = await pool.execute(
-    "SELECT invoice_id FROM invoice WHERE invoiceId = ? LIMIT 1",
-    [SETTINGS_ROW_ID]
+    `SELECT invoice_id FROM invoice WHERE invoiceId = ?${companySql} LIMIT 1`,
+    params
   );
 
   if (existing.length > 0) {
     await pool.execute(
-      "UPDATE invoice SET items_json = ? WHERE invoiceId = ?",
-      [settingsJson, SETTINGS_ROW_ID]
+      `UPDATE invoice SET items_json = ? WHERE invoiceId = ?${companySql}`,
+      companyId ? [settingsJson, SETTINGS_ROW_ID, companyId] : [settingsJson, SETTINGS_ROW_ID]
     );
   } else {
     await pool.execute(
-      "INSERT INTO invoice (invoiceId, status, issue_date, due_date, total_amount, customer_id, items_json, created_at) VALUES (?, 'Draft', '1970-01-01', '1970-01-01', 0, NULL, ?, NOW())",
-      [SETTINGS_ROW_ID, settingsJson]
+      "INSERT INTO invoice (invoiceId, status, issue_date, due_date, total_amount, customer_id, company_id, items_json, created_at) VALUES (?, 'Draft', '1970-01-01', '1970-01-01', 0, NULL, ?, ?, NOW())",
+      [SETTINGS_ROW_ID, companyId, settingsJson]
     );
   }
 
-  return getInvoiceSettings();
+  return getInvoiceSettings(companyId);
 }
 
-async function nextAvailableInvoiceNumber(connection, settings, date = new Date()) {
+async function nextAvailableInvoiceNumber(connection, settings, date = new Date(), companyId = null) {
   let sequence = Math.max(1, Number(settings.nextInvoiceNumber) || 1);
 
   for (let attempt = 0; attempt < 10000; attempt += 1) {
     const invoiceId = buildInvoiceNumber(settings, date, sequence);
+    const companySql = companyId ? " AND company_id = ?" : "";
+    const params = companyId ? [invoiceId, companyId] : [invoiceId];
     const [rows] = await connection.execute(
-      "SELECT invoice_id FROM invoice WHERE invoiceId = ? LIMIT 1",
-      [invoiceId]
+      `SELECT invoice_id FROM invoice WHERE invoiceId = ?${companySql} LIMIT 1`,
+      params
     );
     if (!rows.length) return { invoiceId, sequence };
     sequence += 1;
@@ -460,15 +468,15 @@ async function nextAvailableInvoiceNumber(connection, settings, date = new Date(
   throw new Error("Unable to find an available invoice number.");
 }
 
-async function previewNextInvoiceNumber(date = new Date()) {
-  const settings = (await getInvoiceSettings()) || defaultSettings;
-  const result = await nextAvailableInvoiceNumber(pool, settings, date);
+async function previewNextInvoiceNumber(date = new Date(), companyId = null) {
+  const settings = (await getInvoiceSettings(companyId)) || defaultSettings;
+  const result = await nextAvailableInvoiceNumber(pool, settings, date, companyId);
   return { ...result, settings };
 }
 
-async function reserveNextInvoiceNumber(connection, date = new Date()) {
-  const settings = await getInvoiceSettingsForUpdate(connection);
-  const result = await nextAvailableInvoiceNumber(connection, settings, date);
+async function reserveNextInvoiceNumber(connection, date = new Date(), companyId = null) {
+  const settings = await getInvoiceSettingsForUpdate(connection, companyId);
+  const result = await nextAvailableInvoiceNumber(connection, settings, date, companyId);
 
   // Update nextInvoiceNumber in the settings JSON
   const updatedSettings = { ...settings, nextInvoiceNumber: result.sequence + 1 };
@@ -476,15 +484,15 @@ async function reserveNextInvoiceNumber(connection, date = new Date()) {
   delete updatedSettings.sampleDueDate;
 
   await connection.execute(
-    "UPDATE invoice SET items_json = ? WHERE invoiceId = ?",
-    [JSON.stringify(updatedSettings), SETTINGS_ROW_ID]
+    `UPDATE invoice SET items_json = ? WHERE invoiceId = ?${companyId ? " AND company_id = ?" : ""}`,
+    companyId ? [JSON.stringify(updatedSettings), SETTINGS_ROW_ID, companyId] : [JSON.stringify(updatedSettings), SETTINGS_ROW_ID]
   );
 
   return { ...result, settings };
 }
 
-async function updateInvoiceLogo(companyLogoUrl) {
-  const current = await getInvoiceSettings();
+async function updateInvoiceLogo(companyLogoUrl, companyId = null) {
+  const current = await getInvoiceSettings(companyId);
   const settings = current || defaultSettings;
 
   return saveInvoiceSettings({
@@ -493,7 +501,7 @@ async function updateInvoiceLogo(companyLogoUrl) {
       ...settings.branding,
       companyLogoUrl
     }
-  });
+  }, companyId);
 }
 
 async function addNumberingActivity(records = []) {

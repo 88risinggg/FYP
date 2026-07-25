@@ -17,6 +17,7 @@ const {
   DEFAULT_VANIDAY_MAPPING
 } = require("../services/vanidayImportService");
 const { getInvoiceSettings, saveInvoiceSettings } = require("../models/invoiceSettingsModel");
+const { getCompanyId } = require("../utils/companyScope");
 
 /**
  * POST /api/vaniday-import/validate
@@ -33,7 +34,7 @@ async function validateImport(req, res) {
       });
     }
 
-    const result = await validateVanidayImport(rows, { dateFormat, allowReimport: !!allowReimport });
+    const result = await validateVanidayImport(rows, { dateFormat, allowReimport: !!allowReimport, companyId: getCompanyId(req) });
 
     // Convert validGroups Map to serializable format
     const validGroupsArray = [];
@@ -89,7 +90,7 @@ async function processImport(req, res) {
     }
 
     // Re-validate to ensure data integrity
-    const validationResult = await validateVanidayImport(rows, { dateFormat, allowReimport: !!allowReimport });
+    const validationResult = await validateVanidayImport(rows, { dateFormat, allowReimport: !!allowReimport, companyId: getCompanyId(req) });
 
     if (!validationResult.success) {
       return res.status(400).json(validationResult);
@@ -104,7 +105,7 @@ async function processImport(req, res) {
       });
     }
 
-    const result = await processVanidayImport(validationResult, req.user?.userId);
+    const result = await processVanidayImport(validationResult, req.user?.userId, getCompanyId(req));
 
     if (!result.success) {
       return res.status(500).json(result);
@@ -113,10 +114,11 @@ async function processImport(req, res) {
     // Audit log for the batch
     try {
       await pool.query(
-        `INSERT INTO audit_logs (user_id, module, activity_type, action_description, affected_record, status, created_at, new_value)
-         VALUES (?, 'Invoice', 'vaniday_import', ?, ?, 'Success', NOW(), ?)`,
+        `INSERT INTO audit_logs (user_id, company_id, module, activity_type, action_description, affected_record, status, created_at, new_value)
+         VALUES (?, ?, 'Invoice', 'vaniday_import', ?, ?, 'Success', NOW(), ?)`,
         [
           req.user?.userId,
+          getCompanyId(req),
           `Vaniday batch import: ${result.totalCreated} invoices created`,
           `batch_${Date.now()}`,
           JSON.stringify({ totalCreated: result.totalCreated, paidCount: result.paidCount, unpaidCount: result.unpaidCount })
@@ -140,7 +142,7 @@ async function processImport(req, res) {
  */
 async function getMapping(req, res) {
   try {
-    const settings = await getInvoiceSettings();
+    const settings = await getInvoiceSettings(getCompanyId(req));
     const mapping = settings?.vanidayFieldMapping || DEFAULT_VANIDAY_MAPPING;
     res.json({ mapping, defaults: DEFAULT_VANIDAY_MAPPING });
   } catch (error) {
@@ -159,11 +161,12 @@ async function updateMapping(req, res) {
       return res.status(400).json({ message: "Mapping object is required." });
     }
 
-    const settings = await getInvoiceSettings();
+    const companyId = getCompanyId(req);
+    const settings = await getInvoiceSettings(companyId);
     await saveInvoiceSettings({
       ...settings,
       vanidayFieldMapping: mapping
-    });
+    }, companyId);
 
     res.json({ message: "Mapping updated successfully.", mapping });
   } catch (error) {

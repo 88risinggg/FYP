@@ -10,6 +10,7 @@
 const { pool } = require("../config/db");
 const { assessInvoiceRisk } = require("../services/fraudDetectionService");
 const { sendInvoiceEmail } = require("../services/invoiceDeliveryService");
+const { getCompanyId } = require("../utils/companyScope");
 const {
   calculateDueDate,
   previewNextInvoiceNumber,
@@ -205,6 +206,9 @@ function validateInvoicePayload(body) {
  */
 async function getInvoices(req, res) {
   try {
+    const companyId = getCompanyId(req);
+    const companyFilter = companyId ? "AND i.company_id = ?" : "";
+    const params = companyId ? [companyId] : [];
     // Fetch all invoices joined with customer data
     const [rows] = await pool.query(`
       SELECT
@@ -223,8 +227,9 @@ async function getInvoices(req, res) {
       FROM invoice i
       INNER JOIN customer c ON c.customer_id = i.customer_id
       WHERE i.invoiceId <> '__SETTINGS__'
+        ${companyFilter}
       ORDER BY i.created_at DESC, i.invoice_id DESC
-    `);
+    `, params);
 
     // Try to fetch payment columns (may not exist yet in older schemas)
     let paymentData = {};
@@ -234,8 +239,9 @@ async function getInvoices(req, res) {
                payment_intent_id, payment_status, payment_method,
                payment_date, transaction_id
         FROM invoice
-        WHERE payment_url IS NOT NULL OR payment_status IS NOT NULL
-      `);
+        WHERE (payment_url IS NOT NULL OR payment_status IS NOT NULL)
+          ${companyId ? "AND company_id = ?" : ""}
+      `, companyId ? [companyId] : []);
       paymentRows.forEach((row) => {
         paymentData[row.invoice_id] = row;
       });
@@ -366,11 +372,13 @@ async function getInvoices(req, res) {
  */
 async function getCustomers(req, res) {
   try {
+    const companyId = getCompanyId(req);
     const [rows] = await pool.query(`
       SELECT customer_id, name, email, address
       FROM customer
+      ${companyId ? "WHERE company_id = ?" : ""}
       ORDER BY name ASC
-    `);
+    `, companyId ? [companyId] : []);
 
     res.json({ customers: rows });
   } catch (error) {
@@ -391,7 +399,7 @@ async function getCustomers(req, res) {
  */
 async function getNextInvoiceNumber(req, res) {
   try {
-    const preview = await previewNextInvoiceNumber();
+    const preview = await previewNextInvoiceNumber(new Date(), getCompanyId(req));
 
     res.json({
       invoiceId: preview.invoiceId,
@@ -426,20 +434,32 @@ async function createInvoice(req, res) {
   }
 
   const invoice = validation.value;
+  const companyId = getCompanyId(req);
   const connection = await pool.getConnection();
 
   try {
     await connection.beginTransaction();
 
+    if (companyId) {
+      const [customerRows] = await connection.query(
+        "SELECT customer_id FROM customer WHERE customer_id = ? AND company_id = ? LIMIT 1",
+        [invoice.customer_id, companyId]
+      );
+      if (!customerRows.length) {
+        await connection.rollback();
+        return res.status(400).json({ message: "Customer is not available for this company." });
+      }
+    }
+
     // Lock and advance the canonical settings sequence in this invoice transaction.
-    const { invoiceId } = await reserveNextInvoiceNumber(connection, new Date(invoice.issue_date));
+    const { invoiceId } = await reserveNextInvoiceNumber(connection, new Date(invoice.issue_date), companyId);
 
     // Insert invoice header
     const [invoiceResult] = await connection.query(
       `
         INSERT INTO invoice
-          (status, issue_date, due_date, invoiceId, total_amount, customer_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, NOW())
+          (status, issue_date, due_date, invoiceId, total_amount, customer_id, company_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
       `,
       [
         "Draft",
@@ -447,7 +467,8 @@ async function createInvoice(req, res) {
         invoice.due_date,
         invoiceId,
         invoice.total_amount,
-        invoice.customer_id
+        invoice.customer_id,
+        companyId
       ]
     );
 
@@ -531,6 +552,7 @@ async function createInvoice(req, res) {
  */
 async function sendInvoice(req, res) {
   const invoiceId = Number(req.params.id);
+  const companyId = getCompanyId(req);
 
   if (!invoiceId) {
     return res.status(400).json({ message: "Invalid invoice id." });
@@ -548,6 +570,7 @@ async function sendInvoice(req, res) {
           i.invoice_id,
           i.invoiceId,
           i.status,
+          i.company_id,
           i.total_amount,
           i.due_date,
           c.name AS customer_name,
@@ -556,10 +579,11 @@ async function sendInvoice(req, res) {
         FROM invoice i
         INNER JOIN customer c ON c.customer_id = i.customer_id
         WHERE i.invoice_id = ?
+          ${companyId ? "AND i.company_id = ?" : ""}
         LIMIT 1
         FOR UPDATE
       `,
-      [invoiceId]
+      companyId ? [invoiceId, companyId] : [invoiceId]
     );
 
     const invoice = rows[0];
@@ -602,7 +626,7 @@ async function sendInvoice(req, res) {
 
     // Load Admin settings to determine which payment methods to enable
     const { getInvoiceSettings, defaultSettings: invoiceDefaults } = require("../models/invoiceSettingsModel");
-    const adminSettings = (await getInvoiceSettings()) || invoiceDefaults;
+    const adminSettings = (await getInvoiceSettings(companyId)) || invoiceDefaults;
 
     // Create Stripe Checkout Session (only if online payments enabled)
     const { createCheckoutSession } = require("../services/stripeService");
@@ -691,6 +715,7 @@ async function sendInvoice(req, res) {
  */
 async function voidInvoice(req, res) {
   const invoiceId = Number(req.params.id);
+  const companyId = getCompanyId(req);
   const reason = String(req.body?.reason || "").trim();
   if (!invoiceId) return res.status(400).json({ message: "Invalid invoice id." });
   if (!reason) return res.status(400).json({ message: "A void reason is required." });
@@ -699,8 +724,8 @@ async function voidInvoice(req, res) {
   try {
     await connection.beginTransaction();
     const [rows] = await connection.query(
-      "SELECT status, invoiceId FROM invoice WHERE invoice_id = ? LIMIT 1 FOR UPDATE",
-      [invoiceId]
+      `SELECT status, invoiceId FROM invoice WHERE invoice_id = ? ${companyId ? "AND company_id = ?" : ""} LIMIT 1 FOR UPDATE`,
+      companyId ? [invoiceId, companyId] : [invoiceId]
     );
     if (!rows.length) {
       await connection.rollback();
@@ -779,14 +804,15 @@ async function scheduleInvoices(req, res) {
   }
 
   const connection = await pool.getConnection();
+  const companyId = getCompanyId(req);
 
   try {
     await connection.beginTransaction();
 
     // Lock all target invoices and verify they exist
     const [existingInvoices] = await connection.query(
-      "SELECT invoice_id, status FROM invoice WHERE invoice_id IN (?) FOR UPDATE",
-      [invoiceIds]
+      `SELECT invoice_id, status FROM invoice WHERE invoice_id IN (?) ${companyId ? "AND company_id = ?" : ""} FOR UPDATE`,
+      companyId ? [invoiceIds, companyId] : [invoiceIds]
     );
     const existingIds = existingInvoices.map((invoice) => Number(invoice.invoice_id));
 

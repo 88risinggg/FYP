@@ -1,7 +1,11 @@
 import { useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
-import LoginPage from "./pages/LoginPage.jsx";
+import LandingPage from "./pages/LoginPage.jsx";
+import AuthLoginPage from "./pages/AuthLoginPage.jsx";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx";
+import RegistrationPage from "./pages/RegistrationPage.jsx";
+import VerifyEmailPage from "./pages/VerifyEmailPage.jsx";
 import ModuleSelectionPage from "./pages/ModuleSelectionPage.jsx";
 import PublicInvoiceViewPage from "./pages/PublicInvoiceViewPage.jsx";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage.jsx";
@@ -190,8 +194,11 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="/login" element={<LoginPage />} />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/login" element={<AuthLoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/register" element={<RegistrationPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/invoice/view/:invoiceId" element={<PublicInvoiceViewPage />} />
       <Route path="/payment/success" element={<PaymentSuccessPage />} />
       <Route path="/payment/cancelled" element={<PaymentCancelledPage />} />

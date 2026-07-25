@@ -162,7 +162,7 @@ export default function LoginPage() {
 
   function openLogin() {
     setError("");
-    setIsLoginOpen(true);
+    navigate("/login");
   }
 
   function closeLogin() {
@@ -518,8 +518,8 @@ export default function LoginPage() {
               Users continue through the same authenticated module flow
             </h2>
             <p className="mt-4 text-sm leading-7 text-[#7b6660]">
-              The login modal still uses the existing API. After successful authentication,
-              saved user data controls Admin, Finance, HR, and Staff access.
+              The separate login page verifies password and email OTP before saved user data
+              controls Admin, Finance, HR, and Staff access.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -726,6 +726,7 @@ export default function LoginPage() {
                   <Mail size={18} />
                   Log in with Email OTP
                 </motion.button>
+
               </form>
 
               <div className="mt-5 flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3 text-sm text-[#7b6660]">
@@ -863,6 +864,7 @@ export default function LoginPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
     </main>
   );
 }

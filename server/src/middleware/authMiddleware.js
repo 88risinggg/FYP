@@ -26,7 +26,8 @@ async function authenticateToken(req, res, next) {
         user.status,
         user.must_change_password,
         user.account_locked_at,
-        user.role_name AS role
+        user.role_name AS role,
+        user.company_id AS companyId
       FROM user
       WHERE user.user_id = ?`,
       [payload.userId]
@@ -58,7 +59,8 @@ async function authenticateToken(req, res, next) {
     req.user = {
       ...payload,
       email: user.email,
-      role: user.role
+      role: user.role,
+      companyId: user.companyId || payload.companyId || null
     };
 
     // Resolve staffId (employee_id) for Staff users from the staff table

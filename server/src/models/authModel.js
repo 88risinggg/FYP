@@ -26,7 +26,8 @@ async function findUserByEmail(email) {
       user.must_change_password,
       user.failed_login_attempts,
       user.account_locked_at,
-      user.account_lock_reason
+      user.account_lock_reason,
+      user.company_id
     FROM user
     WHERE LOWER(user.email) = LOWER(?)`,
     [email]
@@ -37,7 +38,7 @@ async function findUserByEmail(email) {
 
 async function findUserById(userId) {
   const [rows] = await pool.execute(
-    `SELECT user_id, email, name, password, status, role_name, must_change_password,
+    `SELECT user_id, email, name, password, status, role_name, company_id, must_change_password,
             failed_login_attempts, account_locked_at, account_lock_reason
      FROM user WHERE user_id = ? LIMIT 1`,
     [userId]

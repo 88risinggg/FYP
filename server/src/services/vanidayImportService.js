@@ -326,13 +326,13 @@ function detectDuplicatesAndConflicts(records) {
 // Customer Matching / Creation
 // =====================================================
 
-async function findOrCreateCustomer(connection, record) {
+async function findOrCreateCustomer(connection, record, companyId = null) {
   const email = record.email.toLowerCase().trim();
 
   // Search by email
   const [existing] = await connection.query(
-    "SELECT customer_id, name, email FROM customer WHERE LOWER(email) = ? LIMIT 1",
-    [email]
+    `SELECT customer_id, name, email FROM customer WHERE LOWER(email) = ? ${companyId ? "AND company_id = ?" : ""} LIMIT 1`,
+    companyId ? [email, companyId] : [email]
   );
 
   if (existing.length > 0) {
@@ -351,12 +351,13 @@ async function findOrCreateCustomer(connection, record) {
 
   // Create new customer
   const [result] = await connection.query(
-    `INSERT INTO customer (name, email, address, created_at)
-     VALUES (?, ?, ?, NOW())`,
+    `INSERT INTO customer (name, email, address, company_id, created_at)
+     VALUES (?, ?, ?, ?, NOW())`,
     [
       record.customerName,
       email,
-      record.contactNo ? `Phone: ${record.contactNo}` : ""
+      record.contactNo ? `Phone: ${record.contactNo}` : "",
+      companyId
     ]
   );
 
@@ -368,7 +369,7 @@ async function findOrCreateCustomer(connection, record) {
 // =====================================================
 
 async function validateVanidayImport(rows, options = {}) {
-  const settings = (await getInvoiceSettings()) || defaultSettings;
+  const settings = (await getInvoiceSettings(options.companyId || null)) || defaultSettings;
   const mapping = settings.vanidayFieldMapping || DEFAULT_VANIDAY_MAPPING;
   const dateFormat = options.dateFormat || settings.displayDateFormat || "DD/MM/YYYY";
 
@@ -452,8 +453,10 @@ async function validateVanidayImport(rows, options = {}) {
   if (orderIds.length > 0 && !options.allowReimport) {
     try {
       const [existingRows] = await pool.query(
-        "SELECT DISTINCT vaniday_order_id FROM invoice WHERE vaniday_order_id IN (?) AND invoiceId <> '__SETTINGS__'",
-        [orderIds]
+        `SELECT DISTINCT vaniday_order_id FROM invoice
+         WHERE vaniday_order_id IN (?) AND invoiceId <> '__SETTINGS__'
+           ${options.companyId ? "AND company_id = ?" : ""}`,
+        options.companyId ? [orderIds, options.companyId] : [orderIds]
       );
       existingOrderIds = new Set(existingRows.map(r => r.vaniday_order_id));
     } catch {
@@ -507,8 +510,8 @@ async function validateVanidayImport(rows, options = {}) {
 // Process Valid Records → Generate Invoices
 // =====================================================
 
-async function processVanidayImport(validationResult, userId) {
-  const settings = (await getInvoiceSettings()) || defaultSettings;
+async function processVanidayImport(validationResult, userId, companyId = null) {
+  const settings = (await getInvoiceSettings(companyId)) || defaultSettings;
   const mapping = settings.vanidayFieldMapping || DEFAULT_VANIDAY_MAPPING;
   const dateFormat = settings.displayDateFormat || "DD/MM/YYYY";
   const { validGroups } = validationResult;
@@ -543,8 +546,8 @@ async function processVanidayImport(validationResult, userId) {
       // Validation happens before this transaction, so re-check inside it.  This
       // closes the race where two users submit the same file at the same time.
       const [existingOrder] = await connection.query(
-        "SELECT invoice_id FROM invoice WHERE vaniday_order_id = ? LIMIT 1 FOR UPDATE",
-        [orderId]
+        `SELECT invoice_id FROM invoice WHERE vaniday_order_id = ? ${companyId ? "AND company_id = ?" : ""} LIMIT 1 FOR UPDATE`,
+        companyId ? [orderId, companyId] : [orderId]
       );
       if (existingOrder.length > 0) {
         skippedAlreadyImported.push(orderId);
@@ -552,10 +555,10 @@ async function processVanidayImport(validationResult, userId) {
       }
 
       // Step 1: Find or create customer by email
-      const customerId = await findOrCreateCustomer(connection, primaryRecord);
+      const customerId = await findOrCreateCustomer(connection, primaryRecord, companyId);
 
       // Step 2: Generate invoice number
-      const { invoiceId } = await reserveNextInvoiceNumber(connection, new Date());
+      const { invoiceId } = await reserveNextInvoiceNumber(connection, new Date(), companyId);
 
       // Step 3: Build line items from records (multiple services = multiple items)
       const lineItems = records.map(record => {
@@ -596,10 +599,10 @@ async function processVanidayImport(validationResult, userId) {
       try {
         [invoiceResult] = await connection.query(
           `INSERT INTO invoice
-            (status, issue_date, due_date, invoiceId, total_amount, customer_id, created_at,
+            (status, issue_date, due_date, invoiceId, total_amount, customer_id, company_id, created_at,
              vaniday_order_id, shop_title, seller_id, payment_method, service_provider,
              vaniday_share, salon_share, vaniday_commission)
-           VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             invoiceStatus,
             bookedDate,
@@ -607,6 +610,7 @@ async function processVanidayImport(validationResult, userId) {
             invoiceId,
             totalAmount,
             customerId,
+            companyId,
             orderId,
             primaryRecord.shopTitle || null,
             primaryRecord.sellerId || null,
@@ -621,9 +625,9 @@ async function processVanidayImport(validationResult, userId) {
         // Fallback: insert with core columns only if extended columns don't exist
         [invoiceResult] = await connection.query(
           `INSERT INTO invoice
-            (status, issue_date, due_date, invoiceId, total_amount, customer_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, NOW())`,
-          [invoiceStatus, bookedDate, dueDate, invoiceId, totalAmount, customerId]
+            (status, issue_date, due_date, invoiceId, total_amount, customer_id, company_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+          [invoiceStatus, bookedDate, dueDate, invoiceId, totalAmount, customerId, companyId]
         );
         // Try updating extended columns one by one (best-effort)
         const invPk = invoiceResult.insertId;
@@ -662,6 +666,7 @@ async function processVanidayImport(validationResult, userId) {
           "INSERT INTO invoice_item (description, quantity, unit_price, amount, invoice_invoice_id) VALUES ?",
           [itemValues]
         );
+        await connection.query("UPDATE invoice_item SET company_id = ? WHERE invoice_invoice_id = ?", [companyId, invoicePk]).catch(() => {});
       } catch { /* table may not exist */ }
 
       // Step 8: If already paid, create payment record
@@ -672,6 +677,7 @@ async function processVanidayImport(validationResult, userId) {
              VALUES (?, ?, 'Completed', ?, ?, ?)`,
             [bookedDate, String(creditCardPaid), `VANIDAY-${orderId}`, invoicePk, primaryRecord.paymentMethod || "Stripe"]
           );
+          await connection.query("UPDATE payment SET company_id = ? WHERE invoice_invoice_id = ?", [companyId, invoicePk]).catch(() => {});
           await connection.query(
             "UPDATE invoice SET payment_date = ?, transaction_id = ?, payment_status = 'paid' WHERE invoice_id = ?",
             [bookedDate, `VANIDAY-${orderId}`, invoicePk]
@@ -689,9 +695,9 @@ async function processVanidayImport(validationResult, userId) {
       // Step 9: Audit log
       try {
         await connection.query(
-          `INSERT INTO audit_logs (user_id, module, activity_type, action_description, affected_record, status, created_at, previous_value, new_value)
-           VALUES (?, 'Invoice', 'invoice', ?, ?, 'Success', NOW(), NULL, ?)`,
-          [userId, `vaniday_import:${invoiceStatus}`, String(invoicePk), JSON.stringify({ orderId, shopTitle: primaryRecord.shopTitle, amount: totalAmount })]
+          `INSERT INTO audit_logs (user_id, company_id, module, activity_type, action_description, affected_record, status, created_at, previous_value, new_value)
+           VALUES (?, ?, 'Invoice', 'invoice', ?, ?, 'Success', NOW(), NULL, ?)`,
+          [userId, companyId, `vaniday_import:${invoiceStatus}`, String(invoicePk), JSON.stringify({ orderId, shopTitle: primaryRecord.shopTitle, amount: totalAmount })]
         );
       } catch { /* audit_logs may have different schema */ }
 

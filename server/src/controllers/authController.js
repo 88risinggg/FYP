@@ -1,8 +1,7 @@
 /**
  * Authentication Controller
  *
- * Handles user login with email/password verification.
- * Issues JWT tokens for authenticated sessions.
+ * Handles email/password login and JWT issuance.
  * Implements role-based module access control.
  */
 
@@ -61,9 +60,16 @@ function isActiveStatus(status) {
 }
 
 function normalToken(user) {
-  return jwt.sign({ userId: user.user_id, email: user.email, role: user.role_name }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "1d"
-  });
+  return jwt.sign(
+    {
+      userId: user.user_id,
+      email: user.email,
+      role: user.role_name,
+      companyId: user.company_id || null
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || "1d" }
+  );
 }
 
 function authPayload(user) {
@@ -74,9 +80,25 @@ function authPayload(user) {
       email: user.email,
       name: user.name,
       role: user.role_name,
+      companyId: user.company_id || null,
       allowedModules: getAllowedModules(user.role_name)
     }
   };
+}
+
+function buildUserResponse(user) {
+  return {
+    userId: user.user_id,
+    email: user.email,
+    name: user.name,
+    role: user.role_name,
+    companyId: user.company_id || null,
+    allowedModules: getAllowedModules(user.role_name)
+  };
+}
+
+function issueJwt(user) {
+  return normalToken(user);
 }
 
 /**
@@ -84,10 +106,10 @@ function authPayload(user) {
  *
  * Authenticates a user with email and password.
  * Validates credentials against bcrypt-hashed password in database.
- * Returns a signed JWT token and user profile on success.
+ * Issues the final JWT immediately after password verification.
  *
  * Request body: { email: string, password: string }
- * Success response: { token: string, user: { userId, email, name, role, allowedModules } }
+ * Success response: { token, user }
  * Error responses: 400 (missing fields), 401 (invalid credentials), 500 (server error)
  */
 async function login(req, res) {
@@ -186,5 +208,8 @@ async function completeFirstLogin(req, res) {
 
 module.exports = {
   completeFirstLogin,
+  buildUserResponse,
+  getAllowedModules,
+  issueJwt,
   login
 };

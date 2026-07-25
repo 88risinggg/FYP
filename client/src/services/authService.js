@@ -14,3 +14,27 @@ export function completeFirstLogin(setupToken, newPassword) {
   });
 }
 
+export function getRegistrationStatus() {
+  return apiRequest("/api/auth/registration/status");
+}
+
+export function startRegistration(details) {
+  return apiRequest("/api/auth/registration/start", {
+    method: "POST",
+    body: JSON.stringify(details)
+  });
+}
+
+export function verifyRegistrationOtp(challengeId, otp) {
+  return apiRequest("/api/auth/registration/verify-email", {
+    method: "POST",
+    body: JSON.stringify({ challengeId, otp })
+  });
+}
+
+export function resendRegistrationOtp(challengeId) {
+  return apiRequest("/api/auth/registration/resend-otp", {
+    method: "POST",
+    body: JSON.stringify({ challengeId })
+  });
+}

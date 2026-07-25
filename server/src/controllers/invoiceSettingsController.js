@@ -17,6 +17,7 @@ const {
 const { getClientIp, logAuditEvent } = require("../models/auditLogModel");
 const { sendInvoiceSettingsTestEmail } = require("../services/invoiceDeliveryService");
 const { generateInvoicePDF } = require("../services/pdfService");
+const { getCompanyId } = require("../utils/companyScope");
 
 const uploadDirectory = path.join(__dirname, "..", "..", "uploads", "invoice-logos");
 
@@ -233,7 +234,7 @@ function handleSettingsError(error, res, fallbackMessage) {
 
 async function getSettings(req, res) {
   try {
-    const settings = await getInvoiceSettings();
+    const settings = await getInvoiceSettings(getCompanyId(req));
     res.json(await buildPayload(settings, Boolean(settings)));
   } catch (error) {
     handleSettingsError(error, res, "Unable to load invoice settings.");
@@ -249,8 +250,9 @@ async function putSettings(req, res) {
       return res.status(400).json({ message: errors[0], errors });
     }
 
-    const previousSettings = await getInvoiceSettings();
-    const saved = await saveInvoiceSettings(settings);
+    const companyId = getCompanyId(req);
+    const previousSettings = await getInvoiceSettings(companyId);
+    const saved = await saveInvoiceSettings(settings, companyId);
     const changedBy = req.user?.email || "Admin";
     const numberingActivity = buildNumberingActivityRecords(previousSettings, settings, saved, changedBy);
 
@@ -310,7 +312,7 @@ async function postInvoiceLogo(req, res) {
     await fs.writeFile(filePath, parsedLogo.buffer);
 
     const companyLogoUrl = `/uploads/invoice-logos/${fileName}`;
-    const saved = await updateInvoiceLogo(companyLogoUrl);
+    const saved = await updateInvoiceLogo(companyLogoUrl, getCompanyId(req));
 
     await logAuditEvent({
       userId: req.user?.userId,

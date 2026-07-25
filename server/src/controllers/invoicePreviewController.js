@@ -8,6 +8,7 @@
 
 const { buildInvoiceHtml, formatDate, formatMoney } = require("../services/pdfService");
 const { defaultSettings, getInvoiceSettings } = require("../models/invoiceSettingsModel");
+const { getCompanyId } = require("../utils/companyScope");
 
 // Sample invoice data used for preview rendering
 const PREVIEW_INVOICE = {
@@ -46,7 +47,7 @@ async function getTemplatePreview(req, res) {
     let baseSettings = defaultSettings;
     if (req.body.invoice && !req.body.settings) {
       try {
-        const saved = await getInvoiceSettings();
+        const saved = await getInvoiceSettings(getCompanyId(req));
         if (saved) baseSettings = { ...defaultSettings, ...saved };
       } catch { /* use defaults */ }
     }
