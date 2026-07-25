@@ -19,11 +19,12 @@ function buildFinanceWorkflowState(run) {
     exceptions: employees.reduce((sum, item) => sum + (item.complianceExceptions?.length || 0), 0),
     payslipsSent: employees.filter((item) => ["Sent", "sent_to_staff"].includes(item.financeStatus)).length
   };
+  const payrollLocked = Boolean(run?.approvedAt || run?.paymentFileGeneratedAt || run?.paymentSubmittedAt || run?.paidAt);
   const workflow = {
     claims: true,
     review: Boolean(run?.reviewedAt),
-    staff: Boolean(employees.length && counts.approved === employees.length && counts.exceptions === 0),
-    approval: Boolean(run?.approvedAt),
+    staff: payrollLocked || Boolean(employees.length && counts.approved === employees.length && counts.exceptions === 0),
+    approval: payrollLocked,
     preparation: Boolean(run?.paymentFileGeneratedAt && Number(run?.paymentRecipientsConfigured || 0) >= employees.length),
     payment: Boolean(run?.paidAt),
     payslips: Boolean(run?.payslipsSentAt || (employees.length && counts.payslipsSent === employees.length)),
@@ -37,7 +38,7 @@ function buildFinanceWorkflowState(run) {
     let status = workflow[key] ? "completed" : key === firstIncomplete ? "current" : "upcoming";
     if (key === processing) status = "processing";
     if (key === failed) status = "failed";
-    if (key === "approval" && (counts.held || counts.exceptions)) status = "blocked";
+    if (key === "approval" && !workflow.approval && (counts.held || counts.exceptions)) status = "blocked";
     return { key, label, status };
   });
   return {

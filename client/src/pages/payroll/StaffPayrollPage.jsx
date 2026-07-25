@@ -609,6 +609,7 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
+  const [evidence, setEvidence] = useState([]);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
@@ -657,6 +658,7 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
     } else if (reason.trim().length < 10) {
       newErrors.reason = "Please provide a more detailed reason (at least 10 characters)";
     }
+    if (!evidence.length) newErrors.evidence = "At least one supporting document is required";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -667,19 +669,13 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
 
     setSubmitting(true);
     try {
-      await apiRequest("/api/hr/advance-requests", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          staff_id: profile?.employee_id,
-          requested_amount: Number(amount),
-          reason: reason.trim()
-        })
-      });
+      const data = new FormData(); data.append("requestType","salary_advance"); data.append("purpose",reason.trim()); data.append("description",reason.trim()); data.append("amount",Number(amount)); evidence.forEach(file=>data.append("evidence",file));
+      await apiRequest("/api/payroll-requests", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": undefined }, body: data });
 
       showToast("Advance payment request submitted successfully");
       setAmount("");
       setReason("");
+      setEvidence([]);
       setErrors({});
       fetchRequests();
     } catch (err) {
@@ -762,6 +758,8 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
               />
               {errors.reason && <p className="mt-1 text-xs text-red-400">{errors.reason}</p>}
             </div>
+
+            <div><label className="block text-xs text-[#7b6660]">Supporting documents (up to 5)</label><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" onChange={e=>{setEvidence(Array.from(e.target.files||[]).slice(0,5));setErrors(prev=>({...prev,evidence:undefined}));}} className="mt-1 w-full rounded-md border border-[#f0d2ca] p-2 text-sm"/>{errors.evidence&&<p className="mt-1 text-xs text-red-400">{errors.evidence}</p>}</div>
 
             <button
               type="button"

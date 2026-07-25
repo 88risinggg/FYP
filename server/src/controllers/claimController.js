@@ -301,16 +301,11 @@ async function processByFinance(req, res) {
     }
     let openRuns = [];
     if (action === "release") {
-      const target = await claimTargetForApproval(connection);
-      targetMonth = target.month;
-      targetYear = target.year;
-      targetCutoffAt = target.cutoffAt;
-      [openRuns] = await connection.query(
-        `SELECT payroll_month, payroll_year FROM payroll_run
-         WHERE payroll_month = ? AND payroll_year = ? AND approved_at IS NULL
-           AND LOWER(status) NOT IN ('payment processed', 'payslips sent', 'reconciled') LIMIT 1 FOR UPDATE`,
-        [targetMonth, targetYear]
-      );
+      // Approved reimbursements are immutable source inputs for the next run
+      // created after approval. Never patch an already-calculated payroll row.
+      targetMonth = null;
+      targetYear = null;
+      targetCutoffAt = null;
     }
     const [result] = await connection.query(
       `UPDATE claims_and_loans

@@ -300,7 +300,8 @@ async function getQueuedClaims(connection, month, year) {
      WHERE type = 'expense_claim'
        AND status = 'payroll_approved'
        AND payroll_inclusion_status = 'queued'
-       AND payroll_target_month = ? AND payroll_target_year = ?
+       AND ((payroll_target_month = ? AND payroll_target_year = ?)
+         OR (payroll_target_month IS NULL AND payroll_target_year IS NULL))
      FOR UPDATE`,
     [month, year]
   );
@@ -712,6 +713,17 @@ async function upsertFinancePayrollRun({ run, userId }) {
 }
 
 async function applyFinancePayrollWorkflowAction({ runId, action, payload = {}, userId }) {
+  // Also accept public workflow command names at the transaction boundary.
+  // This keeps older clients and direct command routes compatible even when a
+  // controller-level alias is bypassed.
+  action = ({
+    "submit-payment": "payment-submitted",
+    "confirm-payment": "payment-confirmed",
+    "fail-payment": "payment-failed",
+    "send-payslips": "payslips-completed",
+    "record-statutory-ledger": "statutory-ledger",
+    "complete-reconciliation": "reconcile"
+  })[action] || action;
   const [month, year] = String(runId).split("_").map(Number);
   if (!month || !year) throw Object.assign(new Error("Invalid payroll run ID."), { code: "INVALID_RUN_ID" });
   const connection = await pool.getConnection();

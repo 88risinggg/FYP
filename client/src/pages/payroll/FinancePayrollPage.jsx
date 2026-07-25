@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  ArrowRight,
   Banknote,
   Bell,
   Building2,
@@ -31,9 +32,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
-import { getPayrollRuleConfig } from "../../services/adminPayrollService.js";
+import { getEffectivePayrollRules, getPayrollRuleConfig } from "../../services/adminPayrollService.js";
 import {
   createFinancePayrollRunFromStaff,
+  exportFinancePayrollReport,
   generateFinancePayrollAdjustments,
   getFinancePayrollAdjustments,
   getFinancePayrollActivity,
@@ -529,6 +531,21 @@ function formatDateTime(value) {
     month: "short",
     year: "numeric"
   }).format(new Date(value));
+}
+
+function formatDate(value) {
+  if (!value) return "Not specified";
+  const dateOnly = String(value).slice(0, 10);
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(dateOnly)
+    ? new Date(`${dateOnly}T00:00:00+08:00`)
+    : new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return new Intl.DateTimeFormat("en-SG", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Singapore"
+  }).format(parsed);
 }
 
 function formatMoney(value) {
@@ -1337,7 +1354,7 @@ function ActionButton({ children, disabled = false, disabledReason = "", icon: I
       aria-disabled={disabled || undefined}
       title={isBlockedWithReason ? disabledReason : undefined}
     >
-      <Icon size={17} />
+      {Icon ? <Icon size={17} aria-hidden="true" /> : null}
       {children}
     </button>
   );
@@ -1600,6 +1617,26 @@ function AdminCpfConfigPanel() {
   );
 }
 
+function FinanceComplianceRulesPanel({ catalogue, loading }) {
+  const [category, setCategory] = useState("All");
+  const [query, setQuery] = useState("");
+  if (loading) return <div className="app-panel flex items-center gap-3 rounded-2xl p-8 text-sm text-[#7b6660]"><Loader2 size={18} className="motion-safe:animate-spin"/>Loading the effective Admin payroll rules…</div>;
+  const rules = catalogue?.rules || [];
+  const categories = catalogue?.categories || [];
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleRules = rules.filter((rule) => (category === "All" || rule.category === category) && (!normalizedQuery || [rule.name, rule.category, rule.value, rule.source, rule.usage].some((value) => String(value || "").toLowerCase().includes(normalizedQuery))));
+  const overrides = rules.filter((rule) => rule.source === "Admin Override").length;
+  const usageLabel = { calculation: "Payroll calculation", validation: "Compliance validation", reference: "Reference only" };
+  return <div className="space-y-5">
+    <section className="app-panel overflow-hidden rounded-2xl"><div className="border-b border-[#f0d2ca] bg-gradient-to-r from-[#2D7C83]/10 via-white to-[#F38978]/10 p-6"><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div className="flex gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#2D7C83] text-white"><ShieldCheck size={22}/></span><div><h2 className="text-lg font-semibold text-[#251E1F]">Effective payroll compliance rules</h2><p className="mt-1 max-w-3xl text-sm text-[#7b6660]">This is the same resolved rule catalogue maintained by Payroll Admin. Finance uses these values for calculation, automated exception review, approval checks, and payroll snapshots.</p></div></div><span className="w-fit rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">Live Admin source · read only</span></div></div>
+      <div className="grid gap-px bg-[#f0d2ca] sm:grid-cols-2 xl:grid-cols-4">{[["Rule groups", catalogue?.groupCount || 0], ["Active groups", catalogue?.activeGroupCount || 0], ["Admin overrides", overrides], ["Last synchronised", catalogue?.asOf ? formatDateTime(catalogue.asOf) : "Not available"]].map(([label,value]) => <div key={label} className="bg-white p-5"><p className="text-xs font-semibold uppercase tracking-wide text-[#7b6660]">{label}</p><strong className="mt-2 block text-lg text-[#251E1F]">{value}</strong></div>)}</div>
+    </section>
+    <section className="app-panel rounded-2xl p-5"><div className="flex flex-col gap-3 md:flex-row"><label className="flex flex-1 items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5"><Search size={16} className="text-[#F38978]"/><span className="sr-only">Search rules</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search rule, value, source, or usage" className="w-full bg-transparent text-sm outline-none"/></label><label><span className="sr-only">Rule category</span><select value={category} onChange={(event) => setCategory(event.target.value)} className="min-w-56 rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm font-semibold outline-none"><option>All</option>{categories.map((item) => <option key={item.category}>{item.category}</option>)}</select></label></div><div className="mt-3 flex flex-wrap gap-2">{categories.map((item) => <span key={item.category} className="rounded-full bg-[#fff8f5] px-3 py-1 text-xs text-[#7b6660]">{item.category}: <b>{item.active}/{item.count} active</b></span>)}</div></section>
+    <section className="app-panel overflow-hidden rounded-2xl"><div className="overflow-x-auto"><table className="min-w-[72rem] w-full text-left text-sm"><thead className="bg-[#fff8f5] text-xs uppercase tracking-wide text-[#7b6660]"><tr><th className="px-5 py-4">Rule</th><th>Current value</th><th>Payroll use</th><th>Source</th><th>Effective from</th><th>Status</th><th className="pr-5">Last update</th></tr></thead><tbody className="divide-y divide-[#f0d2ca]">{visibleRules.map((rule) => <tr key={rule.key} className="align-top transition-colors hover:bg-[#fff8f5]/70"><td className="px-5 py-4"><strong className="text-[#251E1F]">{rule.name}</strong><small className="mt-1 block text-[#7b6660]">{rule.category}</small>{rule.details?.length ? <details className="mt-2"><summary className="cursor-pointer text-xs font-semibold text-[#2D7C83]">View {rule.details.length} applied values</summary><dl className="mt-2 space-y-1 rounded-lg bg-[#2D7C83]/5 p-3">{rule.details.map((detail) => <div key={detail.label} className="flex justify-between gap-4 text-xs"><dt className="capitalize text-[#7b6660]">{detail.label}</dt><dd className="text-right font-semibold">{detail.value}</dd></div>)}</dl></details> : null}</td><td className="py-4 font-semibold text-[#251E1F]">{rule.value}</td><td className="py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${rule.usage === "calculation" ? "bg-blue-50 text-blue-700" : rule.usage === "validation" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}>{usageLabel[rule.usage] || "Reference only"}</span></td><td className="py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${rule.source === "Admin Override" ? "bg-purple-50 text-purple-700" : "bg-slate-100 text-slate-600"}`}>{rule.source}</span></td><td className="py-4">{formatDate(rule.effectiveFrom)}</td><td className="py-4"><span className={`inline-flex items-center gap-1.5 font-semibold ${rule.isActive ? "text-emerald-700" : "text-red-600"}`}><span className={`h-2 w-2 rounded-full ${rule.isActive ? "bg-emerald-500" : "bg-red-500"}`}/>{rule.status}</span></td><td className="py-4 pr-5"><strong className="block">{rule.updatedAt ? formatDateTime(rule.updatedAt) : "Statutory baseline"}</strong><small className="text-[#7b6660]">{rule.updatedBy || "System default"}</small></td></tr>)}</tbody></table></div>{!visibleRules.length ? <div className="p-10 text-center text-sm text-[#7b6660]">No effective rules match the selected filters.</div> : null}</section>
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><strong>How rule changes affect Finance:</strong> new payroll runs use the latest active Admin rules. Existing runs keep their immutable rule snapshot and display a recalculation warning if Admin changes rules before Finance approval.</div>
+  </div>;
+}
+
 function CompliancePanel({ run }) {
   const { checks, failed, passed, total } = getComplianceSummary(run);
   const lastUpdatedLabel = run?.rulesVersion || "Stored snapshot";
@@ -1739,11 +1776,15 @@ function FinancePayrollJourney({ run, isLiveUpdating = false, lastSyncAt = null,
   const allStaffReviewed = Boolean(run?.employees?.length) && approvedStaff === run.employees.length && exceptions === 0;
   const recipientsReady = Number(run?.paymentRecipientsConfigured || 0) >= (run?.employees?.length || 0);
   const finalised = completed.reconciled;
+  // Persisted downstream milestones are authoritative. Employee display statuses can
+  // change during delivery, but a paid run cannot regress to review or approval.
+  const payrollLocked = completed.approved || completed.paid || Boolean(run?.paymentSubmittedAt || run?.paymentFileGeneratedAt);
+  const staffReviewComplete = finalised || payrollLocked || allStaffReviewed;
   const stages = [
     ["Claim requests", "/dashboard/payroll/finance/employee-requests", finalised || Boolean(run?.submittedAt), false, "Snapshotted"],
     ["Payroll run review", "/dashboard/payroll/finance/payroll-runs", finalised || completed.reviewed, !finalised && Boolean(run?.rulesChanged), "Review"],
-    ["Staff review", "/dashboard/payroll/finance/staff-payroll-details", finalised || allStaffReviewed, !finalised && exceptions > 0, "Adjust"],
-    ["Payroll approval", "/dashboard/payroll/finance/payroll-approval", finalised || completed.approved, !finalised && (!completed.reviewed || !allStaffReviewed), "Approve"],
+    ["Staff review", "/dashboard/payroll/finance/staff-payroll-details", staffReviewComplete, !staffReviewComplete && exceptions > 0, "Adjust"],
+    ["Payroll approval", "/dashboard/payroll/finance/payroll-approval", finalised || payrollLocked, !payrollLocked && (!completed.reviewed || !allStaffReviewed), "Approve"],
     ["Payment preparation", "/dashboard/payroll/finance/payment-preparation", finalised || Boolean(run?.paymentFileGeneratedAt && recipientsReady), !finalised && !completed.approved, "Prepare"],
     ["Payment release", "/dashboard/payroll/finance/payment-release", finalised || completed.paid, !finalised && !run?.paymentFileGeneratedAt, run?.paymentStatus === "Processing" ? "Processing" : run?.paymentStatus === "Failed" ? "Failed" : "Release"],
     ["Payslip delivery", "/dashboard/payroll/finance/payslip-delivery", finalised || completed.payslipsSent, !finalised && !completed.paid, "Deliver"],
@@ -3070,7 +3111,7 @@ function PayrollAdjustmentReview({ selectedRun, onRunUpdated }) {
   </section>;
 }
 
-function ExplainablePayrollAdjustmentReview({ selectedRun, onRunUpdated }) {
+function ExplainablePayrollAdjustmentReview({ selectedRun, onRunUpdated, onRecalculateRun, recalculationProcessing }) {
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState("");
@@ -3102,10 +3143,11 @@ function ExplainablePayrollAdjustmentReview({ selectedRun, onRunUpdated }) {
     finally { setProcessing(""); }
   };
   const pending = proposals.filter((item) => item.status === "Pending" && item.actionable);
+  const hasSourceBlockers = proposals.some((item) => !item.actionable && item.status === "Pending");
   const employeeCount = new Set(pending.map((item) => item.staffEmployeeId)).size;
   const sections = [["Why this was flagged", "flaggedBecause"], ["Compliance rule checked", "ruleApplied"], ["Suggested correction", "changeMade"], ["What happens if approved", "expectedOutcome"]];
   return <section className="app-panel mt-6 rounded-2xl p-6">
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Automated exception adjustment</p><h3 className="mt-1 text-lg font-semibold">Finance suggestion review</h3><p className="mt-1 max-w-3xl text-sm text-[#7b6660]">Every explanation and amount uses this run's stored Admin-rule snapshot. No change is applied until Finance approves it.</p></div><div className="flex flex-wrap gap-2"><ActionButton icon={RefreshCw} variant="secondary" disabled={Boolean(processing)} onClick={generate}>{processing === "generate" ? "Generating..." : "Generate suggestions"}</ActionButton>{pending.length ? <ActionButton icon={ShieldCheck} disabled={Boolean(processing)} onClick={() => setConfirmBulk(true)}>Approve all safe ({pending.length})</ActionButton> : null}</div></div>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Automated exception adjustment</p><h3 className="mt-1 text-lg font-semibold">Finance suggestion review</h3><p className="mt-1 max-w-3xl text-sm text-[#7b6660]">Every explanation and amount uses this run's stored Admin-rule snapshot. No change is applied until Finance approves it.</p></div><div className="flex flex-wrap gap-2">{hasSourceBlockers ? <ActionButton icon={recalculationProcessing ? Loader2 : RefreshCw} variant="secondary" disabled={Boolean(processing) || recalculationProcessing} onClick={onRecalculateRun}>{recalculationProcessing ? "Refreshing payroll..." : "Refresh after HR correction"}</ActionButton> : null}<ActionButton icon={RefreshCw} variant="secondary" disabled={Boolean(processing) || recalculationProcessing} onClick={generate}>{processing === "generate" ? "Generating..." : "Generate suggestions"}</ActionButton>{pending.length ? <ActionButton icon={ShieldCheck} disabled={Boolean(processing) || recalculationProcessing} onClick={() => setConfirmBulk(true)}>Approve all safe ({pending.length})</ActionButton> : null}</div></div>
     {confirmBulk ? <div className="mt-4 rounded-xl border border-[#2D7C83]/30 bg-[#eaf6f6] p-4 text-sm"><strong>Confirm bulk approval</strong><p className="mt-1 text-[#47676a]">Approve {pending.length} safe {pending.length === 1 ? "proposal" : "proposals"} for {employeeCount} {employeeCount === 1 ? "employee" : "employees"}, then recalculate the complete pending run.</p><div className="mt-3 flex gap-2"><ActionButton icon={ShieldCheck} onClick={() => { setConfirmBulk(false); review(pending.map((item) => item.id), "approve"); }}>Confirm bulk approval</ActionButton><ActionButton variant="secondary" onClick={() => setConfirmBulk(false)}>Cancel</ActionButton></div></div> : null}
     {error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
     {loading ? <div className="mt-5 flex items-center gap-2 text-sm text-[#7b6660]"><Loader2 size={16} className="animate-spin"/>Loading suggestions...</div> : !proposals.length ? <div className="mt-5 rounded-xl border border-dashed border-[#f0d2ca] p-5 text-sm text-[#7b6660]">No proposals generated for this period. Generate suggestions after payroll calculation or source-data changes.</div> : <div className="mt-5 space-y-4">{proposals.map((proposal) => {
@@ -3120,7 +3162,7 @@ function ExplainablePayrollAdjustmentReview({ selectedRun, onRunUpdated }) {
   </section>;
 }
 
-function StaffPayrollDetailsView({ onSystemCheckApproveAll, onUpdateEmployee, onUpdateStaffStatus, onRunUpdated, onSelectRun, payrollRuns, selectedRun, simulationProcessing, simulationResult }) {
+function StaffPayrollDetailsView({ error, onSystemCheckApproveAll, onUpdateEmployee, onUpdateStaffStatus, onRunUpdated, onRecalculateRun, onSelectRun, payrollRuns, recalculationProcessing, selectedRun, simulationProcessing, simulationResult }) {
   const stats = getAggregatePayrollStats([selectedRun]);
   const isLocked = getCompletedSteps(selectedRun).approved;
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
@@ -3129,6 +3171,7 @@ function StaffPayrollDetailsView({ onSystemCheckApproveAll, onUpdateEmployee, on
   return (
     <PageShell heading="Staff Review & Adjustments" actions={<RunSelector payrollRuns={payrollRuns} selectedRunId={selectedRun.id} onSelectRun={onSelectRun} />}>
       <div className="mb-4 rounded-2xl border border-[#2D7C83]/20 bg-[#2D7C83]/10 p-4 text-sm text-[#2D7C83]"><strong>{formatPayrollPeriod(selectedRun)}</strong> is the only period included in the employee table and totals below.</div>
+      {error ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Gross Pay" value={formatMoney(stats.totals.grossPay)} />
         <StatCard label="Net Pay" value={formatMoney(stats.totals.netPay)} tone="text-[#2f8758]" />
@@ -3138,7 +3181,7 @@ function StaffPayrollDetailsView({ onSystemCheckApproveAll, onUpdateEmployee, on
       <div className="mt-6">
         <ExceptionPanel run={selectedRun} />
       </div>
-      <ExplainablePayrollAdjustmentReview selectedRun={selectedRun} onRunUpdated={onRunUpdated} />
+      <ExplainablePayrollAdjustmentReview selectedRun={selectedRun} onRunUpdated={onRunUpdated} onRecalculateRun={onRecalculateRun} recalculationProcessing={recalculationProcessing} />
       <div className="app-panel mt-6 overflow-hidden rounded-2xl">
         <div className="flex flex-col gap-3 border-b border-[#f0d2ca] bg-[#fff8f5] px-6 py-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold text-[#251E1F]">Salary approval simulation</p><span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-[#2D7C83]">{salaryApprovalCount}/{selectedRun.employees.length} approved</span></div><p className="mt-1 text-xs text-[#7b6660]">For presentation use: runs the automated system check, approves every eligible salary row below, and keeps flagged staff on hold.</p></div><ActionButton icon={ShieldCheck} disabled={isLocked || simulationProcessing} disabledReason={isLocked ? "Approved payroll runs are locked." : ""} onClick={onSystemCheckApproveAll}>{simulationProcessing ? "Checking and approving salaries..." : "System Check & Approve All Salaries"}</ActionButton></div>
         {simulationResult ? <div className={`border-b px-6 py-3 text-sm ${simulationResult.error ? "border-red-200 bg-red-50 text-red-700" : simulationResult.held ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{simulationResult.message}</div> : null}
@@ -3605,6 +3648,20 @@ function downloadReport(selectedRun, reportTitle) {
 function FinanceReportPreviewModal({ reportTitle, selectedRun, onClose }) {
   const report = useMemo(() => createFinanceReportPdf(selectedRun, reportTitle), [reportTitle, selectedRun]);
   const [pdfUrl, setPdfUrl] = useState("");
+  const [excelProgress, setExcelProgress] = useState({ running: false, percent: 0, message: "" });
+  const downloadExcel = async () => {
+    if (excelProgress.running) return;
+    setExcelProgress({ running: true, percent: 8, message: "Preparing payroll rows…" });
+    const timer = window.setInterval(() => setExcelProgress((current) => current.running ? { ...current, percent: Math.min(90, current.percent + 7), message: current.percent > 55 ? "Formatting workbook…" : "Preparing payroll rows…" } : current), 180);
+    try {
+      await exportFinancePayrollReport(selectedRun.id, reportTitle);
+      window.clearInterval(timer);
+      setExcelProgress({ running: false, percent: 100, message: "Excel report downloaded." });
+    } catch (error) {
+      window.clearInterval(timer);
+      setExcelProgress({ running: false, percent: 0, message: error.message });
+    }
+  };
   useEffect(() => {
     if (!report?.blob) return undefined;
     const url = URL.createObjectURL(report.blob);
@@ -3617,8 +3674,9 @@ function FinanceReportPreviewModal({ reportTitle, selectedRun, onClose }) {
       <section className="app-panel flex max-h-[94vh] w-full max-w-6xl flex-col rounded-2xl p-5">
         <header className="flex flex-col gap-3 border-b border-[#f0d2ca] pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Report preview</p><h3 className="mt-1 text-lg font-semibold text-[#251E1F]">{reportTitle}</h3><p className="mt-1 text-sm text-[#7b6660]">{formatPayrollPeriod(selectedRun)} · database-backed payroll snapshot</p></div>
-          <div className="flex gap-2"><ActionButton icon={Download} onClick={() => downloadPdf(report.filename, report.blob)}>Export PDF</ActionButton><ActionButton icon={X} variant="secondary" onClick={onClose}>Close</ActionButton></div>
+          <div className="flex flex-wrap gap-2"><ActionButton icon={Download} onClick={() => downloadPdf(report.filename, report.blob)}>Export PDF</ActionButton><ActionButton icon={FileBarChart} variant="secondary" disabled={excelProgress.running} onClick={downloadExcel}>{excelProgress.running ? "Generating Excel…" : "Export Excel"}</ActionButton><ActionButton icon={X} variant="secondary" disabled={excelProgress.running} onClick={onClose}>Close</ActionButton></div>
         </header>
+        {excelProgress.message ? <div role="status" aria-live="polite" className={`mt-4 rounded-xl border p-3 text-sm ${excelProgress.percent === 0 ? "border-red-200 bg-red-50 text-red-700" : excelProgress.percent === 100 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-[#2D7C83]/25 bg-[#2D7C83]/10 text-[#2D7C83]"}`}><div className="flex items-center justify-between gap-3"><span className="inline-flex items-center gap-2 font-semibold">{excelProgress.running ? <Loader2 size={16} className="motion-safe:animate-spin"/> : excelProgress.percent === 100 ? <CheckCircle2 size={16}/> : <AlertCircle size={16}/>} {excelProgress.message}</span>{excelProgress.percent > 0 ? <b>{excelProgress.percent}%</b> : null}</div>{excelProgress.percent > 0 ? <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/80"><div className="h-full rounded-full bg-gradient-to-r from-[#2D7C83] to-emerald-500 transition-all duration-300" style={{ width: `${excelProgress.percent}%` }}/></div> : null}</div> : null}
         <div className="mt-5 min-h-0 flex-1 overflow-hidden rounded-xl border border-[#f0d2ca] bg-white">{pdfUrl ? <iframe title={`${reportTitle} preview`} src={pdfUrl} className="h-[68vh] w-full" /> : null}</div>
       </section>
     </div>
@@ -3792,7 +3850,41 @@ function PayrollRunDetailsDrawer({ run, onClose }) {
     </div><footer className="sticky bottom-0 flex justify-end border-t border-[#f0d2ca] bg-white p-5"><button type="button" onClick={onClose} className="rounded-xl border border-[#f0d2ca] px-5 py-2.5 font-semibold">Close</button></footer></aside></div>;
 }
 
+function PayrollRunReviewData({ run, showResults }) {
+  const totals = getRunTotals(run);
+  const exceptions = getRunExceptions(run);
+  const affectedEmployees = new Set(exceptions.map((item) => item.employee.id || item.employee.employeeId)).size;
+  const validationChecks = getComplianceChecks(run).slice(0, 8);
+
+  return <div className="mt-5 space-y-4">
+    {showResults ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {[
+        ["Employees", run.employees.length, "Records in this payroll run"],
+        ["Gross payroll", formatMoney(totals.grossPay + totals.allowances), "Salary and payroll earnings"],
+        ["Net payroll", formatMoney(totals.netPay), "Expected employee payments"],
+        ["Exceptions", exceptions.length, affectedEmployees ? `${affectedEmployees} employee(s) affected` : "No compliance blockers"]
+      ].map(([label, value, detail]) => <div key={label} className="rounded-xl border border-[#f0d2ca] bg-white p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#7b6660]">{label}</p>
+        <strong className={`mt-1 block text-xl ${label === "Exceptions" && exceptions.length ? "text-red-600" : "text-[#251E1F]"}`}>{value}</strong>
+        <p className="mt-1 text-xs text-[#7b6660]">{detail}</p>
+      </div>)}
+    </div> : null}
+
+    <section className="overflow-hidden rounded-xl border border-[#f0d2ca] bg-white">
+      <div className="flex flex-col gap-2 border-b border-[#f0d2ca] bg-[#fff8f5] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div><h3 className="font-semibold text-[#251E1F]">{showResults ? "Automated validation results" : "Compliance rules included in this review"}</h3><p className="mt-1 text-xs text-[#7b6660]">{showResults ? "Run-level results only. Review individual salary details and take action in Step 3." : "Review the rules below, then run the automated checks for this payroll period."}</p></div>
+        {showResults ? <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${exceptions.length ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}>{exceptions.length ? `${exceptions.length} issue(s) found` : "All automated checks passed"}</span> : <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">Not run yet</span>}
+      </div>
+      <div className="grid gap-2 p-4 sm:grid-cols-2">{validationChecks.map((check) => <div key={check.label} className="flex items-center justify-between gap-3 rounded-lg border border-[#f0d2ca] px-3 py-2.5 text-sm"><div><span className="text-[#534647]">{check.label}</span>{!showResults ? <p className="mt-1 text-[11px] leading-4 text-[#7b6660]">{check.detail}</p> : null}</div>{showResults ? <span className={`inline-flex shrink-0 items-center gap-1 font-semibold ${check.status ? "text-emerald-700" : "text-red-600"}`}>{check.status ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>} {check.status ? "Passed" : "Review"}</span> : null}</div>)}</div>
+      {showResults && exceptions.length ? <div className="border-t border-[#f0d2ca] px-5 py-3 text-xs text-[#7b6660]"><strong className="text-red-700">Next:</strong> Open Staff Review &amp; Adjustments to see the affected employees, explanations, and suggested corrections.</div> : null}
+    </section>
+  </div>;
+}
+
 function GuidedWorkflowStageView({ stage, selectedRun, payrollRuns, onSelectRun, onAction, onGeneratePaymentFile, onSetupRecipients, onSubmitPayment, onRecalculate, busy, error }) {
+  const navigate = useNavigate();
+  const [reviewResultsVisible, setReviewResultsVisible] = useState(() => Boolean(selectedRun.approvedAt));
+  useEffect(() => setReviewResultsVisible(Boolean(selectedRun.approvedAt)), [selectedRun.id, selectedRun.approvedAt]);
   const state = getCompletedSteps(selectedRun);
   const approvedStaff = selectedRun.employees.filter((employee) => employee.financeStatus === "Approved").length;
   const allStaffApproved = approvedStaff === selectedRun.employees.length && approvedStaff > 0;
@@ -3807,15 +3899,19 @@ function GuidedWorkflowStageView({ stage, selectedRun, payrollRuns, onSelectRun,
   };
   const item = definitions[stage];
   const runAction = async (action, payload) => { try { await onAction(action, payload); } catch { /* error banner is shared */ } };
+  const runComplianceReview = async () => { try { await onAction("review"); setReviewResultsVisible(true); } catch { /* error banner is shared */ } };
+  const displayedChecks = stage === "review" ? [["Admin rules snapshot is current", !selectedRun.rulesChanged], ["Automated compliance review completed", reviewResultsVisible]] : item.checks;
   return <PageShell heading={item.title} actions={<RunSelector payrollRuns={payrollRuns} selectedRunId={selectedRun.id} onSelectRun={onSelectRun} />}>
     <div className="grid gap-5 lg:grid-cols-[1fr_22rem]">
-      <section className="app-panel rounded-2xl p-6"><p className="text-sm text-[#7b6660]">{item.description}</p><div className="mt-5 rounded-xl border border-[#f0d2ca] bg-[#fff8f5] p-4"><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Selected payroll period</p><h3 className="mt-1 text-xl font-semibold text-[#251E1F]">{formatPayrollPeriod(selectedRun)}</h3><p className="mt-1 font-mono text-xs font-semibold text-[#2D7C83]">Run ID: {formatPayrollRunId(selectedRun)}</p><p className="mt-1 text-sm text-[#7b6660]">{selectedRun.status}</p></div>
+      <section className="app-panel rounded-2xl p-6"><p className="text-sm text-[#7b6660]">{item.description}</p><div className="mt-5 rounded-xl border border-[#f0d2ca] bg-[#fff8f5] p-4"><p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]">Selected payroll period</p><h3 className="mt-1 text-xl font-semibold text-[#251E1F]">{formatPayrollPeriod(selectedRun)}</h3><p className="mt-1 font-mono text-xs font-semibold text-[#2D7C83]">Run ID: {formatPayrollRunId(selectedRun)}</p><p className="mt-1 text-sm text-[#7b6660]">{stage === "review" && !reviewResultsVisible ? "Ready for automated review" : selectedRun.status}</p></div>
+        {stage === "review" ? <PayrollRunReviewData run={selectedRun} showResults={reviewResultsVisible}/> : null}
         {stage === "payment" && selectedRun.paymentStatus ? <div className={`mt-4 rounded-xl border p-4 text-sm ${["Failed", "Partially Submitted"].includes(selectedRun.paymentStatus) ? "border-red-200 bg-red-50 text-red-700" : "border-blue-200 bg-blue-50 text-blue-700"}`}><div className="flex items-center justify-between gap-3"><strong>Modern Treasury: {selectedRun.paymentStatus}</strong>{["Submitting", "Processing", "Partially Submitted"].includes(selectedRun.paymentStatus) ? <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2 py-1 text-[11px] font-semibold text-blue-700"><span className="h-2 w-2 rounded-full bg-blue-500 motion-safe:animate-pulse"/>Live</span> : null}</div><p className="mt-1">{selectedRun.bankReference || selectedRun.paymentFailureReason || "Awaiting provider reference"}</p>{selectedRun.paymentBatch ? <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs"><span><b className="block text-base">{selectedRun.paymentBatch.total || 0}</b>Total</span><span><b className="block text-base">{selectedRun.paymentBatch.succeeded || 0}</b>Submitted</span><span><b className="block text-base">{selectedRun.paymentBatch.failed || 0}</b>Failed</span><span><b className="block text-base">{selectedRun.paymentBatch.remaining || 0}</b>Remaining</span></div> : null}</div> : null}
         {stage === "payslips" && selectedRun.payslipDelivery ? <div className={`mt-4 rounded-xl border p-4 text-sm ${selectedRun.payslipDelivery.failed ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}><strong>Payslip delivery result</strong><div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs"><span><b className="block text-base">{selectedRun.payslipDelivery.sent || 0}</b>Sent now</span><span><b className="block text-base">{selectedRun.payslipDelivery.skipped || 0}</b>Already sent</span><span><b className="block text-base">{selectedRun.payslipDelivery.failed || 0}</b>Failed</span></div>{selectedRun.payslipDelivery.errors?.map((item) => <div key={item.payrollId} className="mt-3 rounded-lg bg-white/70 p-3"><b>{item.employee || item.employeeId || `Payroll ${item.payrollId}`}</b><p>{item.message}</p>{item.correctiveAction ? <p className="mt-1 font-medium">Required: {item.correctiveAction}</p> : null}</div>)}</div> : null}
         {error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
       </section>
-      <aside className="app-panel rounded-2xl p-5"><h3 className="font-semibold text-[#251E1F]">Stage checklist</h3><ul className="mt-4 space-y-3">{item.checks.map(([label, complete]) => <li key={label} className="flex items-start gap-2 text-sm"><span className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold ${complete ? "bg-emerald-600 text-white" : "bg-[#f0d2ca] text-[#7b6660]"}`}>{complete ? "✓" : "·"}</span><span className={complete ? "text-emerald-700" : "text-[#7b6660]"}>{label}</span></li>)}</ul>
-        <div className="mt-6 space-y-2">{stage === "review" && selectedRun.rulesChanged ? <ActionButton icon={RefreshCw} disabled={busy} onClick={onRecalculate}>Recalculate with current rules</ActionButton> : stage === "preparation" ? <><ActionButton icon={Download} disabled={!state.approved || busy || Boolean(selectedRun.paymentFileGeneratedAt)} onClick={onGeneratePaymentFile}>{selectedRun.paymentFileGeneratedAt ? "Payment PDF generated" : "Generate payment PDF"}</ActionButton><ActionButton icon={Users} variant="secondary" disabled={!state.approved || busy} onClick={onSetupRecipients}>{selectedRun.paymentRecipientsConfigured >= selectedRun.employees.length ? "Recipients configured" : "Configure recipients"}</ActionButton></> : stage === "payment" ? <>{selectedRun.paymentStatus === "Submitting" ? <ActionButton icon={Loader2} disabled>Submission in progress</ActionButton> : ["Failed", "Partially Submitted"].includes(selectedRun.paymentStatus) ? <ActionButton icon={RefreshCw} disabled={!item.ready || busy} onClick={() => runAction("retry-payment")}>Retry remaining payments</ActionButton> : !selectedRun.paymentSubmittedAt ? <ActionButton icon={Send} disabled={!item.ready || busy} onClick={onSubmitPayment}>Submit to Modern Treasury</ActionButton> : !state.paid ? <ActionButton icon={CheckCircle2} disabled={busy} onClick={() => runAction("confirm-payment", { manual: true, batchReference: selectedRun.bankReference })}>Awaiting settlement confirmation</ActionButton> : null}</> : <ActionButton icon={CheckCircle2} disabled={!item.ready || item.done || busy} onClick={() => runAction(item.action)}>{item.done ? "Stage completed" : item.label}</ActionButton>}</div>
+      <aside className="app-panel rounded-2xl p-5"><h3 className="font-semibold text-[#251E1F]">Stage checklist</h3><ul className="mt-4 space-y-3">{displayedChecks.map(([label, complete]) => <li key={label} className="flex items-start gap-2 text-sm"><span className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold ${complete ? "bg-emerald-600 text-white" : "bg-[#f0d2ca] text-[#7b6660]"}`}>{complete ? "✓" : "·"}</span><span className={complete ? "text-emerald-700" : "text-[#7b6660]"}>{label}</span></li>)}</ul>
+        {busy ? <div role="status" aria-live="polite" className="mt-5 overflow-hidden rounded-xl border border-[#2D7C83]/25 bg-[#2D7C83]/10 p-3 text-sm text-[#2D7C83]"><div className="flex items-center gap-2 font-semibold"><Loader2 size={17} className="motion-safe:animate-spin"/><span>Validating and saving this stage…</span></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/80"><span className="block h-full w-2/3 rounded-full bg-gradient-to-r from-[#2D7C83] via-emerald-400 to-[#2D7C83] motion-safe:animate-pulse"/></div><p className="mt-2 text-xs">The next stage unlocks only after the database confirms this action.</p></div> : null}
+        <div className="mt-6 space-y-2">{stage === "review" && selectedRun.rulesChanged ? <ActionButton icon={RefreshCw} disabled={busy} onClick={onRecalculate}>Recalculate with current rules</ActionButton> : stage === "review" ? reviewResultsVisible ? <ActionButton icon={ArrowRight} onClick={() => navigate("/dashboard/payroll/finance/staff-payroll-details")}>Next: Staff Review &amp; Adjustments</ActionButton> : <ActionButton icon={ShieldCheck} disabled={busy} onClick={runComplianceReview}>Run automated review</ActionButton> : stage === "preparation" ? <><ActionButton icon={Download} disabled={!state.approved || busy || Boolean(selectedRun.paymentFileGeneratedAt)} onClick={onGeneratePaymentFile}>{selectedRun.paymentFileGeneratedAt ? "Payment PDF generated" : "Generate payment PDF"}</ActionButton><ActionButton icon={Users} variant="secondary" disabled={!state.approved || busy} onClick={onSetupRecipients}>{selectedRun.paymentRecipientsConfigured >= selectedRun.employees.length ? "Recipients configured" : "Configure recipients"}</ActionButton></> : stage === "payment" ? <>{selectedRun.paymentStatus === "Submitting" ? <ActionButton icon={Loader2} disabled>Submission in progress</ActionButton> : ["Failed", "Partially Submitted"].includes(selectedRun.paymentStatus) ? <ActionButton icon={RefreshCw} disabled={!item.ready || busy} onClick={() => runAction("retry-payment")}>Retry remaining payments</ActionButton> : !selectedRun.paymentSubmittedAt ? <ActionButton icon={Send} disabled={!item.ready || busy} onClick={onSubmitPayment}>Submit to Modern Treasury</ActionButton> : !state.paid ? <ActionButton icon={CheckCircle2} disabled={busy} onClick={() => runAction("confirm-payment", { manual: true, batchReference: selectedRun.bankReference })}>Awaiting settlement confirmation</ActionButton> : null}</> : <ActionButton icon={CheckCircle2} disabled={!item.ready || item.done || busy} onClick={() => runAction(item.action)}>{item.done ? "Stage completed" : item.label}</ActionButton>}</div>
         {!item.ready && !item.done ? <p className="mt-3 text-xs text-red-600">Complete the unchecked prerequisites before continuing.</p> : null}
       </aside>
     </div>
@@ -3834,13 +3930,15 @@ function RecipientProgressModal({ state, onClose, onRetry }) {
   </div></div>;
 }
 
-function AutoAdvanceNotice({ state, onStay }) {
+function AutoAdvanceNotice({ state, onStay, onContinue }) {
   if (!state) return null;
-  return <div className="fixed bottom-6 right-6 z-[90] w-[22rem] rounded-2xl border border-emerald-200 bg-white p-4 shadow-2xl"><div className="flex gap-3"><CheckCircle2 className="shrink-0 text-emerald-600"/><div><p className="font-semibold text-[#251E1F]">Stage completed</p><p className="mt-1 text-sm text-[#7b6660]">Moving to {state.label} in {state.seconds} second{state.seconds === 1 ? "" : "s"}.</p><button type="button" className="mt-2 text-sm font-semibold text-[#F38978] hover:underline" onClick={onStay}>Stay on this page</button></div></div></div>;
+  return <div className="fixed inset-0 z-[1200] grid place-items-center bg-[#251E1F]/50 p-4 backdrop-blur-sm"><section role="dialog" aria-modal="true" aria-labelledby="workflow-complete-title" className="w-full max-w-md rounded-3xl border border-emerald-200 bg-white p-7 text-center shadow-2xl"><span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"><CheckCircle2 size={34} className="motion-safe:animate-[financeClaimResultPop_.4s_ease_both]"/></span><p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Process completed</p><h3 id="workflow-complete-title" className="mt-1 text-xl font-semibold text-[#251E1F]">This stage was saved successfully</h3><p className="mt-2 text-sm leading-6 text-[#7b6660]">Redirecting to <strong>{state.label}</strong> in {state.seconds} second{state.seconds === 1 ? "" : "s"}.</p><div className="mt-5 h-2 overflow-hidden rounded-full bg-emerald-100"><span className="block h-full rounded-full bg-emerald-500 transition-all duration-1000 motion-reduce:transition-none" style={{ width: `${Math.max(12, (state.seconds / 4) * 100)}%` }}/></div><div className="mt-6 grid gap-2 sm:grid-cols-2"><button type="button" onClick={onStay} className="rounded-xl border border-[#f0d2ca] bg-white px-4 py-3 text-sm font-semibold text-[#7b6660]">Stay on this page</button><button type="button" onClick={onContinue} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white">Continue now<ArrowRight size={16}/></button></div></section></div>;
 }
 
 function FinancePayrollContent({
   configError,
+  effectiveRuleCatalogue,
+  effectiveRulesLoading,
   onAdvanceRun,
   onCreateDbRun,
   onGeneratePaymentFile,
@@ -3875,7 +3973,7 @@ function FinancePayrollContent({
         <div className="mb-5 rounded-2xl border border-[#2D7C83]/25 bg-[#2D7C83]/10 p-5 text-sm text-[#2D7C83]">
           Finance has read-only access. All values below come from Admin Payroll configuration in the connected database; changes must be made by an authorised Admin.
         </div>
-        {configError ? <div className="rounded-2xl border border-red-300 bg-red-50 p-4 text-sm text-red-700">Unable to load the current Admin rules from the database. No fallback Finance rule set is shown. {configError}</div> : <AdminCpfConfigPanel />}
+        {configError ? <div className="rounded-2xl border border-red-300 bg-red-50 p-4 text-sm text-red-700"><strong>Unable to synchronise Admin payroll rules.</strong><p className="mt-1">Finance is not being shown fallback values. Refresh after the Admin configuration service is available. {configError}</p></div> : <FinanceComplianceRulesPanel catalogue={effectiveRuleCatalogue} loading={effectiveRulesLoading} />}
       </PageShell>
     );
   }
@@ -3888,6 +3986,9 @@ function FinancePayrollContent({
         selectedRun={selectedRun}
         onSelectRun={onSelectRun}
         onRunUpdated={onRunUpdated}
+        onRecalculateRun={onRecalculateRun}
+        recalculationProcessing={recalculationProcessing}
+        error={paymentError}
         onSystemCheckApproveAll={onSystemCheckApproveAll}
         onUpdateEmployee={onUpdateEmployee}
         onUpdateStaffStatus={onUpdateStaffStatus}
@@ -3938,6 +4039,8 @@ export default function FinancePayrollPage() {
   const [selectedRunId, setSelectedRunId] = useState("");
   const [payrollRuleConfig, setPayrollRuleConfig] = useState(createDefaultFinancePayrollConfig);
   const [configError, setConfigError] = useState("");
+  const [effectiveRuleCatalogue, setEffectiveRuleCatalogue] = useState(null);
+  const [effectiveRulesLoading, setEffectiveRulesLoading] = useState(true);
   const [financeDbError, setFinanceDbError] = useState("");
   const [financeDbLoaded, setFinanceDbLoaded] = useState(false);
   const [paymentError, setPaymentError] = useState("");
@@ -4015,18 +4118,25 @@ export default function FinancePayrollPage() {
   }, [selectedRunId, financeDbLoaded, location.pathname, workflowActionActive, livePaymentStatus]);
 
   useEffect(() => {
+    let active = true;
+    let firstLoad = true;
     async function loadPayrollRuleConfig() {
       try {
+        if (firstLoad) setEffectiveRulesLoading(true);
+        const [data, catalogue] = await Promise.all([getPayrollRuleConfig(), getEffectivePayrollRules()]);
+        if (!active) return;
         setConfigError("");
-        const data = await getPayrollRuleConfig();
         setPayrollRuleConfig(resolveFinancePayrollConfig(data.settings || []));
+        setEffectiveRuleCatalogue(catalogue);
       } catch (error) {
-        setConfigError(error.message);
-      }
+        if (active) setConfigError(error.message);
+      } finally { if (active) setEffectiveRulesLoading(false); firstLoad = false; }
     }
 
     loadPayrollRuleConfig();
-  }, []);
+    const interval = location.pathname.endsWith("/compliance-rules") ? window.setInterval(loadPayrollRuleConfig, 15000) : null;
+    return () => { active = false; if (interval) window.clearInterval(interval); };
+  }, [location.pathname]);
 
   const selectedRun = useMemo(
     () => payrollRuns.find((run) => run.id === selectedRunId) || payrollRuns[0],
@@ -4045,7 +4155,14 @@ export default function FinancePayrollPage() {
     return () => clearTimeout(timer);
   }, [autoAdvance, navigate]);
 
-  const scheduleAutoAdvance = (path, label) => setAutoAdvance({ path, label, seconds: 2 });
+  const scheduleAutoAdvance = (path, label) => setAutoAdvance({ path, label, seconds: 4 });
+
+  const continueAutoAdvance = () => {
+    if (!autoAdvance) return;
+    setRecipientProgress((current) => ({ ...current, open: false }));
+    navigate(autoAdvance.path);
+    setAutoAdvance(null);
+  };
 
   const scheduleAfterAction = (action, run) => {
     const destination = getFinanceAutoAdvance(action, run);
@@ -4476,6 +4593,8 @@ export default function FinancePayrollPage() {
       {selectedRun || runIndependentRoute ? (
         <FinancePayrollContent
           configError={configError}
+          effectiveRuleCatalogue={effectiveRuleCatalogue}
+          effectiveRulesLoading={effectiveRulesLoading}
           heading={heading}
           pathname={location.pathname}
           payrollRuns={payrollRuns}
@@ -4516,7 +4635,7 @@ export default function FinancePayrollPage() {
       )}
       </div>
       <RecipientProgressModal state={recipientProgress} onClose={() => setRecipientProgress((current) => ({ ...current, open: false }))} onRetry={handleSetupModernTreasuryRecipients} />
-      <AutoAdvanceNotice state={autoAdvance} onStay={() => setAutoAdvance(null)} />
+      <AutoAdvanceNotice state={autoAdvance} onStay={() => setAutoAdvance(null)} onContinue={continueAutoAdvance} />
     </DashboardLayout>
   );
 }

@@ -1823,7 +1823,7 @@ router.put("/loan-requests/:id/approve", authenticateToken, allowRoles("HR"), as
     const { hr_comments } = req.body || {};
     const [loanRows] = await pool.query("SELECT * FROM claims_and_loans WHERE record_id = ? AND type = 'loan' LIMIT 1", [id]);
     if (!loanRows.length) return res.status(404).json({ message: "Loan request not found" });
-    if (loanRows[0].status !== 'pending') return res.status(400).json({ message: `Cannot approve request in status ${loanRows[0].status}` });
+    if (!['pending', 'pending_hr', 'returned_to_hr'].includes(loanRows[0].status)) return res.status(400).json({ message: `Cannot approve request in status ${loanRows[0].status}` });
     const meta = safeParseMeta(loanRows[0].request_metadata);
     const amount = Number(loanRows[0].amount);
     const months = Number(meta.repayment_months || 12);
@@ -1835,13 +1835,19 @@ router.put("/loan-requests/:id/approve", authenticateToken, allowRoles("HR"), as
       const dueDate = new Date(approvalDate); dueDate.setMonth(dueDate.getMonth() + i);
       installments.push({ installment_id: makeId('LI'), installment_number: i, amount: (i === months) ? lastInstallment : monthlyInstallment, due_date: dueDate.toISOString().split('T')[0], status: 'unpaid', paid_at: null, paid_by: null });
     }
-    const updatedMeta = JSON.stringify({ ...meta, approved_by: req.user.userId, monthly_installment: monthlyInstallment, outstanding_balance: amount, total_paid: 0, installments });
-    await pool.query(`UPDATE claims_and_loans SET status = 'approved', reviewer_comments = ?, reviewed_at = NOW(), monthly_installment = ?, outstanding_balance = ?, request_metadata = ? WHERE record_id = ? AND type = 'loan' AND status = 'pending'`, [hr_comments || null, monthlyInstallment, amount, updatedMeta, id]);
+    const updatedMeta = JSON.stringify({ ...meta, hr_reviewed_by: req.user.userId, hr_action: 'approve', monthly_installment: monthlyInstallment, total_paid: 0, installments });
+    await pool.query(`UPDATE claims_and_loans SET status = 'hr_approved', reviewer_comments = ?, reviewed_at = NOW(), monthly_installment = ?, request_metadata = ? WHERE record_id = ? AND type = 'loan' AND status IN ('pending', 'pending_hr', 'returned_to_hr')`, [hr_comments || null, monthlyInstallment, updatedMeta, id]);
     const [updatedLoan] = await pool.query(`SELECT ${LOAN_SELECT} FROM claims_and_loans c JOIN staff s ON c.staff_employee_id = s.employee_id WHERE c.record_id = ? LIMIT 1`, [id]);
-    addAudit(req.user.email, `HR approved loan request ${id}`, 'Payroll');
+    addAudit(req.user.email, `HR approved loan request ${id} and sent it to Finance`, 'Payroll');
+    await notifyRoles("Finance", {
+      type: "payroll_request", title: "Loan awaiting Finance confirmation",
+      message: `Loan request ${id} passed HR review and requires Finance confirmation.`, actorUserId: req.user.userId,
+      entityType: "payroll_request", entityId: id,
+      actionPath: "/dashboard/payroll/finance/employee-requests"
+    });
     const [approvedOwner] = await pool.query("SELECT user_user_id FROM staff WHERE employee_id = ? LIMIT 1", [loanRows[0].staff_employee_id]);
     if (approvedOwner[0]?.user_user_id) await notifyUser(approvedOwner[0].user_user_id, {
-      type: "loan_approved", title: "Loan request approved", message: `Your loan request ${id} was approved by HR.`,
+      type: "loan_hr_approved", title: "Loan request passed HR review", message: `Your loan request ${id} is awaiting Finance confirmation.`,
       actorUserId: req.user.userId, entityType: "loan", entityId: id,
       actionPath: "/dashboard/payroll/staff/loans"
     });
@@ -1857,10 +1863,10 @@ router.put("/loan-requests/:id/reject", authenticateToken, allowRoles("HR"), asy
     const { hr_comments } = req.body || {};
     const [loanRows] = await pool.query("SELECT * FROM claims_and_loans WHERE record_id = ? AND type = 'loan' LIMIT 1", [id]);
     if (!loanRows.length) return res.status(404).json({ message: "Loan request not found" });
-    if (loanRows[0].status !== 'pending') return res.status(400).json({ message: `Cannot reject request in status ${loanRows[0].status}` });
+    if (!['pending', 'pending_hr', 'returned_to_hr'].includes(loanRows[0].status)) return res.status(400).json({ message: `Cannot reject request in status ${loanRows[0].status}` });
     const meta = safeParseMeta(loanRows[0].request_metadata);
-    const updatedMeta = JSON.stringify({ ...meta, approved_by: req.user.userId });
-    await pool.query(`UPDATE claims_and_loans SET status = 'rejected', reviewer_comments = ?, reviewed_at = NOW(), request_metadata = ? WHERE record_id = ? AND type = 'loan' AND status = 'pending'`, [hr_comments || null, updatedMeta, id]);
+    const updatedMeta = JSON.stringify({ ...meta, hr_reviewed_by: req.user.userId, hr_action: 'reject' });
+    await pool.query(`UPDATE claims_and_loans SET status = 'hr_rejected', reviewer_comments = ?, reviewed_at = NOW(), request_metadata = ? WHERE record_id = ? AND type = 'loan' AND status IN ('pending', 'pending_hr', 'returned_to_hr')`, [hr_comments || null, updatedMeta, id]);
     const [updatedLoan] = await pool.query(`SELECT ${LOAN_SELECT} FROM claims_and_loans c JOIN staff s ON c.staff_employee_id = s.employee_id WHERE c.record_id = ? LIMIT 1`, [id]);
     addAudit(req.user.email, `HR rejected loan request ${id}`, 'Payroll');
     const [rejectedOwner] = await pool.query("SELECT user_user_id FROM staff WHERE employee_id = ? LIMIT 1", [loanRows[0].staff_employee_id]);

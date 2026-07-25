@@ -77,6 +77,11 @@ describe("2026 statutory payroll engine", () => {
     expect(result.complianceExceptions).toContain("CPF scheme or wage band requires manual review");
   });
 
+  test("reports one actionable root cause when DOB is missing", () => {
+    const result = calculateEmployeePayroll({ staff: staff({ date_of_birth: null }), month: 7, year: 2026 });
+    expect(result.complianceExceptions).toEqual(["Date of birth is required for CPF calculation"]);
+  });
+
   test("applies configured CPF rates, wage ceiling and earning classifications", () => {
     const result = calculateEmployeePayroll({
       staff: staff({ base_salary: 4000 }),

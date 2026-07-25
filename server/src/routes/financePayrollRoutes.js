@@ -6,6 +6,7 @@ const {
   confirmRunSchedule,
   getFinanceActivity,
   getFinancePayrollRuns,
+  exportFinancePayrollReport,
   getPayslipPeriodSummary,
   getRunAdjustments,
   getRunWorkflow,
@@ -30,6 +31,7 @@ const router = express.Router();
 router.use(authenticateToken);
 
 router.get("/runs", allowRoles("Admin", "Finance", "HR"), getFinancePayrollRuns);
+router.get("/reports/export", allowRoles("Finance"), exportFinancePayrollReport);
 router.get("/activity", allowRoles("Admin", "Finance"), getFinanceActivity);
 router.get("/payslip-period-summary", allowRoles("Admin", "Finance"), getPayslipPeriodSummary);
 router.get("/schedule", allowRoles("Admin", "Finance"), getSchedule);

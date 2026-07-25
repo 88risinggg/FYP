@@ -73,12 +73,12 @@ function requirePayrollConfigReader(req, res, next) {
 router.use(authenticateToken);
 
 router.get("/config", requirePayrollConfigReader, getPayrollRuleConfig);
+router.get("/effective-rules", requirePayrollConfigReader, getAdminEffectivePayrollRules);
 
 router.use(requireAdmin);
 
 router.get("/dashboard", getAdminPayrollDashboard);
 router.get("/dashboard/insights", getAdminPayrollInsights);
-router.get("/effective-rules", getAdminEffectivePayrollRules);
 router.get("/reports", getAdminPayrollReports);
 router.get("/reports/export", exportAdminPayrollReport);
 router.get("/payslip-layouts", getPayslipLayouts);

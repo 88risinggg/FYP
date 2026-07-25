@@ -18,17 +18,29 @@ import {
 
 const loanStatusStyles = {
   pending: "border-amber-300/30 bg-amber-300/10 text-amber-700",
-  approved: "border-emerald-300/30 bg-emerald-300/10 text-emerald-700",
-  rejected: "border-red-300/30 bg-red-300/10 text-red-700"
+  approved: "border-blue-300/30 bg-blue-300/10 text-blue-700",
+  pending_hr: "border-amber-300/30 bg-amber-300/10 text-amber-700",
+  hr_approved: "border-blue-300/30 bg-blue-300/10 text-blue-700",
+  finance_approved: "border-emerald-300/30 bg-emerald-300/10 text-emerald-700",
+  released: "border-emerald-300/30 bg-emerald-300/10 text-emerald-700",
+  rejected: "border-red-300/30 bg-red-300/10 text-red-700",
+  hr_rejected: "border-red-300/30 bg-red-300/10 text-red-700",
+  finance_rejected: "border-red-300/30 bg-red-300/10 text-red-700"
 };
 
 const statusLabels = {
   pending: "Pending",
-  approved: "Approved",
-  rejected: "Rejected"
+  pending_hr: "Pending HR",
+  approved: "Awaiting Finance",
+  hr_approved: "Awaiting Finance",
+  finance_approved: "Finance approved",
+  released: "Released",
+  rejected: "Rejected by HR",
+  hr_rejected: "Rejected by HR",
+  finance_rejected: "Rejected by Finance"
 };
 
-const filterOptions = ["all", "pending", "approved", "rejected"];
+const filterOptions = ["all", "pending", "pending_hr", "hr_approved", "finance_approved", "released", "hr_rejected", "finance_rejected"];
 
 function formatCurrency(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -116,7 +128,7 @@ export default function HRLoanManagement() {
     setApproving(loanId);
     try {
       await approveLoanRequest(loanId, { hr_comments: hrComments[loanId] || "" });
-      showToast("Loan request approved successfully.");
+      showToast("HR review completed. The loan is now awaiting Finance confirmation.");
       setHrComments((prev) => ({ ...prev, [loanId]: "" }));
       setExpandedLoanId(null);
       setInstallments((prev) => {
@@ -299,7 +311,7 @@ export default function HRLoanManagement() {
                     {isExpanded && (
                       <div className="mt-3 rounded-lg border border-[#f0d2ca] bg-[#251E1F]/20 p-4">
                         {/* Pending: Approve/Reject + Comments */}
-                        {loan.status === "pending" && (
+                        {["pending", "pending_hr", "returned_to_hr"].includes(loan.status) && (
                           <div className="space-y-4">
                             <div>
                               <label className="block text-xs text-[#7b6660] mb-1">
@@ -343,7 +355,7 @@ export default function HRLoanManagement() {
                         )}
 
                         {/* Approved: Installment Schedule */}
-                        {loan.status === "approved" && (
+                        {["finance_approved", "released"].includes(loan.status) && (
                           <div>
                             <h4 className="text-sm font-semibold text-[#251E1F] mb-3">
                               Installment Schedule
@@ -423,7 +435,7 @@ export default function HRLoanManagement() {
                         )}
 
                         {/* Rejected: Show HR Comments */}
-                        {loan.status === "rejected" && (
+                        {["rejected", "hr_rejected", "finance_rejected"].includes(loan.status) && (
                           <div>
                             <h4 className="text-sm font-semibold text-[#251E1F] mb-2">
                               Rejection Details

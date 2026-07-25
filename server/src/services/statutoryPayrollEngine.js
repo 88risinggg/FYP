@@ -184,7 +184,9 @@ function calculateEmployeePayroll({ staff, month, year, allowances = [], reimbur
     ? { employee: 0, employer: 0, tier: null, wageBase: 0, unsupported: true }
     : calculateCpf({ wages: cpfApplicableWages, age, rules });
   rules.cpfOrdinaryWageCeiling = configuredCeiling;
-  if (cpf.unsupported) {
+  // A missing DOB already has a precise source-data exception. Do not add the
+  // derived generic CPF warning as a second blocker for the same root cause.
+  if (cpf.unsupported && age !== null) {
     complianceExceptions.push("CPF scheme or wage band requires manual review");
   }
 

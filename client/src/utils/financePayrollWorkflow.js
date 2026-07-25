@@ -42,7 +42,6 @@ export function getFinanceAutoAdvance(action, run = {}) {
       : null;
   }
   return ({
-    review: { path: "/dashboard/payroll/finance/staff-payroll-details", label: "Staff Review & Adjustments" },
     "approve-payroll": { path: "/dashboard/payroll/finance/payment-preparation", label: "Payment Preparation" },
     "confirm-payment": { path: "/dashboard/payroll/finance/payslip-delivery", label: "Payslip Delivery" },
     "send-payslips": { path: "/dashboard/payroll/finance/statutory-ledger", label: "Statutory & Ledger" },

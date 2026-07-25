@@ -3,9 +3,10 @@ import { apiRequest } from "./apiClient.js";
 // ─── Staff Functions ─────────────────────────────────────────────────────────
 
 export function createLoanRequest(data) {
-  return apiRequest("/api/hr/loan-requests", {
+  return apiRequest(data instanceof FormData ? "/api/payroll-requests" : "/api/hr/loan-requests", {
     method: "POST",
-    body: JSON.stringify(data)
+    headers: data instanceof FormData ? { "Content-Type": undefined } : undefined,
+    body: data instanceof FormData ? data : JSON.stringify(data)
   });
 }
 

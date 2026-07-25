@@ -132,6 +132,7 @@ function LoanRequestForm() {
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [repaymentMonths, setRepaymentMonths] = useState("");
+  const [evidence, setEvidence] = useState([]);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
@@ -165,6 +166,7 @@ function LoanRequestForm() {
     } else if (isNaN(numMonths) || numMonths < 1 || numMonths > 36) {
       newErrors.repaymentMonths = "Repayment period must be between 1 and 36 months";
     }
+    if (!evidence.length) newErrors.evidence = "At least one supporting document is required";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -175,16 +177,14 @@ function LoanRequestForm() {
 
     setSubmitting(true);
     try {
-      await createLoanRequest({
-        requested_amount: Number(amount),
-        repayment_months: Number(repaymentMonths),
-        reason: reason.trim()
-      });
+      const data = new FormData(); data.append("requestType","loan"); data.append("purpose",reason.trim()); data.append("description",reason.trim()); data.append("amount",Number(amount)); data.append("repaymentMonths",Number(repaymentMonths)); evidence.forEach(file=>data.append("evidence",file));
+      await createLoanRequest(data);
 
       showToast("Loan request submitted successfully");
       setAmount("");
       setReason("");
       setRepaymentMonths("");
+      setEvidence([]);
       setErrors({});
 
       // Dispatch custom event so the list refreshes
@@ -273,6 +273,7 @@ function LoanRequestForm() {
             </select>
             {errors.repaymentMonths && <p className="mt-1 text-xs text-red-400">{errors.repaymentMonths}</p>}
           </div>
+          <div><label className="block text-xs text-[#7b6660]">Supporting documents (up to 5)</label><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" onChange={e=>{setEvidence(Array.from(e.target.files||[]).slice(0,5));setErrors(prev=>({...prev,evidence:undefined}));}} className="mt-1 w-full rounded-md border border-[#f0d2ca] p-2 text-sm"/>{errors.evidence&&<p className="mt-1 text-xs text-red-400">{errors.evidence}</p>}</div>
 
           {/* Submit */}
           <button

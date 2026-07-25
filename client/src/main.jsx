@@ -4,7 +4,10 @@ import { BrowserRouter } from "react-router-dom";
 
 import App from "./App.jsx";
 import GlobalCrashBoundary from "./components/common/GlobalCrashBoundary.jsx";
+import { installSingaporeTimeDefaults } from "./utils/singaporeTime.js";
 import "./styles/index.css";
+
+installSingaporeTimeDefaults();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -15,5 +18,4 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     </GlobalCrashBoundary>
   </React.StrictMode>
 );
-
 

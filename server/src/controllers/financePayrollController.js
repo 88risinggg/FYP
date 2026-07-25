@@ -13,6 +13,7 @@ const { launchPayslipBrowser } = require("../services/payslipPdfService");
 const { pool } = require("../config/db");
 const { buildFinanceWorkflowState } = require("../services/financePayrollWorkflowState");
 const { submitModernTreasuryEmployeePayment } = require("../services/modernTreasuryPaymentService");
+const ExcelJS = require("exceljs");
 const {
   applyScheduleDefaultsToRun,
   cancelRunSchedule,
@@ -298,6 +299,65 @@ async function findFinanceRun(runId) {
   return (await listFinancePayrollRuns()).find((run) => run.id === runId) || null;
 }
 
+function financeReportDefinition(reportType, run) {
+  const employees = run.employees || [];
+  const money = (value) => Number(value || 0);
+  // The stored deductions value is already the full payroll deduction total,
+  // including employee CPF and self-help-group amounts.
+  const deductions = (employee) => money(employee.totalDeductions ?? employee.storedTotalDeductions ?? employee.deductions);
+  const net = (employee) => money(employee.netPay ?? (money(employee.grossPay ?? employee.basicPay) + money(employee.allowances) - deductions(employee)));
+  const exceptions = employees.flatMap((employee) => (employee.complianceExceptions || []).map((item) => [employee.name, employee.department || "Missing", item.message || item.reason || String(item), employee.financeStatus || "Draft"]));
+  const definitions = {
+    "Payroll Summary": ["Payroll Summary", ["Employee", "Department", "Gross Earnings", "Total Deductions", "Net Pay", "Finance Status"], employees.map((e) => [e.name, e.department || "Missing", money(e.grossPay ?? e.basicPay) + money(e.allowances), deductions(e), net(e), e.financeStatus || "Draft"])],
+    "Pay Run Summary": ["Pay Run Summary", ["Run ID", "Period", "Status", "Employees", "Payment Status", "Payment Reference"], [[run.id, `${String(run.month).padStart(2, "0")}/${run.year}`, run.status, employees.length, run.paymentStatus || "Pending", run.bankReference || ""]]],
+    "Payment File": ["Payment File", ["Employee", "Bank", "Account Ending", "Net Payment", "Recipient Status", "Provider Reference"], employees.map((e) => [e.name, e.bank || e.bankType || "Missing", String(e.accountNo || e.bankAccount || "").slice(-4), net(e), e.modernTreasuryCounterpartyId ? "Configured" : "Pending", e.modernTreasuryReference || ""])],
+    "Exception Summary": ["Exceptions", ["Employee", "Department", "Exception", "Finance Status"], exceptions.length ? exceptions : [["All employees", "All departments", "No automated exceptions detected", "Clear"]]],
+    "CPF Summary": ["CPF Summary", ["Employee", "CPF Wage", "Employee CPF", "Employer CPF", "Total CPF"], employees.map((e) => [e.name, money(e.cpfApplicableEarnings ?? e.grossPay ?? e.basicPay), money(e.employeeCpf), money(e.employerCpf), money(e.employeeCpf) + money(e.employerCpf)])],
+    "MBMF Summary": ["MBMF Summary", ["Employee", "Religion", "Employee MBMF", "Employer MBMF", "Eligibility"], employees.map((e) => [e.name, e.religion || "Not recorded", money(e.employeeMbmf), money(e.employerMbmf), money(e.employeeMbmf) || money(e.employerMbmf) ? "Applied" : "Not applied"])],
+    "Deduction Summary": ["Deductions", ["Employee", "Other Deductions", "Employee CPF", "MBMF", "Total Deductions", "Net Pay"], employees.map((e) => [e.name, Math.max(0, deductions(e) - money(e.employeeCpf) - money(e.employeeMbmf ?? e.mbmf)), money(e.employeeCpf), money(e.employeeMbmf ?? e.mbmf), deductions(e), net(e)])],
+    "Compliance Checklist": ["Compliance", ["Check", "Status", "Detail"], [["Rule snapshot", run.rulesChanged ? "Action required" : "Passed", run.rulesChanged ? "Admin rules changed after calculation" : "Stored rule snapshot is current"], ["Employee review", employees.every((e) => e.financeStatus === "Approved") ? "Passed" : "Action required", `${employees.filter((e) => e.financeStatus === "Approved").length}/${employees.length} approved`], ["Exceptions", exceptions.length ? "Action required" : "Passed", `${exceptions.length} exception(s)`]]],
+    "Audit Trail": ["Audit Trail", ["Date Time", "Action", "Owner"], (run.timeline || []).map((e) => [e.at, e.action, e.owner || "System"])],
+    "Cost to Company": ["Cost to Company", ["Employee", "Gross Earnings", "Employer CPF", "SDL", "Total Employer Cost"], employees.map((e) => { const gross = money(e.grossPay ?? e.basicPay) + money(e.allowances); return [e.name, gross, money(e.employerCpf), money(e.sdl), gross + money(e.employerCpf) + money(e.sdl)]; })]
+  };
+  return definitions[reportType] || null;
+}
+
+async function exportFinancePayrollReport(req, res) {
+  try {
+    const run = await findFinanceRun(String(req.query.runId || ""));
+    if (!run) return res.status(404).json({ code: "PAYROLL_RUN_NOT_FOUND", message: "Payroll run not found." });
+    const definition = financeReportDefinition(String(req.query.reportType || ""), run);
+    if (!definition) return res.status(400).json({ code: "REPORT_NOT_EXPORTABLE", message: "This Finance report is not available as Excel." });
+    const [sheetName, headers, rows] = definition;
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "PayNivo";
+    workbook.created = new Date();
+    workbook.properties.subject = `${req.query.reportType} for payroll run ${run.id}`;
+    const sheet = workbook.addWorksheet(sheetName.slice(0, 31), { views: [{ state: "frozen", ySplit: 1 }] });
+    sheet.addRow(headers);
+    rows.forEach((row) => sheet.addRow(row));
+    const header = sheet.getRow(1);
+    header.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF38978" } };
+    header.alignment = { vertical: "middle" };
+    header.height = 24;
+    sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
+    sheet.columns.forEach((column, index) => {
+      column.width = Math.min(44, Math.max(14, headers[index].length + 3, ...rows.map((row) => String(row[index] ?? "").length + 2)));
+      if (rows.some((row) => typeof row[index] === "number")) column.numFmt = "#,##0.00";
+    });
+    sheet.eachRow((row, rowNumber) => { if (rowNumber > 1 && rowNumber % 2 === 0) row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF8F5" } }; });
+    const slug = String(req.query.reportType).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${slug}-${run.id}.xlsx"`);
+    await workbook.xlsx.write(res);
+    return res.end();
+  } catch (error) {
+    console.error("Finance payroll Excel export failed", { runId: req.query.runId, reportType: req.query.reportType, message: error.message });
+    return res.status(500).json({ code: "FINANCE_REPORT_EXPORT_FAILED", message: "Failed to export the Finance payroll report." });
+  }
+}
+
 function workflowResponse(run, actionReference = null) {
   return { run, workflow: buildFinanceWorkflowState(run), actionReference };
 }
@@ -432,6 +492,7 @@ async function reviewRunAdjustments(req, res) {
 module.exports = {
   createRunFromStaffDatabase,
   getFinancePayrollRuns,
+  exportFinancePayrollReport,
   getFinanceActivity,
   getPayslipPeriodSummary,
   getRunAdjustments,

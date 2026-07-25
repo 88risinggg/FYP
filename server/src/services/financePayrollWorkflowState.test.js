@@ -28,4 +28,11 @@ describe("finance payroll workflow state", () => {
     expect(state.paymentProgress).toEqual(paymentBatch);
     expect(state.stages.find((stage) => stage.key === "payment").status).toBe("processing");
   });
+
+  test("does not regress staff review or approval after payment confirmation", () => {
+    const state = buildFinanceWorkflowState({ id: "5_2026", reviewedAt: "x", approvedAt: "x", paymentFileGeneratedAt: "x", paymentRecipientsConfigured: 1, paidAt: "x", employees: [{ financeStatus: "Draft", complianceExceptions: ["display-only stale exception"] }] });
+    expect(state.stages.find((stage) => stage.key === "staff").status).toBe("completed");
+    expect(state.stages.find((stage) => stage.key === "approval").status).toBe("completed");
+    expect(state.currentStage).toBe("payslips");
+  });
 });

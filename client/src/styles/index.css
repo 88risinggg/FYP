@@ -1045,6 +1045,135 @@ html[data-theme="dark"] :focus-visible { outline-color: color-mix(in srgb, var(-
   0%, 100% { opacity: 0.65; }
   50% { opacity: 1; }
 }
+
+/* Finance Claim Requests: motion communicates queue and review state. */
+@keyframes financeClaimRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes financeClaimDrawer {
+  from { opacity: 0; transform: translateX(38px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes financeClaimPreview {
+  from { opacity: 0; transform: translateY(18px) scale(.975); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes financeClaimAttention {
+  0%, 100% { box-shadow: inset 4px 0 0 #f59e0b; }
+  50% { box-shadow: inset 4px 0 0 #f59e0b, 0 0 0 3px rgb(245 158 11 / 10%); }
+}
+
+@keyframes financeClaimFieldShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+@keyframes financeClaimResultPop {
+  0% { opacity: .2; transform: scale(.72); }
+  65% { transform: scale(1.12); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.finance-claims-page > header,
+.finance-claims-page > section,
+.finance-claims-page > div.app-panel {
+  animation: financeClaimRise .42s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.finance-claims-page > section:nth-of-type(1) { animation-delay: 40ms; }
+.finance-claims-page > section:nth-of-type(2) { animation-delay: 90ms; }
+.finance-claims-page > section:nth-of-type(3) { animation-delay: 140ms; }
+
+.finance-claims-page > section:first-of-type article {
+  transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+}
+
+.finance-claims-page > section:first-of-type article:hover {
+  transform: translateY(-3px);
+  border-color: rgb(243 137 120 / 45%);
+  box-shadow: 0 14px 30px rgb(89 57 48 / 10%);
+}
+
+.finance-claims-page tbody tr {
+  animation: financeClaimRise .32s ease both;
+}
+
+.finance-claims-page tbody tr:nth-child(2) { animation-delay: 35ms; }
+.finance-claims-page tbody tr:nth-child(3) { animation-delay: 70ms; }
+.finance-claims-page tbody tr:nth-child(4) { animation-delay: 105ms; }
+.finance-claims-page tbody tr:nth-child(n+5) { animation-delay: 140ms; }
+
+.finance-claims-page tbody tr.border-l-amber-400 {
+  animation-name: financeClaimRise, financeClaimAttention;
+  animation-duration: .32s, 2.4s;
+  animation-delay: 0s, .35s;
+  animation-iteration-count: 1, infinite;
+}
+
+.finance-claims-page .claim-drawer-enter {
+  animation: financeClaimDrawer .32s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.finance-claims-page .claim-document-enter {
+  animation: financeClaimPreview .28s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.finance-claims-page button:not(:disabled),
+.finance-claims-page a {
+  transition: transform .16s ease, box-shadow .2s ease, background-color .2s ease, border-color .2s ease;
+}
+
+.finance-claims-page button:not(:disabled):active,
+.finance-claims-page a:active { transform: scale(.975); }
+
+.finance-claims-page .claim-field-error {
+  animation: financeClaimFieldShake .42s ease both;
+  box-shadow: 0 0 0 3px rgb(239 68 68 / 12%);
+}
+
+.finance-claims-page [role="dialog"] > div:first-child > span:first-child svg:not(.animate-spin) {
+  animation: financeClaimResultPop .38s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.finance-claims-page button:disabled {
+  cursor: wait;
+  opacity: .62;
+}
+
+@keyframes claimEmptyEvidenceScan {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(220%); }
+}
+
+.claim-empty-evidence::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 36%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 65%), transparent);
+  animation: claimEmptyEvidenceScan 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.claim-empty-evidence__icon {
+  animation: financeClaimAttention 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .finance-claims-page *,
+  .finance-claims-page *::before,
+  .finance-claims-page *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+  }
+}
 /* Settings pages use the shared floating action bar instead of local form actions. */
 [data-settings-save],
 [data-settings-local-cancel] {
@@ -1061,4 +1190,8 @@ html[data-theme="dark"] :focus-visible { outline-color: color-mix(in srgb, var(-
 .settings-save-button:hover:not(:disabled) {
   background: #E87562 !important;
   transform: translateY(-1px);
+}
+/* A blocking dialog must own the whole viewport, including the fixed sidebar. */
+body:has([aria-modal="true"]) {
+  overflow: hidden;
 }

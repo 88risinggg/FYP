@@ -1,7 +1,9 @@
+require("dotenv").config();
+require("./config/timezone");
+
 const cors = require("cors");
 const express = require("express");
 const path = require("path");
-require("dotenv").config();
 
 // Route imports
 const healthRoutes = require("./routes/healthRoutes");
@@ -31,6 +33,7 @@ const publicRoutes = require("./routes/publicRoutes");
 const financePayrollRoutes = require("./routes/financePayrollRoutes");
 const payrollUserRoutes = require("./routes/payrollUserRoutes");
 const claimRoutes = require("./routes/claimRoutes");
+const payrollRequestRoutes = require("./routes/payrollRequestRoutes");
 const settingsRoutes = require("./routes/settingsRoutes");
 const financeDashboardRoutes = require("./routes/financeDashboardRoutes");
 const vanidayImportRoutes = require("./routes/vanidayImportRoutes");
@@ -101,6 +104,7 @@ app.use("/api/payroll/payments", paymentRoutes);
 app.use("/api/payroll", payrollRoutes);
 app.use("/api/leave", leaveRoutes);
 app.use("/api/claims", claimRoutes);
+app.use("/api/payroll-requests", payrollRequestRoutes);
 
 // Routes — Admin module
 app.use("/api/admin/users", adminUserRoutes);

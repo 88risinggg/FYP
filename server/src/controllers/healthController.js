@@ -5,7 +5,8 @@
  * Used by load balancers, monitoring tools, and DevOps pipelines.
  */
 
-const { testDatabaseConnection } = require("../config/db");
+const { getDatabaseTimezone, testDatabaseConnection } = require("../config/db");
+const { APPLICATION_TIMEZONE, DATABASE_TIMEZONE } = require("../config/timezone");
 
 /**
  * GET /api/health
@@ -16,7 +17,10 @@ const { testDatabaseConnection } = require("../config/db");
 async function getServerHealth(req, res) {
   res.json({
     status: "ok",
-    message: "Server is running"
+    message: "Server is running",
+    timezone: APPLICATION_TIMEZONE,
+    serverTime: new Intl.DateTimeFormat("en-SG", { dateStyle: "medium", timeStyle: "long", timeZone: APPLICATION_TIMEZONE }).format(new Date()),
+    isoTime: new Date().toISOString()
   });
 }
 
@@ -29,10 +33,14 @@ async function getServerHealth(req, res) {
 async function getDatabaseHealth(req, res) {
   try {
     await testDatabaseConnection();
+    const database = await getDatabaseTimezone();
 
     res.json({
       status: "ok",
-      message: "Database connected"
+      message: "Database connected",
+      configuredTimezone: DATABASE_TIMEZONE,
+      sessionTimezone: database.sessionTimezone,
+      databaseTime: database.databaseNow
     });
   } catch (error) {
     res.status(500).json({

@@ -39,7 +39,7 @@ export default function FinanceProfileSection({ onDirty }) {
         job_title: data.job_title || "",
         department: data.department || "",
         preferred_language: data.preferred_language || "en",
-        timezone: data.timezone || "Asia/Singapore",
+        timezone: "Asia/Singapore",
         date_format: data.date_format || "DD/MM/YYYY",
         currency: data.currency || "SGD",
         profile_picture: data.profile_picture || ""
@@ -156,15 +156,9 @@ export default function FinanceProfileSection({ onDirty }) {
                 { value: "ms", label: "Malay" },
                 { value: "ta", label: "Tamil" }
               ]} />
-            <SelectField label="Time Zone" name="timezone" value={form.timezone} onChange={handleChange}
-              options={[
-                { value: "Asia/Singapore", label: "Asia/Singapore (GMT+8)" },
-                { value: "Asia/Hong_Kong", label: "Asia/Hong Kong (GMT+8)" },
-                { value: "Asia/Tokyo", label: "Asia/Tokyo (GMT+9)" },
-                { value: "America/New_York", label: "America/New York (GMT-5)" },
-                { value: "Europe/London", label: "Europe/London (GMT+0)" },
-                { value: "UTC", label: "UTC (GMT+0)" }
-              ]} />
+            <SelectField label="Time Zone" name="timezone" value="Asia/Singapore" onChange={handleChange}
+              options={[{ value: "Asia/Singapore", label: "Asia/Singapore (GMT+8)" }]} />
+            <p className="-mt-2 text-xs text-[#7b6660]">PayNivo payroll, payment, audit, and scheduling records use Singapore time.</p>
             <SelectField label="Date Format" name="date_format" value={form.date_format} onChange={handleChange}
               options={[
                 { value: "DD/MM/YYYY", label: "DD/MM/YYYY" },
