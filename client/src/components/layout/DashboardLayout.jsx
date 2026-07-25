@@ -443,7 +443,7 @@ export default function DashboardLayout({
 
       {/* Do not create a z-index stacking context here. Full-screen dialogs rendered by
           route content must be able to layer above the fixed sidebar. */}
-      <div className={`relative transition-[padding-left] duration-200 ease-out ${hideSidebar || sidebarCollapsed ? "lg:pl-0" : "lg:pl-64"}`}>
+      <div className={`relative transition-[padding-left] duration-200 ease-out ${hideSidebar || sidebarCollapsed ? "lg:pl-0" : "lg:pl-60"}`}>
         <header className={classes.header}>
           {!hideSidebar ? (
             <button

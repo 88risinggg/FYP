@@ -573,6 +573,7 @@ async function sendInvoice(req, res) {
           i.company_id,
           i.total_amount,
           i.due_date,
+          i.customer_id,
           c.name AS customer_name,
           c.email AS customer_email,
           c.address AS customer_address
@@ -683,6 +684,32 @@ async function sendInvoice(req, res) {
     // Notify Finance (non-blocking)
     const { notifyInvoiceSent } = require("../services/invoiceNotificationService");
     notifyInvoiceSent(invoice.invoiceId, invoice.customer_name, req.user?.userId).catch(() => {});
+
+    // WhatsApp notification: Invoice Created (non-blocking)
+    (async () => {
+      try {
+        const whatsappModel = require("../models/whatsappNotificationModel");
+        const settings = await whatsappModel.getSettings();
+        if (settings?.whatsapp_enabled && settings?.send_invoice_created) {
+          const customer = await whatsappModel.getCustomerWithWhatsApp(invoice.customer_id);
+          if (customer?.whatsapp_number) {
+            const { sendInvoiceCreated } = require("../services/whatsappService");
+            await sendInvoiceCreated({
+              customerName: invoice.customer_name,
+              phone: customer.whatsapp_number,
+              invoiceNumber: invoice.invoiceId,
+              amount: invoice.total_amount,
+              dueDate: invoice.due_date,
+              paymentLink: paymentUrl || null,
+              customerId: invoice.customer_id,
+              invoiceId: invoiceId
+            });
+          }
+        }
+      } catch (whatsappErr) {
+        console.error("[WHATSAPP] Invoice created notification failed:", whatsappErr.message);
+      }
+    })();
 
     res.json({
       message: "Invoice sent.",

@@ -64,6 +64,7 @@ const CUSTOMERS = [
   { name: "Bliss Nail Studio", email: "hello@blissnails.sg", address: "930 Yishun Avenue 2 #02-56, Singapore 769098" },
   { name: "Rejuve Wellness Clinic", email: "appointments@rejuveclinic.sg", address: "1 Kim Seng Promenade #02-105, Singapore 237994" },
   { name: "Palace Therapy", email: "bookings@palacetherapy.sg", address: "50 Club Street, Singapore 069426" },
+  { name: "Test Customer", email: "aroot16257@gmail.com", address: "1 Test Avenue, Singapore 123456" },
 ];
 
 const SERVICE_DESCRIPTIONS = [

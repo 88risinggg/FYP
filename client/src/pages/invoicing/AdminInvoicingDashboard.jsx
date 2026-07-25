@@ -2,6 +2,7 @@ import {
   Bell,
   FileBarChart,
   LayoutDashboard,
+  MessageSquare,
   Settings
 } from "lucide-react";
 import { Navigate, useLocation } from "react-router-dom";
@@ -18,6 +19,7 @@ import AdminReportsPage from "./AdminReportsPage.jsx";
 import AdminReminderSettingsPage from "./AdminReminderSettingsPage.jsx";
 import AdminValidationSummaryPage from "./AdminValidationSummaryPage.jsx";
 import AdminTemplatePreviewPage from "./AdminTemplatePreviewPage.jsx";
+import WhatsAppNotificationSettingsPage from "./WhatsAppNotificationSettingsPage.jsx";
 
 const pageTitle = "Automated Invoicing System - Admin Dashboard";
 
@@ -74,6 +76,11 @@ const invoicingSidebarSections = [
         label: "Reminder Settings",
         icon: Bell,
         path: "/dashboard/invoicing/admin/reminder-settings"
+      },
+      {
+        label: "WhatsApp Settings",
+        icon: MessageSquare,
+        path: "/dashboard/invoicing/admin/whatsapp-settings"
       }
     ]
   },
@@ -119,6 +126,7 @@ const routeHeadings = {
   "/dashboard/invoicing/admin/invoice-settings/email": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/payments": "Invoice Settings",
   "/dashboard/invoicing/admin/reminder-settings": "Reminder Settings",
+  "/dashboard/invoicing/admin/whatsapp-settings": "WhatsApp Notification Settings",
   "/dashboard/invoicing/admin/template-preview": "Template Preview",
   "/dashboard/invoicing/admin/audit-logs": "Audit Logs",
   "/dashboard/invoicing/admin/reports": "Reports"
@@ -149,6 +157,7 @@ export default function AdminInvoicingDashboard() {
   );
   const isInvoiceSettings = Boolean(invoiceSettingsMatch);
   const isReminderSettings = normalizedPath === "/dashboard/invoicing/admin/reminder-settings";
+  const isWhatsAppSettings = normalizedPath === "/dashboard/invoicing/admin/whatsapp-settings";
   const isTemplatePreview = normalizedPath === "/dashboard/invoicing/admin/template-preview";
   const isAuditLogs = normalizedPath === "/dashboard/invoicing/admin/audit-logs";
   const isInvoicePerformance = normalizedPath === "/dashboard/invoicing/admin/dashboard/invoice-performance";
@@ -166,6 +175,8 @@ export default function AdminInvoicingDashboard() {
       ? "Automated Invoicing System - Invoice Settings"
     : isReminderSettings
       ? "Automated Invoicing System - Reminder Settings"
+    : isWhatsAppSettings
+      ? "Automated Invoicing System - WhatsApp Settings"
     : isReports
       ? "Automated Invoicing System - Reports"
       : isAuditLogs
@@ -199,6 +210,8 @@ export default function AdminInvoicingDashboard() {
         <AdminInvoiceSettingsPage activeTab={invoiceSettingsMatch?.[1] || "general"} />
       ) : isReminderSettings ? (
         <AdminReminderSettingsPage />
+      ) : isWhatsAppSettings ? (
+        <WhatsAppNotificationSettingsPage />
       ) : isTemplatePreview ? (
         <AdminTemplatePreviewPage />
       ) : isAuditLogs ? (

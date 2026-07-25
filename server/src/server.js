@@ -27,6 +27,7 @@ async function startServer() {
   const { startReminderNotificationScheduler } = require("./workers/reminderNotificationScheduler");
   const { startPayrollReleaseScheduler } = require("./workers/payrollReleaseScheduler");
   const { startSubscriptionScheduler } = require("./workers/subscriptionScheduler");
+  const { startScheduler: startWhatsAppScheduler } = require("./services/whatsappScheduler");
 
   const server = app.listen(port, host, async () => {
     console.log(`Server listening on ${host}:${port} (${APPLICATION_TIMEZONE})`);
@@ -42,6 +43,7 @@ async function startServer() {
     startReminderNotificationScheduler();
     startPayrollReleaseScheduler();
     startSubscriptionScheduler();
+    startWhatsAppScheduler();
   });
 
   server.on("error", (error) => {

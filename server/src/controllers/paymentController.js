@@ -282,6 +282,35 @@ async function confirmStripePayment(req, res) {
         notifyPaymentSuccess(invoiceId, null, payAmount).catch(() => {});
       } catch { /* non-blocking */ }
 
+      // WhatsApp notification: Payment Received (non-blocking)
+      (async () => {
+        try {
+          const whatsappModel = require("../models/whatsappNotificationModel");
+          const settings = await whatsappModel.getSettings();
+          if (settings?.whatsapp_enabled && settings?.send_payment_received) {
+            const [custRows] = await pool.query(
+              `SELECT c.customer_id, c.whatsapp_number FROM customer c
+               INNER JOIN invoice i ON i.customer_id = c.customer_id
+               WHERE i.invoice_id = ? LIMIT 1`,
+              [invoice.invoice_id]
+            );
+            const cust = custRows[0];
+            if (cust?.whatsapp_number) {
+              const { sendPaymentReceived } = require("../services/whatsappService");
+              await sendPaymentReceived({
+                phone: cust.whatsapp_number,
+                invoiceNumber: invoiceId,
+                amount: payAmount,
+                customerId: cust.customer_id,
+                invoiceId: invoice.invoice_id
+              });
+            }
+          }
+        } catch (whatsappErr) {
+          console.error("[WHATSAPP] Payment received notification failed:", whatsappErr.message);
+        }
+      })();
+
       res.json({ status: "Paid", message: "Invoice marked as paid.", amount: payAmount });
     } catch (dbErr) {
       await connection.rollback();
@@ -352,6 +381,35 @@ async function stripeWebhook(req, res) {
             notifyPaymentSuccess(invInfo[0].invoiceId, invInfo[0].customer_name, payAmount).catch(() => {});
           }
         } catch { /* non-blocking */ }
+
+        // WhatsApp notification: Payment Received via webhook (non-blocking)
+        (async () => {
+          try {
+            const whatsappModel = require("../models/whatsappNotificationModel");
+            const settings = await whatsappModel.getSettings();
+            if (settings?.whatsapp_enabled && settings?.send_payment_received) {
+              const [custRows] = await pool.query(
+                `SELECT c.customer_id, c.whatsapp_number, i.invoiceId AS invoice_number
+                 FROM customer c INNER JOIN invoice i ON i.customer_id = c.customer_id
+                 WHERE i.invoice_id = ? LIMIT 1`,
+                [invoiceId]
+              );
+              const cust = custRows[0];
+              if (cust?.whatsapp_number) {
+                const { sendPaymentReceived } = require("../services/whatsappService");
+                await sendPaymentReceived({
+                  phone: cust.whatsapp_number,
+                  invoiceNumber: cust.invoice_number,
+                  amount: payAmount,
+                  customerId: cust.customer_id,
+                  invoiceId: invoiceId
+                });
+              }
+            }
+          } catch (whatsappErr) {
+            console.error("[WHATSAPP] Webhook payment notification failed:", whatsappErr.message);
+          }
+        })();
       } catch (dbErr) { await connection.rollback(); throw dbErr; }
       finally { connection.release(); }
     }

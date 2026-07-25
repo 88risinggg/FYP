@@ -40,6 +40,7 @@ const vanidayImportRoutes = require("./routes/vanidayImportRoutes");
 const subscriptionRoutes = require("./routes/subscriptionRoutes");
 const subscriptionReminderRoutes = require("./routes/subscriptionReminderRoutes");
 const financeReminderRoutes = require("./routes/financeReminderRoutes");
+const whatsappNotificationRoutes = require("./routes/whatsappNotificationRoutes");
 
 const app = express();
 
@@ -88,6 +89,7 @@ app.use("/api/vaniday-import", vanidayImportRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/subscription-reminders", subscriptionReminderRoutes);
 app.use("/api/finance-reminders", financeReminderRoutes);
+app.use("/api/whatsapp-notifications", whatsappNotificationRoutes);
 
 // Routes — Payroll module
 app.use("/api/profile", profileRoutes);

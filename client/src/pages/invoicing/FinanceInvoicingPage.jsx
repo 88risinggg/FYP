@@ -80,6 +80,8 @@ import VanidayImportPage from "./VanidayImportPage.jsx";
 import SubscriptionsView from "../../components/invoicing/SubscriptionsView.jsx";
 import FinanceRemindersView from "../../components/invoicing/FinanceRemindersView.jsx";
 import FinanceSettingsView from "./FinanceSettingsView.jsx";
+import WhatsAppDashboardWidgets from "../../components/invoicing/WhatsAppDashboardWidgets.jsx";
+import WhatsAppNotificationLogsPage from "./WhatsAppNotificationLogsPage.jsx";
 
 const financeSidebarSections = [
   {
@@ -89,38 +91,7 @@ const financeSidebarSections = [
         label: "Dashboard",
         icon: LayoutDashboard,
         path: "/dashboard/invoicing/finance",
-        end: true,
-        children: [
-          {
-            label: "Overview",
-            path: "/dashboard/invoicing/finance",
-            end: true
-          },
-          {
-            label: "Customers",
-            path: "/dashboard/invoicing/finance/customers"
-          },
-          {
-            label: "Invoices",
-            path: "/dashboard/invoicing/finance/invoices"
-          },
-          {
-            label: "Subscriptions",
-            path: "/dashboard/invoicing/finance/subscriptions"
-          },
-          {
-            label: "Payments",
-            path: "/dashboard/invoicing/finance/payments"
-          },
-          {
-            label: "Fraud Detection",
-            path: "/dashboard/invoicing/finance/fraud"
-          },
-          {
-            label: "Reports",
-            path: "/dashboard/invoicing/finance/reports"
-          }
-        ]
+        end: true
       }
     ]
   },
@@ -161,6 +132,21 @@ const financeSidebarSections = [
         label: "Reminders",
         icon: Bell,
         path: "/dashboard/invoicing/finance/reminders"
+      }
+    ]
+  },
+  {
+    label: "WHATSAPP",
+    items: [
+      {
+        label: "WhatsApp Notifications",
+        icon: Send,
+        path: "/dashboard/invoicing/finance/whatsapp"
+      },
+      {
+        label: "Notification Logs",
+        icon: FileText,
+        path: "/dashboard/invoicing/finance/whatsapp-logs"
       }
     ]
   },
@@ -3888,6 +3874,14 @@ export default function FinanceInvoicingPage() {
       return "reports";
     }
 
+    if (location.pathname.endsWith("/whatsapp")) {
+      return "whatsapp";
+    }
+
+    if (location.pathname.endsWith("/whatsapp-logs")) {
+      return "whatsapp-logs";
+    }
+
     if (location.pathname.includes("/subscriptions")) {
       return "subscriptions";
     }
@@ -3999,13 +3993,18 @@ export default function FinanceInvoicingPage() {
   function renderActiveView() {
     if (activeView === "dashboard") {
       return (
-        <InvoicingDashboardView
-          invoices={displayInvoices}
-          customers={displayCustomers}
-          isLoading={isLoading}
-          error={error}
-          navigate={navigate}
-        />
+        <>
+          <InvoicingDashboardView
+            invoices={displayInvoices}
+            customers={displayCustomers}
+            isLoading={isLoading}
+            error={error}
+            navigate={navigate}
+          />
+          <div className="mt-6">
+            <WhatsAppDashboardWidgets />
+          </div>
+        </>
       );
     }
 
@@ -4039,6 +4038,14 @@ export default function FinanceInvoicingPage() {
 
     if (activeView === "reports") {
       return <ReportsView />;
+    }
+
+    if (activeView === "whatsapp") {
+      return <WhatsAppDashboardWidgets />;
+    }
+
+    if (activeView === "whatsapp-logs") {
+      return <WhatsAppNotificationLogsPage />;
     }
 
     if (activeView === "subscriptions") {
