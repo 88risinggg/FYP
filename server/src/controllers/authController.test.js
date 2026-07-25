@@ -6,7 +6,6 @@ jest.mock("../models/authModel", () => ({
   recordFailedLogin: jest.fn(),
   resetFailedLogins: jest.fn()
 }));
-jest.mock("../models/authChallengeModel", () => ({ findActiveBlock: jest.fn() }));
 jest.mock("../services/authChallengeService", () => ({
   createChallenge: jest.fn(),
   resendChallenge: jest.fn(),
@@ -22,7 +21,6 @@ jest.mock("../services/auditService", () => ({
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const authModel = require("../models/authModel");
-const challengeModel = require("../models/authChallengeModel");
 const challengeService = require("../services/authChallengeService");
 const { sendAuthOtpEmail } = require("../services/emailService");
 const controller = require("./authController");
@@ -49,7 +47,6 @@ beforeEach(() => {
   authModel.findUserByEmail.mockResolvedValue(activeUser);
   authModel.recordFailedLogin.mockResolvedValue({ newlyLocked: false });
   authModel.resetFailedLogins.mockResolvedValue();
-  challengeModel.findActiveBlock.mockResolvedValue(null);
   challengeService.createChallenge.mockResolvedValue({
     challengeId: "login-challenge",
     otp: "123456",
@@ -59,24 +56,24 @@ beforeEach(() => {
   bcrypt.compare.mockResolvedValue(true);
 });
 
-test("password login sends an OTP challenge without issuing a JWT", async () => {
+test("password login issues a JWT without requiring OTP", async () => {
   const req = { body: { email: activeUser.email, password: "Password@123" } };
   const res = response();
 
   await controller.login(req, res);
 
-  expect(res.status).toHaveBeenCalledWith(202);
   expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-    requiresOtp: true,
-    challengeId: "login-challenge",
-    email: activeUser.email
+    token: "signed-jwt",
+    user: expect.objectContaining({
+      email: activeUser.email,
+      role: "Finance",
+      companyId: 3
+    })
   }));
-  expect(sendAuthOtpEmail).toHaveBeenCalledWith({
-    to: activeUser.email,
-    otp: "123456",
-    purpose: "login"
-  });
-  expect(jwt.sign).not.toHaveBeenCalled();
+  expect(res.status).not.toHaveBeenCalled();
+  expect(challengeService.createChallenge).not.toHaveBeenCalled();
+  expect(sendAuthOtpEmail).not.toHaveBeenCalled();
+  expect(jwt.sign).toHaveBeenCalledTimes(1);
 });
 
 test("invalid password does not issue a JWT", async () => {

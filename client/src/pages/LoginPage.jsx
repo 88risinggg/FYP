@@ -21,9 +21,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 
 import {
   completeFirstLogin,
-  login,
-  resendLoginOtp,
-  verifyLoginOtp
+  login
 } from "../services/authService.js";
 import { startHealthCheck } from "../services/apiClient.js";
 import { getPostAuthDestination, saveSession } from "../services/sessionService.js";
@@ -93,11 +91,6 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
-  const [showOtpForm, setShowOtpForm] = useState(false);
-  const [otpEmail, setOtpEmail] = useState("");
-  const [otpCode, setOtpCode] = useState("");
-  const [challengeId, setChallengeId] = useState("");
-  const [otpMessage, setOtpMessage] = useState("");
   const [setupToken, setSetupToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -119,37 +112,6 @@ export default function LoginPage() {
     }
     setIsLoginOpen(location.pathname === "/login");
   }, [location.pathname, searchParams]);
-
-  async function handleOtpVerify(e) {
-    e.preventDefault();
-    setError("");
-    setIsLoading(true);
-    try {
-      const data = await verifyLoginOtp(challengeId, otpCode);
-      saveSession(data.token, data.user, rememberMe);
-      startHealthCheck();
-      navigate(getPostAuthDestination(data.user), { replace: true });
-    } catch (err) {
-      setError(err.message || "Verification failed. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function handleOtpResend() {
-    setError("");
-    setOtpMessage("");
-    setIsLoading(true);
-    try {
-      const data = await resendLoginOtp(challengeId);
-      setOtpCode("");
-      setOtpMessage(data.message || "A new login code was sent.");
-    } catch (err) {
-      setError(err.message || "The login code could not be resent.");
-    } finally {
-      setIsLoading(false);
-    }
-  }
 
   function openLogin() {
     setError("");
@@ -176,13 +138,10 @@ export default function LoginPage() {
         setIsLoginOpen(false);
         return;
       }
-      if (data.requiresOtp) {
-        setChallengeId(data.challengeId);
-        setOtpEmail(data.email);
-        setOtpCode("");
-        setOtpMessage("A six-digit login code was sent to your email.");
-        setIsLoginOpen(false);
-        setShowOtpForm(true);
+      if (data.token && data.user) {
+        saveSession(data.token, data.user, rememberMe);
+        startHealthCheck();
+        navigate(getPostAuthDestination(data.user), { replace: true });
         return;
       }
       throw new Error("The login response was incomplete.");
@@ -528,8 +487,8 @@ export default function LoginPage() {
               Users continue through the same authenticated module flow
             </h2>
             <p className="mt-4 text-sm leading-7 text-[#7b6660]">
-              The separate login page verifies password and email OTP before saved user data
-              controls Admin, Finance, HR, and Staff access.
+              The separate login page verifies passwords before saved user data controls
+              Admin, Finance, HR, and Staff access.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -773,87 +732,6 @@ export default function LoginPage() {
                 {isLoading ? "Saving..." : "Save password and continue"}
               </button>
             </motion.form>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showOtpForm && (
-          <motion.div
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-[#251E1F]/60 backdrop-blur-sm p-4"
-            initial={shouldReduceMotion ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={shouldReduceMotion ? undefined : { opacity: 0 }}
-            onClick={() => {
-              if (!isLoading) {
-                setShowOtpForm(false);
-                setOtpCode("");
-                setError("");
-                setIsLoginOpen(true);
-              }
-            }}
-          >
-            <motion.div
-              className="w-full max-w-sm rounded-2xl border border-[#f0d2ca] bg-white/95 p-6 shadow-2xl"
-              initial={shouldReduceMotion ? false : { scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={shouldReduceMotion ? undefined : { scale: 0.95, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3 className="text-lg font-semibold text-[#251E1F]">Enter verification code</h3>
-              <p className="mt-1 text-sm text-[#7b6660]">
-                We sent a six-digit code to {otpEmail}.
-              </p>
-
-              <form className="mt-5 space-y-4" onSubmit={handleOtpVerify}>
-                <div>
-                  <label className="block text-sm font-medium text-[#6f5b55]" htmlFor="otp-code">Verification code</label>
-                  <input
-                    id="otp-code"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    required
-                    value={otpCode}
-                    onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, ""))}
-                    className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-[#251E1F] outline-none focus:border-[#F38978]/70 focus:ring-4 focus:ring-[#F38978]/15"
-                    placeholder="000000"
-                    autoFocus
-                  />
-                </div>
-                {otpMessage && <p className="text-sm text-[#355f63]">{otpMessage}</p>}
-                {error && <p className="rounded-xl border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm text-red-700">{error}</p>}
-                <button
-                  type="submit"
-                  disabled={isLoading || otpCode.length !== 6}
-                  className="w-full rounded-xl bg-[#F38978] px-4 py-3 text-sm font-semibold text-[#251E1F] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isLoading ? "Verifying..." : "Verify and log in"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleOtpResend}
-                  disabled={isLoading}
-                  className="w-full text-center text-sm font-medium text-[#C55245] hover:underline disabled:opacity-50"
-                >
-                  Resend code
-                </button>
-              </form>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setShowOtpForm(false);
-                  setOtpCode("");
-                  setError("");
-                  setIsLoginOpen(true);
-                }}
-                className="mt-4 w-full text-center text-sm text-[#6f5b55] hover:text-[#251E1F]"
-              >
-                Back to login
-              </button>
-            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

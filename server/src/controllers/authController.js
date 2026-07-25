@@ -15,7 +15,6 @@ const {
   recordFailedLogin,
   resetFailedLogins
 } = require("../models/authModel");
-const challengeModel = require("../models/authChallengeModel");
 const challengeService = require("../services/authChallengeService");
 const { sendAuthOtpEmail } = require("../services/emailService");
 const { notifyRoles } = require("../services/payrollNotificationService");
@@ -195,27 +194,7 @@ async function login(req, res) {
       return res.json({ requiresPasswordChange: true, setupToken, email: user.email });
     }
 
-    const activeBlock = await challengeModel.findActiveBlock(user.email, "login");
-    if (activeBlock) {
-      return res.status(429).json({
-        code: "OTP_BLOCKED",
-        message: "Login verification is temporarily blocked.",
-        blockedUntil: activeBlock.blockedUntil
-      });
-    }
-
-    const challenge = await challengeService.createChallenge({
-      email: user.email,
-      purpose: "login",
-      userId: user.user_id
-    });
-    await sendAuthOtpEmail({ to: user.email, otp: challenge.otp, purpose: "login" });
-    return res.status(202).json({
-      requiresOtp: true,
-      challengeId: challenge.challengeId,
-      email: user.email,
-      expiresAt: challenge.expiresAt
-    });
+    return res.json(authPayload(user));
   } catch (error) {
     res.status(500).json({
       message: "Login failed. Please try again later."
