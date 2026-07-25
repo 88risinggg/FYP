@@ -81,7 +81,24 @@ async function sendAuthOtpEmail({ to, otp, purpose }) {
   });
 }
 
+async function sendAccountSetupEmail({ to, name, setupUrl }) {
+  const transporter = createTransporter();
+  return transporter.sendMail({
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    to,
+    subject: "Your PayNivo account has been approved",
+    text: [
+      `Hello ${name || "there"},`,
+      "Your PayNivo account has been approved by an administrator.",
+      `Use this one-time link to accept the Terms and Privacy Policy and create your password: ${setupUrl}`,
+      "The link expires in 24 hours and cannot be used after your password has been created.",
+      "If you were not expecting this account, contact your administrator."
+    ].join("\n\n")
+  });
+}
+
 module.exports = {
+  sendAccountSetupEmail,
   sendAuthOtpEmail,
   sendReminderEmail,
   sendTestReminderEmail

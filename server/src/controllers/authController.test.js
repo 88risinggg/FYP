@@ -1,15 +1,30 @@
 jest.mock("bcrypt", () => ({ compare: jest.fn() }));
 jest.mock("jsonwebtoken", () => ({ sign: jest.fn(() => "signed-jwt") }));
 jest.mock("../models/authModel", () => ({
+  findUserById: jest.fn(),
   findUserByEmail: jest.fn(),
   recordFailedLogin: jest.fn(),
   resetFailedLogins: jest.fn()
 }));
+jest.mock("../models/authChallengeModel", () => ({ findActiveBlock: jest.fn() }));
+jest.mock("../services/authChallengeService", () => ({
+  createChallenge: jest.fn(),
+  resendChallenge: jest.fn(),
+  verifyChallenge: jest.fn()
+}));
+jest.mock("../services/emailService", () => ({ sendAuthOtpEmail: jest.fn() }));
 jest.mock("../services/payrollNotificationService", () => ({ notifyRoles: jest.fn() }));
+jest.mock("../services/auditService", () => ({
+  MODULE: { AUTH: "Auth" },
+  writeAuditLog: jest.fn()
+}));
 
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const authModel = require("../models/authModel");
+const challengeModel = require("../models/authChallengeModel");
+const challengeService = require("../services/authChallengeService");
+const { sendAuthOtpEmail } = require("../services/emailService");
 const controller = require("./authController");
 
 function response() {
@@ -34,24 +49,34 @@ beforeEach(() => {
   authModel.findUserByEmail.mockResolvedValue(activeUser);
   authModel.recordFailedLogin.mockResolvedValue({ newlyLocked: false });
   authModel.resetFailedLogins.mockResolvedValue();
+  challengeModel.findActiveBlock.mockResolvedValue(null);
+  challengeService.createChallenge.mockResolvedValue({
+    challengeId: "login-challenge",
+    otp: "123456",
+    expiresAt: new Date("2026-07-25T10:00:00Z")
+  });
+  sendAuthOtpEmail.mockResolvedValue();
   bcrypt.compare.mockResolvedValue(true);
 });
 
-test("password login issues the final JWT", async () => {
+test("password login sends an OTP challenge without issuing a JWT", async () => {
   const req = { body: { email: activeUser.email, password: "Password@123" } };
   const res = response();
 
   await controller.login(req, res);
 
+  expect(res.status).toHaveBeenCalledWith(202);
   expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-    token: "signed-jwt",
-    user: expect.objectContaining({
-      email: activeUser.email,
-      role: "Finance",
-      companyId: 3
-    })
+    requiresOtp: true,
+    challengeId: "login-challenge",
+    email: activeUser.email
   }));
-  expect(jwt.sign).toHaveBeenCalledTimes(1);
+  expect(sendAuthOtpEmail).toHaveBeenCalledWith({
+    to: activeUser.email,
+    otp: "123456",
+    purpose: "login"
+  });
+  expect(jwt.sign).not.toHaveBeenCalled();
 });
 
 test("invalid password does not issue a JWT", async () => {
@@ -63,4 +88,25 @@ test("invalid password does not issue a JWT", async () => {
 
   expect(res.status).toHaveBeenCalledWith(401);
   expect(jwt.sign).not.toHaveBeenCalled();
+});
+
+test("OTP verification issues the final JWT", async () => {
+  challengeService.verifyChallenge.mockResolvedValue({
+    challenge: { userId: activeUser.user_id }
+  });
+  authModel.findUserById.mockResolvedValue(activeUser);
+  const req = { body: { challengeId: "login-challenge", otp: "123456" } };
+  const res = response();
+
+  await controller.verifyLoginOtp(req, res);
+
+  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+    token: "signed-jwt",
+    user: expect.objectContaining({
+      email: activeUser.email,
+      role: "Finance",
+      companyId: 3
+    })
+  }));
+  expect(jwt.sign).toHaveBeenCalledTimes(1);
 });

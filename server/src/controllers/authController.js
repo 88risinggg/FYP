@@ -15,7 +15,11 @@ const {
   recordFailedLogin,
   resetFailedLogins
 } = require("../models/authModel");
+const challengeModel = require("../models/authChallengeModel");
+const challengeService = require("../services/authChallengeService");
+const { sendAuthOtpEmail } = require("../services/emailService");
 const { notifyRoles } = require("../services/payrollNotificationService");
+const { writeAuditLog, MODULE } = require("../services/auditService");
 
 const LOGIN_FAILURE_LIMIT = 5;
 
@@ -101,6 +105,27 @@ function issueJwt(user) {
   return normalToken(user);
 }
 
+function challengeError(res, result) {
+  if (result.error === "BLOCKED") {
+    return res.status(429).json({
+      code: "OTP_BLOCKED",
+      message: "Too many OTP requests or attempts. Login verification is blocked for three hours.",
+      blockedUntil: result.blockedUntil
+    });
+  }
+  if (result.error === "EXPIRED") {
+    return res.status(410).json({ code: "OTP_EXPIRED", message: "The OTP has expired. Request a new code." });
+  }
+  if (result.error === "INVALID_OTP") {
+    return res.status(401).json({
+      code: "OTP_INVALID",
+      message: "The OTP is incorrect.",
+      attemptsRemaining: result.attemptsRemaining
+    });
+  }
+  return res.status(400).json({ code: "OTP_CHALLENGE_INVALID", message: "The login challenge is no longer valid." });
+}
+
 /**
  * POST /api/auth/login
  *
@@ -170,8 +195,27 @@ async function login(req, res) {
       return res.json({ requiresPasswordChange: true, setupToken, email: user.email });
     }
 
-    // Return token and user profile including allowed modules
-    res.json(authPayload(user));
+    const activeBlock = await challengeModel.findActiveBlock(user.email, "login");
+    if (activeBlock) {
+      return res.status(429).json({
+        code: "OTP_BLOCKED",
+        message: "Login verification is temporarily blocked.",
+        blockedUntil: activeBlock.blockedUntil
+      });
+    }
+
+    const challenge = await challengeService.createChallenge({
+      email: user.email,
+      purpose: "login",
+      userId: user.user_id
+    });
+    await sendAuthOtpEmail({ to: user.email, otp: challenge.otp, purpose: "login" });
+    return res.status(202).json({
+      requiresOtp: true,
+      challengeId: challenge.challengeId,
+      email: user.email,
+      expiresAt: challenge.expiresAt
+    });
   } catch (error) {
     res.status(500).json({
       message: "Login failed. Please try again later."
@@ -183,8 +227,12 @@ async function completeFirstLogin(req, res) {
   try {
     const setupToken = String(req.body.setupToken || "");
     const newPassword = String(req.body.newPassword || "");
-    if (!setupToken || newPassword.length < 8) {
-      return res.status(400).json({ message: "A setup token and password of at least 8 characters are required." });
+    const termsAccepted = req.body.termsAccepted === true;
+    const privacyAccepted = req.body.privacyAccepted === true;
+    if (!setupToken || newPassword.length < 8 || !termsAccepted || !privacyAccepted) {
+      return res.status(400).json({
+        message: "A valid setup link, password of at least 8 characters, and acceptance of the Terms and Privacy Policy are required."
+      });
     }
     const payload = jwt.verify(setupToken, process.env.JWT_SECRET);
     if (payload.purpose !== "first_login_password") {
@@ -197,6 +245,19 @@ async function completeFirstLogin(req, res) {
     }
     const passwordHash = await bcrypt.hash(newPassword, 12);
     const user = await saveFirstLoginPassword(payload.userId, passwordHash);
+    await writeAuditLog({
+      module: MODULE.AUTH,
+      activityType: "Legal Acceptance",
+      action: "Accepted Terms and Privacy Policy during first account setup",
+      entityId: payload.userId,
+      entityType: "user",
+      userId: payload.userId,
+      ipAddress: req.ip || null,
+      newValue: JSON.stringify({
+        termsAcceptedAt: new Date().toISOString(),
+        privacyAcceptedAt: new Date().toISOString()
+      })
+    });
     return res.json(authPayload(user));
   } catch (error) {
     if (error.name === "TokenExpiredError" || error.name === "JsonWebTokenError") {
@@ -206,10 +267,43 @@ async function completeFirstLogin(req, res) {
   }
 }
 
+async function verifyLoginOtp(req, res) {
+  try {
+    const { challengeId, otp } = req.body;
+    if (!challengeId || !otp) {
+      return res.status(400).json({ message: "Challenge ID and OTP are required." });
+    }
+    const result = await challengeService.verifyChallenge(challengeId, otp, "login");
+    if (result.error) return challengeError(res, result);
+    const user = await findUserById(result.challenge.userId);
+    if (!user || !isActiveStatus(user.status) || user.account_locked_at) {
+      return res.status(401).json({ message: "This account is no longer available." });
+    }
+    return res.json(authPayload(user));
+  } catch (error) {
+    return res.status(500).json({ message: "Login verification failed. Please try again later." });
+  }
+}
+
+async function resendLoginOtp(req, res) {
+  try {
+    const { challengeId } = req.body;
+    if (!challengeId) return res.status(400).json({ message: "Challenge ID is required." });
+    const result = await challengeService.resendChallenge(challengeId, "login");
+    if (result.error) return challengeError(res, result);
+    await sendAuthOtpEmail({ to: result.challenge.email, otp: result.otp, purpose: "login" });
+    return res.json({ message: "A new login code was sent.", expiresAt: result.expiresAt });
+  } catch (error) {
+    return res.status(500).json({ message: "The login code could not be resent." });
+  }
+}
+
 module.exports = {
   completeFirstLogin,
   buildUserResponse,
   getAllowedModules,
   issueJwt,
-  login
+  login,
+  resendLoginOtp,
+  verifyLoginOtp
 };
