@@ -42,6 +42,9 @@ const REQUIRED_TEMPLATE_COLUMNS = [
   "Amount"
 ];
 
+// Optional columns that are recognized but not required
+const OPTIONAL_TEMPLATE_COLUMNS = ["Subscription", "Vendor Name", "Bank Account"];
+
 function normalizeHeader(header) {
   return String(header || "").trim().toLowerCase();
 }
@@ -115,6 +118,7 @@ function normalizeImportedRows(rows) {
       amount: toCurrencyNumber(amount),
       vendor_name: String(getRowValue(row, "Vendor Name") || "").trim(),
       bank_account: String(getRowValue(row, "Bank Account") || "").trim(),
+      subscription: String(getRowValue(row, "Subscription") || "").trim(),
       status: "Draft",
       errors: []
     };
@@ -186,6 +190,25 @@ async function validateInvoiceImport(rows, file, connection = pool) {
     existingInvoices.forEach((invoice) => existingInvoiceNumbers.add(String(invoice.invoiceId).trim()));
   }
 
+  // Resolve subscription plan names to subscription_id for rows that have a Subscription value
+  const subscriptionPlanNames = [...new Set(normalizedRows.map((row) => row.subscription).filter(Boolean))];
+  const subscriptionLookup = new Map(); // "customerId:planName" → subscription_id
+
+  if (subscriptionPlanNames.length > 0) {
+    try {
+      const [subRows] = await connection.query(
+        `SELECT subscription_id, customer_id, plan_name
+         FROM subscriptions
+         WHERE plan_name IN (?) AND status = 'Active'`,
+        [subscriptionPlanNames]
+      );
+      subRows.forEach((sub) => {
+        const key = `${sub.customer_id}:${String(sub.plan_name).trim().toLowerCase()}`;
+        subscriptionLookup.set(key, sub.subscription_id);
+      });
+    } catch { /* subscriptions table may not exist yet */ }
+  }
+
   const seenInvoiceNumbers = new Set();
   const duplicateInvoiceNumbers = new Set();
   invoiceNumbers.forEach((invoiceNumber) => {
@@ -228,9 +251,20 @@ async function validateInvoiceImport(rows, file, connection = pool) {
       errors.push("Amount must be numeric and greater than 0");
     }
 
+    // Resolve subscription_id if Subscription column is provided
+    let subscription_id = null;
+    if (row.subscription && customerId) {
+      const subKey = `${customerId}:${row.subscription.toLowerCase()}`;
+      subscription_id = subscriptionLookup.get(subKey) || null;
+      if (!subscription_id) {
+        errors.push(`Subscription "${row.subscription}" not found for this customer or is not active`);
+      }
+    }
+
     return {
       ...row,
       customer_id: customerId,
+      subscription_id,
       errors,
       is_valid: errors.length === 0
     };
@@ -317,8 +351,8 @@ async function processBulkInvoices(req, res) {
       const [invoiceResult] = await connection.query(
         `
           INSERT INTO invoice
-            (status, issue_date, due_date, invoiceId, total_amount, customer_id, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, NOW())
+            (status, issue_date, due_date, invoiceId, total_amount, customer_id, subscription_id, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
         `,
         [
           "Draft",
@@ -326,7 +360,8 @@ async function processBulkInvoices(req, res) {
           invoice.due_date,
           invoice.invoice_number,
           invoice.amount,
-          invoice.customer_id
+          invoice.customer_id,
+          invoice.subscription_id || null
         ]
       );
 

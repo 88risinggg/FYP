@@ -14,6 +14,17 @@ router.use(authenticateToken);
 router.post("/validate", validateBulkRows);
 router.post("/process", processBulkInvoices);
 
+// Serve sample Excel template for bulk invoice upload
+router.get("/template", (req, res) => {
+  const path = require("path");
+  const templatePath = path.join(__dirname, "..", "..", "uploads", "templates", "sample_invoice_upload_template.xlsx");
+  res.download(templatePath, "sample_invoice_upload_template.xlsx", (err) => {
+    if (err && !res.headersSent) {
+      res.status(404).json({ message: "Template file not found." });
+    }
+  });
+});
+
 // Parse uploaded Excel file and return rows as JSON (replaces client-side xlsx parsing)
 router.post("/parse-excel", upload.single("file"), async (req, res) => {
   try {

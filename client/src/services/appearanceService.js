@@ -1,5 +1,5 @@
 export const DEFAULT_APPEARANCE = {
-  theme: "system",
+  theme: "light",
   accent_color: "#F38978",
   compact_mode: false,
   font_size: "medium",

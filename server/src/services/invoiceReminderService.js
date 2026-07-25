@@ -83,12 +83,12 @@ function buildReminderEmailHtml(invoice, reminderType) {
       subject = `Payment Reminder - Invoice ${invoice.invoiceId}`;
       heading = "Payment Reminder";
       message = `Please complete payment for invoice ${invoice.invoiceId}.`;
-      urgencyColor = "#7B2FF7";
+      urgencyColor = "#F38978";
   }
 
   const payButton = paymentUrl ? `
     <div style="text-align: center; margin: 24px 0;">
-      <a href="${paymentUrl}" style="display: inline-block; background: #7B2FF7; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px;">
+      <a href="${paymentUrl}" style="display: inline-block; background: #F38978; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px;">
         Pay Now - SGD ${amount}
       </a>
       <p style="margin: 8px 0 0; font-size: 11px; color: #666; word-break: break-all;">${paymentUrl}</p>
@@ -103,13 +103,13 @@ function buildReminderEmailHtml(invoice, reminderType) {
   const html = `
     <div style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
       <div style="text-align: center; margin-bottom: 24px;">
-        <h1 style="color: #7B2FF7; margin: 0;">Vaniday</h1>
+        <h1 style="color: #F38978; margin: 0;">Vaniday</h1>
       </div>
       <div style="border-left: 4px solid ${urgencyColor}; padding: 16px 20px; background: #f9fafb; border-radius: 0 8px 8px 0; margin-bottom: 24px;">
         <h2 style="margin: 0 0 8px; color: #1a1a2e; font-size: 18px;">${heading}</h2>
         <p style="margin: 0; color: #333; line-height: 1.6;">${message}</p>
       </div>
-      <div style="background: #f8f4ff; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+      <div style="background: #FFF8F5; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
         <table style="width: 100%; font-size: 14px; color: #333;">
           <tr><td style="padding: 4px 0; color: #666;">Invoice:</td><td style="padding: 4px 0; font-weight: bold;">${invoice.invoiceId}</td></tr>
           <tr><td style="padding: 4px 0; color: #666;">Customer:</td><td style="padding: 4px 0;">${invoice.customer_name}</td></tr>
