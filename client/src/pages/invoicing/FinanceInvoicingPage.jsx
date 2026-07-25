@@ -173,16 +173,6 @@ const financeSidebarSections = [
         path: "/dashboard/invoicing/finance/reports"
       }
     ]
-  },
-  {
-    label: "SETTINGS",
-    items: [
-      {
-        label: "Settings",
-        icon: Settings2,
-        path: "/dashboard/invoicing/finance/settings"
-      }
-    ]
   }
 ];
 
