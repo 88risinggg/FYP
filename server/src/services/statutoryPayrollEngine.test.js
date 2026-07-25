@@ -58,6 +58,15 @@ describe("2026 statutory payroll engine", () => {
     ]);
   });
 
+  test("selects the effective-dated MBMF schedule for the payroll period", () => {
+    const rules = { selfHelpGroupRules: { MBMF: { enabled: true, eligibilityField: "religion", eligibilityValue: "Muslim", versions: [
+      { effectiveFrom: "2016-06-01", bands: [[null, 15]] },
+      { effectiveFrom: "2027-01-01", bands: [[null, 18]] }
+    ] } } };
+    expect(getSelfHelpGroupDeductions({ race: "", religion: "Muslim", totalWages: 4000, month: 12, year: 2026, rules })[0].amount).toBe(15);
+    expect(getSelfHelpGroupDeductions({ race: "", religion: "Muslim", totalWages: 4000, month: 1, year: 2027, rules })[0].amount).toBe(18);
+  });
+
   test("calculates SDL from remuneration with minimum and maximum", () => {
     expect(calculateEmployeePayroll({ staff: staff({ base_salary: 500 }), month: 7, year: 2026 }).sdl).toBe(2);
     expect(calculateEmployeePayroll({ staff: staff({ base_salary: 10000 }), month: 7, year: 2026 }).sdl).toBe(11.25);

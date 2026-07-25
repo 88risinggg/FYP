@@ -587,13 +587,19 @@ async function reviewDeletionRequest(requestId, adminId, decision, note = "") {
       return null;
     }
     if (decision === "approved") {
-      await connection.query("DELETE FROM user WHERE user_id = ?", [request.user_id]);
+      const [[target]] = await connection.query("SELECT role_name FROM user WHERE user_id = ?", [request.user_id]);
+      if (target?.role_name === "Admin") {
+        const [[count]] = await connection.query("SELECT COUNT(*) AS total FROM user WHERE role_name = 'Admin' AND status = 1");
+        if (Number(count.total) <= 1) { await connection.rollback(); throw new Error("The final active Admin account cannot be deleted"); }
+      }
+      await connection.query("UPDATE staff SET user_user_id = NULL WHERE user_user_id = ?", [request.user_id]);
     }
     await connection.query(
       `UPDATE account_action_requests SET status = ?, reviewed_at = NOW(), reviewed_by = ?, review_note = ?
        WHERE request_id = ?`,
       [decision, adminId, note || null, requestId]
     );
+    if (decision === "approved") await connection.query("DELETE FROM user WHERE user_id = ?", [request.user_id]);
     await connection.commit();
     return { ...request, status: decision };
   } catch (error) {
@@ -602,6 +608,32 @@ async function reviewDeletionRequest(requestId, adminId, decision, note = "") {
   } finally {
     connection.release();
   }
+}
+
+async function deleteUserAccountByAdmin(userId, adminId, note = "Deleted from Payroll User Management") {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query("SELECT user_id, name, email, role_name FROM user WHERE user_id = ? FOR UPDATE", [userId]);
+    const user = rows[0];
+    if (!user) { await connection.rollback(); return { notFound: true }; }
+    if (Number(user.user_id) === Number(adminId)) { await connection.rollback(); return { selfDelete: true }; }
+    if (user.role_name === "Admin") {
+      const [[count]] = await connection.query("SELECT COUNT(*) AS total FROM user WHERE role_name = 'Admin' AND status = 1");
+      if (Number(count.total) <= 1) { await connection.rollback(); return { lastAdmin: true }; }
+    }
+    const [pending] = await connection.query("SELECT request_id FROM account_action_requests WHERE user_id = ? AND request_type = 'account_deletion' AND status = 'pending' ORDER BY request_id DESC LIMIT 1", [userId]);
+    if (pending[0]) {
+      await connection.query("UPDATE account_action_requests SET status = 'approved', reviewed_at = NOW(), reviewed_by = ?, review_note = ? WHERE request_id = ?", [adminId, note, pending[0].request_id]);
+    } else {
+      await connection.query(`INSERT INTO account_action_requests (user_id, user_name, user_email, request_type, status, requested_at, reviewed_at, reviewed_by, review_note) VALUES (?, ?, ?, 'account_deletion', 'approved', NOW(), NOW(), ?, ?)`, [userId, user.name, user.email, adminId, note]);
+    }
+    await connection.query("UPDATE staff SET user_user_id = NULL WHERE user_user_id = ?", [userId]);
+    await connection.query("DELETE FROM user WHERE user_id = ?", [userId]);
+    await connection.commit();
+    return { deleted: true, user: { userId, name: user.name, email: user.email } };
+  } catch (error) { await connection.rollback(); throw error; }
+  finally { connection.release(); }
 }
 
 async function resetUserSettings(userId) {
@@ -655,5 +687,6 @@ module.exports = {
   notifyAdminsOfDeletionRequest,
   listDeletionRequests,
   reviewDeletionRequest,
+  deleteUserAccountByAdmin,
   resetUserSettings
 };

@@ -1,6 +1,7 @@
 const {
   CPF_FULL_RATE_TIERS_2026,
-  DEFAULT_PAYROLL_RULES_2026
+  DEFAULT_PAYROLL_RULES_2026,
+  SHG_BANDS_2026
 } = require("./statutoryPayrollEngine");
 
 function getPool() {
@@ -27,7 +28,7 @@ function defaultMetadata(key) {
   if (key === "compliance_cpf_enabled") return { ruleCategory: "CPF", usageType: RULE_USAGE.CALCULATION, effectiveFrom: "2026-01-01" };
   if (key === "compliance_sdl_enabled") return { ruleCategory: "SDL", usageType: RULE_USAGE.CALCULATION, effectiveFrom: "2026-01-01" };
   if (/^compliance_/.test(key)) return { ruleCategory: "Validation", usageType: RULE_USAGE.VALIDATION, effectiveFrom: "2026-01-01" };
-  if (/^mbmf_(enabled|effective_from|applicable_religion)$/.test(key) || /^(cdac|sinda|ecf)_(enabled|effective_from|applicable_race)$/.test(key)) return { ruleCategory: "Community Funds", usageType: RULE_USAGE.CALCULATION, effectiveFrom: "2026-01-01" };
+  if (/^mbmf_(enabled|effective_from|applicable_religion|wage_bands|wage_band_versions|source_url|change_reason)$/.test(key) || /^(cdac|sinda|ecf)_(enabled|effective_from|applicable_race)$/.test(key)) return { ruleCategory: "Community Funds", usageType: RULE_USAGE.CALCULATION, effectiveFrom: key.startsWith("mbmf_") ? "2016-06-01" : "2026-01-01" };
   if (/^earning_component_.+_cpf_applicable$/.test(key)) return { ruleCategory: "Earnings", usageType: RULE_USAGE.CALCULATION, effectiveFrom: null };
   if (/^deduction_component_.+_affects_net_pay$/.test(key)) return { ruleCategory: "Deductions", usageType: RULE_USAGE.CALCULATION, effectiveFrom: null };
   return { ruleCategory: "Operational Reference", usageType: RULE_USAGE.REFERENCE, effectiveFrom: null };
@@ -43,8 +44,10 @@ const DEFAULT_SETTINGS = [
   ["compliance_sdl_enabled", "Enabled", "Apply SDL calculation."],
   ["compliance_max_other_deduction_percent", "30", "Maximum non-statutory deductions as a percentage of gross salary."],
   ["mbmf_enabled", "Enabled", "Apply MBMF where the employee is eligible."],
-  ["mbmf_effective_from", "2026-01-01", "MBMF rule effective date."],
+  ["mbmf_effective_from", "2016-06-01", "MBMF rule effective date."],
   ["mbmf_applicable_religion", "Muslim", "Religion used for MBMF eligibility."],
+  ["mbmf_wage_bands", JSON.stringify(SHG_BANDS_2026.MBMF.map(([maximumWage, amount]) => [Number.isFinite(maximumWage) ? maximumWage : null, amount])), "Official MBMF employee contribution bands by monthly total wages."],
+  ["mbmf_wage_band_versions", JSON.stringify([{ effectiveFrom: "2016-06-01", bands: SHG_BANDS_2026.MBMF.map(([maximumWage, amount]) => [Number.isFinite(maximumWage) ? maximumWage : null, amount]), sourceUrl: "https://www.cpf.gov.sg/employer/employer-obligations/contributions-to-self-help-groups", reason: "Official MBMF contribution schedule" }]), "Effective-dated MBMF contribution schedules."],
   ["cdac_enabled", "Enabled", "Apply CDAC where the employee is eligible."],
   ["cdac_effective_from", "2026-01-01", "CDAC rule effective date."],
   ["cdac_applicable_race", "Chinese", "Race used for CDAC eligibility."],
@@ -169,6 +172,26 @@ function finiteNumber(value, fallback, minimum = 0, maximum = Number.MAX_SAFE_IN
 function resolveAppliedPayrollRules(settings = []) {
   const values = Object.fromEntries(settings.map((setting) => [setting.setting_key, setting.setting_value]));
   const get = (key, fallback) => values[key] ?? fallback;
+  const parseBands = (value, fallback) => {
+    try {
+      const parsed = JSON.parse(value);
+      if (!Array.isArray(parsed) || !parsed.length) return fallback;
+      return parsed.map(([maximumWage, amount]) => [maximumWage === null ? Infinity : Number(maximumWage), Number(amount)]);
+    } catch (_error) {
+      return fallback;
+    }
+  };
+  const parseVersions = (value) => {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.map((version) => ({
+        ...version,
+        bands: parseBands(JSON.stringify(version.bands || []), SHG_BANDS_2026.MBMF)
+      })) : [];
+    } catch (_error) {
+      return [];
+    }
+  };
   const cpfRateTiers = CPF_FULL_RATE_TIERS_2026.map((tier, index) => ({
     ...tier,
     employeeRate: finiteNumber(get(`cpf_rate_${CPF_TIER_SLUGS[index]}_employee_percent`, tier.employeeRate), tier.employeeRate, 0, 100),
@@ -198,7 +221,7 @@ function resolveAppliedPayrollRules(settings = []) {
     componentCpfApplicable,
     deductionAffectsNetPay,
     selfHelpGroupRules: {
-      MBMF: { enabled: isEnabled(get("mbmf_enabled", "Enabled")), effectiveFrom: get("mbmf_effective_from", "2026-01-01"), eligibilityField: "religion", eligibilityValue: get("mbmf_applicable_religion", "Muslim") },
+      MBMF: { enabled: isEnabled(get("mbmf_enabled", "Enabled")), effectiveFrom: get("mbmf_effective_from", "2016-06-01"), eligibilityField: "religion", eligibilityValue: get("mbmf_applicable_religion", "Muslim"), bands: parseBands(get("mbmf_wage_bands", "[]"), SHG_BANDS_2026.MBMF), versions: parseVersions(get("mbmf_wage_band_versions", "[]")) },
       CDAC: { enabled: isEnabled(get("cdac_enabled", "Enabled")), effectiveFrom: get("cdac_effective_from", "2026-01-01"), eligibilityField: "race", eligibilityValue: get("cdac_applicable_race", "Chinese") },
       SINDA: { enabled: isEnabled(get("sinda_enabled", "Enabled")), effectiveFrom: get("sinda_effective_from", "2026-01-01"), eligibilityField: "race", eligibilityValue: get("sinda_applicable_race", "Indian") },
       ECF: { enabled: isEnabled(get("ecf_enabled", "Enabled")), effectiveFrom: get("ecf_effective_from", "2026-01-01"), eligibilityField: "race", eligibilityValue: get("ecf_applicable_race", "Eurasian") }

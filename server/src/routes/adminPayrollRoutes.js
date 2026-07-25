@@ -13,9 +13,12 @@ const {
   getAdminPayrollDashboard,
   getAdminPayrollInsights,
   getAdminPayrollReports,
+  exportAdminPayrollReport,
   getPayrollRuleConfig,
   getPayslipLayouts,
   makeDefaultPayslipLayout,
+  previewPayslipLayout,
+  previewSamplePayslip,
   resetUserPassword,
   updatePayrollSetting
 } = require("../controllers/adminPayrollController");
@@ -77,7 +80,10 @@ router.get("/dashboard", getAdminPayrollDashboard);
 router.get("/dashboard/insights", getAdminPayrollInsights);
 router.get("/effective-rules", getAdminEffectivePayrollRules);
 router.get("/reports", getAdminPayrollReports);
+router.get("/reports/export", exportAdminPayrollReport);
 router.get("/payslip-layouts", getPayslipLayouts);
+router.get("/payslip-layouts/sample/preview", previewSamplePayslip);
+router.get("/payslip-layouts/:layoutId/preview", previewPayslipLayout);
 router.post("/users", addUser);
 router.post("/payslip-layouts", uploadPayslipLayout, addPayslipLayout);
 router.patch("/payslip-layouts/:layoutId/default", makeDefaultPayslipLayout);

@@ -1,9 +1,9 @@
 import {
   BriefcaseBusiness, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Download, Eye, FileSpreadsheet, KeyRound,
-  Loader2, Mail, Pencil, Plus, RefreshCw, Search, ShieldCheck, Upload, UserCheck, Users, UserX, WalletCards, X
+  Loader2, Mail, Pencil, Plus, RefreshCw, Search, ShieldCheck, Trash2, Upload, UserCheck, Users, UserX, WalletCards, X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPayrollHire, exportStaffWorkbook, getPayrollUsers, importPayrollHires, reviewActivationRequest, updateActivationRequest } from "../../services/payrollUserService.js";
+import { createPayrollHire, deleteManagedPayrollUser, exportStaffWorkbook, getPayrollUsers, importPayrollHires, resendAccountSetup, reviewActivationRequest, updateActivationRequest } from "../../services/payrollUserService.js";
 import { resetUserPassword, updateUserRole, updateUserStatus } from "../../services/adminPayrollService.js";
 import { apiRequest } from "../../services/apiClient.js";
 import { downloadBlob } from "../../services/apiClient.js";
@@ -30,6 +30,12 @@ function DetailSection({ title, icon: Icon, items }) {
     <h4 className="flex items-center gap-2 text-sm font-semibold text-[#251E1F]"><span className="grid h-8 w-8 place-items-center rounded-lg bg-[#fff0ec] text-[#d66f5e]"><Icon size={16}/></span>{title}</h4>
     <dl className="mt-4 grid gap-4 sm:grid-cols-2">{items.map(([label, value]) => <div key={label}><dt className="text-xs font-semibold uppercase tracking-wide text-[#9a7f78]">{label}</dt><dd className="mt-1 break-words text-sm font-medium text-[#251E1F]">{value}</dd></div>)}</dl>
   </section>;
+}
+
+function ActionProgress({ state, onClose }) {
+  if (!state.open) return null;
+  const tone = state.status === "failed" ? "bg-red-500" : state.status === "completed" ? "bg-emerald-500" : "bg-[#F38978]";
+  return <div className="fixed inset-0 z-[1200] grid place-items-center bg-[#251E1F]/45 p-4"><section role="dialog" aria-modal="true" aria-label="Account action progress" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-center gap-3">{state.status === "running" ? <Loader2 className="animate-spin text-[#F38978]"/> : state.status === "completed" ? <CheckCircle2 className="text-emerald-600"/> : <X className="text-red-600"/>}<div><h3 className="font-semibold text-[#251E1F]">{state.title}</h3><p className="text-sm text-[#7b6660]">{state.phase}</p></div></div><div className="mt-5 flex justify-between text-xs font-semibold"><span>{state.status === "running" ? "Processing" : state.status === "completed" ? "Completed" : "Action failed"}</span><span>{state.progress}%</span></div><div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[#f0d2ca]"><div className={`h-full rounded-full transition-all duration-500 motion-reduce:transition-none ${tone}`} style={{ width: `${state.progress}%` }}/></div>{state.detail ? <p className={`mt-4 rounded-xl p-3 text-sm ${state.status === "failed" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{state.detail}</p> : null}{state.status !== "running" ? <div className="mt-5 flex justify-end"><button type="button" onClick={onClose} className="rounded-xl border border-[#f0d2ca] px-4 py-2 text-sm font-semibold">Close</button></div> : null}</section></div>;
 }
 
 function initials(record) {
@@ -75,7 +81,7 @@ function getRoleVisuals(record) {
   return roleVisuals[key] || roleVisuals.unlinked;
 }
 
-function AdminUserDirectory({ data, loading, busy, error, success, temporaryPassword, load, review, accountAction }) {
+function AdminUserDirectory({ data, loading, busy, error, success, temporaryPassword, load, review, resendSetup, deleteAccount, accountAction, actionProgress, closeProgress }) {
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("All Roles");
   const [departmentFilter, setDepartmentFilter] = useState("All Departments");
@@ -178,9 +184,12 @@ function AdminUserDirectory({ data, loading, busy, error, success, temporaryPass
         <div><span>Account access</span><button onClick={() => accountAction(selected, "status", selected.account_locked_at ? 1 : Number(selected.account_status) === 1 ? 0 : 1)}>{selected.account_locked_at ? "Reactivate account" : Number(selected.account_status) === 1 ? "Disable account" : "Enable account"}</button></div>
         <div><span>Password security</span><button onClick={() => accountAction(selected, "password")}><KeyRound size={15}/>Issue temporary password</button></div>
       </div> : null}
+      {selected.activation_status === "Approved" && Number(selected.must_change_password) === 1 ? <div className={`admin-user-management__request-note ${selected.setup_email_status === "Failed" ? "admin-user-management__request-note--locked" : ""}`}><strong>Setup email: {selected.setup_email_status || "Not sent"}</strong><br/>{selected.setup_email_recipient || selected.staff_email || "No staff email"}{selected.setup_email_error ? <><br/>{selected.setup_email_error}</> : null}<div className="mt-3"><button type="button" disabled={busy} onClick={() => resendSetup(selected)} className="admin-user-management__secondary">Resend setup link</button></div></div> : null}
+      {selected.user_id ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4"><div className="flex items-center justify-between gap-3"><div><strong className="text-sm text-red-700">Delete account</strong><p className="mt-1 text-xs text-red-600">{selected.deletion_request_status === "pending" ? "This user requested deletion and is awaiting Admin approval." : "Removes login access while preserving the HR staff record."}</p></div><button type="button" disabled={busy} onClick={async () => { if (await deleteAccount(selected)) setSelected(null); }} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white"><Trash2 size={14}/>{selected.deletion_request_status === "pending" ? "Approve deletion" : "Delete account"}</button></div></div> : null}
       {!selected.user_id ? <p className="admin-user-management__request-note">This staff record has no PayNivo account. HR must create and submit the account request.</p> : null}
       <footer><button type="button" onClick={() => setSelected(null)} className="admin-user-management__secondary">Close</button></footer>
     </section></div> : null}
+    <ActionProgress state={actionProgress} onClose={closeProgress}/>
   </section>;
 }
 
@@ -198,6 +207,7 @@ export default function PayrollUserManagement({ role, defaultShowHire = false })
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [importFile, setImportFile] = useState(null);
   const [importPreview, setImportPreview] = useState(null);
+  const [actionProgress, setActionProgress] = useState({ open: false, status: "idle", progress: 0, title: "", phase: "", detail: "" });
   const importInputRef = useRef(null);
 
   const load = async () => {
@@ -207,6 +217,14 @@ export default function PayrollUserManagement({ role, defaultShowHire = false })
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!actionProgress.open || actionProgress.status !== "running") return undefined;
+    const timer = window.setInterval(() => setActionProgress((current) => current.status === "running" ? { ...current, progress: Math.min(90, current.progress + Math.max(1, Math.ceil((90 - current.progress) / 7))) } : current), 180);
+    return () => window.clearInterval(timer);
+  }, [actionProgress.open, actionProgress.status]);
+  const beginProgress = (title, phase = "Validating request…") => setActionProgress({ open: true, status: "running", progress: 5, title, phase, detail: "" });
+  const finishProgress = (phase, detail = "") => setActionProgress((current) => ({ ...current, status: "completed", progress: 100, phase, detail }));
+  const failProgress = (error) => setActionProgress((current) => ({ ...current, status: "failed", progress: 100, phase: "Unable to complete action", detail: error.message || String(error) }));
 
   const filtered = useMemo(() => {
     const value = query.trim().toLowerCase();
@@ -297,27 +315,46 @@ export default function PayrollUserManagement({ role, defaultShowHire = false })
     const reason = action === "reject" ? window.prompt("Enter the rejection reason:") : "";
     if (action === "reject" && !reason) return false;
     setBusy(`review-${record.request_id}`);
-    try { await reviewActivationRequest(record.request_id, action, reason); setSuccess(`Account ${action === "approve" ? "approved" : "rejected"}.`); setError(""); await load(); return true; }
-    catch (reviewError) { setError(reviewError.message); await load(); return false; }
+    beginProgress(action === "approve" ? "Approve account activation" : "Reject account request", action === "approve" ? "Approving account and preparing setup email…" : "Saving rejection decision…");
+    try { const result = await reviewActivationRequest(record.request_id, action, reason); const emailDetail = result.setupEmail ? `Setup email ${result.setupEmail.status.toLowerCase()}${result.setupEmail.recipient ? ` to ${result.setupEmail.recipient}` : ""}.` : ""; setSuccess(`Account ${action === "approve" ? "approved" : "rejected"}. ${emailDetail}`.trim()); setError(""); await load(); finishProgress("Account records refreshed", emailDetail || "The action was saved successfully."); return true; }
+    catch (reviewError) { setError(reviewError.message); failProgress(reviewError); await load(); return false; }
+    finally { setBusy(""); }
+  };
+
+  const resendSetup = async (record) => {
+    setBusy(`resend-${record.request_id}`); beginProgress("Resend account setup link", "Validating staff email…");
+    try { const result = await resendAccountSetup(record.request_id); await load(); finishProgress("Setup email sent", `Sent to ${result.setupEmail?.recipient || record.staff_email}.`); return true; }
+    catch (error) { setError(error.message); failProgress(error); await load(); return false; }
+    finally { setBusy(""); }
+  };
+
+  const deleteAccount = async (record) => {
+    if (!window.confirm(`Delete ${record.staff_name || record.name}'s PayNivo account? The HR staff record will remain.`)) return false;
+    if (!window.confirm("Final confirmation: permanently remove this account's login access?")) return false;
+    setBusy(`delete-${record.user_id}`); beginProgress("Delete user account", "Checking deletion safeguards…");
+    try { const result = await deleteManagedPayrollUser(record.user_id, record.deletion_request_status === "pending" ? "Approved user-requested account deletion" : "Deleted by Admin from Payroll User Management"); setSuccess(result.message); await load(); finishProgress("Account deleted", "The staff record remains available to HR."); return true; }
+    catch (error) { setError(error.message); failProgress(error); return false; }
     finally { setBusy(""); }
   };
 
   const accountAction = async (record, action, value) => {
     setBusy(`account-${record.user_id}`);
+    const titles = { status: Number(value) === 1 ? "Enable account access" : "Disable account access", role: "Change account role", password: "Issue temporary password" };
+    beginProgress(titles[action] || "Update account", "Saving account settings…");
     try {
       let result;
       if (action === "status") result = await updateUserStatus(record.user_id, value);
       if (action === "role") result = await updateUserRole(record.user_id, value);
       if (action === "password") result = await resetUserPassword(record.user_id);
       if (result?.temporaryPassword) setTemporaryPassword(result.temporaryPassword);
-      setSuccess("Account settings updated."); await load();
-    } catch (actionError) { setError(actionError.message); }
+      setSuccess("Account settings updated."); await load(); finishProgress("Account settings refreshed", "The change was saved successfully.");
+    } catch (actionError) { setError(actionError.message); failProgress(actionError); }
     finally { setBusy(""); }
   };
 
   if (role === "Admin") return <AdminUserDirectory
     data={data} loading={loading} busy={busy} error={error} success={success}
-    temporaryPassword={temporaryPassword} load={load} review={review} accountAction={accountAction}
+    temporaryPassword={temporaryPassword} load={load} review={review} resendSetup={resendSetup} deleteAccount={deleteAccount} accountAction={accountAction} actionProgress={actionProgress} closeProgress={() => setActionProgress((current) => ({ ...current, open: false }))}
   />;
 
   return <section className="space-y-5">

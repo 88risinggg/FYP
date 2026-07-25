@@ -16,7 +16,13 @@ async function listManagedUsers() {
               WHEN 'rejected' THEN 'Rejected' ELSE 'Approved' END AS activation_status,
             ar.requested_role, ar.requested_by, requester.name AS requested_by_name,
             ar.reviewed_by, reviewer.name AS reviewed_by_name, ar.review_note AS rejection_reason,
-            ar.requested_at, ar.reviewed_at
+            ar.requested_at, ar.reviewed_at,
+            JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.status')) AS setup_email_status,
+            JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.recipient')) AS setup_email_recipient,
+            JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.sentAt')) AS setup_email_sent_at,
+            JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.error')) AS setup_email_error
+            ,(SELECT dr.status FROM account_action_requests dr WHERE dr.user_id = u.user_id AND dr.request_type = 'account_deletion' ORDER BY dr.request_id DESC LIMIT 1) AS deletion_request_status
+            ,(SELECT dr.request_id FROM account_action_requests dr WHERE dr.user_id = u.user_id AND dr.request_type = 'account_deletion' ORDER BY dr.request_id DESC LIMIT 1) AS deletion_request_id
      FROM user u
      LEFT JOIN staff s ON s.user_user_id = u.user_id
      LEFT JOIN account_action_requests ar
@@ -144,8 +150,9 @@ async function reviewActivationRequest({ requestId, action, reviewerId, reason }
   try {
     await connection.beginTransaction();
     const [[request]] = await connection.execute(
-      `SELECT ar.*, u.email, u.name FROM account_action_requests ar
+      `SELECT ar.*, u.email, u.name, u.must_change_password, s.email AS staff_email FROM account_action_requests ar
        JOIN user u ON u.user_id = ar.user_id
+       LEFT JOIN staff s ON s.employee_id = ar.staff_employee_id
        WHERE ar.request_id = ? AND ar.request_type = 'user_activation' FOR UPDATE`,
       [requestId]
     );
@@ -174,6 +181,39 @@ async function reviewActivationRequest({ requestId, action, reviewerId, reason }
   } finally {
     connection.release();
   }
+}
+
+async function getActivationSetupContext(requestId) {
+  const [rows] = await pool.execute(
+    `SELECT ar.*, u.name, u.status AS account_status, u.must_change_password,
+            s.email AS staff_email,
+            JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.status')) AS setup_email_status,
+            JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.recipient')) AS setup_email_recipient,
+            JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.sentAt')) AS setup_email_sent_at,
+            JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.error')) AS setup_email_error
+     FROM account_action_requests ar
+     JOIN user u ON u.user_id = ar.user_id
+     LEFT JOIN staff s ON s.employee_id = ar.staff_employee_id
+     WHERE ar.request_id = ? AND ar.request_type = 'user_activation' LIMIT 1`,
+    [requestId]
+  );
+  return rows[0] || null;
+}
+
+async function saveSetupEmailResult(requestId, setupEmail) {
+  const [rows] = await pool.execute(
+    "SELECT metadata FROM account_action_requests WHERE request_id = ? LIMIT 1", [requestId]
+  );
+  if (!rows[0]) return false;
+  let metadata = {};
+  try { metadata = typeof rows[0].metadata === "string" ? JSON.parse(rows[0].metadata || "{}") : (rows[0].metadata || {}); } catch { metadata = {}; }
+  metadata.setupEmail = setupEmail;
+  await pool.execute("UPDATE account_action_requests SET metadata = ? WHERE request_id = ?", [JSON.stringify(metadata), requestId]);
+  return true;
+}
+
+async function logSetupEmailAudit(requestId, setupEmail) {
+  await writeAuditLog({ module: "Payroll", activityType: "Account Setup Email", action: `Account setup email ${setupEmail.status.toLowerCase()}`, entityId: requestId, entityType: "account_action_request", status: setupEmail.status === "Sent" ? "Success" : setupEmail.status === "Not Required" ? "Info" : "Failed", newValue: JSON.stringify({ status: setupEmail.status, recipient: setupEmail.recipient, sentAt: setupEmail.sentAt, error: setupEmail.error }) });
 }
 
 async function updatePendingRequest({ requestId, requestedBy, staff, account }) {
@@ -219,4 +259,4 @@ async function updatePendingRequest({ requestId, requestedBy, staff, account }) 
   }
 }
 
-module.exports = { ROLE_NAMES, createHireWithAccount, listManagedUsers, reviewActivationRequest, updatePendingRequest };
+module.exports = { ROLE_NAMES, createHireWithAccount, getActivationSetupContext, listManagedUsers, logSetupEmailAudit, reviewActivationRequest, saveSetupEmailResult, updatePendingRequest };

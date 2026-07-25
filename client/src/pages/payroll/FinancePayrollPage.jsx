@@ -740,7 +740,7 @@ function isEmployeeMbmfEligible(employee) {
 }
 
 function getMbmfWageBase(employee) {
-  return Math.min(getEmployeeTotalEarnings(employee), Number(adminCpfConfiguration.mbmf?.monthlyWageCeiling || 0));
+  return getEmployeeTotalEarnings(employee);
 }
 
 function getMbmfSkipReason(employee) {

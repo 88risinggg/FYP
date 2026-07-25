@@ -58,8 +58,11 @@ function getCpfTier(age, tiers = CPF_FULL_RATE_TIERS_2026) {
   return tiers.find((tier) => age <= tier.maximumAge) || tiers.at(-1);
 }
 
-function getBandAmount(fund, wages) {
-  const band = SHG_BANDS_2026[fund]?.find(([maximumWage]) => Number(wages) <= maximumWage);
+function getBandAmount(fund, wages, configuredBands) {
+  const bands = Array.isArray(configuredBands) && configuredBands.length
+    ? configuredBands
+    : SHG_BANDS_2026[fund];
+  const band = bands?.find(([maximumWage]) => maximumWage === null || Number(wages) <= Number(maximumWage));
   return Number(band?.[1] || 0);
 }
 
@@ -75,6 +78,15 @@ function getSelfHelpGroupDeductions({ race, religion, totalWages, month, year, r
   const normalizedReligion = normalize(religion);
   const funds = [];
   const configuredRules = rules.selfHelpGroupRules || {};
+  const bandsForPeriod = (fund) => {
+    const rule = configuredRules[fund];
+    if (!Array.isArray(rule?.versions) || !rule.versions.length) return rule?.bands;
+    const period = `${year}-${String(month).padStart(2, "0")}-01`;
+    const active = [...rule.versions]
+      .filter((version) => String(version.effectiveFrom || "0000-00-00").slice(0, 10) <= period)
+      .sort((a, b) => String(b.effectiveFrom).localeCompare(String(a.effectiveFrom)))[0];
+    return active?.bands || rule?.bands;
+  };
   const eligible = (fund, defaultEligible) => {
     const rule = configuredRules[fund];
     if (!rule) return defaultEligible;
@@ -89,7 +101,7 @@ function getSelfHelpGroupDeductions({ race, religion, totalWages, month, year, r
   };
 
   if (eligible("MBMF", ["islam", "muslim"].includes(normalizedReligion))) {
-    funds.push({ fund: "MBMF", amount: getBandAmount("MBMF", totalWages), basis: "religion" });
+    funds.push({ fund: "MBMF", amount: getBandAmount("MBMF", totalWages, bandsForPeriod("MBMF")), basis: "religion" });
   }
   if (eligible("CDAC", normalizedRace === "chinese")) {
     funds.push({ fund: "CDAC", amount: getBandAmount("CDAC", totalWages), basis: "race" });

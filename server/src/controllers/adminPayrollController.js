@@ -2,7 +2,9 @@ const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const ExcelJS = require("exceljs");
 const { getEffectivePayrollRules } = require("../services/payrollRuleConfigService");
+const { generatePayslipPDF } = require("../services/payslipPdfService");
 
 const {
   createUserAccount,
@@ -150,6 +152,49 @@ async function getAdminPayrollReports(req, res) {
   } catch (error) {
     console.error("Admin payroll report error:", error.message);
     res.status(500).json({ message: "Failed to load admin payroll reports." });
+  }
+}
+
+const excelReportDefinitions = {
+  "User Access & Account Status Report": { sheet: "User Access", headers: ["Employee", "Email", "Role", "Account Status", "Department", "Employee Code"], rows: (data) => (data.users || []).map((u) => [u.name, u.email, u.role_name, Number(u.status) === 1 ? "Active" : "Inactive", u.department_name || "No department", u.employee_code || "No linked staff"]) },
+  "Statutory Configuration Report": { sheet: "Statutory Configuration", headers: ["Setting", "Configured Value", "Description"], rows: (data) => (data.settings || []).map((s) => [String(s.setting_key || "").replaceAll("_", " "), s.setting_value, s.description || "No description"]) },
+  "Payroll Run Status & Exception Report": { sheet: "Payroll Runs", headers: ["Payroll Period", "Status", "Employees", "Created", "Updated", "Payment Reference"], rows: (data, from, to) => (data.payrollRuns || []).filter((r) => withinDateRange(r.created_at, from, to)).map((r) => [`${String(r.payroll_month).padStart(2, "0")}/${r.payroll_year}`, r.status || "Pending", Number(r.employee_count || 0), r.created_at, r.updated_at, r.payment_reference || ""]) },
+  "Audit Activity Report": { sheet: "Audit Activity", headers: ["Date Time", "Action", "Record Area", "Module", "Actor", "Outcome"], rows: (data, from, to) => (data.auditLogs || []).filter((a) => withinDateRange(a.created_at, from, to)).map((a) => [a.created_at, a.action || "System activity", a.entity_type || "System", a.module || "System", a.user_name || "System", a.status || "Info"]) },
+  "Effective Payroll Rules Report": { sheet: "Effective Rules", headers: ["Rule", "Category", "Current Value", "Usage", "Source", "Effective From", "Status", "Updated By"], rows: (data) => (data.effectiveRules?.rules || []).map((r) => [r.name, r.category, r.value, r.usage, r.source, r.effectiveFrom, r.status, r.updatedBy || "System default"]) }
+};
+
+function withinDateRange(value, from, to) {
+  if (!from && !to) return true;
+  const time = new Date(value || 0).getTime();
+  const start = from ? new Date(`${from}T00:00:00+08:00`).getTime() : -Infinity;
+  const end = to ? new Date(`${to}T23:59:59.999+08:00`).getTime() : Infinity;
+  return Number.isFinite(time) && time >= start && time <= end;
+}
+
+async function exportAdminPayrollReport(req, res) {
+  try {
+    const reportType = String(req.query.reportType || "");
+    const definition = excelReportDefinitions[reportType];
+    if (!definition) return res.status(400).json({ message: "This report is not available as Excel." });
+    const data = await getAdminPayrollReportData();
+    const rows = definition.rows(data, req.query.from, req.query.to);
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "PayNivo";
+    const sheet = workbook.addWorksheet(definition.sheet, { views: [{ state: "frozen", ySplit: 1 }] });
+    sheet.addRow(definition.headers);
+    rows.forEach((row) => sheet.addRow(row));
+    const header = sheet.getRow(1);
+    header.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF38978" } };
+    sheet.columns.forEach((column, index) => { column.width = Math.min(42, Math.max(14, definition.headers[index].length + 3, ...rows.map((row) => String(row[index] ?? "").length + 2))); });
+    sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: definition.headers.length } };
+    const fileName = `${reportType.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    await workbook.xlsx.write(res);
+    return res.end();
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to export the Admin payroll report." });
   }
 }
 
@@ -304,6 +349,37 @@ async function makeDefaultPayslipLayout(req, res) {
     res.status(500).json({
       message: "Failed to update default payslip layout."
     });
+  }
+}
+
+async function previewPayslipLayout(req, res) {
+  try {
+    const layoutId = Number(req.params.layoutId);
+    const layouts = await listPayslipLayouts();
+    const layout = layouts.find((item) => Number(item.layout_id) === layoutId);
+    if (!layout) return res.status(404).json({ message: "Payslip layout not found." });
+    const uploadsRoot = path.resolve(__dirname, "..", "..", "uploads", "payslip-layouts");
+    const fileName = path.basename(String(layout.file_path || ""));
+    const filePath = path.resolve(uploadsRoot, fileName);
+    if (!fileName || !filePath.startsWith(`${uploadsRoot}${path.sep}`) || !fs.existsSync(filePath)) {
+      return res.status(404).json({ message: "The stored payslip PDF is missing. Upload the layout again." });
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${String(layout.original_file_name || "payslip-layout.pdf").replace(/[\r\n\"]/g, "")}"`);
+    return res.sendFile(filePath);
+  } catch (error) {
+    return res.status(500).json({ message: "Unable to preview the payslip layout." });
+  }
+}
+
+async function previewSamplePayslip(req, res) {
+  try {
+    const pdf = await generatePayslipPDF({ employee_name: "Sample Employee", employee_id: "EMP-SAMPLE", department: "Finance", payroll_month: new Date().getMonth() + 1, payroll_year: new Date().getFullYear(), basic_salary: 4200, gross_pay: 4400, total_deductions: 865, net_pay: 3535, employee_cpf: 840, employer_cpf: 714, mbmf: 15, sdl: 11.25, allowances: 200, bank_name: "Sample Bank", bank_account: "****1234" });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", "inline; filename=sample-payslip.pdf");
+    return res.send(pdf);
+  } catch (error) {
+    return res.status(500).json({ message: "Unable to generate the sample payslip preview." });
   }
 }
 
@@ -596,9 +672,12 @@ module.exports = {
   getAdminEffectivePayrollRules,
   getAdminPayrollInsights,
   getAdminPayrollReports,
+  exportAdminPayrollReport,
   getPayrollRuleConfig,
   getPayslipLayouts,
   makeDefaultPayslipLayout,
+  previewPayslipLayout,
+  previewSamplePayslip,
   resetUserPassword,
   updatePayrollSetting,
   normalizeInsightQuery

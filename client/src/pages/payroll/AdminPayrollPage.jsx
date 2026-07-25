@@ -32,7 +32,10 @@ import {
   getAdminPayrollDashboard,
   getAdminPayrollInsights,
   getAdminPayrollReports,
+  exportAdminPayrollReport,
   getEffectivePayrollRules,
+  getPayslipLayoutPreview,
+  getPayslipSamplePreview,
   resetUserPassword,
   setDefaultPayslipLayout,
   updatePayrollSetting,
@@ -233,12 +236,9 @@ const otherCpfSettings = [
 
 const mbmfDefaultSettings = {
   enabled: "Enabled",
-  effectiveFrom: "2026-01-01",
-  rateType: "CPF Board Wage Band",
-  employeeRate: "0",
-  employerRate: "0",
-  monthlyWageCeiling: "999999.00",
-  employerExpenseAccount: "6810 - MBMF Employer Expense",
+  effectiveFrom: "2016-06-01",
+  rateType: "Fixed amount by monthly wage band",
+  bands: [[1000, 3], [2000, 4.5], [3000, 6.5], [4000, 15], [6000, 19.5], [8000, 22], [10000, 24], [null, 26]],
   employeePayableAccount: "2110 - MBMF Payable (Employee)",
   clearingAccount: "2140 - MBMF Payable Clearing",
   paymentBankAccount: "1210 - Bank - MBMF",
@@ -333,6 +333,19 @@ function ActionButton({ icon: Icon, children, variant = "primary", onClick, disa
       {children}
     </button>
   );
+}
+
+function AdminActionProgress({ state, onClose }) {
+  const [progress, setProgress] = useState(5);
+  useEffect(() => {
+    if (!state?.open) return undefined;
+    if (state.status !== "running") { setProgress(100); return undefined; }
+    setProgress(5);
+    const timer = window.setInterval(() => setProgress((value) => Math.min(90, value + Math.max(1, Math.ceil((90 - value) / 7)))), 180);
+    return () => window.clearInterval(timer);
+  }, [state?.open, state?.status, state?.title]);
+  if (!state?.open) return null;
+  return <div className="fixed inset-0 z-[1200] grid place-items-center bg-[#251E1F]/45 p-4"><section role="dialog" aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-center gap-3">{state.status === "running" ? <Loader2 className="animate-spin text-[#F38978]"/> : state.status === "failed" ? <AlertCircle className="text-red-600"/> : <CheckCircle2 className="text-emerald-600"/>}<div><h3 className="font-semibold text-[#251E1F]">{state.title}</h3><p className="text-sm text-[#7b6660]">{state.phase}</p></div></div><div className="mt-5 flex justify-between text-xs font-semibold"><span>{state.status === "running" ? "Processing" : state.status === "failed" ? "Failed" : "Completed"}</span><span>{progress}%</span></div><div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[#f0d2ca]"><div className={`h-full rounded-full transition-all duration-500 motion-reduce:transition-none ${state.status === "failed" ? "bg-red-500" : state.status === "completed" ? "bg-emerald-500" : "bg-[#F38978]"}`} style={{ width: `${progress}%` }}/></div>{state.detail ? <p className={`mt-4 rounded-xl p-3 text-sm ${state.status === "failed" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{state.detail}</p> : null}{state.status !== "running" ? <div className="mt-5 flex justify-end"><button type="button" onClick={onClose} className="rounded-xl border border-[#f0d2ca] px-4 py-2 text-sm font-semibold">Close</button></div> : null}</section></div>;
 }
 
 function formatDate(value) {
@@ -1781,6 +1794,27 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
   const defaultLayout = layouts.find((layout) => Number(layout.is_default) === 1) || layouts[0];
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [actionState, setActionState] = useState(null);
+  const [preview, setPreview] = useState(null);
+
+  const previewLayout = async (layout) => {
+    if (!layout?.layout_id) { setUploadError("Upload a payslip layout before previewing it."); return; }
+    setActionState({ open: true, status: "running", title: "Prepare payslip preview", phase: "Loading the stored PDF…" });
+    try { const blob = await getPayslipLayoutPreview(layout.layout_id); const url = URL.createObjectURL(blob); setPreview({ url, name: layout.layout_name }); setActionState({ open: true, status: "completed", title: "Payslip preview ready", phase: "PDF loaded successfully." }); }
+    catch (error) { setActionState({ open: true, status: "failed", title: "Payslip preview", phase: "Unable to load preview", detail: error.message }); }
+  };
+  const previewSample = async () => {
+    setActionState({ open: true, status: "running", title: "Generate sample payslip", phase: "Rendering a safe sample PDF…" });
+    try { const blob = await getPayslipSamplePreview(); const url = URL.createObjectURL(blob); setPreview({ url, name: "Sample Payslip" }); setActionState({ open: true, status: "completed", title: "Sample payslip ready", phase: "PDF generated successfully." }); }
+    catch (error) { setActionState({ open: true, status: "failed", title: "Sample payslip preview", phase: "Unable to generate preview", detail: error.message }); }
+  };
+  useEffect(() => () => { if (preview?.url) URL.revokeObjectURL(preview.url); }, [preview?.url]);
+
+  const makeDefault = async (layout) => {
+    setActionState({ open: true, status: "running", title: "Set default payslip layout", phase: "Saving layout selection…" });
+    try { await onSetDefaultLayout(layout.layout_id); setActionState({ open: true, status: "completed", title: "Default layout updated", phase: `${layout.layout_name} is now the default.` }); }
+    catch (error) { setActionState({ open: true, status: "failed", title: "Set default payslip layout", phase: "Unable to save selection", detail: error.message }); }
+  };
 
   const selectLayoutFile = async (event) => {
     const file = event.target.files?.[0];
@@ -1795,9 +1829,11 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
       return;
     }
     setIsUploading(true);
+    setActionState({ open: true, status: "running", title: "Upload payslip layout", phase: "Validating and saving PDF…" });
     setUploadError("");
     const uploaded = await onImportLayout(file);
-    if (!uploaded) setUploadError("The payslip layout could not be uploaded.");
+    if (!uploaded) { setUploadError("The payslip layout could not be uploaded."); setActionState({ open: true, status: "failed", title: "Upload payslip layout", phase: "Upload failed", detail: "The payslip layout could not be uploaded." }); }
+    else setActionState({ open: true, status: "completed", title: "Payslip layout uploaded", phase: "The PDF is ready to preview." });
     setIsUploading(false);
   };
 
@@ -1813,8 +1849,7 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
           <ActionButton
             icon={Eye}
             variant="secondary"
-            disabled={!defaultLayout?.file_path}
-            onClick={() => window.open(defaultLayout.file_path, "_blank")}
+            onClick={previewSample}
           >
             Preview Sample
           </ActionButton>
@@ -1863,14 +1898,14 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
                   <span className="text-[#7b6660]/80">{formatDate(layout.updated_at)}</span>
                 </div>
                 <div className="mt-5 flex gap-2">
-                  <button type="button" className="rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45" onClick={() => window.open(layout.file_path, "_blank")}>
+                  <button type="button" className="rounded-xl border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45" onClick={() => previewLayout(layout)}>
                     Preview
                   </button>
                   <button
                     type="button"
                     disabled={Number(layout.is_default) === 1}
                     className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold ${Number(layout.is_default) === 1 ? "cursor-default border-[#2f8758]/30 bg-[#2f8758]/10 text-[#2f8758]" : "border-[#F38978]/25 bg-[#F38978]/10 text-[#251E1F] hover:bg-[#F38978]/20"}`}
-                    onClick={() => onSetDefaultLayout(layout.layout_id)}
+                    onClick={() => makeDefault(layout)}
                   >
                     {Number(layout.is_default) === 1 ? <CheckCircle2 size={15} /> : null}
                     {Number(layout.is_default) === 1 ? "Default selected" : "Set Default"}
@@ -1903,6 +1938,8 @@ function PayslipLayoutsView({ layouts = [], onImportLayout, onSetDefaultLayout }
           </ul>
         </aside>
       </div>
+      <AdminActionProgress state={actionState} onClose={() => setActionState(null)}/>
+      {preview ? <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-[#251E1F]/50 p-4"><section className="flex h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"><header className="flex items-center justify-between border-b border-[#f0d2ca] p-4"><div><p className="text-xs uppercase tracking-wide text-[#F38978]">Payslip layout preview</p><h3 className="font-semibold">{preview.name}</h3></div><div className="flex gap-2"><a href={preview.url} download={`${preview.name || "payslip-layout"}.pdf`} className="rounded-xl border border-[#f0d2ca] px-4 py-2 text-sm font-semibold">Download PDF</a><button type="button" onClick={() => { URL.revokeObjectURL(preview.url); setPreview(null); }} className="rounded-xl border border-[#f0d2ca] p-2"><X size={18}/></button></div></header><iframe title={`${preview.name} preview`} src={preview.url} className="min-h-0 flex-1"/></section></div> : null}
     </PageShell>
   );
 }
@@ -2462,14 +2499,30 @@ function getEligibleUsers(users = [], field, value) {
 }
 
 function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
+  const readBands = () => {
+    try {
+      const parsed = JSON.parse(getMbmfValue(settingsByKey, "mbmf_wage_bands", JSON.stringify(mbmfDefaultSettings.bands)));
+      return Array.isArray(parsed) && parsed.length ? parsed : mbmfDefaultSettings.bands;
+    } catch (_error) {
+      return mbmfDefaultSettings.bands;
+    }
+  };
+  const readVersions = () => {
+    try {
+      const parsed = JSON.parse(getMbmfValue(settingsByKey, "mbmf_wage_band_versions", "[]"));
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_error) {
+      return [];
+    }
+  };
   const [form, setForm] = useState(() => ({
     enabled: getMbmfValue(settingsByKey, "mbmf_enabled", mbmfDefaultSettings.enabled),
     effectiveFrom: getMbmfValue(settingsByKey, "mbmf_effective_from", mbmfDefaultSettings.effectiveFrom),
     rateType: getMbmfValue(settingsByKey, "mbmf_rate_type", mbmfDefaultSettings.rateType),
-    employeeRate: getMbmfValue(settingsByKey, "mbmf_employee_rate_percent", mbmfDefaultSettings.employeeRate),
-    employerRate: getMbmfValue(settingsByKey, "mbmf_employer_rate_percent", mbmfDefaultSettings.employerRate),
-    monthlyWageCeiling: getMbmfValue(settingsByKey, "mbmf_monthly_wage_ceiling", mbmfDefaultSettings.monthlyWageCeiling),
-    employerExpenseAccount: getMbmfValue(settingsByKey, "mbmf_gl_employer_expense_account", mbmfDefaultSettings.employerExpenseAccount),
+    bands: readBands(),
+    versions: readVersions(),
+    sourceUrl: "https://www.cpf.gov.sg/employer/employer-obligations/contributions-to-self-help-groups",
+    changeReason: "",
     employeePayableAccount: getMbmfValue(settingsByKey, "mbmf_gl_employee_payable_account", mbmfDefaultSettings.employeePayableAccount),
     clearingAccount: getMbmfValue(settingsByKey, "mbmf_gl_clearing_account", mbmfDefaultSettings.clearingAccount),
     paymentBankAccount: getMbmfValue(settingsByKey, "mbmf_payment_bank_account", mbmfDefaultSettings.paymentBankAccount),
@@ -2482,10 +2535,10 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
       enabled: getMbmfValue(settingsByKey, "mbmf_enabled", mbmfDefaultSettings.enabled),
       effectiveFrom: getMbmfValue(settingsByKey, "mbmf_effective_from", mbmfDefaultSettings.effectiveFrom),
       rateType: getMbmfValue(settingsByKey, "mbmf_rate_type", mbmfDefaultSettings.rateType),
-      employeeRate: getMbmfValue(settingsByKey, "mbmf_employee_rate_percent", mbmfDefaultSettings.employeeRate),
-      employerRate: getMbmfValue(settingsByKey, "mbmf_employer_rate_percent", mbmfDefaultSettings.employerRate),
-      monthlyWageCeiling: getMbmfValue(settingsByKey, "mbmf_monthly_wage_ceiling", mbmfDefaultSettings.monthlyWageCeiling),
-      employerExpenseAccount: getMbmfValue(settingsByKey, "mbmf_gl_employer_expense_account", mbmfDefaultSettings.employerExpenseAccount),
+      bands: readBands(),
+      versions: readVersions(),
+      sourceUrl: getMbmfValue(settingsByKey, "mbmf_source_url", "https://www.cpf.gov.sg/employer/employer-obligations/contributions-to-self-help-groups"),
+      changeReason: "",
       employeePayableAccount: getMbmfValue(settingsByKey, "mbmf_gl_employee_payable_account", mbmfDefaultSettings.employeePayableAccount),
       clearingAccount: getMbmfValue(settingsByKey, "mbmf_gl_clearing_account", mbmfDefaultSettings.clearingAccount),
       paymentBankAccount: getMbmfValue(settingsByKey, "mbmf_payment_bank_account", mbmfDefaultSettings.paymentBankAccount),
@@ -2496,27 +2549,46 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
   const updateForm = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
-  const employeeRate = Number(form.employeeRate || 0);
-  const employerRate = Number(form.employerRate || 0);
-  const ceiling = Number(form.monthlyWageCeiling || 0);
+  const updateBand = (index, field, value) => {
+    setForm((current) => ({
+      ...current,
+      bands: current.bands.map((band, bandIndex) => bandIndex === index
+        ? [field === "maximum" ? (value === "" ? null : Number(value)) : band[0], field === "amount" ? Number(value) : band[1]]
+        : band)
+    }));
+  };
+  const validationErrors = (() => {
+    const errors = [];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.effectiveFrom)) errors.push("Enter a valid effective date.");
+    if (!form.changeReason.trim()) errors.push("Enter the government announcement or change reason.");
+    try { new URL(form.sourceUrl); } catch (_error) { errors.push("Enter a valid government source URL."); }
+    if (form.bands.length < 2) errors.push("At least two wage bands are required.");
+    form.bands.forEach(([maximumWage, amount], index) => {
+      if (Number(amount) < 0 || !Number.isFinite(Number(amount))) errors.push(`Band ${index + 1} needs a valid non-negative amount.`);
+      if (index < form.bands.length - 1 && (!Number.isFinite(Number(maximumWage)) || Number(maximumWage) <= Number(form.bands[index - 1]?.[0] || 0))) errors.push(`Band ${index + 1} needs an increasing upper wage limit.`);
+    });
+    if (form.bands.at(-1)?.[0] !== null) errors.push("The final wage band must be open-ended.");
+    if (form.versions.some((version) => String(version.effectiveFrom).slice(0, 10) === form.effectiveFrom)) errors.push("A saved MBMF version already uses this effective date. Choose a new date.");
+    return [...new Set(errors)];
+  })();
   const examples = [4000, 7000, 9500].map((grossSalary) => {
-    const salaryConsidered = Math.min(grossSalary, ceiling || grossSalary);
-    const employeeAmount = salaryConsidered * (employeeRate / 100);
-    const employerAmount = salaryConsidered * (employerRate / 100);
+    const band = form.bands.find(([maximumWage]) => maximumWage === null || grossSalary <= Number(maximumWage));
+    const employeeAmount = Number(band?.[1] || 0);
 
     return {
       grossSalary,
-      salaryConsidered,
       employeeAmount,
-      employerAmount,
-      total: employeeAmount + employerAmount
+      total: employeeAmount
     };
   });
 
   const saveMbmfSettings = async () => {
+    if (validationErrors.length) return;
     setIsSaving(true);
 
     try {
+      const nextVersion = { effectiveFrom: form.effectiveFrom, bands: form.bands, sourceUrl: form.sourceUrl.trim(), reason: form.changeReason.trim() };
+      const versions = [...form.versions, nextVersion].sort((a, b) => String(a.effectiveFrom).localeCompare(String(b.effectiveFrom)));
       await Promise.all([
         onSave("mbmf_enabled", {
           settingValue: form.enabled,
@@ -2534,22 +2606,22 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
           settingValue: form.rateType,
           description: "MBMF contribution rate type."
         }),
-        onSave("mbmf_employee_rate_percent", {
-          settingValue: form.employeeRate,
-          description: "MBMF employee contribution percentage."
+        onSave("mbmf_wage_bands", {
+          settingValue: JSON.stringify(form.bands),
+          description: "Official MBMF employee contribution bands by monthly total wages.",
+          effectiveFrom: form.effectiveFrom,
+          ruleCategory: "Community Funds",
+          usageType: "calculation"
         }),
-        onSave("mbmf_employer_rate_percent", {
-          settingValue: form.employerRate,
-          description: "MBMF employer contribution percentage."
+        onSave("mbmf_wage_band_versions", {
+          settingValue: JSON.stringify(versions),
+          description: "Effective-dated MBMF contribution schedules.",
+          effectiveFrom: form.effectiveFrom,
+          ruleCategory: "Community Funds",
+          usageType: "calculation"
         }),
-        onSave("mbmf_monthly_wage_ceiling", {
-          settingValue: form.monthlyWageCeiling,
-          description: "MBMF monthly wage ceiling."
-        }),
-        onSave("mbmf_gl_employer_expense_account", {
-          settingValue: form.employerExpenseAccount,
-          description: "MBMF employer expense GL account."
-        }),
+        onSave("mbmf_source_url", { settingValue: form.sourceUrl.trim(), description: "Government source for the latest MBMF schedule." }),
+        onSave("mbmf_change_reason", { settingValue: form.changeReason.trim(), description: "Reason for the latest MBMF schedule version." }),
         onSave("mbmf_gl_employee_payable_account", {
           settingValue: form.employeePayableAccount,
           description: "MBMF employee payable GL account."
@@ -2563,6 +2635,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
           description: "MBMF payment bank account."
         })
       ]);
+      setForm((current) => ({ ...current, versions, changeReason: "" }));
     } finally {
       setIsSaving(false);
     }
@@ -2599,40 +2672,33 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
             </section>
 
             <section className="app-panel rounded-2xl p-5">
-              <h4 className="font-semibold text-[#251E1F]">2. Contribution Rates</h4>
+              <h4 className="font-semibold text-[#251E1F]">2. Rule details</h4>
               <div className="mt-4 space-y-3">
-                <SettingInput value={form.effectiveFrom} onChange={(value) => updateForm("effectiveFrom", value)} placeholder="Effective date" />
-                <select
-                  value={form.rateType}
-                  onChange={(event) => updateForm("rateType", event.target.value)}
-                  className="w-full rounded-lg border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm text-[#251E1F] outline-none"
-                >
-                  <option value="Percentage of Gross Salary">Percentage of Gross Salary</option>
-                  <option value="Fixed Amount">Fixed Amount</option>
-                </select>
-                <SettingInput value={form.employeeRate} onChange={(value) => updateForm("employeeRate", value)} placeholder="Employee rate %" />
-                <SettingInput value={form.employerRate} onChange={(value) => updateForm("employerRate", value)} placeholder="Employer rate %" />
-                <div className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#7b6660]">
-                  Total Rate: <span className="font-semibold text-[#251E1F]">{(employeeRate + employerRate).toFixed(2)}%</span>
+                <label className="block text-sm text-[#7b6660]">Effective from</label>
+                <SettingInput value={form.effectiveFrom} onChange={(value) => updateForm("effectiveFrom", value)} placeholder="2016-06-01" />
+                <div className="rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-sm text-[#251E1F]">
+                  Fixed amount by monthly total-wage band
                 </div>
+                <p className="text-xs text-[#7b6660]">MBMF is entirely deducted from the employee. There is no employer contribution.</p>
               </div>
             </section>
 
             <section className="app-panel rounded-2xl p-5">
-              <h4 className="font-semibold text-[#251E1F]">3. Wage Ceiling</h4>
-              <div className="mt-4 space-y-3">
-                <select
-                  value="Monthly Wage Ceiling"
-                  className="w-full rounded-lg border border-[#f0d2ca] bg-[#ffffff] px-3 py-2 text-sm text-[#251E1F] outline-none"
-                  disabled
-                >
-                  <option value="Monthly Wage Ceiling">Monthly Wage Ceiling</option>
-                </select>
-                <SettingInput value={form.monthlyWageCeiling} onChange={(value) => updateForm("monthlyWageCeiling", value)} placeholder="Monthly wage ceiling" />
+              <h4 className="font-semibold text-[#251E1F]">3. Official wage bands</h4>
+              <div className="mt-4 max-h-52 space-y-2 overflow-y-auto pr-1 text-sm">
+                {form.bands.map(([maximumWage, amount], index) => (
+                  <div key={index} className="grid grid-cols-[1fr_0.8fr_auto] items-center gap-2 rounded-lg border border-[#f0d2ca] bg-white/80 p-2">
+                    <input type="number" min="0" step="1" value={maximumWage ?? ""} disabled={index === form.bands.length - 1} onChange={(event) => updateBand(index, "maximum", event.target.value)} placeholder="No upper limit" aria-label={`Band ${index + 1} maximum wage`} className="min-w-0 rounded-md border border-[#f0d2ca] px-2 py-1.5 disabled:bg-[#f8f2f0]" />
+                    <input type="number" min="0" step="0.01" value={amount} onChange={(event) => updateBand(index, "amount", event.target.value)} aria-label={`Band ${index + 1} contribution`} className="min-w-0 rounded-md border border-[#f0d2ca] px-2 py-1.5" />
+                    <button type="button" disabled={form.bands.length <= 2} onClick={() => setForm((current) => ({ ...current, bands: current.bands.filter((_, bandIndex) => bandIndex !== index) }))} className="rounded-md px-2 py-1 text-[#b64646] disabled:opacity-30" aria-label={`Remove band ${index + 1}`}>×</button>
+                  </div>
+                ))}
               </div>
-              <p className="mt-4 rounded-xl border border-[#D97706]/25 bg-[#D97706]/10 p-3 text-sm text-[#9A6412]">
-                If gross salary is above the ceiling, MBMF uses the ceiling amount only.
-              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={() => setForm((current) => ({ ...current, bands: [...current.bands.slice(0, -1), [Number(current.bands.at(-2)?.[0] || 0) + 1000, 0], current.bands.at(-1)] }))} className="rounded-lg border border-[#2D7C83]/25 px-3 py-1.5 text-xs font-semibold text-[#2D7C83]">Add band</button>
+                <button type="button" onClick={() => setForm((current) => ({ ...current, bands: mbmfDefaultSettings.bands }))} className="rounded-lg border border-[#f0d2ca] px-3 py-1.5 text-xs font-semibold text-[#7b6660]">Restore official defaults</button>
+              </div>
+              <p className="mt-3 text-xs text-[#7b6660]">Left: upper monthly wage limit. Right: employee contribution. The final row is always open-ended.</p>
             </section>
           </div>
 
@@ -2640,7 +2706,6 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
             <section className="app-panel rounded-2xl p-5">
               <h4 className="font-semibold text-[#251E1F]">4. Map GL Accounts</h4>
               <div className="mt-4 grid gap-3">
-                <SettingInput value={form.employerExpenseAccount} onChange={(value) => updateForm("employerExpenseAccount", value)} />
                 <SettingInput value={form.employeePayableAccount} onChange={(value) => updateForm("employeePayableAccount", value)} />
                 <SettingInput value={form.clearingAccount} onChange={(value) => updateForm("clearingAccount", value)} />
                 <SettingInput value={form.paymentBankAccount} onChange={(value) => updateForm("paymentBankAccount", value)} />
@@ -2652,11 +2717,16 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
               <div className="mt-4 rounded-xl border border-[#2f8758]/25 bg-[#2f8758]/10 p-4 text-sm text-[#2D7C83]">
                 Saved MBMF settings are applied to eligible Muslim employees only.
               </div>
+              <label className="mt-4 block text-xs font-semibold uppercase text-[#7b6660]">Government source URL</label>
+              <input value={form.sourceUrl} onChange={(event) => updateForm("sourceUrl", event.target.value)} className="mt-1 w-full rounded-lg border border-[#f0d2ca] px-3 py-2 text-sm" placeholder="https://..." />
+              <label className="mt-3 block text-xs font-semibold uppercase text-[#7b6660]">Change reason</label>
+              <textarea value={form.changeReason} onChange={(event) => updateForm("changeReason", event.target.value)} className="mt-1 min-h-20 w-full rounded-lg border border-[#f0d2ca] px-3 py-2 text-sm" placeholder="Example: Government rates announced for 1 January 2027" />
+              {validationErrors.length ? <ul className="mt-3 space-y-1 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">{validationErrors.map((error) => <li key={error}>• {error}</li>)}</ul> : null}
               <button
                 type="button"
                 className="mt-5 rounded-xl border border-[#F38978]/25 bg-[#F38978]/10 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#F38978]/20 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={saveMbmfSettings}
-                disabled={isSaving}
+                disabled={isSaving || validationErrors.length > 0}
               >
                 {isSaving ? "Saving..." : "Save MBMF Settings"}
               </button>
@@ -2672,10 +2742,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
                 <thead className="text-xs uppercase tracking-wide text-[#F38978]/80">
                   <tr>
                     <th className="border-b border-[#f0d2ca] px-4 py-3">Gross Salary</th>
-                    <th className="border-b border-[#f0d2ca] px-4 py-3">Wage Ceiling</th>
-                    <th className="border-b border-[#f0d2ca] px-4 py-3">Salary Considered</th>
                     <th className="border-b border-[#f0d2ca] px-4 py-3">Employee</th>
-                    <th className="border-b border-[#f0d2ca] px-4 py-3">Employer</th>
                     <th className="border-b border-[#f0d2ca] px-4 py-3">Total</th>
                   </tr>
                 </thead>
@@ -2683,10 +2750,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
                   {examples.map((example) => (
                     <tr key={example.grossSalary}>
                       <td className="border-b border-[#f0d2ca] px-4 py-3 text-[#251E1F]">{formatMoney(example.grossSalary)}</td>
-                      <td className="border-b border-[#f0d2ca] px-4 py-3 text-[#7b6660]">{formatMoney(ceiling)}</td>
-                      <td className="border-b border-[#f0d2ca] px-4 py-3 text-[#7b6660]">{formatMoney(example.salaryConsidered)}</td>
                       <td className="border-b border-[#f0d2ca] px-4 py-3 text-[#7b6660]">{formatMoney(example.employeeAmount)}</td>
-                      <td className="border-b border-[#f0d2ca] px-4 py-3 text-[#7b6660]">{formatMoney(example.employerAmount)}</td>
                       <td className="border-b border-[#f0d2ca] px-4 py-3 font-semibold text-[#251E1F]">{formatMoney(example.total)}</td>
                     </tr>
                   ))}
@@ -2743,7 +2807,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
               <li>1. Payroll reads staff religion from the employee database.</li>
               <li>2. MBMF is calculated only when religion is Muslim.</li>
               <li>3. Non-Muslim employees are skipped automatically.</li>
-              <li>4. Employee and employer amounts are shown separately.</li>
+              <li>4. The fixed contribution is deducted from the employee only.</li>
               <li>5. GL accounts are used for journal posting and payment.</li>
             </ol>
           </section>
@@ -3953,12 +4017,19 @@ function getReportLines(report, data = {}, periodMode = "range", fromDate = "", 
 
 function ReportPreviewModal({ data, report, onClose }) {
   const [pdfUrl, setPdfUrl] = useState("");
+  const [exportState, setExportState] = useState(null);
   const today = new Date().toISOString().slice(0, 10);
   const yearStart = `${today.slice(0, 4)}-01-01`;
   const [periodMode, setPeriodMode] = useState("range");
   const [fromDate, setFromDate] = useState(yearStart);
   const [toDate, setToDate] = useState(today);
   const supportsPeriod = ["Payroll Run Status & Exception Report", "Audit Activity Report"].includes(report);
+  const supportsExcel = ["User Access & Account Status Report", "Statutory Configuration Report", "Payroll Run Status & Exception Report", "Audit Activity Report", "Effective Payroll Rules Report"].includes(report);
+  const downloadExcel = async () => {
+    setExportState({ open: true, status: "running", title: "Generate Excel report", phase: "Preparing filtered workbook…" });
+    try { await exportAdminPayrollReport(report, supportsPeriod ? { from: fromDate, to: periodMode === "single" ? fromDate : toDate } : {}); setExportState({ open: true, status: "completed", title: "Excel report downloaded", phase: "The workbook was generated successfully." }); }
+    catch (error) { setExportState({ open: true, status: "failed", title: "Generate Excel report", phase: "Export failed", detail: error.message }); }
+  };
 
   useEffect(() => {
     const periodLabel = supportsPeriod ? getPeriodLabel(periodMode, fromDate, toDate) : `As of ${formatDate(today)}`;
@@ -3983,11 +4054,13 @@ function ReportPreviewModal({ data, report, onClose }) {
             <a
               href={pdfUrl}
               download={`${report.toLowerCase().replaceAll(" ", "-")}.pdf`}
+              onClick={() => setExportState({ open: true, status: "completed", title: "PDF report downloaded", phase: "The current report preview was saved." })}
               className="primary-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold"
             >
               <FileText size={17} />
               Download PDF
             </a>
+            {supportsExcel ? <button type="button" onClick={downloadExcel} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700"><FileBarChart size={17}/>Download Excel</button> : null}
             <button
               type="button"
               className="rounded-xl border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
@@ -4038,6 +4111,7 @@ function ReportPreviewModal({ data, report, onClose }) {
             <iframe title={`${report} preview`} src={pdfUrl} className="h-[68vh] w-full" />
           ) : null}
         </div>
+        <AdminActionProgress state={exportState} onClose={() => setExportState(null)}/>
       </section>
     </div>
   );
@@ -4286,9 +4360,11 @@ export default function AdminPayrollPage() {
       }));
       setErrorMessage("");
       setSuccessMessage(`${selectedLayout?.layout_name || "Payslip layout"} is now the default layout.`);
+      return true;
     } catch (error) {
       setSuccessMessage("");
       setErrorMessage(error.message);
+      throw error;
     }
   };
 

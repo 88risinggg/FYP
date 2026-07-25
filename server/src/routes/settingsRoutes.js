@@ -78,5 +78,6 @@ router.post("/delete-account", settingsController.deleteAccount);
 router.post("/reset-settings", settingsController.resetSettings);
 router.get("/deletion-requests", requireRole("Admin"), settingsController.getDeletionRequests);
 router.post("/deletion-requests/:id/review", requireRole("Admin"), settingsController.reviewDeletionRequest);
+router.delete("/managed-users/:userId", requireRole("Admin"), settingsController.deleteManagedUser);
 
 module.exports = router;

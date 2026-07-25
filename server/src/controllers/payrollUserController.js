@@ -5,8 +5,11 @@ const ExcelJS = require("exceljs");
 const {
   ROLE_NAMES,
   createHireWithAccount,
+  getActivationSetupContext,
   listManagedUsers,
+  logSetupEmailAudit,
   reviewActivationRequest,
+  saveSetupEmailResult,
   updatePendingRequest
 } = require("../models/payrollUserModel");
 const { notifyRoles, notifyUser } = require("../services/payrollNotificationService");
@@ -85,6 +88,12 @@ function toAdminManagedUser(record) {
     rejection_reason: record.rejection_reason,
     requested_at: record.requested_at,
     reviewed_at: record.reviewed_at
+    ,setup_email_status: record.setup_email_status,
+    setup_email_recipient: record.setup_email_recipient,
+    setup_email_sent_at: record.setup_email_sent_at,
+    setup_email_error: record.setup_email_error
+    ,deletion_request_status: record.deletion_request_status,
+    deletion_request_id: record.deletion_request_id
   };
 }
 
@@ -236,7 +245,12 @@ async function reviewRequest(req, res) {
       requestId: Number(req.params.requestId), action, reviewerId: req.user.userId, reason
     });
     if (result.notFound) return res.status(404).json({ message: "Activation request not found." });
-    if (result.alreadyReviewed && result.idempotent) return res.json({ approved: result.approved, alreadyReviewed: true });
+    if (result.alreadyReviewed && result.idempotent) {
+      const context = await getActivationSetupContext(Number(req.params.requestId));
+      return res.json({ approved: result.approved, accountStatus: Number(context?.account_status) === 1 ? "Active" : "Inactive", alreadyReviewed: true, setupEmail: context ? {
+        status: context.setup_email_status || "Unknown", recipient: context.setup_email_recipient || context.staff_email || "", sentAt: context.setup_email_sent_at || null, error: context.setup_email_error || null
+      } : null });
+    }
     if (result.alreadyReviewed) return res.status(409).json({ message: `This activation request was already ${result.request.status}. Refresh to view its latest status.` });
     const event = {
       type: "payroll_account_activation_result",
@@ -250,18 +264,9 @@ async function reviewRequest(req, res) {
       entityId: req.params.requestId
     };
     await notifyUser(result.request.requested_by, event);
+    let setupEmail = null;
     if (result.approved) {
-      const setupToken = jwt.sign(
-        { userId: result.request.user_id, purpose: "first_login_password" },
-        process.env.JWT_SECRET,
-        { expiresIn: "24h" }
-      );
-      const setupUrl = `${process.env.CLIENT_URL || "http://localhost:5173"}/login?setup_token=${encodeURIComponent(setupToken)}`;
-      await sendAccountSetupEmail({
-        to: result.request.email,
-        name: result.request.name,
-        setupUrl
-      });
+      setupEmail = await deliverSetupEmail(Number(req.params.requestId));
       await notifyUser(result.request.user_id, {
         ...event,
         title: "Your PayNivo account is active",
@@ -269,10 +274,49 @@ async function reviewRequest(req, res) {
         actionPath: "/login"
       });
     }
-    return res.json({ approved: result.approved });
+    return res.json({ approved: result.approved, accountStatus: result.approved ? "Active" : "Inactive", setupEmail });
   } catch (error) {
     return res.status(500).json({ message: "Unable to review the activation request.", detail: error.message });
   }
 }
 
-module.exports = { createHire, editRequest, getManagedUsers, importHires, reviewRequest, toAdminManagedUser, toHrManagedUser };
+async function deliverSetupEmail(requestId, suppliedContext = null) {
+  const context = suppliedContext || await getActivationSetupContext(requestId);
+  const recipient = String(context?.staff_email || "").trim().toLowerCase();
+  let result;
+  if (!context || context.status !== "approved") {
+    result = { status: "Failed", recipient, sentAt: null, error: "The activation request is not approved." };
+  } else if (Number(context.must_change_password) !== 1) {
+    result = { status: "Not Required", recipient, sentAt: null, error: "The employee already completed account setup." };
+  } else if (!emailPattern.test(recipient)) {
+    result = { status: "Failed", recipient, sentAt: null, error: "HR must provide a valid staff email before the setup link can be sent." };
+  } else {
+    const setupToken = jwt.sign({ userId: context.user_id, purpose: "first_login_password" }, process.env.JWT_SECRET, { expiresIn: "24h" });
+    const setupUrl = `${process.env.CLIENT_URL || "http://localhost:5173"}/login?setup_token=${encodeURIComponent(setupToken)}`;
+    try {
+      const delivery = await sendAccountSetupEmail({ to: recipient, name: context.name || context.user_name, setupUrl });
+      result = { status: "Sent", recipient, sentAt: new Date().toISOString(), error: null, providerMessageId: delivery?.messageId || null };
+    } catch (error) {
+      result = { status: "Failed", recipient, sentAt: null, error: String(error.message || "Email delivery failed").slice(0, 500) };
+    }
+  }
+  await saveSetupEmailResult(requestId, result);
+  await logSetupEmailAudit(requestId, result);
+  return result;
+}
+
+async function resendSetupEmail(req, res) {
+  try {
+    const requestId = Number(req.params.requestId);
+    const context = await getActivationSetupContext(requestId);
+    if (!context) return res.status(404).json({ message: "Activation request not found." });
+    if (context.status !== "approved") return res.status(409).json({ message: "Approve the account before sending its setup link." });
+    const setupEmail = await deliverSetupEmail(requestId, context);
+    const status = setupEmail.status === "Sent" ? 200 : 422;
+    return res.status(status).json({ approved: true, accountStatus: Number(context.account_status) === 1 ? "Active" : "Inactive", setupEmail });
+  } catch (error) {
+    return res.status(500).json({ message: "Unable to resend the account setup link.", detail: error.message });
+  }
+}
+
+module.exports = { createHire, editRequest, getManagedUsers, importHires, resendSetupEmail, reviewRequest, toAdminManagedUser, toHrManagedUser };

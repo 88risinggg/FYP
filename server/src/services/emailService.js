@@ -1,16 +1,22 @@
 const nodemailer = require("nodemailer");
 
 function createTransporter() {
+  const host = String(process.env.SMTP_HOST || "").trim();
+  const user = String(process.env.SMTP_USER || "").trim();
+  const pass = String(process.env.SMTP_PASS || "").trim();
+
+  if (!host || !user || !pass) {
+    const error = new Error("Email delivery is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM on the server, then retry the setup email.");
+    error.code = "SMTP_NOT_CONFIGURED";
+    throw error;
+  }
+
+  const port = Number(process.env.SMTP_PORT || 587);
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: Number(process.env.SMTP_PORT) === 465,
-    auth: process.env.SMTP_USER && process.env.SMTP_PASS
-      ? {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS
-        }
-      : undefined
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass }
   });
 }
 

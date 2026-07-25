@@ -524,6 +524,19 @@ async function reviewDeletionRequest(req, res) {
   }
 }
 
+async function deleteManagedUser(req, res) {
+  try {
+    const result = await settingsModel.deleteUserAccountByAdmin(Number(req.params.userId), req.user.userId, String(req.body.note || "").trim() || "Deleted from Payroll User Management");
+    if (result.notFound) return res.status(404).json({ message: "User account not found" });
+    if (result.selfDelete) return res.status(409).json({ message: "You cannot delete your own Admin account" });
+    if (result.lastAdmin) return res.status(409).json({ message: "The final active Admin account cannot be deleted" });
+    await settingsModel.createSettingsAuditLog(req.user.userId, { action: `Deleted user account ${result.user.email}`, module: "user_management", ip_address: req.ip });
+    return res.json({ message: "User account deleted. The staff record remains available to HR.", deletedUser: result.user });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to delete user account", detail: error.message });
+  }
+}
+
 // ─── OTP (Phone/Email Verification) ─────────────────────────────────────────
 
 async function sendOtp(req, res) {
@@ -604,5 +617,6 @@ module.exports = {
   requestAccountData,
   resetSettings,
   getDeletionRequests,
-  reviewDeletionRequest
+  reviewDeletionRequest,
+  deleteManagedUser
 };

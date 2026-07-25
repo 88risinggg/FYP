@@ -22,3 +22,5 @@ export const updateActivationRequest = (requestId, payload) => apiRequest(`/api/
 export const reviewActivationRequest = (requestId, action, reason = "") => apiRequest(`/api/payroll/users/activation-requests/${requestId}/${action}`, {
   method: "POST", body: JSON.stringify({ reason })
 });
+export const resendAccountSetup = (requestId) => apiRequest(`/api/payroll/users/activation-requests/${requestId}/resend-setup`, { method: "POST" });
+export const deleteManagedPayrollUser = (userId, note = "") => apiRequest(`/api/settings/managed-users/${userId}`, { method: "DELETE", body: JSON.stringify({ note }) });

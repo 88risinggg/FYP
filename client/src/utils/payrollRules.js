@@ -59,12 +59,12 @@ export const employerContributionRows = [
 
 export const mbmfDefaultSettings = {
   enabled: "Enabled",
-  effectiveFrom: "2026-01-01",
-  rateType: "CPF Board Wage Band",
+  effectiveFrom: "2016-06-01",
+  rateType: "Fixed amount by monthly wage band",
   employeeRate: "0",
   employerRate: "0",
   monthlyWageCeiling: "999999.00",
-  employerExpenseAccount: "6810 - MBMF Employer Expense",
+  employerExpenseAccount: "Not applicable (employee deduction only)",
   employeePayableAccount: "2110 - MBMF Payable (Employee)",
   clearingAccount: "2140 - MBMF Payable Clearing",
   paymentBankAccount: "1210 - Bank - MBMF",
