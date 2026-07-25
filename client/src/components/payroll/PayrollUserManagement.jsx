@@ -1,15 +1,16 @@
 import {
-  BriefcaseBusiness, CheckCircle2, ChevronLeft, ChevronRight, Clock3, KeyRound,
-  Loader2, Pencil, Plus, RefreshCw, Search, ShieldCheck, UserCheck, Users, UserX, X
+  BriefcaseBusiness, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Download, Eye, FileSpreadsheet, KeyRound,
+  Loader2, Mail, Pencil, Plus, RefreshCw, Search, ShieldCheck, Upload, UserCheck, Users, UserX, WalletCards, X
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { createPayrollHire, getPayrollUsers, reviewActivationRequest, updateActivationRequest } from "../../services/payrollUserService.js";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPayrollHire, exportStaffWorkbook, getPayrollUsers, importPayrollHires, reviewActivationRequest, updateActivationRequest } from "../../services/payrollUserService.js";
 import { resetUserPassword, updateUserRole, updateUserStatus } from "../../services/adminPayrollService.js";
 import { apiRequest } from "../../services/apiClient.js";
+import { downloadBlob } from "../../services/apiClient.js";
 
 const emptyHire = {
   name: "", email: "", employeeCode: "", phone: "", departmentName: "",
-  hireDate: "", baseSalary: "", bank: "", accountNo: "", roleName: "Staff"
+  hireDate: "", dateOfBirth: "", race: "", religion: "", baseSalary: "", bank: "", accountNo: "", roleName: "Staff"
 };
 
 function badge(value) {
@@ -22,6 +23,13 @@ function badge(value) {
 
 function StatusBadge({ children }) {
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${badge(children)}`}>{children}</span>;
+}
+
+function DetailSection({ title, icon: Icon, items }) {
+  return <section className="rounded-2xl border border-[#f0d2ca] bg-white p-5">
+    <h4 className="flex items-center gap-2 text-sm font-semibold text-[#251E1F]"><span className="grid h-8 w-8 place-items-center rounded-lg bg-[#fff0ec] text-[#d66f5e]"><Icon size={16}/></span>{title}</h4>
+    <dl className="mt-4 grid gap-4 sm:grid-cols-2">{items.map(([label, value]) => <div key={label}><dt className="text-xs font-semibold uppercase tracking-wide text-[#9a7f78]">{label}</dt><dd className="mt-1 break-words text-sm font-medium text-[#251E1F]">{value}</dd></div>)}</dl>
+  </section>;
 }
 
 function initials(record) {
@@ -103,6 +111,14 @@ function AdminUserDirectory({ data, loading, busy, error, success, temporaryPass
     const current = users.find((record) => record.user_id === selected.user_id && record.employee_id === selected.employee_id);
     if (current) setSelected(current);
   }, [users]);
+  useEffect(() => {
+    if (!selected) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event) => { if (event.key === "Escape" && !busy) setSelected(null); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", closeOnEscape); };
+  }, [selected, busy]);
 
   const summary = [
     { label: "Total Users", value: users.filter((record) => record.user_id).length, note: "Registered PayNivo accounts", icon: Users, cardClass: "admin-user-management__metric--rose", iconClass: "admin-user-management__metric-icon--rose" },
@@ -156,7 +172,7 @@ function AdminUserDirectory({ data, loading, busy, error, success, temporaryPass
       <div className="admin-user-management__identity"><span className={`admin-user-management__avatar ${getRoleVisuals(selected).avatar}`}>{initials(selected)}</span><div><strong>{selected.staff_name || selected.name}</strong><p>{selected.staff_email || selected.email}</p><small>{selected.employee_code || "No employee code"} · {selected.department_name || "No department"}</small></div></div>
       {selected.requested_by_name ? <p className="admin-user-management__request-note">Requested by {selected.requested_by_name}{selected.rejection_reason ? ` · Previous rejection: ${selected.rejection_reason}` : ""}</p> : null}
       {selected.account_locked_at ? <p className="admin-user-management__request-note admin-user-management__request-note--locked"><strong>Security lock:</strong> {selected.account_lock_reason || "Too many failed password attempts"}<br/>Locked {new Date(selected.account_locked_at).toLocaleString("en-SG")} after {selected.failed_login_attempts || 5} failed attempts.</p> : null}
-      {selected.activation_status === "Pending" ? <div className="admin-user-management__review-actions"><button disabled={busy} onClick={() => review(selected, "approve")} className="admin-user-management__approve"><CheckCircle2 size={16}/>Approve activation</button><button disabled={busy} onClick={() => review(selected, "reject")} className="admin-user-management__reject"><X size={16}/>Reject request</button></div> : null}
+      {selected.activation_status === "Pending" ? <div className="admin-user-management__review-actions"><button disabled={busy} onClick={async () => { if (await review(selected, "approve")) setSelected(null); }} className="admin-user-management__approve"><CheckCircle2 size={16}/>{busy ? "Approving..." : "Approve activation"}</button><button disabled={busy} onClick={async () => { if (await review(selected, "reject")) setSelected(null); }} className="admin-user-management__reject"><X size={16}/>{busy ? "Saving..." : "Reject request"}</button></div> : null}
       {selected.user_id && selected.activation_status === "Approved" ? <div className="admin-user-management__account-controls">
         <label><span>PayNivo role</span><select value={selected.role_name || "Staff"} onChange={(event) => accountAction(selected, "role", roles.indexOf(event.target.value) + 1)}>{roles.map((item) => <option key={item}>{item}</option>)}</select></label>
         <div><span>Account access</span><button onClick={() => accountAction(selected, "status", selected.account_locked_at ? 1 : Number(selected.account_status) === 1 ? 0 : 1)}>{selected.account_locked_at ? "Reactivate account" : Number(selected.account_status) === 1 ? "Disable account" : "Enable account"}</button></div>
@@ -168,17 +184,21 @@ function AdminUserDirectory({ data, loading, busy, error, success, temporaryPass
   </section>;
 }
 
-export default function PayrollUserManagement({ role }) {
+export default function PayrollUserManagement({ role, defaultShowHire = false }) {
   const [data, setData] = useState({ users: [], roles: [] });
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [showHire, setShowHire] = useState(false);
+  const [showHire, setShowHire] = useState(defaultShowHire);
   const [hire, setHire] = useState(emptyHire);
   const [editing, setEditing] = useState(null);
+  const [selectedStaff, setSelectedStaff] = useState(null);
   const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [importFile, setImportFile] = useState(null);
+  const [importPreview, setImportPreview] = useState(null);
+  const importInputRef = useRef(null);
 
   const load = async () => {
     setLoading(true);
@@ -196,10 +216,17 @@ export default function PayrollUserManagement({ role }) {
       record.activation_status].some((item) => String(item || "").toLowerCase().includes(value)));
   }, [data.users, query]);
 
+  const staffSummary = useMemo(() => ({
+    total: (data.users || []).length,
+    active: (data.users || []).filter((record) => record.user_id && Number(record.account_status) === 1).length,
+    pending: (data.users || []).filter((record) => record.activation_status === "Pending").length,
+    unlinked: (data.users || []).filter((record) => !record.user_id).length
+  }), [data.users]);
+
   const submitHire = async (event) => {
     event.preventDefault(); setBusy("hire"); setError(""); setTemporaryPassword("");
     try {
-      const payload = { staff: { ...hire, employeeId: editing?.type === "link" ? editing.employeeId : undefined }, account: { name: hire.name, email: hire.email, roleName: hire.roleName } };
+      const payload = { staff: { ...hire, employeeId: editing?.type === "link" ? editing.employeeId : undefined }, account: { name: hire.name, email: hire.email, roleName: role === "HR" ? "Staff" : hire.roleName } };
       const result = editing?.type === "request"
         ? await updateActivationRequest(editing.requestId, payload)
         : editing?.type === "staff"
@@ -229,6 +256,8 @@ export default function PayrollUserManagement({ role }) {
       name: record.staff_name || record.name || "", email: record.staff_email || record.email || "",
       employeeCode: record.employee_code || "", phone: record.phone || "",
       departmentName: record.department_name || "", hireDate: date,
+      dateOfBirth: record.date_of_birth ? String(record.date_of_birth).slice(0, 10) : "",
+      race: record.race || "", religion: record.religion || "",
       baseSalary: record.base_salary ?? "", bank: record.bank || "", accountNo: record.account_no || "",
       roleName: record.requested_role || record.role_name || "Staff"
     });
@@ -237,12 +266,39 @@ export default function PayrollUserManagement({ role }) {
 
   const closeEditor = () => { setShowHire(false); setEditing(null); setHire(emptyHire); };
 
+  const previewImport = async (file) => {
+    if (!file) return;
+    if (!/\.xlsx$/i.test(file.name)) { setError("Import requires an .xlsx Excel workbook."); return; }
+    setBusy("import-preview"); setError("");
+    try { setImportFile(file); setImportPreview(await importPayrollHires(file, "preview")); }
+    catch (importError) { setError(importError.message); setImportFile(null); }
+    finally { setBusy(""); if (importInputRef.current) importInputRef.current.value = ""; }
+  };
+
+  const commitImport = async () => {
+    if (!importFile) return;
+    setBusy("import-commit");
+    try {
+      const result = await importPayrollHires(importFile, "commit");
+      setSuccess(`Imported ${result.created} staff record(s). ${result.skipped || 0} skipped and ${result.failed || 0} failed.`);
+      setImportFile(null); setImportPreview(null); await load();
+    } catch (importError) { setError(importError.message); }
+    finally { setBusy(""); }
+  };
+
+  const exportStaff = async () => {
+    setBusy("export"); setError("");
+    try { downloadBlob(await exportStaffWorkbook(), `staff_records_${new Date().toISOString().slice(0, 10)}.xlsx`); }
+    catch (exportError) { setError(exportError.message); }
+    finally { setBusy(""); }
+  };
+
   const review = async (record, action) => {
     const reason = action === "reject" ? window.prompt("Enter the rejection reason:") : "";
-    if (action === "reject" && !reason) return;
+    if (action === "reject" && !reason) return false;
     setBusy(`review-${record.request_id}`);
-    try { await reviewActivationRequest(record.request_id, action, reason); setSuccess(`Account ${action === "approve" ? "approved" : "rejected"}.`); await load(); }
-    catch (reviewError) { setError(reviewError.message); }
+    try { await reviewActivationRequest(record.request_id, action, reason); setSuccess(`Account ${action === "approve" ? "approved" : "rejected"}.`); setError(""); await load(); return true; }
+    catch (reviewError) { setError(reviewError.message); await load(); return false; }
     finally { setBusy(""); }
   };
 
@@ -264,29 +320,36 @@ export default function PayrollUserManagement({ role }) {
     temporaryPassword={temporaryPassword} load={load} review={review} accountAction={accountAction}
   />;
 
-  return <section className="space-y-6">
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div><h2 className="text-2xl font-semibold text-[#251E1F]">User Management</h2>
-        <p className="mt-2 text-sm text-[#7b6660]">Employee records, PayNivo access, staff linkage and account activation in one directory.</p></div>
-      <div className="flex gap-2">
+  return <section className="space-y-5">
+    <header className="flex flex-col gap-4 rounded-2xl border border-[#f0d2ca] bg-gradient-to-r from-white to-[#fff8f5] p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div><h2 className="text-2xl font-semibold text-[#251E1F]">Staff Management</h2>
+        <p className="mt-2 text-sm text-[#7b6660]">Manage staff records, payroll details, PayNivo access, and Admin activation from one directory.</p></div>
+      <div className="flex flex-wrap gap-2">
+        <input ref={importInputRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={(event) => previewImport(event.target.files?.[0])}/>
+        <button type="button" disabled={Boolean(busy)} onClick={() => importInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white px-4 py-2.5 text-sm font-semibold"><Upload size={16}/>Import Excel</button>
+        <button type="button" disabled={Boolean(busy)} onClick={exportStaff} className="inline-flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white px-4 py-2.5 text-sm font-semibold"><Download size={16}/>{busy === "export" ? "Exporting..." : "Export Excel"}</button>
         <button type="button" onClick={load} className="inline-flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white px-4 py-2.5 text-sm font-semibold"><RefreshCw size={16}/>Refresh</button>
-        {role === "HR" ? <button type="button" onClick={() => setShowHire(true)} className="primary-button inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold"><Plus size={16}/>Add new hire</button> : null}
+        {role === "HR" ? <button type="button" onClick={() => setShowHire(true)} className="primary-button inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold"><Plus size={16}/>Hire staff &amp; create user</button> : null}
       </div>
     </header>
     {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
     {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{success}</div> : null}
     {temporaryPassword ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><strong>Temporary password (shown once):</strong> <code className="ml-2 select-all">{temporaryPassword}</code></div> : null}
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {[["Total staff", staffSummary.total, Users, "bg-rose-50 text-[#d66f5e]"], ["Active accounts", staffSummary.active, UserCheck, "bg-emerald-50 text-emerald-700"], ["Awaiting Admin", staffSummary.pending, Clock3, "bg-amber-50 text-amber-700"], ["Accounts not linked", staffSummary.unlinked, UserX, "bg-slate-100 text-slate-600"]].map(([label, value, Icon, tone]) => <article key={label} className="app-panel flex items-center gap-3 rounded-2xl p-4"><span className={`grid h-11 w-11 place-items-center rounded-xl ${tone}`}><Icon size={20}/></span><div><p className="text-xs font-semibold uppercase tracking-wide text-[#7b6660]">{label}</p><strong className="mt-1 block text-2xl text-[#251E1F]">{value}</strong></div></article>)}
+    </div>
     <div className="app-panel overflow-hidden rounded-2xl">
-      <div className="border-b border-[#f0d2ca] p-5"><label className="flex max-w-xl items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5"><Search size={16} className="text-[#F38978]"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employee, email, department, role or status" className="w-full bg-transparent text-sm outline-none"/></label></div>
+      <div className="flex flex-col gap-2 border-b border-[#f0d2ca] p-5 sm:flex-row sm:items-center sm:justify-between"><label className="flex w-full max-w-xl items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5 shadow-sm"><Search size={16} className="text-[#F38978]"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employee, email, department, role or status" className="w-full bg-transparent text-sm outline-none"/></label><p className="text-xs text-[#7b6660]">Select a staff member to view their complete record.</p></div>
       {loading ? <div className="flex items-center justify-center gap-2 p-12 text-sm text-[#7b6660]"><Loader2 className="animate-spin" size={18}/>Loading users...</div> :
       <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-[#fff8f5] text-xs uppercase tracking-wide text-[#7b6660]"><tr>
         <th className="px-4 py-3">Employee</th><th className="px-4 py-3">Employment</th><th className="px-4 py-3">Account access</th><th className="px-4 py-3">Activation</th><th className="px-4 py-3">Actions</th>
-      </tr></thead><tbody className="divide-y divide-[#f0d2ca]">{filtered.map((record, index) => <tr key={record.user_id || `staff-${record.employee_id}-${index}`} className="align-top hover:bg-[#fff8f5]">
+      </tr></thead><tbody className="divide-y divide-[#f0d2ca]">{filtered.map((record, index) => <tr key={record.user_id || `staff-${record.employee_id}-${index}`} tabIndex={0} role="button" onClick={() => setSelectedStaff(record)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedStaff(record); } }} className="cursor-pointer align-top transition hover:bg-[#fff8f5] focus:bg-[#fff8f5] focus:outline-none">
         <td className="px-4 py-4"><p className="font-semibold text-[#251E1F]">{record.staff_name || record.name}</p><p className="mt-1 text-xs text-[#7b6660]">{record.employee_code || "No employee code"} · {record.staff_email || record.email}</p></td>
         <td className="px-4 py-4"><p>{record.department_name || "No department"}</p><p className="mt-1 text-xs text-[#7b6660]">Hire: {record.hire_date ? new Date(record.hire_date).toLocaleDateString("en-SG") : "Not set"} · Salary: ${Number(record.base_salary || 0).toLocaleString()}</p></td>
         <td className="px-4 py-4"><p className="font-semibold">{record.role_name || "No account"}</p><div className="mt-2"><StatusBadge>{record.user_id ? (Number(record.account_status) === 1 ? "Active" : "Disabled") : "Unlinked"}</StatusBadge></div></td>
         <td className="px-4 py-4"><StatusBadge>{record.activation_status}</StatusBadge>{record.requested_by_name ? <p className="mt-2 text-xs text-[#7b6660]">Requested by {record.requested_by_name}</p> : null}{record.rejection_reason ? <p className="mt-1 max-w-xs text-xs text-red-700">{record.rejection_reason}</p> : null}</td>
-        <td className="px-4 py-4"><div className="flex min-w-56 flex-wrap gap-2">
+        <td className="px-4 py-4" onClick={(event) => event.stopPropagation()}><div className="flex min-w-56 flex-wrap gap-2">
+          <button type="button" onClick={() => setSelectedStaff(record)} className="inline-flex items-center gap-1 rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-xs font-semibold text-[#7b6660]"><Eye size={14}/>View details</button>
           {role === "Admin" && record.activation_status === "Pending" ? <><button disabled={busy} onClick={() => review(record,"approve")} className="rounded-lg bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-700">Approve</button><button disabled={busy} onClick={() => review(record,"reject")} className="rounded-lg bg-red-100 px-3 py-2 text-xs font-semibold text-red-700">Reject</button></> : null}
           {role === "Admin" && record.employee_id ? <button onClick={() => openEditor(record,"staff")} className="rounded-lg border border-[#f0d2ca] p-2" title="Edit staff details"><Pencil size={15}/></button> : null}
           {role === "Admin" && record.user_id && record.activation_status === "Approved" ? <><select value={record.role_name || "Staff"} onChange={(event) => accountAction(record,"role",(data.roles.indexOf(event.target.value)+1))} className="rounded-lg border border-[#f0d2ca] bg-white px-2 py-2 text-xs">{data.roles.map((item)=><option key={item}>{item}</option>)}</select><button onClick={() => accountAction(record,"status",Number(record.account_status)===1?0:1)} className="rounded-lg border border-[#f0d2ca] px-3 py-2 text-xs font-semibold">{Number(record.account_status)===1?"Disable":"Enable"}</button><button onClick={() => accountAction(record,"password")} title="Reset temporary password" className="rounded-lg border border-[#f0d2ca] p-2"><KeyRound size={15}/></button></> : null}
@@ -296,13 +359,34 @@ export default function PayrollUserManagement({ role }) {
       </tr>)}</tbody></table>{!filtered.length ? <p className="p-10 text-center text-sm text-[#7b6660]">No records match your search.</p> : null}</div>}
     </div>
 
+    {importPreview ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#251E1F]/45 p-4" onMouseDown={() => { if (!busy) { setImportPreview(null); setImportFile(null); } }}><section role="dialog" aria-modal="true" aria-labelledby="import-staff-title" onMouseDown={(event) => event.stopPropagation()} className="app-panel max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl">
+      <header className="flex items-start justify-between border-b border-[#f0d2ca] p-6"><div><p className="text-xs font-semibold uppercase tracking-wider text-[#F38978]">Excel import preview</p><h3 id="import-staff-title" className="mt-1 text-xl font-semibold text-[#251E1F]">Review staff records before import</h3><p className="mt-1 text-sm text-[#7b6660]">Valid rows create inactive Staff accounts and are submitted to Admin for activation.</p></div><button type="button" disabled={Boolean(busy)} onClick={() => { setImportPreview(null); setImportFile(null); }}><X size={20}/></button></header>
+      <div className="grid gap-3 border-b border-[#f0d2ca] bg-[#fff8f5] p-5 sm:grid-cols-3"><div className="rounded-xl bg-white p-4"><span className="text-xs text-[#7b6660]">Rows found</span><strong className="block text-2xl">{importPreview.total}</strong></div><div className="rounded-xl bg-emerald-50 p-4 text-emerald-700"><span className="text-xs">Ready to import</span><strong className="block text-2xl">{importPreview.valid}</strong></div><div className="rounded-xl bg-red-50 p-4 text-red-700"><span className="text-xs">Needs correction</span><strong className="block text-2xl">{importPreview.invalid}</strong></div></div>
+      <div className="max-h-[45vh] overflow-auto"><table className="min-w-full text-left text-sm"><thead className="sticky top-0 bg-white text-xs uppercase text-[#7b6660]"><tr><th className="px-4 py-3">Excel row</th><th className="px-4 py-3">Employee</th><th className="px-4 py-3">Department</th><th className="px-4 py-3">Validation</th></tr></thead><tbody className="divide-y divide-[#f0d2ca]">{importPreview.rows.map((row) => <tr key={row.rowNumber}><td className="px-4 py-3">{row.rowNumber}</td><td className="px-4 py-3"><strong>{row.name || "Missing name"}</strong><small className="block text-[#7b6660]">{row.email || "Missing email"}</small></td><td className="px-4 py-3">{row.department || "Not provided"}</td><td className="px-4 py-3">{row.valid ? <span className="text-emerald-700">Ready</span> : <span className="text-red-700">{row.error}</span>}</td></tr>)}</tbody></table></div>
+      <div className="border-t border-[#f0d2ca] bg-amber-50 px-6 py-3 text-xs text-amber-800"><strong>Required headings:</strong> Name, Email, Department, Hire Date, Date of Birth, Race, Religion, Base Salary, Bank, and Account Number. Employee Code and Phone are optional.</div>
+      <footer className="flex justify-end gap-3 p-5"><button type="button" disabled={Boolean(busy)} onClick={() => { setImportPreview(null); setImportFile(null); }} className="rounded-xl border border-[#f0d2ca] px-4 py-2.5 text-sm font-semibold">Cancel</button><button type="button" disabled={!importPreview.valid || Boolean(busy)} onClick={commitImport} className="primary-button inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold">{busy === "import-commit" ? <Loader2 size={16} className="animate-spin"/> : <FileSpreadsheet size={16}/>}Import {importPreview.valid} valid record(s)</button></footer>
+    </section></div> : null}
+
+    {selectedStaff ? <div className="fixed inset-0 z-50 flex justify-end bg-[#251E1F]/40" onMouseDown={() => setSelectedStaff(null)}><aside role="dialog" aria-modal="true" aria-labelledby="staff-details-title" onMouseDown={(event) => event.stopPropagation()} className="h-full w-full max-w-xl overflow-y-auto bg-[#fffdfc] shadow-2xl">
+      <header className="sticky top-0 z-10 flex items-start justify-between border-b border-[#f0d2ca] bg-white/95 p-6 backdrop-blur"><div><p className="text-xs font-semibold uppercase tracking-wider text-[#F38978]">Staff record</p><h3 id="staff-details-title" className="mt-1 text-2xl font-semibold text-[#251E1F]">{selectedStaff.staff_name || selectedStaff.name}</h3><p className="mt-1 text-sm text-[#7b6660]">{selectedStaff.employee_code || "No employee code"}</p></div><button type="button" onClick={() => setSelectedStaff(null)} className="rounded-xl border border-[#f0d2ca] p-2" aria-label="Close staff details"><X size={19}/></button></header>
+      <div className="space-y-5 p-6">
+        <section className="flex items-center gap-4 rounded-2xl border border-[#f0d2ca] bg-gradient-to-r from-[#fff8f5] to-white p-5"><span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-[#F38978] text-lg font-bold text-white">{initials(selectedStaff)}</span><div><h4 className="text-lg font-semibold text-[#251E1F]">{selectedStaff.staff_name || selectedStaff.name}</h4><p className="text-sm text-[#7b6660]">{selectedStaff.department_name || "No department"}</p><div className="mt-2 flex flex-wrap gap-2"><StatusBadge>{selectedStaff.user_id ? (Number(selectedStaff.account_status) === 1 ? "Active" : "Disabled") : "Unlinked"}</StatusBadge><StatusBadge>{selectedStaff.activation_status}</StatusBadge></div></div></section>
+        <DetailSection title="Contact information" icon={Mail} items={[["Email", selectedStaff.staff_email || selectedStaff.email || "Not recorded"], ["Phone", selectedStaff.phone || "Not recorded"]]}/>
+        <DetailSection title="Employment and payroll" icon={BriefcaseBusiness} items={[["Department", selectedStaff.department_name || "Not assigned"], ["Hire date", selectedStaff.hire_date ? new Date(selectedStaff.hire_date).toLocaleDateString("en-SG") : "Not recorded"], ["Base salary", `$${Number(selectedStaff.base_salary || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`], ["Work location", selectedStaff.work_location || "Singapore"], ["Date of birth", selectedStaff.date_of_birth ? new Date(selectedStaff.date_of_birth).toLocaleDateString("en-SG") : "Not recorded"], ["Race / Religion", [selectedStaff.race, selectedStaff.religion].filter(Boolean).join(" / ") || "Not recorded"]]}/>
+        <DetailSection title="Payment details" icon={WalletCards} items={[["Bank", selectedStaff.bank || "Not recorded"], ["Account number", selectedStaff.account_no || "Not recorded"]]}/>
+        <DetailSection title="PayNivo account" icon={ShieldCheck} items={[["Role", selectedStaff.role_name || selectedStaff.requested_role || "No account"], ["Account access", selectedStaff.user_id ? (Number(selectedStaff.account_status) === 1 ? "Active" : "Disabled") : "Not linked"], ["Activation", selectedStaff.activation_status || "No account"], ["Requested by", selectedStaff.requested_by_name || "Not applicable"]]}/>
+        {selectedStaff.rejection_reason ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><strong>Admin correction required</strong><p className="mt-1">{selectedStaff.rejection_reason}</p></div> : null}
+      </div>
+      <footer className="sticky bottom-0 flex justify-end gap-3 border-t border-[#f0d2ca] bg-white p-5"><button type="button" onClick={() => setSelectedStaff(null)} className="rounded-xl border border-[#f0d2ca] px-4 py-2.5 text-sm font-semibold">Close</button><button type="button" onClick={() => { const record = selectedStaff; setSelectedStaff(null); openEditor(record, record.activation_status === "No Account" ? "link" : record.activation_status === "Rejected" ? "request" : "staff"); }} className="primary-button inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold"><Pencil size={15}/>{selectedStaff.activation_status === "No Account" ? "Create linked account" : "Edit staff details"}</button></footer>
+    </aside></div> : null}
+
     {showHire ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#251E1F]/45 p-4" onMouseDown={closeEditor}><form onSubmit={submitHire} onMouseDown={(event)=>event.stopPropagation()} className="app-panel max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl p-6">
       <div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-wider text-[#F38978]">{editing?.type === "staff" ? "Employee record" : "HR hiring workflow"}</p><h3 className="mt-2 text-xl font-semibold text-[#251E1F]">{editing?.type === "link" ? "Create account for existing staff" : editing ? "Edit staff and account details" : "Create staff and PayNivo account"}</h3><p className="mt-1 text-sm text-[#7b6660]">{editing?.type === "staff" ? "Account access settings remain unchanged." : "The account remains disabled until Admin approval."}</p></div><button type="button" onClick={closeEditor}><X size={20}/></button></div>
       <div className="mt-6 grid gap-4 sm:grid-cols-2">{[
-        ["name","Full name","text",true],["email","Employee email","email",true],["employeeCode","Employee code","text",false],["phone","Phone","text",false],["departmentName","Department","text",false],["hireDate","Hire date","date",false],["baseSalary","Base salary","number",false],["bank","Bank","text",false],["accountNo","Bank account number","text",false]
+        ["name","Full name","text",true],["email","Employee email","email",true],["employeeCode","Employee code","text",false],["phone","Phone","text",false],["departmentName","Department","text",true],["hireDate","Hire date","date",true],["dateOfBirth","Date of birth","date",true],["race","Race","text",true],["religion","Religion","text",true],["baseSalary","Base salary","number",true],["bank","Bank","text",true],["accountNo","Bank account number","text",true]
       ].map(([key,label,type,required])=><label key={key} className="text-sm font-medium text-[#7b6660]">{label}<input type={type} required={required} min={type==="number"?0:undefined} value={hire[key]} onChange={(event)=>setHire(current=>({...current,[key]:event.target.value}))} className="mt-1 w-full rounded-xl border border-[#f0d2ca] px-3 py-2.5 text-[#251E1F] outline-none focus:border-[#F38978]"/></label>)}
-        {editing?.type !== "staff" ? <label className="text-sm font-medium text-[#7b6660]">Requested PayNivo role<select value={hire.roleName} onChange={(event)=>setHire(current=>({...current,roleName:event.target.value}))} className="mt-1 w-full rounded-xl border border-[#f0d2ca] px-3 py-2.5">{(data.roles.length?data.roles:["Admin","Finance","HR","Staff"]).map(item=><option key={item}>{item}</option>)}</select></label> : null}
-      </div><div className="mt-6 flex justify-end gap-3"><button type="button" onClick={closeEditor} className="rounded-xl border border-[#f0d2ca] px-4 py-2.5 font-semibold">Cancel</button><button disabled={busy==="hire"} className="primary-button inline-flex items-center gap-2 px-4 py-2.5 font-semibold">{busy==="hire"?<Loader2 className="animate-spin" size={16}/>:<CheckCircle2 size={16}/>} {editing?.type === "staff" ? "Save staff details" : editing?.type === "request" ? "Save and resubmit" : "Submit for activation"}</button></div>
+        {editing?.type !== "staff" ? <label className="text-sm font-medium text-[#7b6660]">PayNivo account role<div className="mt-1 rounded-xl border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2.5 font-semibold text-[#251E1F]">Staff</div><span className="mt-1 block text-xs font-normal text-[#7b6660]">Admin can change the role after account approval.</span></label> : null}
+      </div><div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><strong>What happens next?</strong><p className="mt-1">The staff record and inactive user account are created together. Admin must approve activation before the employee receives the email setup link.</p></div><div className="mt-6 flex justify-end gap-3"><button type="button" onClick={closeEditor} className="rounded-xl border border-[#f0d2ca] px-4 py-2.5 font-semibold">Cancel</button><button disabled={busy==="hire"} className="primary-button inline-flex items-center gap-2 px-4 py-2.5 font-semibold">{busy==="hire"?<Loader2 className="animate-spin" size={16}/>:<CheckCircle2 size={16}/>} {editing?.type === "staff" ? "Save staff details" : editing?.type === "request" ? "Save and resubmit" : "Create user and submit to Admin"}</button></div>
     </form></div> : null}
   </section>;
 }

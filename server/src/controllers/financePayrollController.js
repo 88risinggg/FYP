@@ -356,7 +356,7 @@ async function runWorkflowAction(req, res) {
           try {
             const result = await generateAndSendPayslip(employee.payrollId, { browser, actorUserId: req.user?.userId });
             if (result.status === 200) result.message.includes("already") ? delivery.skipped++ : delivery.sent++;
-            else { delivery.failed++; delivery.errors.push({ employee: employee.name, employeeId: employee.id, payrollId: employee.payrollId, message: result.message, correctiveAction: result.message.includes("not linked to a user account") ? "Ask HR/Admin to link this staff record to its user account, then retry pending payslips." : "Correct the employee payslip source data, then retry pending payslips." }); }
+            else { delivery.failed++; delivery.errors.push({ employee: employee.name, employeeId: employee.id, payrollId: employee.payrollId, message: result.message, correctiveAction: result.message.includes("not linked to a user account") ? "HR must create the linked account, Admin must approve it, and then Finance can retry pending payslips." : result.message.includes("awaiting Admin activation") ? "Admin must approve the pending activation request before Finance retries pending payslips." : "Correct the employee payslip source data, then retry pending payslips." }); }
           } catch (error) { delivery.failed++; delivery.errors.push({ employee: employee.name, employeeId: employee.id, payrollId: employee.payrollId, message: error.message, correctiveAction: "Correct the employee payslip or user-account data, then retry pending payslips." }); }
         }
       } finally { if (browser) await browser.close(); }

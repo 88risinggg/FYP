@@ -869,7 +869,7 @@ html[data-theme="dark"] :focus-visible { outline-color: color-mix(in srgb, var(-
   .admin-user-management__pagination select,
   .admin-user-management__pagination button { border: 1px solid var(--user-border); border-radius: 0.6rem; background: var(--user-surface); color: var(--user-text); padding: 0.45rem 0.65rem; }
   .admin-user-management__pagination button:disabled { cursor: not-allowed; opacity: 0.4; }
-  .admin-user-management__modal-backdrop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; overflow-y: auto; background: rgb(37 30 31 / 52%); padding: 1rem; }
+  .admin-user-management__modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; overflow-y: auto; overscroll-behavior: contain; background: rgb(37 30 31 / 52%); padding: 1rem; pointer-events: auto; touch-action: none; }
   .admin-user-management__modal { width: min(34rem, 100%); border: 1px solid var(--user-border); border-radius: 1rem; background: var(--user-surface); box-shadow: 0 24px 70px rgb(37 30 31 / 25%); padding: 1.25rem; }
   .admin-user-management__modal > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
   .admin-user-management__modal > header span { color: var(--app-accent); font-size: 0.67rem; font-weight: 750; text-transform: uppercase; letter-spacing: 0.08em; }

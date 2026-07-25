@@ -25,10 +25,11 @@ async function getPayslipDataset(payrollId) {
   const [rows] = await pool.query(
     `SELECT p.*, p.payroll_id AS payslip_id,
             s.employee_id, s.employee_code, s.name AS employee_name,
-            s.user_user_id, s.email AS staff_email, s.base_salary,
+            s.user_user_id, u.status AS user_account_status, s.email AS staff_email, s.base_salary,
             s.department_name
      FROM payroll p
      INNER JOIN staff s ON s.employee_id = p.staff_employee_id
+     LEFT JOIN user u ON u.user_id = s.user_user_id
      WHERE p.payroll_id = ?
      LIMIT 1`,
     [payrollId]
@@ -56,6 +57,9 @@ async function generateAndSendPayslip(payrollId, options = {}) {
   }
   if (!payslip.user_user_id) {
     return { status: 409, message: `Employee ${payslip.employee_id} is not linked to a user account` };
+  }
+  if (Number(payslip.user_account_status) !== 1) {
+    return { status: 409, message: `Employee ${payslip.employee_id}'s linked user account is awaiting Admin activation` };
   }
 
   const periodDirectory = path.join(OUTPUT_ROOT, `${payslip.payroll_year}-${String(payslip.payroll_month).padStart(2, "0")}`);

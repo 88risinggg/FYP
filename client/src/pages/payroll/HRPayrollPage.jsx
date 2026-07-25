@@ -110,8 +110,7 @@ const payrollSidebarSections = [
   {
     label: "STAFF MANAGEMENT",
     items: [
-      { label: "Staff Records", icon: Users, path: "/dashboard/payroll/hr/staff" },
-      { label: "User Management", icon: Users, path: "/dashboard/payroll/hr/user-management" }
+      { label: "Staff Management", icon: Users, path: "/dashboard/payroll/hr/staff" }
     ]
   },
   {
@@ -152,8 +151,8 @@ const payrollSidebarSections = [
 
 const routeHeadings = {
   "/dashboard/payroll/hr": "Dashboard",
-  "/dashboard/payroll/hr/staff": "Staff Records",
-  "/dashboard/payroll/hr/user-management": "User Management",
+  "/dashboard/payroll/hr/staff": "Staff Management",
+  "/dashboard/payroll/hr/user-management": "Staff Management",
   "/dashboard/payroll/hr/upload": "Payroll Upload",
   "/dashboard/payroll/hr/payroll-runs": "Payroll Runs",
   "/dashboard/payroll/hr/leave-management": "Leave Management",
@@ -727,7 +726,7 @@ function getStaffActionId(staff) {
   return staff?.employee_id || staff?.staff_id || staff?.id || "";
 }
 
-function StaffRecordsView() {
+function StaffRecordsView({ onStartHire }) {
   const session = getStoredSession();
   const location = useLocation();
   const navigate = useNavigate();
@@ -1121,13 +1120,7 @@ function StaffRecordsView() {
           <div>
             <h3 className="text-lg font-semibold text-[#251E1F]">Staff Records</h3>
           </div>
-          <button
-            type="button"
-            onClick={fetchStaff}
-            className="rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45"
-          >
-            Refresh
-          </button>
+          <div className="flex flex-wrap gap-2"><button type="button" onClick={fetchStaff} className="rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45">Refresh</button><button type="button" onClick={onStartHire} className="primary-button inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold"><Users size={16}/>Hire staff and create user</button></div>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
           <label className="block text-sm text-[#7b6660]">
@@ -3047,7 +3040,7 @@ export default function HRPayrollPage() {
 
   const renderContent = () => {
     if (activePath === "/dashboard/payroll/hr/staff") {
-      return <StaffRecordsView />;
+      return <PayrollUserManagement role="HR" />;
     }
 
     if (activePath === "/dashboard/payroll/hr/upload") {

@@ -9,7 +9,7 @@ async function listManagedUsers() {
             u.must_change_password, u.failed_login_attempts, u.account_locked_at,
             u.account_lock_reason, u.created_at AS account_created_at,
             s.employee_id, s.employee_code, s.name AS staff_name, s.email AS staff_email,
-            s.phone, s.department_name, s.hire_date, s.base_salary,
+            s.phone, s.department_name, s.hire_date, s.date_of_birth, s.race, s.religion, s.base_salary,
             s.status AS employment_status, s.bank, s.account_no,
             ar.request_id,
             CASE ar.status WHEN 'pending' THEN 'Pending' WHEN 'approved' THEN 'Approved'
@@ -20,13 +20,16 @@ async function listManagedUsers() {
      FROM user u
      LEFT JOIN staff s ON s.user_user_id = u.user_id
      LEFT JOIN account_action_requests ar
-       ON ar.user_id = u.user_id AND ar.request_type = 'user_activation'
+       ON ar.request_id = (
+         SELECT MAX(latest_ar.request_id) FROM account_action_requests latest_ar
+         WHERE latest_ar.user_id = u.user_id AND latest_ar.request_type = 'user_activation'
+       )
      LEFT JOIN user requester ON requester.user_id = ar.requested_by
      LEFT JOIN user reviewer ON reviewer.user_id = ar.reviewed_by`
   );
   const [unlinkedRows] = await pool.query(
     `SELECT s.employee_id, s.employee_code, s.name AS staff_name, s.email AS staff_email,
-            s.phone, s.department_name, s.hire_date, s.base_salary,
+            s.phone, s.department_name, s.hire_date, s.date_of_birth, s.race, s.religion, s.base_salary,
             s.status AS employment_status, s.bank, s.account_no
      FROM staff s
      WHERE s.user_user_id IS NULL`
@@ -92,10 +95,10 @@ async function createHireWithAccount({ staff, account, requestedBy, passwordHash
       }
       await connection.execute(
         `UPDATE staff SET employee_code = COALESCE(NULLIF(?, ''), employee_code), name = ?, email = ?,
-          phone = ?, department_name = ?, hire_date = ?, base_salary = ?, status = ?, bank = ?,
+          phone = ?, department_name = ?, hire_date = ?, date_of_birth = ?, race = ?, religion = ?, base_salary = ?, status = ?, bank = ?,
           account_no = ?, updated_at = NOW() WHERE employee_id = ?`,
         [staff.employeeCode, staff.name, staff.email, staff.phone || null, staff.departmentName || null,
-          staff.hireDate || null, Number(staff.baseSalary || 0), staff.status === 0 ? 0 : 1,
+          staff.hireDate || null, staff.dateOfBirth || null, staff.race || null, staff.religion || null, Number(staff.baseSalary || 0), staff.status === 0 ? 0 : 1,
           staff.bank || null, staff.accountNo || null, employeeId]
       );
     } else {
@@ -105,10 +108,10 @@ async function createHireWithAccount({ staff, account, requestedBy, passwordHash
       await connection.execute(
         `INSERT INTO staff
           (employee_id, employee_code, name, email, phone, department_name, hire_date,
-           base_salary, status, bank, account_no, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+           date_of_birth, race, religion, base_salary, status, bank, account_no, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
         [employeeId, employeeCode, staff.name, staff.email, staff.phone || null,
-          staff.departmentName || null, staff.hireDate || null, Number(staff.baseSalary || 0),
+          staff.departmentName || null, staff.hireDate || null, staff.dateOfBirth || null, staff.race || null, staff.religion || null, Number(staff.baseSalary || 0),
           staff.status === 0 ? 0 : 1, staff.bank || null, staff.accountNo || null]
       );
     }
@@ -152,7 +155,8 @@ async function reviewActivationRequest({ requestId, action, reviewerId, reason }
     }
     if (request.status !== "pending") {
       await connection.rollback();
-      return { alreadyReviewed: true, request };
+      const requestedStatus = action === "approve" ? "approved" : "rejected";
+      return { alreadyReviewed: true, idempotent: request.status === requestedStatus, approved: request.status === "approved", request };
     }
     const approved = action === "approve";
     await connection.execute(
@@ -194,9 +198,9 @@ async function updatePendingRequest({ requestId, requestedBy, staff, account }) 
     );
     await connection.execute(
       `UPDATE staff SET name = ?, email = ?, employee_code = ?, phone = ?, department_name = ?, hire_date = ?,
-        base_salary = ?, bank = ?, account_no = ?, updated_at = NOW() WHERE employee_id = ?`,
+        date_of_birth = ?, race = ?, religion = ?, base_salary = ?, bank = ?, account_no = ?, updated_at = NOW() WHERE employee_id = ?`,
       [staff.name, staff.email, staff.employeeCode || null, staff.phone || null, staff.departmentName || null,
-        staff.hireDate || null, Number(staff.baseSalary || 0), staff.bank || null,
+        staff.hireDate || null, staff.dateOfBirth || null, staff.race || null, staff.religion || null, Number(staff.baseSalary || 0), staff.bank || null,
         staff.accountNo || null, request.staff_employee_id]
     );
     await connection.execute(

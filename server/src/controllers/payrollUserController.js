@@ -1,6 +1,7 @@
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
+const ExcelJS = require("exceljs");
 const {
   ROLE_NAMES,
   createHireWithAccount,
@@ -25,6 +26,9 @@ function normalizedPayload(body = {}) {
       phone: String(staff.phone || "").trim(),
       departmentName: String(staff.departmentName || staff.department_name || "").trim(),
       hireDate: staff.hireDate || staff.hire_date || null,
+      dateOfBirth: staff.dateOfBirth || staff.date_of_birth || null,
+      race: String(staff.race || "").trim(),
+      religion: String(staff.religion || "").trim(),
       baseSalary: Number(staff.baseSalary ?? staff.base_salary ?? 0),
       bank: String(staff.bank || "").trim(),
       accountNo: String(staff.accountNo || staff.account_no || "").trim(),
@@ -41,8 +45,11 @@ function normalizedPayload(body = {}) {
 function validate(payload) {
   if (!payload.staff.name || !payload.account.name) return "Employee name is required.";
   if (!emailPattern.test(payload.staff.email) || !emailPattern.test(payload.account.email)) return "A valid employee email is required.";
+  if (!payload.staff.departmentName || !payload.staff.hireDate || !payload.staff.dateOfBirth) return "Department, hire date and date of birth are required.";
+  if (!payload.staff.race || !payload.staff.religion) return "Race and religion are required for statutory payroll assessment.";
+  if (!payload.staff.bank || !payload.staff.accountNo) return "Bank and account number are required for payroll payment.";
   if (!ROLE_NAMES.includes(payload.account.roleName)) return "Select a valid PayNivo role.";
-  if (!Number.isFinite(payload.staff.baseSalary) || payload.staff.baseSalary < 0) return "Base salary must be zero or greater.";
+  if (!Number.isFinite(payload.staff.baseSalary) || payload.staff.baseSalary <= 0) return "Base salary must be greater than zero.";
   return null;
 }
 
@@ -128,9 +135,66 @@ async function createHire(req, res) {
       entityType: "account_action_request",
       entityId: result.requestId
     }, { excludeUserId: req.user.userId });
-    return res.status(201).json({ ...result, temporaryPassword: generatedPassword });
+    return res.status(201).json(result);
   } catch (error) {
     return res.status(500).json({ message: "Unable to create the new-hire account.", detail: error.message });
+  }
+}
+
+const importColumns = {
+  name: ["name", "fullname", "staffname", "employeename"], email: ["email", "employeeemail", "staffemail"],
+  employeeCode: ["employeecode", "employeeid", "staffid"], phone: ["phone", "phonenumber", "contact"],
+  departmentName: ["department", "departmentname"], hireDate: ["hiredate", "startdate"],
+  dateOfBirth: ["dateofbirth", "dob", "birthdate"], race: ["race"], religion: ["religion"],
+  baseSalary: ["basesalary", "salary", "basicsalary"], bank: ["bank", "bankname"],
+  accountNo: ["accountno", "accountnumber", "bankaccount", "bankaccountnumber"]
+};
+const excelValue = (value) => value instanceof Date ? value.toISOString().slice(0, 10) : value && typeof value === "object" ? (value.text || value.result || "") : (value ?? "");
+const excelHeader = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+async function importHires(req, res) {
+  try {
+    if (!req.file?.buffer) return res.status(400).json({ message: "Select an Excel workbook to import." });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) return res.status(400).json({ message: "The workbook does not contain a worksheet." });
+    const headers = {};
+    worksheet.getRow(1).eachCell((cell, column) => { headers[excelHeader(excelValue(cell.value))] = column; });
+    const prepared = [];
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const staff = {};
+      Object.entries(importColumns).forEach(([field, aliases]) => {
+        const alias = aliases.find((item) => headers[item]);
+        staff[field] = alias ? excelValue(row.getCell(headers[alias]).value) : "";
+      });
+      if (!Object.values(staff).some((value) => String(value || "").trim())) return;
+      const payload = normalizedPayload({ staff, account: { name: staff.name, email: staff.email, roleName: "Staff" } });
+      prepared.push({ rowNumber, payload, error: validate(payload) });
+    });
+    if (!prepared.length) return res.status(400).json({ message: "No staff rows were found in the first worksheet." });
+    if (prepared.length > 500) return res.status(400).json({ message: "Import up to 500 staff records at a time." });
+    if (String(req.body?.mode || "preview") !== "commit") {
+      return res.json({ mode: "preview", total: prepared.length, valid: prepared.filter((row) => !row.error).length, invalid: prepared.filter((row) => row.error).length, rows: prepared.map((row) => ({ rowNumber: row.rowNumber, name: row.payload.staff.name, email: row.payload.staff.email, department: row.payload.staff.departmentName, valid: !row.error, error: row.error })) });
+    }
+    const results = [];
+    for (const row of prepared) {
+      if (row.error) { results.push({ rowNumber: row.rowNumber, status: "invalid", error: row.error }); continue; }
+      try {
+        const passwordHash = await bcrypt.hash(temporaryPassword(), 12);
+        const result = await createHireWithAccount({ ...row.payload, requestedBy: req.user.userId, passwordHash });
+        const duplicate = result.duplicateEmail || result.staffAlreadyLinked;
+        results.push({ rowNumber: row.rowNumber, name: row.payload.staff.name, status: duplicate ? "skipped" : "created", error: duplicate ? "Account already exists or is linked." : "" });
+      } catch (error) {
+        results.push({ rowNumber: row.rowNumber, name: row.payload.staff.name, status: "failed", error: error.code === "ER_DUP_ENTRY" ? "Duplicate employee code or email." : "Unable to create this record." });
+      }
+    }
+    const created = results.filter((row) => row.status === "created").length;
+    if (created) await notifyRoles("Admin", { type: "payroll_account_activation", title: "Imported accounts awaiting activation", message: `${created} imported staff account(s) require Admin review.`, actionPath: "/dashboard/payroll/admin/user-management", actorUserId: req.user.userId, entityType: "account_action_request" }, { excludeUserId: req.user.userId });
+    return res.status(created ? 201 : 422).json({ mode: "commit", total: results.length, created, skipped: results.filter((row) => row.status === "skipped").length, failed: results.filter((row) => row.status === "failed" || row.status === "invalid").length, rows: results });
+  } catch (error) {
+    return res.status(400).json({ message: "Unable to read the Excel workbook.", detail: error.message });
   }
 }
 
@@ -172,7 +236,8 @@ async function reviewRequest(req, res) {
       requestId: Number(req.params.requestId), action, reviewerId: req.user.userId, reason
     });
     if (result.notFound) return res.status(404).json({ message: "Activation request not found." });
-    if (result.alreadyReviewed) return res.status(409).json({ message: "This activation request has already been reviewed." });
+    if (result.alreadyReviewed && result.idempotent) return res.json({ approved: result.approved, alreadyReviewed: true });
+    if (result.alreadyReviewed) return res.status(409).json({ message: `This activation request was already ${result.request.status}. Refresh to view its latest status.` });
     const event = {
       type: "payroll_account_activation_result",
       title: result.approved ? "Account approved" : "Account request rejected",
@@ -210,4 +275,4 @@ async function reviewRequest(req, res) {
   }
 }
 
-module.exports = { createHire, editRequest, getManagedUsers, reviewRequest, toAdminManagedUser, toHrManagedUser };
+module.exports = { createHire, editRequest, getManagedUsers, importHires, reviewRequest, toAdminManagedUser, toHrManagedUser };
