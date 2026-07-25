@@ -41,6 +41,7 @@ function buildInvoiceEmailHtml(invoice, settings, options = {}) {
     ? options.paymentUrl
     : null;
   const viewUrl = values.online_view_url;
+  const invoiceLink = viewUrl;
   const primaryCta = stripeUrl || viewUrl;
 
   const secondary = "#ff5a52";
@@ -82,6 +83,10 @@ function buildInvoiceEmailHtml(invoice, settings, options = {}) {
       Or copy this link into your browser:
     </p>
     <p style="font-size:11px;color:#9e8e89;word-break:break-all;margin:0 0 20px">${escapeHtml(stripeUrl)}</p>` : ""}
+    <p style="font-size:12px;color:#7b6660;margin:0 0 4px">
+      View invoice online:
+    </p>
+    <p style="font-size:11px;color:#9e8e89;word-break:break-all;margin:0 0 20px">${escapeHtml(invoiceLink)}</p>
 
     <hr style="border:none;border-top:1px solid #f0e8e5;margin:20px 0" />
     <p style="font-size:12px;color:#7b6660;margin:0">${escapeHtml(settings.supportEmail || settings.financeEmail || "")}</p>

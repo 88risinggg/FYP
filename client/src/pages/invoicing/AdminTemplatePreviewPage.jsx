@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Eye, Palette, RefreshCw, ToggleLeft, ToggleRight, AlertCircle
+  Eye, RefreshCw, AlertCircle
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import InvoiceTemplate from "../../components/invoicing/InvoiceTemplate.jsx";
 import { getInvoiceSettings } from "../../services/adminInvoiceSettingsService.js";
@@ -49,7 +50,8 @@ const ZOOM_LEVELS = [
  * Uses the shared InvoiceTemplate component — the same one used for
  * PDF generation, invoice detail, and customer-facing views.
  *
- * Settings changes reflect instantly without saving.
+ * The preview is read-only and uses the same saved invoice settings
+ * consumed by Finance invoice creation/export.
  */
 export default function AdminTemplatePreviewPage() {
   const [settings, setSettings] = useState(null);
@@ -188,14 +190,6 @@ export default function AdminTemplatePreviewPage() {
     ? Math.min((containerWidth - 48) / A4_WIDTH_PX, 1)
     : zoom;
 
-  function updateSetting(key, value) {
-    setSettings((prev) => ({ ...prev, [key]: value }));
-  }
-
-  function toggleSetting(key) {
-    setSettings((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
-
   if (loading) {
     return (
       <div className="flex h-[calc(100vh-64px)] items-center justify-center">
@@ -210,12 +204,18 @@ export default function AdminTemplatePreviewPage() {
       {/* Left Panel — Settings Controls */}
       <div className="w-[380px] shrink-0 overflow-y-auto border-r bg-white p-4 space-y-5">
         <h2 className="flex items-center gap-2 text-lg font-bold text-[#251E1F]">
-          <Palette className="h-5 w-5 text-[#2D7C83]" />
-          Template Configuration
+          <Eye className="h-5 w-5 text-[#2D7C83]" />
+          Template Preview
         </h2>
         <p className="text-xs text-[#7B6660]">
-          Changes reflect instantly in the preview. Settings are NOT saved until you click Save in Invoice Settings.
+          This preview uses the saved Invoice Settings. Finance invoices use the same saved settings when invoices are created, sent, viewed, and exported.
         </p>
+        <Link
+          to="/dashboard/invoicing/admin/settings"
+          className="inline-flex w-full items-center justify-center rounded-lg border border-[#F38978] px-3 py-2 text-sm font-bold text-[#F38978] transition hover:bg-[#fff8f5]"
+        >
+          Edit Invoice Settings
+        </Link>
 
         {loadError && (
           <div className="flex items-center gap-2 rounded-lg border border-[#FDD9CD] bg-[#FDD9CD] px-3 py-2 text-xs text-amber-700">
@@ -238,158 +238,38 @@ export default function AdminTemplatePreviewPage() {
           </select>
         </div>
 
-        {/* Colors */}
-        <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Colors</legend>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-xs text-[#7B6660]">Primary</label>
-              <input type="color" value={settings.primaryColor} onChange={(e) => updateSetting("primaryColor", e.target.value)} className="h-8 w-full cursor-pointer rounded" />
+        <div className="rounded-lg border border-[#ead3cc] bg-[#fff8f5] p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Saved Settings Used</p>
+          <dl className="mt-3 space-y-2 text-sm">
+            <div>
+              <dt className="text-xs text-[#7B6660]">Company</dt>
+              <dd className="font-semibold text-[#251E1F]">{settings.companyName || "-"}</dd>
             </div>
-            <div className="flex-1">
-              <label className="text-xs text-[#7B6660]">Secondary</label>
-              <input type="color" value={settings.secondaryColor} onChange={(e) => updateSetting("secondaryColor", e.target.value)} className="h-8 w-full cursor-pointer rounded" />
+            <div>
+              <dt className="text-xs text-[#7B6660]">Currency</dt>
+              <dd className="font-semibold text-[#251E1F]">{settings.defaultCurrency || "SGD"}</dd>
             </div>
-          </div>
-        </fieldset>
-
-        {/* Typography */}
-        <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Typography</legend>
-          <div>
-            <label className="text-xs text-[#7B6660]">Font Family</label>
-            <select value={settings.fontFamily} onChange={(e) => updateSetting("fontFamily", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm">
-              <option value="Arial, Helvetica, sans-serif">Arial</option>
-              <option value="'Times New Roman', serif">Times New Roman</option>
-              <option value="'Georgia', serif">Georgia</option>
-              <option value="'Courier New', monospace">Courier New</option>
-              <option value="'Segoe UI', sans-serif">Segoe UI</option>
-              <option value="'Inter', sans-serif">Inter</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-[#7B6660]">Base Font Size: {settings.fontSizeBase}pt</label>
-            <input type="range" min="8" max="16" value={settings.fontSizeBase} onChange={(e) => updateSetting("fontSizeBase", Number(e.target.value))} className="w-full" />
-          </div>
-        </fieldset>
-
-        {/* Company Info */}
-        <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Company Info</legend>
-          <input placeholder="Company Name" value={settings.companyName} onChange={(e) => updateSetting("companyName", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
-          <input placeholder="UEN Number" value={settings.uenNumber} onChange={(e) => updateSetting("uenNumber", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
-          <input placeholder="GST Registration" value={settings.gstRegistrationNumber} onChange={(e) => updateSetting("gstRegistrationNumber", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
-          <input placeholder="Address" value={settings.companyAddress} onChange={(e) => updateSetting("companyAddress", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
-          <div className="flex gap-2">
-            <input placeholder="Phone" value={settings.companyPhone} onChange={(e) => updateSetting("companyPhone", e.target.value)} className="flex-1 rounded border px-2 py-1.5 text-sm" />
-            <input placeholder="Email" value={settings.companyEmail} onChange={(e) => updateSetting("companyEmail", e.target.value)} className="flex-1 rounded border px-2 py-1.5 text-sm" />
-          </div>
-        </fieldset>
-
-        {/* Invoice Settings */}
-        <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Invoice</legend>
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <label className="text-xs text-[#7B6660]">Prefix</label>
-              <input value={settings.invoicePrefix} onChange={(e) => updateSetting("invoicePrefix", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
+            <div>
+              <dt className="text-xs text-[#7B6660]">GST</dt>
+              <dd className="font-semibold text-[#251E1F]">
+                {settings.taxEnabled ? `${settings.taxName || "GST"} ${settings.taxPercentage || 0}%` : "Disabled"}
+              </dd>
             </div>
-            <div className="flex-1">
-              <label className="text-xs text-[#7B6660]">Currency</label>
-              <input value={settings.currencySymbol} onChange={(e) => updateSetting("currencySymbol", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
+            <div>
+              <dt className="text-xs text-[#7B6660]">Payment Terms</dt>
+              <dd className="font-semibold text-[#251E1F]">{settings.paymentTerms || "Net 30"}</dd>
             </div>
-          </div>
-        </fieldset>
-
-        {/* Tax */}
-        <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Tax</legend>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={() => toggleSetting("taxEnabled")} className="text-[#2D7C83]">
-              {settings.taxEnabled ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5 text-[#7B6660]" />}
-            </button>
-            <span className="text-sm">{settings.taxEnabled ? "Tax Enabled" : "Tax Disabled"}</span>
-          </div>
-          {settings.taxEnabled && (
-            <div className="flex gap-2">
-              <input placeholder="Tax Name" value={settings.taxName} onChange={(e) => updateSetting("taxName", e.target.value)} className="flex-1 rounded border px-2 py-1.5 text-sm" />
-              <input type="number" placeholder="%" value={settings.taxPercentage} onChange={(e) => updateSetting("taxPercentage", Number(e.target.value))} className="w-20 rounded border px-2 py-1.5 text-sm" />
+            <div>
+              <dt className="text-xs text-[#7B6660]">Bank Transfer</dt>
+              <dd className="font-semibold text-[#251E1F]">{settings.bankName || "-"}</dd>
             </div>
-          )}
-        </fieldset>
-
-        {/* Display Toggles */}
-        <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Display</legend>
-          {[
-            ["watermarkEnabled", "Watermark"],
-            ["qrCodeDisplay", "QR Code"],
-            ["bankDetailsDisplay", "Bank Details"],
-            ["paynowDisplay", "PayNow"],
-            ["signatureDisplay", "Signature"],
-          ].map(([key, label]) => (
-            <div key={key} className="flex items-center justify-between">
-              <span className="text-sm text-[#251E1F]">{label}</span>
-              <button type="button" onClick={() => toggleSetting(key)} className="text-[#2D7C83]">
-                {settings[key] ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5 text-[#7B6660]" />}
-              </button>
+            <div>
+              <dt className="text-xs text-[#7B6660]">PayNow</dt>
+              <dd className="font-semibold text-[#251E1F]">{settings.paynowIdentifier || "-"}</dd>
             </div>
-          ))}
-        </fieldset>
+          </dl>
+        </div>
 
-        {/* Payment Details */}
-        <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Payment Details</legend>
-          <input placeholder="Bank Account Holder" value={settings.bankAccountHolderName} onChange={(e) => updateSetting("bankAccountHolderName", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
-          <input placeholder="Bank Name" value={settings.bankName} onChange={(e) => updateSetting("bankName", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
-          <input placeholder="Account Number" value={settings.bankAccountNumber} onChange={(e) => updateSetting("bankAccountNumber", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
-          <input placeholder="BIC/SWIFT" value={settings.bicSwift} onChange={(e) => updateSetting("bicSwift", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
-          <input placeholder="PayNow Identifier" value={settings.paynowIdentifier} onChange={(e) => updateSetting("paynowIdentifier", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm" />
-        </fieldset>
-
-        {/* Layout */}
-        <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Layout</legend>
-          <div>
-            <label className="text-xs text-[#7B6660]">Border Style</label>
-            <select value={settings.invoiceBorderStyle} onChange={(e) => updateSetting("invoiceBorderStyle", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm">
-              <option value="modern">Modern</option>
-              <option value="classic">Classic</option>
-              <option value="minimal">Minimal</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-[#7B6660]">Table Style</label>
-            <select value={settings.itemTableStyle} onChange={(e) => updateSetting("itemTableStyle", e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm">
-              <option value="striped">Striped</option>
-              <option value="bordered">Bordered</option>
-              <option value="clean">Clean</option>
-            </select>
-          </div>
-        </fieldset>
-
-        {/* Footer */}
-        <fieldset className="space-y-2">
-          <legend className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Footer</legend>
-          <div>
-            <label className="text-xs text-[#7B6660]">Payment Reference Instruction</label>
-            <textarea
-              rows={2}
-              value={settings.paymentReferenceInstruction}
-              onChange={(e) => updateSetting("paymentReferenceInstruction", e.target.value)}
-              className="w-full rounded border px-2 py-1.5 text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-[#7B6660]">Computer Generated Statement</label>
-            <textarea
-              rows={2}
-              value={settings.computerGeneratedStatement}
-              onChange={(e) => updateSetting("computerGeneratedStatement", e.target.value)}
-              className="w-full rounded border px-2 py-1.5 text-sm"
-            />
-          </div>
-        </fieldset>
       </div>
 
       {/* Right Panel — Live Preview */}

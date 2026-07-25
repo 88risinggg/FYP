@@ -13,7 +13,7 @@ import AdminAuditLogsPage from "./AdminAuditLogsPage.jsx";
 import AdminDashboardHomePage from "./AdminDashboardHomePage.jsx";
 import AdminInvoicePerformancePage from "./AdminInvoicePerformancePage.jsx";
 import AdminInvoiceListPage from "./AdminInvoiceListPage.jsx";
-import AdminInvoiceSettingsPage from "./AdminInvoiceSettingsPage.jsx";
+import AdminInvoiceSettingsPage, { AdminGstManagementPage } from "./AdminInvoiceSettingsPage.jsx";
 import AdminPaymentReminderSummaryPage from "./AdminPaymentReminderSummaryPage.jsx";
 import AdminReportsPage from "./AdminReportsPage.jsx";
 import AdminReminderSettingsPage from "./AdminReminderSettingsPage.jsx";
@@ -63,12 +63,19 @@ const invoicingSidebarSections = [
         path: "/dashboard/invoicing/admin/invoice-settings",
         children: [
           {
+            label: "GST Management",
+            path: "/dashboard/invoicing/admin/gst-management",
+            end: true
+          },
+          {
             label: "Settings",
-            path: "/dashboard/invoicing/admin/invoice-settings"
+            path: "/dashboard/invoicing/admin/invoice-settings",
+            end: true
           },
           {
             label: "Template Preview",
-            path: "/dashboard/invoicing/admin/template-preview"
+            path: "/dashboard/invoicing/admin/template-preview",
+            end: true
           }
         ]
       },
@@ -120,6 +127,7 @@ const routeHeadings = {
   "/dashboard/invoicing/admin/customers/create": "New Customer",
   "/dashboard/invoicing/admin/payments": "Payments",
   "/dashboard/invoicing/admin/payments/record": "Record Payment",
+  "/dashboard/invoicing/admin/gst-management": "GST Management",
   "/dashboard/invoicing/admin/invoice-settings": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/general": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/numbering": "Invoice Settings",
@@ -155,7 +163,8 @@ export default function AdminInvoicingDashboard() {
   const invoiceSettingsMatch = normalizedPath.match(
     /^\/dashboard\/invoicing\/admin\/invoice-settings(?:\/([a-z-]+))?$/
   );
-  const isInvoiceSettings = Boolean(invoiceSettingsMatch);
+  const isGstManagement = normalizedPath === "/dashboard/invoicing/admin/gst-management";
+  const isInvoiceSettings = Boolean(invoiceSettingsMatch) && !isGstManagement;
   const isReminderSettings = normalizedPath === "/dashboard/invoicing/admin/reminder-settings";
   const isWhatsAppSettings = normalizedPath === "/dashboard/invoicing/admin/whatsapp-settings";
   const isTemplatePreview = normalizedPath === "/dashboard/invoicing/admin/template-preview";
@@ -171,7 +180,9 @@ export default function AdminInvoicingDashboard() {
       ? "Automated Invoicing System - Payment & Reminder Summary"
     : isValidationSummary
       ? "Automated Invoicing System - Validation Summary"
-    : isInvoiceSettings
+      : isGstManagement
+      ? "Automated Invoicing System - GST Management"
+      : isInvoiceSettings
       ? "Automated Invoicing System - Invoice Settings"
     : isReminderSettings
       ? "Automated Invoicing System - Reminder Settings"
@@ -206,6 +217,8 @@ export default function AdminInvoicingDashboard() {
         <AdminPaymentReminderSummaryPage />
       ) : isValidationSummary ? (
         <AdminValidationSummaryPage />
+      ) : isGstManagement ? (
+        <AdminGstManagementPage />
       ) : isInvoiceSettings ? (
         <AdminInvoiceSettingsPage activeTab={invoiceSettingsMatch?.[1] || "general"} />
       ) : isReminderSettings ? (

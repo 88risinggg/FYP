@@ -7,13 +7,20 @@ const {
   calculateDueDate,
   calculateConfigurationStatus,
   defaultSettings,
+  derivePaymentTermDays,
   getInvoiceSettings,
+  getInvoiceSettingsOptions,
   invoiceStatusWorkflow,
   listNumberingActivity,
-  optionLists,
   saveInvoiceSettings,
   updateInvoiceLogo
 } = require("../models/invoiceSettingsModel");
+const {
+  createGstRate,
+  getEffectiveGstRate,
+  getNextScheduledGstRate,
+  listGstRates
+} = require("../models/invoiceGstRateModel");
 const { getClientIp, logAuditEvent } = require("../models/auditLogModel");
 const { sendInvoiceSettingsTestEmail } = require("../services/invoiceDeliveryService");
 const { generateInvoicePDF } = require("../services/pdfService");
@@ -21,12 +28,12 @@ const { getCompanyId } = require("../utils/companyScope");
 
 const uploadDirectory = path.join(__dirname, "..", "..", "uploads", "invoice-logos");
 
-async function buildPayload(settings, isConfigured) {
+async function buildPayload(settings, isConfigured, companyId = null) {
   const effectiveSettings = settings || defaultSettings;
 
   return {
     settings: effectiveSettings,
-    options: optionLists,
+    options: await getInvoiceSettingsOptions(companyId),
     configurationStatus: calculateConfigurationStatus(effectiveSettings),
     invoiceStatusWorkflow,
     numberingActivity: await listNumberingActivity(),
@@ -39,6 +46,9 @@ function normalizeSettings(body) {
   const exportSettings = body.export || {};
   const branding = body.branding || {};
   const sequenceRules = body.sequenceRules || {};
+
+  const paymentTerms = String(general.paymentTerms || "").trim();
+  const dueDays = derivePaymentTermDays({ general: { paymentTerms } });
 
   return {
     ...defaultSettings,
@@ -54,6 +64,8 @@ function normalizeSettings(body) {
     registeredOfficeAddress: String(body.registeredOfficeAddress || "").trim(),
     financeEmail: String(body.financeEmail || "").trim(),
     supportEmail: String(body.supportEmail || "").trim(),
+    paymentTerms,
+    dueDays,
     bankAccountHolderName: String(body.bankAccountHolderName || "").trim(),
     bankName: String(body.bankName || "").trim(),
     bankAccountNumber: String(body.bankAccountNumber || "").trim(),
@@ -74,11 +86,11 @@ function normalizeSettings(body) {
       defaultLanguage: String(general.defaultLanguage || "").trim(),
       defaultTax: String(general.defaultTax || "").trim(),
       priceDisplay: String(general.priceDisplay || "").trim(),
-      paymentTerms: String(general.paymentTerms || "").trim(),
+      paymentTerms,
       lateFeeValue: Number(general.lateFeeValue),
       lateFeeType: String(general.lateFeeType || "percent").trim(),
-      onlineViewLinkEnabled: Boolean(general.onlineViewLinkEnabled),
-      whatsappNotificationsEnabled: Boolean(general.whatsappNotificationsEnabled)
+      onlineViewLinkEnabled: true,
+      whatsappNotificationsEnabled: true
     },
     export: {
       ...defaultSettings.export,
@@ -116,37 +128,48 @@ function hasOption(list, value) {
   return list.some((item) => item.value === value);
 }
 
-function validateSettings(settings) {
+function isRecognizedPaymentTerm(value) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  if (/^(due\s+on\s+receipt|immediate|payable\s+on\s+receipt)$/i.test(text)) return true;
+  return /\bnet\s*\d{1,4}\b/i.test(text) || /\b\d{1,4}\s*(?:calendar\s*)?(?:business\s*)?days?\b/i.test(text);
+}
+
+function validateSettings(settings, options) {
   const errors = [];
   const general = settings.general;
   const exportSettings = settings.export;
   const branding = settings.branding;
 
-  if (!hasOption(optionLists.currencies, general.defaultCurrency)) {
+  if (!hasOption(options.currencies, general.defaultCurrency)) {
     errors.push("Default currency is required.");
   }
-  if (!hasOption(optionLists.languages, general.defaultLanguage)) {
+  if (!hasOption(options.languages, general.defaultLanguage)) {
     errors.push("Default language is required.");
   }
-  if (!hasOption(optionLists.taxes, general.defaultTax)) {
+  if (!hasOption(options.taxes, general.defaultTax)) {
     errors.push("Default tax is required.");
   }
-  if (!hasOption(optionLists.priceDisplayOptions, general.priceDisplay)) {
+  if (!hasOption(options.priceDisplayOptions, general.priceDisplay)) {
     errors.push("Price display is required.");
   }
-  if (!hasOption(optionLists.paymentTerms, general.paymentTerms)) {
+  if (!general.paymentTerms) {
     errors.push("Payment terms are required.");
+  } else if (general.paymentTerms.length > 80) {
+    errors.push("Payment terms must be 80 characters or fewer.");
+  } else if (!hasOption(options.paymentTerms, general.paymentTerms) && !isRecognizedPaymentTerm(general.paymentTerms)) {
+    errors.push("Payment terms must include a number of days, for example Net 45, or be Due on Receipt.");
   }
   if (Number.isNaN(general.lateFeeValue) || general.lateFeeValue < 0) {
     errors.push("Late fee must be 0 or higher.");
   }
-  if (!hasOption(optionLists.lateFeeTypes, general.lateFeeType)) {
+  if (!hasOption(options.lateFeeTypes, general.lateFeeType)) {
     errors.push("Late fee type is invalid.");
   }
-  if (!hasOption(optionLists.pdfPaperSizes, exportSettings.pdfPaperSize)) {
+  if (!hasOption(options.pdfPaperSizes, exportSettings.pdfPaperSize)) {
     errors.push("PDF paper size is required.");
   }
-  if (!hasOption(optionLists.excelFormats, exportSettings.excelFormat)) {
+  if (!hasOption(options.excelFormats, exportSettings.excelFormat)) {
     errors.push("Excel format is required.");
   }
   if (!settings.invoicePrefix) {
@@ -155,10 +178,10 @@ function validateSettings(settings) {
   if (!/^\d{4}$/.test(String(settings.invoiceYear || ""))) {
     errors.push("Enter a valid four-digit invoice year.");
   }
-  if (!hasOption(optionLists.separatorStyles, settings.separatorStyle)) {
+  if (!hasOption(options.separatorStyles, settings.separatorStyle)) {
     errors.push("Separator style is invalid.");
   }
-  if (!hasOption(optionLists.invoiceFormats, settings.invoiceFormat)) {
+  if (!hasOption(options.invoiceFormats, settings.invoiceFormat)) {
     errors.push("Invoice format is invalid.");
   }
   if (!Number.isInteger(Number(settings.nextInvoiceNumber)) || Number(settings.nextInvoiceNumber) < 1) {
@@ -234,8 +257,9 @@ function handleSettingsError(error, res, fallbackMessage) {
 
 async function getSettings(req, res) {
   try {
-    const settings = await getInvoiceSettings(getCompanyId(req));
-    res.json(await buildPayload(settings, Boolean(settings)));
+    const companyId = getCompanyId(req);
+    const settings = await getInvoiceSettings(companyId);
+    res.json(await buildPayload(settings, Boolean(settings), companyId));
   } catch (error) {
     handleSettingsError(error, res, "Unable to load invoice settings.");
   }
@@ -243,14 +267,15 @@ async function getSettings(req, res) {
 
 async function putSettings(req, res) {
   try {
+    const companyId = getCompanyId(req);
     const settings = normalizeSettings(req.body);
-    const errors = validateSettings(settings);
+    const options = await getInvoiceSettingsOptions(companyId);
+    const errors = validateSettings(settings, options);
 
     if (errors.length > 0) {
       return res.status(400).json({ message: errors[0], errors });
     }
 
-    const companyId = getCompanyId(req);
     const previousSettings = await getInvoiceSettings(companyId);
     const saved = await saveInvoiceSettings(settings, companyId);
     const changedBy = req.user?.email || "Admin";
@@ -271,7 +296,7 @@ async function putSettings(req, res) {
     });
 
     res.json({
-      ...(await buildPayload(saved, true)),
+      ...(await buildPayload(saved, true, companyId)),
       message: "Invoice settings saved."
     });
   } catch (error) {
@@ -350,8 +375,10 @@ async function postTestInvoiceEmail(req, res) {
 
 async function postInvoicePreview(req, res) {
   try {
+    const companyId = getCompanyId(req);
     const settings = normalizeSettings(req.body);
-    const errors = validateSettings(settings);
+    const options = await getInvoiceSettingsOptions(companyId);
+    const errors = validateSettings(settings, options);
     if (errors.length > 0) {
       return res.status(400).json({ message: errors[0], errors });
     }
@@ -381,10 +408,47 @@ async function postInvoicePreview(req, res) {
   }
 }
 
+async function getGstRates(req, res) {
+  try {
+    const companyId = getCompanyId(req);
+    const [rates, currentRate, nextRate] = await Promise.all([
+      listGstRates(companyId),
+      getEffectiveGstRate(companyId),
+      getNextScheduledGstRate(companyId)
+    ]);
+    res.json({ rates, currentRate, nextRate });
+  } catch (error) {
+    handleSettingsError(error, res, "Unable to load GST rates.");
+  }
+}
+
+async function postGstRate(req, res) {
+  try {
+    const companyId = getCompanyId(req);
+    await createGstRate(req.body, companyId, req.user?.email || "Admin");
+    await logAuditEvent({
+      userId: req.user?.userId,
+      userName: req.user?.email || "Admin",
+      activityType: "Invoice GST",
+      actionDescription: "Scheduled invoice GST rate",
+      affectedRecord: String(req.body.effectiveFrom || req.body.effective_from || ""),
+      status: "Success",
+      previousValue: "",
+      newValue: JSON.stringify(req.body),
+      ipAddress: getClientIp(req)
+    });
+    return getGstRates(req, res);
+  } catch (error) {
+    handleSettingsError(error, res, "Unable to save GST rate.");
+  }
+}
+
 module.exports = {
   getSettings,
+  getGstRates,
   postInvoiceLogo,
   postInvoicePreview,
+  postGstRate,
   postTestInvoiceEmail,
   putSettings
 };

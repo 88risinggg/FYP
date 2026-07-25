@@ -40,7 +40,7 @@ function setCachedSession(invoiceId, paymentUrl, sessionId) {
  */
 async function createCheckoutSession(invoice) {
   const amount = Math.round(Number(invoice.total_amount) * 100); // cents
-  const cacheKey = invoice.invoiceId || String(invoice.invoice_id);
+  const cacheKey = `${invoice.invoiceId || String(invoice.invoice_id)}:${amount}`;
 
   // Return cached session if still valid (avoids rate limit on rapid reloads)
   const cached = getCachedSession(cacheKey);

@@ -12,10 +12,13 @@ const { assessInvoiceRisk } = require("../services/fraudDetectionService");
 const { sendInvoiceEmail } = require("../services/invoiceDeliveryService");
 const { getCompanyId } = require("../utils/companyScope");
 const {
+  calculateInvoiceLateFee,
   calculateDueDate,
+  getInvoiceSettings,
   previewNextInvoiceNumber,
   reserveNextInvoiceNumber
 } = require("../models/invoiceSettingsModel");
+const { getEffectiveGstRate } = require("../models/invoiceGstRateModel");
 
 /** Set of valid invoice statuses used throughout the application. */
 const VALID_STATUSES = new Set(["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdue", "Pending Review", "Void", "Cancelled", "Refunded"]);
@@ -251,6 +254,7 @@ async function getInvoices(req, res) {
     let itemsByInvoiceId = {};
     let statusByInvoiceId = {};
     let sentAtByInvoiceId = {};
+    const invoiceSettings = await getInvoiceSettings(companyId);
 
     if (invoiceIds.length > 0) {
       // Try loading items - attempt invoice_item table first, then items_json column
@@ -338,11 +342,16 @@ async function getInvoices(req, res) {
     res.json({
       invoices: rows.map((row) => {
         const payment = paymentData[row.invoice_id] || {};
+        const status = toOperationalInvoiceStatus(row.status, statusByInvoiceId[row.invoice_id]);
+        const lateFee = calculateInvoiceLateFee({ ...row, status }, invoiceSettings);
         return {
           ...row,
           database_status: row.status,
-          status: toOperationalInvoiceStatus(row.status, statusByInvoiceId[row.invoice_id]),
+          status,
           total_amount: toCurrencyNumber(row.total_amount),
+          late_fee_rate: lateFee.lateFeeRate,
+          late_fee_amount: lateFee.lateFeeAmount,
+          amount_due: lateFee.amountDue,
           items: itemsByInvoiceId[row.invoice_id] || [],
           payment_url: payment.payment_url || null,
           qr_code_url: payment.qr_code_url || null,
@@ -399,12 +408,16 @@ async function getCustomers(req, res) {
  */
 async function getNextInvoiceNumber(req, res) {
   try {
-    const preview = await previewNextInvoiceNumber(new Date(), getCompanyId(req));
+    const companyId = getCompanyId(req);
+    const preview = await previewNextInvoiceNumber(new Date(), companyId);
+    const currentGstRate = await getEffectiveGstRate(companyId);
 
     res.json({
       invoiceId: preview.invoiceId,
       defaultDueDate: calculateDueDate(preview.settings),
-      paymentTerms: preview.settings.paymentTerms
+      paymentTerms: preview.settings.paymentTerms,
+      currentGstRate,
+      settings: preview.settings
     });
   } catch (error) {
     res.status(500).json({
@@ -451,6 +464,21 @@ async function createInvoice(req, res) {
       }
     }
 
+    const [effectiveGstRate, invoiceSettings] = await Promise.all([
+      getEffectiveGstRate(companyId, invoice.issue_date),
+      getInvoiceSettings(companyId)
+    ]);
+    const subtotalAmount = invoice.total_amount;
+    const taxRate = Number(effectiveGstRate?.ratePercentage || 0);
+    const taxInclusive = invoiceSettings.taxInclusive || invoiceSettings.general?.priceDisplay === "tax_inclusive";
+    const configuredDueDate = calculateDueDate(invoiceSettings, invoice.issue_date);
+    const taxAmount = taxInclusive
+      ? toCurrencyNumber(subtotalAmount - subtotalAmount / (1 + taxRate / 100))
+      : toCurrencyNumber(subtotalAmount * (taxRate / 100));
+    const totalAmount = taxInclusive
+      ? toCurrencyNumber(subtotalAmount)
+      : toCurrencyNumber(subtotalAmount + taxAmount);
+
     // Lock and advance the canonical settings sequence in this invoice transaction.
     const { invoiceId } = await reserveNextInvoiceNumber(connection, new Date(invoice.issue_date), companyId);
 
@@ -464,15 +492,32 @@ async function createInvoice(req, res) {
       [
         "Draft",
         invoice.issue_date,
-        invoice.due_date,
+        configuredDueDate,
         invoiceId,
-        invoice.total_amount,
+        totalAmount,
         invoice.customer_id,
         companyId
       ]
     );
 
     const invoicePrimaryId = invoiceResult.insertId;
+
+    try {
+      await connection.query(
+        `UPDATE invoice
+         SET subtotal_amount = ?, tax_name = ?, tax_rate = ?, tax_amount = ?
+         WHERE invoice_id = ?`,
+        [
+          subtotalAmount,
+          effectiveGstRate?.taxName || "GST",
+          taxRate,
+          taxAmount,
+          invoicePrimaryId
+        ]
+      );
+    } catch {
+      // Older schemas can still store the GST-inclusive total; migration adds explicit tax columns.
+    }
 
     // Store line items in items_json column on the invoice table
     await connection.query(
@@ -525,7 +570,11 @@ async function createInvoice(req, res) {
         invoice_id: invoicePrimaryId,
         invoiceId,
         status: "Draft",
-        total_amount: invoice.total_amount
+        subtotal_amount: subtotalAmount,
+        tax_name: effectiveGstRate?.taxName || "GST",
+        tax_rate: taxRate,
+        tax_amount: taxAmount,
+        total_amount: totalAmount
       }
     });
   } catch (error) {

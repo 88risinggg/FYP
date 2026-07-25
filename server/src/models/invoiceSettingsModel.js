@@ -6,8 +6,21 @@
  */
 
 const { pool } = require("../config/db");
+const {
+  getEffectiveGstRate,
+  getNextScheduledGstRate,
+  gstRateToOption,
+  gstRateToSettings,
+  listGstRates
+} = require("./invoiceGstRateModel");
 
 const SETTINGS_ROW_ID = "__SETTINGS__";
+
+const currencyMeta = {
+  SGD: { symbol: "S$", locale: "en-SG" },
+  USD: { symbol: "$", locale: "en-US" },
+  MYR: { symbol: "RM", locale: "ms-MY" }
+};
 
 const missingInvoiceSettingsMessage =
   "Invoice settings row is missing from the invoice table. Run the setup script to create the __SETTINGS__ row.";
@@ -25,7 +38,6 @@ const optionLists = {
   ],
   taxes: [
     { value: "GST_9", label: "GST (9%)", rate: 9, type: "GST" },
-    { value: "VAT_12", label: "VAT (12%)", rate: 12, type: "VAT" },
     { value: "NONE", label: "No Tax", rate: 0, type: "None" }
   ],
   priceDisplayOptions: [
@@ -156,7 +168,7 @@ const defaultSettings = {
     lateFeeValue: 0,
     lateFeeType: "percent",
     onlineViewLinkEnabled: true,
-    whatsappNotificationsEnabled: false
+    whatsappNotificationsEnabled: true
   },
   export: {
     pdfExportEnabled: true,
@@ -218,20 +230,101 @@ function buildInvoiceNumber(settings, date = new Date(), nextNumber = settings?.
 
 function calculateDueDate(settings, issueDate = new Date()) {
   const dueDate = new Date(issueDate);
-  dueDate.setDate(dueDate.getDate() + Number(settings.dueDays || 30));
+  dueDate.setDate(dueDate.getDate() + derivePaymentTermDays(settings));
   return dueDate.toISOString().slice(0, 10);
 }
 
+function derivePaymentTermDays(settings, fallbackDays = defaultSettings.dueDays) {
+  const term = String(settings?.general?.paymentTerms || settings?.paymentTerms || "").trim();
+
+  if (/^(due\s+on\s+receipt|immediate|payable\s+on\s+receipt)$/i.test(term)) {
+    return 0;
+  }
+
+  const netMatch = term.match(/\bnet\s*(\d{1,4})\b/i);
+  const dayMatch = term.match(/\b(\d{1,4})\s*(?:calendar\s*)?(?:business\s*)?days?\b/i);
+  const parsedDays = Number(netMatch?.[1] || dayMatch?.[1]);
+
+  if (Number.isInteger(parsedDays) && parsedDays >= 0) {
+    return parsedDays;
+  }
+
+  return Number(fallbackDays) || defaultSettings.dueDays;
+}
+
+function toCurrencyNumber(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? Number(numberValue.toFixed(2)) : 0;
+}
+
+function calculateInvoiceLateFee(invoice, settings, asOf = new Date()) {
+  const status = String(invoice?.status || "");
+  const dueDate = invoice?.due_date || invoice?.dueDate;
+  const isClosed = ["Paid", "Void", "Cancelled", "Refunded"].includes(status);
+  const parsedDueDate = dueDate ? new Date(dueDate) : null;
+  if (parsedDueDate) parsedDueDate.setHours(23, 59, 59, 999);
+  const dueTimestamp = parsedDueDate ? parsedDueDate.getTime() : Number.NaN;
+
+  if (isClosed || Number.isNaN(dueTimestamp) || new Date(asOf).getTime() <= dueTimestamp) {
+    return { lateFeeRate: 0, lateFeeAmount: 0, amountDue: toCurrencyNumber(invoice?.total_amount) };
+  }
+
+  const rate = Number(settings?.general?.lateFeeValue ?? settings?.lateFeePercent ?? 0);
+  const baseAmount = toCurrencyNumber(invoice?.total_amount);
+  const lateFeeAmount = rate > 0 ? toCurrencyNumber(baseAmount * (rate / 100)) : 0;
+
+  return {
+    lateFeeRate: rate > 0 ? rate : 0,
+    lateFeeAmount,
+    amountDue: toCurrencyNumber(baseAmount + lateFeeAmount)
+  };
+}
+
 function calculateConfigurationStatus(settings) {
+  const hasValue = (value) => String(value ?? "").trim() !== "";
+  const hasValidYear = /^\d{4}$/.test(String(settings?.invoiceYear || ""));
+  const hasValidNextNumber = Number.isInteger(Number(settings?.nextInvoiceNumber)) && Number(settings?.nextInvoiceNumber) >= 1;
+  const hasValidLateFee = settings?.general?.lateFeeValue !== "" && Number(settings?.general?.lateFeeValue) >= 0;
+
   const status = {
-    general: settings?.general?.defaultCurrency && settings?.general?.defaultLanguage ? "completed" : "incomplete",
-    numbering: settings?.invoicePrefix && settings?.nextInvoiceNumber ? "completed" : "incomplete",
-    template: typeof settings?.branding?.showCompanyDetailsOnInvoice === "boolean" ? "completed" : "warning",
-    email: settings?.general?.onlineViewLinkEnabled ? "completed" : "warning",
-    reminders: settings?.general?.whatsappNotificationsEnabled ? "completed" : "warning",
-    payments: "warning",
-    automation: settings?.export?.pdfExportEnabled || settings?.export?.excelExportEnabled ? "completed" : "warning",
-    bulkUpload: "incomplete"
+    general:
+      hasValue(settings?.general?.defaultCurrency) &&
+      hasValue(settings?.general?.defaultLanguage) &&
+      hasValue(settings?.general?.defaultTax) &&
+      hasValue(settings?.general?.priceDisplay) &&
+      hasValue(settings?.general?.paymentTerms) &&
+      hasValidLateFee &&
+      hasValue(settings?.export?.pdfPaperSize) &&
+      hasValue(settings?.export?.excelFormat) &&
+      hasValue(settings?.companyName) &&
+      hasValue(settings?.financeEmail)
+        ? "completed"
+        : "incomplete",
+    numbering:
+      hasValue(settings?.invoicePrefix) &&
+      hasValidYear &&
+      hasValue(settings?.separatorStyle) &&
+      hasValue(settings?.invoiceFormat) &&
+      hasValidNextNumber
+        ? "completed"
+        : "incomplete",
+    email:
+      hasValue(settings?.senderName) &&
+      hasValue(settings?.replyToEmail) &&
+      hasValue(settings?.supportEmail) &&
+      hasValue(settings?.emailSubjectTemplate) &&
+      hasValue(settings?.emailBodyTemplate)
+        ? "completed"
+        : "incomplete",
+    payments:
+      hasValue(settings?.bankAccountHolderName) &&
+      hasValue(settings?.bankName) &&
+      hasValue(settings?.bankAccountNumber) &&
+      hasValue(settings?.bicSwift) &&
+      hasValue(settings?.paynowIdentifier) &&
+      hasValue(settings?.paymentReferenceInstruction)
+        ? "completed"
+        : "incomplete"
   };
   const completedCount = Object.values(status).filter((v) => v === "completed").length;
   return {
@@ -355,8 +448,8 @@ function mapRawToSettings(raw) {
       paymentTerms: raw.payment_terms || defaultSettings.general.paymentTerms,
       lateFeeValue: numberValue(raw.late_fee_percent, defaultSettings.general.lateFeeValue),
       lateFeeType: raw.late_fee_type || defaultSettings.general.lateFeeType,
-      onlineViewLinkEnabled: boolValue(raw.online_view_link_enabled, defaultSettings.general.onlineViewLinkEnabled),
-      whatsappNotificationsEnabled: boolValue(raw.whatsapp_notifications_enabled, defaultSettings.general.whatsappNotificationsEnabled)
+      onlineViewLinkEnabled: true,
+      whatsappNotificationsEnabled: true
     },
     export: {
       pdfExportEnabled: boolValue(raw.pdf_export_enabled, defaultSettings.export.pdfExportEnabled),
@@ -384,6 +477,70 @@ function mapRawToSettings(raw) {
   };
 }
 
+function applyGeneralSettings(settings) {
+  const general = settings.general || {};
+  const defaultCurrency = general.defaultCurrency || settings.defaultCurrency || defaultSettings.defaultCurrency;
+  const priceDisplay = general.priceDisplay || defaultSettings.general.priceDisplay;
+  const paymentTerms = general.paymentTerms || settings.paymentTerms || defaultSettings.general.paymentTerms;
+  const dueDays = derivePaymentTermDays({ ...settings, general: { ...general, paymentTerms } });
+  const lateFeeValue = Number(general.lateFeeValue ?? settings.lateFeePercent ?? defaultSettings.general.lateFeeValue);
+  const meta = currencyMeta[defaultCurrency] || currencyMeta.SGD;
+
+  return {
+    ...settings,
+    defaultCurrency,
+    defaultLanguage: general.defaultLanguage || settings.defaultLanguage || defaultSettings.general.defaultLanguage,
+    paymentTerms,
+    dueDays,
+    lateFeePercent: Number.isFinite(lateFeeValue) ? lateFeeValue : defaultSettings.general.lateFeeValue,
+    currencySymbol: meta.symbol,
+    currencyLocale: meta.locale,
+    pricesIncludeTax: priceDisplay === "tax_inclusive",
+    taxInclusive: priceDisplay === "tax_inclusive",
+    general: {
+      ...general,
+      defaultCurrency,
+      defaultLanguage: general.defaultLanguage || settings.defaultLanguage || defaultSettings.general.defaultLanguage,
+      paymentTerms,
+      lateFeeValue: Number.isFinite(lateFeeValue) ? lateFeeValue : defaultSettings.general.lateFeeValue,
+      onlineViewLinkEnabled: true,
+      whatsappNotificationsEnabled: true,
+      priceDisplay
+    }
+  };
+}
+
+async function applyEffectiveGst(settings, companyId = null, asOf = new Date()) {
+  const baseSettings = applyGeneralSettings(settings);
+  const [currentGstRate, nextScheduledGstRate] = await Promise.all([
+    getEffectiveGstRate(companyId, asOf),
+    getNextScheduledGstRate(companyId, asOf)
+  ]);
+  const gstSettings = gstRateToSettings(currentGstRate);
+
+  return {
+    ...baseSettings,
+    ...gstSettings,
+    currentGstRate,
+    nextScheduledGstRate,
+    general: {
+      ...baseSettings.general,
+      ...gstSettings.general
+    }
+  };
+}
+
+async function getInvoiceSettingsOptions(companyId = null) {
+  const rates = await listGstRates(companyId);
+  const taxOptions = rates.map(gstRateToOption);
+  return {
+    ...optionLists,
+    taxes: taxOptions.length > 0
+      ? taxOptions
+      : optionLists.taxes
+  };
+}
+
 // ─── DB Operations ───────────────────────────────────────────────────────────
 
 async function getInvoiceSettings(companyId = null) {
@@ -394,9 +551,14 @@ async function getInvoiceSettings(companyId = null) {
     params
   );
 
-  if (!rows[0] || !rows[0].items_json) return { ...defaultSettings, previewInvoiceNumber: buildInvoiceNumber(defaultSettings), sampleDueDate: calculateDueDate(defaultSettings) };
+  if (!rows[0] || !rows[0].items_json) {
+    return applyEffectiveGst(
+      { ...defaultSettings, previewInvoiceNumber: buildInvoiceNumber(defaultSettings), sampleDueDate: calculateDueDate(defaultSettings) },
+      companyId
+    );
+  }
 
-  return parseSettingsJson(rows[0].items_json);
+  return applyEffectiveGst(parseSettingsJson(rows[0].items_json), companyId);
 }
 
 async function getInvoiceSettingsForUpdate(connection, companyId = null) {
@@ -408,7 +570,7 @@ async function getInvoiceSettingsForUpdate(connection, companyId = null) {
   );
 
   if (rows[0] && rows[0].items_json) {
-    return parseSettingsJson(rows[0].items_json);
+    return applyEffectiveGst(parseSettingsJson(rows[0].items_json), companyId);
   }
 
   // Create the settings row if it doesn't exist
@@ -417,14 +579,30 @@ async function getInvoiceSettingsForUpdate(connection, companyId = null) {
     "INSERT INTO invoice (invoiceId, status, issue_date, due_date, total_amount, customer_id, company_id, items_json, created_at) VALUES (?, 'Draft', '1970-01-01', '1970-01-01', 0, NULL, ?, ?, NOW())",
     [SETTINGS_ROW_ID, companyId, settingsJson]
   );
-  return { ...defaultSettings, previewInvoiceNumber: buildInvoiceNumber(defaultSettings), sampleDueDate: calculateDueDate(defaultSettings) };
+  return applyEffectiveGst(
+    { ...defaultSettings, previewInvoiceNumber: buildInvoiceNumber(defaultSettings), sampleDueDate: calculateDueDate(defaultSettings) },
+    companyId
+  );
 }
 
 async function saveInvoiceSettings(settings, companyId = null) {
-  const toSave = { ...defaultSettings, ...settings };
+  const effectiveGst = await getEffectiveGstRate(companyId);
+  const gstSettings = gstRateToSettings(effectiveGst);
+  const toSave = {
+    ...defaultSettings,
+    ...applyGeneralSettings(settings),
+    ...gstSettings,
+    general: {
+      ...defaultSettings.general,
+      ...(applyGeneralSettings(settings).general || {}),
+      ...gstSettings.general
+    }
+  };
   // Remove computed fields before saving
   delete toSave.previewInvoiceNumber;
   delete toSave.sampleDueDate;
+  delete toSave.currentGstRate;
+  delete toSave.nextScheduledGstRate;
 
   const settingsJson = JSON.stringify(toSave);
 
@@ -482,6 +660,8 @@ async function reserveNextInvoiceNumber(connection, date = new Date(), companyId
   const updatedSettings = { ...settings, nextInvoiceNumber: result.sequence + 1 };
   delete updatedSettings.previewInvoiceNumber;
   delete updatedSettings.sampleDueDate;
+  delete updatedSettings.currentGstRate;
+  delete updatedSettings.nextScheduledGstRate;
 
   await connection.execute(
     `UPDATE invoice SET items_json = ? WHERE invoiceId = ?${companyId ? " AND company_id = ?" : ""}`,
@@ -546,7 +726,10 @@ module.exports = {
   buildInvoiceNumber,
   calculateConfigurationStatus,
   calculateDueDate,
+  calculateInvoiceLateFee,
   defaultSettings,
+  derivePaymentTermDays,
+  getInvoiceSettingsOptions,
   getInvoiceSettings,
   getInvoiceSettingsForUpdate,
   invoiceStatusWorkflow,

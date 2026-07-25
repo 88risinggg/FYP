@@ -9,7 +9,12 @@ jest.mock("../models/invoiceSettingsModel", () => ({
     paymentTerms: "Net 30",
     dueDays: 30
   },
-  getInvoiceSettings: jest.fn()
+  getInvoiceSettings: jest.fn(),
+  calculateInvoiceLateFee: jest.fn((invoice) => ({
+    lateFeeRate: 0,
+    lateFeeAmount: 0,
+    amountDue: Number(invoice?.total_amount || 0)
+  }))
 }));
 
 jest.mock("./qrCodeService", () => ({ generateQRCode: jest.fn() }));

@@ -233,10 +233,10 @@ const DEMO_CUSTOMERS = [
   { customer_id: 15, name: "Rejuve Wellness Clinic", email: "appointments@rejuveclinic.sg", address: "80 Marine Parade Road, #09-05, Parkway Parade, Singapore 449269", created_at: "2026-06-10T10:00:00.000Z" }
 ];
 
-function formatCurrency(value) {
+function formatCurrency(value, currency = "SGD") {
   return new Intl.NumberFormat("en-SG", {
     style: "currency",
-    currency: "SGD"
+    currency
   }).format(Number(value || 0));
 }
 
@@ -356,12 +356,23 @@ function toDateInputValue(date) {
   return date.toISOString().slice(0, 10);
 }
 
+function addDaysToDateInput(value, days) {
+  const date = value ? new Date(`${value}T00:00:00`) : new Date();
+  if (Number.isNaN(date.getTime())) return toDateInputValue(new Date());
+  date.setDate(date.getDate() + Number(days || 0));
+  return toDateInputValue(date);
+}
+
 function toTimeInputValue(date) {
   return date.toTimeString().slice(0, 5);
 }
 
 function getItemAmount(item) {
   return Number(item.quantity || 0) * Number(item.unit_price || 0);
+}
+
+function getInvoiceAmountDue(invoice) {
+  return Number(invoice?.amount_due ?? invoice?.total_amount ?? 0);
 }
 
 function InvoiceStatusBadge({ status }) {
@@ -607,8 +618,13 @@ function InvoiceDetailsModal({ invoice, onClose }) {
             </div>
           </div>
           <div>
-            <p className="text-xs text-[#7b6660]/70">Total</p>
-            <p className="mt-1 text-sm font-semibold text-[#251E1F]">{formatCurrency(invoice.total_amount)}</p>
+            <p className="text-xs text-[#7b6660]/70">Amount Due</p>
+            <p className="mt-1 text-sm font-semibold text-[#251E1F]">{formatCurrency(getInvoiceAmountDue(invoice))}</p>
+            {Number(invoice.late_fee_amount || 0) > 0 ? (
+              <p className="mt-1 text-xs font-medium text-rose-700">
+                Includes late fee: {formatCurrency(invoice.late_fee_amount)}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -645,6 +661,18 @@ function InvoiceDetailsModal({ invoice, onClose }) {
                   <td colSpan="3" className="px-4 py-3 text-right text-sm font-bold text-[#251E1F]">Total</td>
                   <td className="px-4 py-3 text-right text-sm font-bold text-[#251E1F]">{formatCurrency(invoice.total_amount)}</td>
                 </tr>
+                {Number(invoice.late_fee_amount || 0) > 0 ? (
+                  <>
+                    <tr>
+                      <td colSpan="3" className="px-4 py-3 text-right text-sm font-bold text-rose-700">Late Fee ({Number(invoice.late_fee_rate || 0)}%)</td>
+                      <td className="px-4 py-3 text-right text-sm font-bold text-rose-700">{formatCurrency(invoice.late_fee_amount)}</td>
+                    </tr>
+                    <tr>
+                      <td colSpan="3" className="px-4 py-3 text-right text-sm font-bold text-[#251E1F]">Amount Due</td>
+                      <td className="px-4 py-3 text-right text-sm font-bold text-[#251E1F]">{formatCurrency(getInvoiceAmountDue(invoice))}</td>
+                    </tr>
+                  </>
+                ) : null}
               </tfoot>
             </table>
           </div>
@@ -732,7 +760,7 @@ function InvoiceDetailsModal({ invoice, onClose }) {
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#F38978] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#E87562]"
                 >
                   <CreditCard size={15} />
-                  Pay Now with Card / PayNow — {formatCurrency(invoice.total_amount)}
+                  Pay Now with Card / PayNow - {formatCurrency(getInvoiceAmountDue(invoice))}
                 </a>
 
                 {/* Regenerate link */}
@@ -915,9 +943,11 @@ function VoidInvoiceModal({ invoice, onCancel, onVoided }) {
   );
 }
 
-function InvoiceCreationModal({ customers, nextInvoiceId, defaultDueDate: configuredDueDate, onCancel, onCreated }) {
+function InvoiceCreationModal({ customers, nextInvoiceId, defaultDueDate: configuredDueDate, currentGstRate, invoiceSettings, onCancel, onCreated }) {
   const today = toDateInputValue(new Date());
-  const defaultDueDate = configuredDueDate || toDateInputValue(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000));
+  const dueDays = Number(invoiceSettings?.dueDays ?? 30);
+  const paymentTerms = invoiceSettings?.paymentTerms || invoiceSettings?.general?.paymentTerms || "Net 30";
+  const defaultDueDate = configuredDueDate || addDaysToDateInput(today, dueDays);
   const [form, setForm] = useState({
     customer_id: "",
     issue_date: today,
@@ -931,6 +961,19 @@ function InvoiceCreationModal({ customers, nextInvoiceId, defaultDueDate: config
     () => form.items.reduce((sum, item) => sum + getItemAmount(item), 0),
     [form.items]
   );
+  const gstRate = Number(currentGstRate?.ratePercentage || 0);
+  const gstName = currentGstRate?.taxName || "GST";
+  const invoiceCurrency = invoiceSettings?.defaultCurrency || invoiceSettings?.general?.defaultCurrency || "SGD";
+  const taxInclusive = invoiceSettings?.taxInclusive || invoiceSettings?.general?.priceDisplay === "tax_inclusive";
+  const taxAmount = taxInclusive ? subtotal - subtotal / (1 + gstRate / 100) : subtotal * (gstRate / 100);
+  const invoiceTotal = taxInclusive ? subtotal : subtotal + taxAmount;
+
+  useEffect(() => {
+    setForm((current) => ({
+      ...current,
+      due_date: addDaysToDateInput(current.issue_date, dueDays)
+    }));
+  }, [dueDays, form.issue_date]);
 
   function updateItem(index, field, value) {
     setForm((current) => ({
@@ -1029,9 +1072,12 @@ function InvoiceCreationModal({ customers, nextInvoiceId, defaultDueDate: config
             <input
               type="date"
               value={form.due_date}
-              onChange={(event) => setForm((current) => ({ ...current, due_date: event.target.value }))}
-              className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white px-3 py-3 text-sm text-[#251E1F] outline-none focus:border-[#F38978]"
+              readOnly
+              className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-[#fff8f5] px-3 py-3 text-sm text-[#251E1F] outline-none"
             />
+            <span className="mt-1 block text-xs font-medium text-[#7b6660]">
+              Based on admin payment terms: {paymentTerms}
+            </span>
           </label>
         </div>
 
@@ -1111,15 +1157,15 @@ function InvoiceCreationModal({ customers, nextInvoiceId, defaultDueDate: config
           <div className="w-full max-w-sm rounded-xl border border-[#f0d2ca] bg-white/[0.05] p-4">
             <div className="flex justify-between py-1 text-sm text-[#7b6660]">
               <span>Subtotal</span>
-              <span>{formatCurrency(subtotal)}</span>
+              <span>{formatCurrency(subtotal, invoiceCurrency)}</span>
             </div>
             <div className="flex justify-between py-1 text-sm text-[#7b6660]">
-              <span>Tax</span>
-              <span>{formatCurrency(0)}</span>
+              <span>{gstName} ({gstRate}%{taxInclusive ? ", included" : ""})</span>
+              <span>{formatCurrency(taxAmount, invoiceCurrency)}</span>
             </div>
             <div className="mt-3 flex justify-between border-t border-[#f0d2ca] pt-3 text-base font-semibold text-[#251E1F]">
               <span>Total</span>
-              <span>{formatCurrency(subtotal)}</span>
+              <span>{formatCurrency(invoiceTotal, invoiceCurrency)}</span>
             </div>
           </div>
         </div>
@@ -1302,7 +1348,12 @@ function InvoiceTable({
               <td className="px-4 py-4">{formatDate(invoice.issue_date)}</td>
               <td className="px-4 py-4">{formatDate(invoice.due_date)}</td>
               <td className="px-4 py-4 text-[#7b6660]">{invoice.scheduled_at ? formatDateTime(invoice.scheduled_at) : "-"}</td>
-              <td className="px-4 py-4 text-right font-bold text-[#251E1F]">{formatCurrency(invoice.total_amount)}</td>
+              <td className="px-4 py-4 text-right font-bold text-[#251E1F]">
+                {formatCurrency(getInvoiceAmountDue(invoice))}
+                {Number(invoice.late_fee_amount || 0) > 0 ? (
+                  <p className="text-xs font-semibold text-rose-700">Late fee included</p>
+                ) : null}
+              </td>
               <td className="px-4 py-4">
                 <InvoiceStatusBadge status={invoice.status} />
               </td>
@@ -1494,7 +1545,7 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
       }
 
       const [settingsData, remindersData, auditData, fraudData] = await Promise.all([
-        safeFetch("/api/admin/invoicing/invoice-settings"),
+        safeFetch("/api/invoices/settings"),
         safeFetch("/api/admin/invoicing/reminder-settings"),
         safeFetch("/api/admin/invoicing/audit-logs?limit=10"),
         safeFetch("/api/fraud/dashboard")
@@ -1520,7 +1571,7 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
   const totals = useMemo(() => {
     const totalRevenue = invoices.reduce((s, i) => s + Number(i.total_amount || 0), 0);
     const paidRevenue = invoices.filter((i) => i.status === "Paid").reduce((s, i) => s + Number(i.total_amount || 0), 0);
-    const overdueAmount = invoices.filter((i) => i.status === "Overdue").reduce((s, i) => s + Number(i.total_amount || 0), 0);
+    const overdueAmount = invoices.filter((i) => i.status === "Overdue").reduce((s, i) => s + getInvoiceAmountDue(i), 0);
     const pendingAmount = invoices.filter((i) => i.status === "Sent" || i.status === "Scheduled").reduce((s, i) => s + Number(i.total_amount || 0), 0);
     return { totalRevenue, paidRevenue, overdueAmount, pendingAmount };
   }, [invoices]);
@@ -1801,22 +1852,27 @@ function AdminInvoiceConfigPanel({ settings, reminderRules }) {
         </div>
         <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
           <p className="text-xs text-[#7b6660]">Payment Terms</p>
-          <p className="mt-1 text-sm font-semibold text-[#251E1F]">{settings.paymentTerms || "Net 30"}</p>
+          <p className="mt-1 text-sm font-semibold text-[#251E1F]">{settings.paymentTerms || settings.general?.paymentTerms || "Net 30"}</p>
         </div>
       </div>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
           <p className="text-xs text-[#7b6660]">Due Period</p>
-          <p className="mt-1 text-sm font-semibold text-[#251E1F]">{settings.dueDays || 30} days</p>
+          <p className="mt-1 text-sm font-semibold text-[#251E1F]">{settings.dueDays ?? 30} days</p>
         </div>
         <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
           <p className="text-xs text-[#7b6660]">Tax Type & Rate</p>
           <p className="mt-1 text-sm font-semibold text-[#251E1F]">{settings.taxType || "GST"} @ {settings.defaultTaxRate || 0}%</p>
+          {settings.nextScheduledGstRate ? (
+            <p className="mt-1 text-xs text-[#7b6660]">
+              Next scheduled: {settings.nextScheduledGstRate.taxName} @ {Number(settings.nextScheduledGstRate.ratePercentage)}% from {formatDate(settings.nextScheduledGstRate.effectiveFrom)}
+            </p>
+          ) : null}
         </div>
         <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
           <p className="text-xs text-[#7b6660]">Late Fee</p>
-          <p className="mt-1 text-sm font-semibold text-[#251E1F]">{settings.lateFeePercent || 0}% after {settings.gracePeriodDays || 0} day grace</p>
+          <p className="mt-1 text-sm font-semibold text-[#251E1F]">{settings.lateFeePercent ?? settings.general?.lateFeeValue ?? 0}% after due date</p>
         </div>
         <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-4">
           <p className="text-xs text-[#7b6660]">Active Reminders</p>
@@ -3832,6 +3888,8 @@ export default function FinanceInvoicingPage() {
   const [customers, setCustomers] = useState([]);
   const [nextInvoiceId, setNextInvoiceId] = useState("");
   const [defaultInvoiceDueDate, setDefaultInvoiceDueDate] = useState("");
+  const [currentGstRate, setCurrentGstRate] = useState(null);
+  const [invoiceSettings, setInvoiceSettings] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -3906,6 +3964,8 @@ export default function FinanceInvoicingPage() {
     setCustomers(customerDirectoryResponse.customers || customerResponse.customers || []);
     setNextInvoiceId(numberResponse.invoiceId || "INV-0001");
     setDefaultInvoiceDueDate(numberResponse.defaultDueDate || "");
+    setCurrentGstRate(numberResponse.currentGstRate || null);
+    setInvoiceSettings(numberResponse.settings || null);
   }
 
   function handleGlobalSearch(query) {
@@ -4097,6 +4157,8 @@ export default function FinanceInvoicingPage() {
           customers={displayCustomers}
           nextInvoiceId={nextInvoiceId}
           defaultDueDate={defaultInvoiceDueDate}
+          currentGstRate={currentGstRate}
+          invoiceSettings={invoiceSettings}
           onCancel={() => setIsCreating(false)}
           onCreated={handleCreated}
         />

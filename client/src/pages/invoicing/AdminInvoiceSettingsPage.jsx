@@ -18,9 +18,11 @@ import {
   XCircle
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import {
+  createInvoiceGstRate,
+  getInvoiceGstRates,
   getInvoiceSettings,
   sendInvoiceSettingsTestEmail,
   updateInvoiceSettings
@@ -32,6 +34,11 @@ const tabs = [
   { label: "Email", slug: "email" },
   { label: "Payments", slug: "payments" }
 ];
+
+const invoiceSettingsStatusSections = tabs.map((tab) => ({
+  key: tab.slug,
+  label: tab.label
+}));
 
 const emptyOptions = {
   currencies: [],
@@ -79,8 +86,8 @@ const defaultForm = {
     paymentTerms: "",
     lateFeeValue: "",
     lateFeeType: "percent",
-    onlineViewLinkEnabled: false,
-    whatsappNotificationsEnabled: false
+    onlineViewLinkEnabled: true,
+    whatsappNotificationsEnabled: true
   },
   export: {
     pdfExportEnabled: false,
@@ -105,22 +112,23 @@ const generalSelectFields = [
   { label: "Default Currency", section: "general", field: "defaultCurrency", optionsKey: "currencies" },
   { label: "Default Language", section: "general", field: "defaultLanguage", optionsKey: "languages" },
   { label: "Default Tax", section: "general", field: "defaultTax", optionsKey: "taxes" },
-  { label: "Price Display", section: "general", field: "priceDisplay", optionsKey: "priceDisplayOptions" },
-  { label: "Payment Terms", section: "general", field: "paymentTerms", optionsKey: "paymentTerms" }
+  { label: "Price Display", section: "general", field: "priceDisplay", optionsKey: "priceDisplayOptions" }
 ];
 
 const generalToggles = [
   {
     label: "Online View Link",
-    note: "Include secure online invoice view link in emails",
+    note: "Always included when Finance sends invoices.",
     section: "general",
-    field: "onlineViewLinkEnabled"
+    field: "onlineViewLinkEnabled",
+    locked: true
   },
   {
     label: "Enable WhatsApp Notifications",
-    note: "Send invoice and reminder notifications via WhatsApp",
+    note: "Always enabled for invoice notification settings.",
     section: "general",
-    field: "whatsappNotificationsEnabled"
+    field: "whatsappNotificationsEnabled",
+    locked: true
   }
 ];
 
@@ -240,11 +248,11 @@ function formatDateTime(value) {
   }).format(date);
 }
 
-function titleFromKey(key) {
-  return String(key)
-    .replace(/([A-Z])/g, " $1")
-    .replace(/-/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+function paymentTermsHasDueLength(value) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  if (/^(due\s+on\s+receipt|immediate|payable\s+on\s+receipt)$/i.test(text)) return true;
+  return /\bnet\s*\d+\b/i.test(text) || /\b\d+\s*(?:calendar\s*)?(?:business\s*)?days?\b/i.test(text);
 }
 
 function Field({ label, children, note }) {
@@ -282,6 +290,20 @@ function SelectField({ value, onChange, options, placeholder = "Select option" }
 }
 
 function SettingsSelect({ config, options, value, onChange }) {
+  if (config.field === "defaultTax") {
+    const selected = options[config.optionsKey].find((option) => option.value === value);
+    return (
+      <Field label={config.label} note="Managed from GST Management. This field is locked for invoice consistency.">
+        <input
+          type="text"
+          readOnly
+          value={selected?.label || "No GST rate configured"}
+          className="h-11 w-full rounded-lg border border-[#ead3cc] bg-[#fff8f5] px-3 text-sm font-semibold text-[#251E1F] outline-none"
+        />
+      </Field>
+    );
+  }
+
   return (
     <Field label={config.label}>
       <SelectField
@@ -293,9 +315,396 @@ function SettingsSelect({ config, options, value, onChange }) {
   );
 }
 
-function Toggle({ checked, onChange, label, note }) {
+function PaymentTermsSetting({ options, value, onChange }) {
+  const fixedOptions = options.paymentTerms || [];
+  const fixedValues = new Set(fixedOptions.map((option) => option.value));
+  const isCustom = value && !fixedValues.has(value);
+  const selectValue = isCustom ? "__custom__" : value;
+  const customDays = isCustom ? String(value).match(/\d+/)?.[0] || "" : "";
+
+  function handleSelect(nextValue) {
+    if (nextValue === "__custom__") {
+      onChange("general", "paymentTerms", isCustom ? value : "Net ");
+      return;
+    }
+    onChange("general", "paymentTerms", nextValue);
+  }
+
   return (
-    <label className="flex min-h-[70px] items-center justify-between gap-4 rounded-lg border border-[#ead3cc] bg-[#fff8f5] px-4 py-3">
+    <Field label="Payment Terms" note="Choose a saved term or enter a custom number of days.">
+      <div className="space-y-2">
+        <SelectField
+          value={selectValue}
+          onChange={handleSelect}
+          options={[...fixedOptions, { value: "__custom__", label: "Custom term" }]}
+        />
+        {selectValue === "__custom__" ? (
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={customDays}
+            onChange={(event) => onChange("general", "paymentTerms", event.target.value === "" ? "Net " : `Net ${event.target.value}`)}
+            placeholder="Number of days"
+            className="h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm font-semibold text-[#251E1F] outline-none transition focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/20"
+          />
+        ) : null}
+      </div>
+    </Field>
+  );
+}
+
+function shortDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("en-SG", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit"
+  }).format(date);
+}
+
+function GstManagementTab() {
+  const navigate = useNavigate();
+  const [data, setData] = useState({ rates: [], currentRate: null, nextRate: null });
+  const [form, setForm] = useState({
+    ratePercentage: "",
+    effectiveFrom: "",
+    effectiveTo: ""
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  async function loadGstRates() {
+    setLoading(true);
+    setError("");
+    try {
+      setData(await getInvoiceGstRates());
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadGstRates();
+  }, []);
+
+  async function submitGstRate() {
+    setSaving(true);
+    setMessage("");
+    setError("");
+    try {
+      const nextData = await createInvoiceGstRate({
+        taxName: "GST",
+        ratePercentage: Number(form.ratePercentage),
+        effectiveFrom: form.effectiveFrom,
+        effectiveTo: form.effectiveTo || null
+      });
+      setData(nextData);
+      setForm({ ratePercentage: "", effectiveFrom: "", effectiveTo: "" });
+      setMessage("GST rate scheduled.");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function clearScheduleForm() {
+    setForm({ ratePercentage: "", effectiveFrom: "", effectiveTo: "" });
+    setMessage("");
+    setError("");
+  }
+
+  const previewRates = data.rates.slice(0, 5);
+
+  if (loading) {
+    return (
+      <section className="rounded-xl border border-[#f0d2ca] bg-white/95 p-8 text-center text-sm font-semibold text-[#7b6660]">
+        Loading GST management...
+      </section>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {error ? <MessageBanner type="error">{error}</MessageBanner> : null}
+      {message ? <MessageBanner type="success">{message}</MessageBanner> : null}
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/95 p-5 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-[#F38978]">Current Active GST</p>
+              <p className="mt-3 text-4xl font-bold leading-none text-[#251E1F]">
+                {data.currentRate ? `${Number(data.currentRate.ratePercentage)}%` : "-"}
+              </p>
+            </div>
+            <span className="rounded-full border border-[#f0d2ca] bg-[#fff8f5] px-3 py-1 text-xs font-bold text-[#6f4f47]">
+              {data.currentRate?.taxName || "GST"}
+            </span>
+          </div>
+          <div className="mt-5 border-t border-[#f0d2ca] pt-4">
+            <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">Effective From</p>
+            <p className="mt-1 text-sm font-semibold text-[#251E1F]">{shortDate(data.currentRate?.effectiveFrom)}</p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-[#f0d2ca] bg-white/95 p-5 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-[#F38978]">Upcoming Scheduled GST</p>
+              <p className="mt-3 text-4xl font-bold leading-none text-[#251E1F]">
+                {data.nextRate ? `${Number(data.nextRate.ratePercentage)}%` : "None"}
+              </p>
+            </div>
+            <span className="rounded-full border border-[#f0d2ca] bg-[#fff8f5] px-3 py-1 text-xs font-bold text-[#6f4f47]">
+              {data.nextRate?.taxName || "Pending"}
+            </span>
+          </div>
+          <div className="mt-5 border-t border-[#f0d2ca] pt-4">
+            <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">Starts On</p>
+            <p className="mt-1 text-sm font-semibold text-[#251E1F]">
+              {data.nextRate ? shortDate(data.nextRate.effectiveFrom) : "No scheduled change"}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <SettingsCard title="Schedule GST Rate" icon={FileText}>
+        <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-start">
+          <Field label="GST Rate (%)">
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              required
+              value={form.ratePercentage}
+              onChange={(event) => setForm((current) => ({ ...current, ratePercentage: event.target.value }))}
+              className="h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm font-semibold text-[#251E1F] outline-none focus:border-[#F38978]"
+            />
+          </Field>
+          <Field label="Effective From">
+            <input
+              type="date"
+              required
+              value={form.effectiveFrom}
+              onChange={(event) => setForm((current) => ({ ...current, effectiveFrom: event.target.value }))}
+              className="h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm font-semibold text-[#251E1F] outline-none focus:border-[#F38978]"
+            />
+          </Field>
+          <Field label="Effective To" note="Leave empty for ongoing.">
+            <input
+              type="date"
+              value={form.effectiveTo}
+              onChange={(event) => setForm((current) => ({ ...current, effectiveTo: event.target.value }))}
+              className="h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm font-semibold text-[#251E1F] outline-none focus:border-[#F38978]"
+            />
+          </Field>
+          <button
+            type="button"
+            onClick={submitGstRate}
+            disabled={saving || !form.ratePercentage || !form.effectiveFrom}
+            className="primary-button mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold disabled:opacity-60 xl:mt-5"
+          >
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            {saving ? "Saving..." : "Schedule"}
+          </button>
+        </div>
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={clearScheduleForm}
+            disabled={saving || (!form.ratePercentage && !form.effectiveFrom && !form.effectiveTo)}
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-[#ead3cc] bg-white px-4 text-sm font-bold text-[#6f4f47] transition hover:border-[#F38978] hover:text-[#F38978] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Clear
+          </button>
+        </div>
+      </SettingsCard>
+
+      <SettingsCard title="GST Rate History" icon={Clock3}>
+        <div className="-mt-2 mb-4 flex justify-end">
+          <button
+            type="button"
+            onClick={() => navigate("/dashboard/invoicing/admin/gst-management/history")}
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-[#F38978]/30 bg-white px-4 text-sm font-bold text-[#F38978] transition hover:bg-[#FDD9CD]/30"
+          >
+            View Full History
+          </button>
+        </div>
+        <div className="overflow-hidden rounded-lg border border-[#f0d2ca]">
+          <div className="overflow-x-auto">
+            <table className="min-w-[760px] w-full text-left text-sm">
+              <thead className="bg-[#fff8f5] text-xs font-bold uppercase text-[#7b6660]">
+                <tr>
+                  <th className="px-4 py-3">Tax Code</th>
+                  <th className="px-4 py-3">Tax Name</th>
+                  <th className="px-4 py-3">Rate</th>
+                  <th className="px-4 py-3">Effective From</th>
+                  <th className="px-4 py-3">Effective To</th>
+                  <th className="px-4 py-3">Created By</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#f5e2dc] bg-white">
+                {previewRates.length === 0 ? (
+                  <tr><td colSpan="6" className="px-4 py-10 text-center font-semibold text-[#7b6660]">No GST rates configured.</td></tr>
+                ) : previewRates.map((rate) => (
+                  <tr key={rate.id} className="align-middle">
+                    <td className="px-4 py-3 font-bold text-[#251E1F]">{rate.taxCode}</td>
+                    <td className="px-4 py-3 text-[#7b6660]">{rate.taxName}</td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-full bg-[#FDD9CD]/55 px-2.5 py-1 text-xs font-bold text-[#251E1F]">
+                        {Number(rate.ratePercentage)}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-[#7b6660]">{shortDate(rate.effectiveFrom)}</td>
+                    <td className="px-4 py-3 text-[#7b6660]">{rate.effectiveTo ? shortDate(rate.effectiveTo) : "Ongoing"}</td>
+                    <td className="px-4 py-3 text-[#7b6660]">{rate.createdBy || "System"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {data.rates.length > 5 ? (
+          <p className="mt-3 text-right text-xs font-semibold text-[#7b6660]">
+            Showing 5 of {data.rates.length} records
+          </p>
+        ) : null}
+      </SettingsCard>
+    </div>
+  );
+}
+
+export function AdminGstHistoryPage() {
+  const [data, setData] = useState({ rates: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    async function loadGstRates() {
+      setLoading(true);
+      setError("");
+      try {
+        const response = await getInvoiceGstRates();
+        if (active) setData(response);
+      } catch (requestError) {
+        if (active) setError(requestError.message);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    loadGstRates();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <section
+      className="min-h-screen p-6 text-[#251E1F]"
+      style={{
+        backgroundImage:
+          "linear-gradient(90deg, #FDD9CD 0%, #fff8f5 15%, #fffaf8 58%, #FDD9CD 100%)"
+      }}
+    >
+      <div className="mx-auto max-w-[1400px] space-y-5">
+        <header className="space-y-4">
+          <Link
+            to="/dashboard/invoicing/admin/gst-management"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-[#ead3cc] bg-white px-4 text-sm font-bold text-[#6f4f47] transition hover:border-[#F38978] hover:text-[#F38978]"
+          >
+            Back to GST Management
+          </Link>
+          <div>
+            <p className="text-sm font-bold text-[#F38978]">GST Management</p>
+            <h1 className="mt-1 text-2xl font-bold text-[#251E1F]">GST Rate History</h1>
+          </div>
+        </header>
+
+        {error ? <MessageBanner type="error">{error}</MessageBanner> : null}
+
+        <section className="rounded-xl border border-[#f0d2ca] bg-white/95 p-5 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
+          {loading ? (
+            <div className="flex min-h-40 items-center justify-center gap-2 text-sm font-semibold text-[#7b6660]">
+              <Loader2 size={18} className="animate-spin" />
+              Loading GST rate history...
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-[#f0d2ca]">
+              <div className="overflow-x-auto">
+                <table className="min-w-[760px] w-full text-left text-sm">
+                  <thead className="bg-[#fff8f5] text-xs font-bold uppercase text-[#7b6660]">
+                    <tr>
+                      <th className="px-4 py-3">Tax Code</th>
+                      <th className="px-4 py-3">Tax Name</th>
+                      <th className="px-4 py-3">Rate</th>
+                      <th className="px-4 py-3">Effective From</th>
+                      <th className="px-4 py-3">Effective To</th>
+                      <th className="px-4 py-3">Created By</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#f5e2dc] bg-white">
+                    {data.rates.length === 0 ? (
+                      <tr><td colSpan="6" className="px-4 py-10 text-center font-semibold text-[#7b6660]">No GST rates configured.</td></tr>
+                    ) : data.rates.map((rate) => (
+                      <tr key={rate.id} className="align-middle">
+                        <td className="px-4 py-3 font-bold text-[#251E1F]">{rate.taxCode}</td>
+                        <td className="px-4 py-3 text-[#7b6660]">{rate.taxName}</td>
+                        <td className="px-4 py-3">
+                          <span className="rounded-full bg-[#FDD9CD]/55 px-2.5 py-1 text-xs font-bold text-[#251E1F]">
+                            {Number(rate.ratePercentage)}%
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-[#7b6660]">{shortDate(rate.effectiveFrom)}</td>
+                        <td className="px-4 py-3 text-[#7b6660]">{rate.effectiveTo ? shortDate(rate.effectiveTo) : "Ongoing"}</td>
+                        <td className="px-4 py-3 text-[#7b6660]">{rate.createdBy || "System"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
+    </section>
+  );
+}
+
+export function AdminGstManagementPage() {
+  return (
+    <section
+      className="-m-4 min-h-[calc(100vh-5rem)] p-4 text-[#251E1F] sm:-m-6 sm:p-6"
+      style={{
+        backgroundImage:
+          "linear-gradient(90deg, #FDD9CD 0%, #fff8f5 15%, #fffaf8 58%, #FDD9CD 100%)"
+      }}
+    >
+      <div className="mx-auto max-w-[1600px] space-y-5">
+        <header>
+          <h2 className="text-2xl font-bold tracking-tight text-[#251E1F]">GST Management</h2>
+          <p className="mt-2 text-sm font-medium text-[#6f5b55]">
+            Schedule invoice GST rates by effective date.
+          </p>
+        </header>
+        <GstManagementTab />
+      </div>
+    </section>
+  );
+}
+
+function Toggle({ checked, onChange, label, note, disabled = false }) {
+  return (
+    <label className={`flex min-h-[70px] items-center justify-between gap-4 rounded-lg border border-[#ead3cc] bg-[#fff8f5] px-4 py-3 ${disabled ? "cursor-not-allowed" : ""}`}>
       <span className="min-w-0">
         <span className="block text-sm font-bold text-[#251E1F]">{label}</span>
         {note ? <span className="mt-1 block text-xs leading-5 text-[#7b6660]">{note}</span> : null}
@@ -304,6 +713,7 @@ function Toggle({ checked, onChange, label, note }) {
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
+        disabled={disabled}
         className="peer sr-only"
       />
       <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${checked ? "bg-[#F38978]" : "bg-[#dcc8c1]"}`}>
@@ -318,8 +728,11 @@ function SettingsToggle({ config, checked, onChange }) {
     <Toggle
       label={config.label}
       note={config.note}
-      checked={checked}
-      onChange={(nextValue) => onChange(config.section, config.field, nextValue)}
+      checked={config.locked ? true : checked}
+      disabled={config.locked}
+      onChange={(nextValue) => {
+        if (!config.locked) onChange(config.section, config.field, nextValue);
+      }}
     />
   );
 }
@@ -346,7 +759,12 @@ function StatusIcon({ status }) {
 
 function ConfigurationStatusPanel({ status }) {
   const categories = status?.categories || {};
-  const percentage = Number(status?.completionPercentage || 0);
+  const sectionStatuses = invoiceSettingsStatusSections.map((section) => ({
+    ...section,
+    status: categories[section.key] || "incomplete"
+  }));
+  const completedCount = sectionStatuses.filter((section) => section.status === "completed").length;
+  const percentage = Math.round((completedCount / sectionStatuses.length) * 100);
   const circumference = 2 * Math.PI * 42;
   const offset = circumference - (percentage / 100) * circumference;
 
@@ -375,10 +793,18 @@ function ConfigurationStatusPanel({ status }) {
           </div>
         </div>
         <div className="space-y-2">
-          {Object.entries(categories).map(([key, value]) => (
-            <div key={key} className="flex items-center justify-between gap-3 text-sm">
-              <span className="font-semibold text-[#251E1F]">{titleFromKey(key)}</span>
-              <StatusIcon status={value} />
+          {sectionStatuses.map((section) => (
+            <div key={section.key} className="space-y-1.5">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-semibold text-[#251E1F]">{section.label}</span>
+                <StatusIcon status={section.status} />
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-[#f7e2db]">
+                <div
+                  className="h-full rounded-full bg-[#F38978] transition-all"
+                  style={{ width: section.status === "completed" ? "100%" : "0%" }}
+                />
+              </div>
             </div>
           ))}
         </div>
@@ -454,12 +880,7 @@ function RecentNumberingActivity({ activity }) {
 function NumberingTab({
   form,
   options,
-  configurationStatus,
-  previewNumbers,
   activity,
-  lastSavedAt,
-  saving,
-  onCancel,
   onRootFieldChange,
   onSeparatorChange,
   onFormatChange,
@@ -468,95 +889,76 @@ function NumberingTab({
   const examplePreview = buildInvoiceNumber(form);
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-      <div className="space-y-5">
-        <SettingsCard title="Numbering Format" icon={Hash}>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Field label="Invoice Prefix">
-              <input
-                type="text"
-                value={form.invoicePrefix}
-                onChange={(event) => onRootFieldChange("invoicePrefix", event.target.value.toUpperCase())}
-                className="h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm font-semibold text-[#251E1F] outline-none transition focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/20"
-              />
-            </Field>
-            <Field label="Year">
-              <input
-                type="number"
-                min="1900"
-                max="9999"
-                value={form.invoiceYear}
-                onChange={(event) => onRootFieldChange("invoiceYear", event.target.value)}
-                className="h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm font-semibold text-[#251E1F] outline-none transition focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/20"
-              />
-            </Field>
-            <Field label="Separator Style">
-              <SelectField
-                value={form.separatorStyle}
-                onChange={onSeparatorChange}
-                options={options.separatorStyles}
-              />
-            </Field>
-            <Field label="Invoice Format">
-              <SelectField
-                value={form.invoiceFormat}
-                onChange={onFormatChange}
-                options={options.invoiceFormats}
-              />
-            </Field>
-            <Field label="Next Invoice Number" note="Usually read-only because the system calculates the next available number automatically.">
-              <input
-                type="number"
-                min="1"
-                readOnly={!form.sequenceRules.allowManualOverride}
-                value={form.nextInvoiceNumber}
-                onChange={(event) => onRootFieldChange("nextInvoiceNumber", event.target.value)}
-                className={`h-11 w-full rounded-lg border border-[#ead3cc] px-3 text-sm font-semibold text-[#251E1F] outline-none transition focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/20 ${
-                  form.sequenceRules.allowManualOverride ? "bg-white" : "bg-[#fff8f5]"
-                }`}
-              />
-            </Field>
-            <Field label="Example Preview">
-              <div className="flex h-11 items-center rounded-lg border border-[#ead3cc] bg-[#fff8f5] px-3 text-sm font-bold text-[#251E1F]">
-                {examplePreview}
-              </div>
-            </Field>
-          </div>
-        </SettingsCard>
-
-        <SettingsCard title="Sequence Rules" icon={ListChecks}>
-          <div className="grid gap-4 lg:grid-cols-2">
-            {sequenceRuleFields.map((rule) => (
-              <Toggle
-                key={rule.field}
-                label={rule.label}
-                note={rule.note}
-                checked={form.sequenceRules[rule.field]}
-                onChange={(value) => onSequenceRuleChange(rule.field, value)}
-              />
-            ))}
-          </div>
-        </SettingsCard>
-
-        <RecentNumberingActivity activity={activity} />
-      </div>
-
-      <aside className="space-y-5">
-        <ConfigurationStatusPanel status={configurationStatus} />
-        <NumberingPreviewPanel form={form} previewNumbers={previewNumbers} />
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/95 p-4 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
-          <p className="mb-3 text-xs font-bold text-[#7b6660]">Last saved</p>
-          <p className="mb-4 text-sm font-bold text-[#251E1F]">{formatDateTime(lastSavedAt)}</p>
-          <button type="submit" disabled={saving} className={buttonClasses.primary}>
-            {saving ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}
-            {saving ? "Saving..." : "Save & Publish Settings"}
-          </button>
-          <button type="button" onClick={onCancel} disabled={saving} className={buttonClasses.secondary}>
-            <RotateCcw size={16} />
-            Cancel
-          </button>
+    <div className="space-y-5">
+      <SettingsCard title="Numbering Format" icon={Hash}>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Field label="Invoice Prefix">
+            <input
+              type="text"
+              value={form.invoicePrefix}
+              onChange={(event) => onRootFieldChange("invoicePrefix", event.target.value.toUpperCase())}
+              className="h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm font-semibold text-[#251E1F] outline-none transition focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/20"
+            />
+          </Field>
+          <Field label="Year">
+            <input
+              type="number"
+              min="1900"
+              max="9999"
+              value={form.invoiceYear}
+              onChange={(event) => onRootFieldChange("invoiceYear", event.target.value)}
+              className="h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm font-semibold text-[#251E1F] outline-none transition focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/20"
+            />
+          </Field>
+          <Field label="Separator Style">
+            <SelectField
+              value={form.separatorStyle}
+              onChange={onSeparatorChange}
+              options={options.separatorStyles}
+            />
+          </Field>
+          <Field label="Invoice Format">
+            <SelectField
+              value={form.invoiceFormat}
+              onChange={onFormatChange}
+              options={options.invoiceFormats}
+            />
+          </Field>
+          <Field label="Next Invoice Number" note="Usually read-only because the system calculates the next available number automatically.">
+            <input
+              type="number"
+              min="1"
+              readOnly={!form.sequenceRules.allowManualOverride}
+              value={form.nextInvoiceNumber}
+              onChange={(event) => onRootFieldChange("nextInvoiceNumber", event.target.value)}
+              className={`h-11 w-full rounded-lg border border-[#ead3cc] px-3 text-sm font-semibold text-[#251E1F] outline-none transition focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/20 ${
+                form.sequenceRules.allowManualOverride ? "bg-white" : "bg-[#fff8f5]"
+              }`}
+            />
+          </Field>
+          <Field label="Example Preview">
+            <div className="flex h-11 items-center rounded-lg border border-[#ead3cc] bg-[#fff8f5] px-3 text-sm font-bold text-[#251E1F]">
+              {examplePreview}
+            </div>
+          </Field>
         </div>
-      </aside>
+      </SettingsCard>
+
+      <SettingsCard title="Sequence Rules" icon={ListChecks}>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {sequenceRuleFields.map((rule) => (
+            <Toggle
+              key={rule.field}
+              label={rule.label}
+              note={rule.note}
+              checked={form.sequenceRules[rule.field]}
+              onChange={(value) => onSequenceRuleChange(rule.field, value)}
+            />
+          ))}
+        </div>
+      </SettingsCard>
+
+      <RecentNumberingActivity activity={activity} />
     </div>
   );
 }
@@ -574,18 +976,7 @@ function TextSetting({ label, field, form, onChange, note, multiline = false, ty
   );
 }
 
-function TabSaveButton({ saving }) {
-  return (
-    <div className="flex justify-end">
-      <button type="submit" disabled={saving} className="primary-button inline-flex items-center gap-2 px-5 py-3 text-sm font-bold disabled:opacity-60">
-        {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-        {saving ? "Saving..." : "Save Settings"}
-      </button>
-    </div>
-  );
-}
-
-function PaymentSettingsTab({ form, onChange, saving }) {
+function PaymentSettingsTab({ form, onChange }) {
   return (
     <div className="space-y-5">
       <SettingsCard title="Bank Transfer & PayNow" icon={Landmark}>
@@ -600,12 +991,11 @@ function PaymentSettingsTab({ form, onChange, saving }) {
           <TextSetting label="Computer-generated Statement" field="computerGeneratedStatement" form={form} onChange={onChange} multiline />
         </div>
       </SettingsCard>
-      <TabSaveButton saving={saving} />
     </div>
   );
 }
 
-function EmailSettingsTab({ form, onChange, saving }) {
+function EmailSettingsTab({ form, onChange }) {
   const [recipient, setRecipient] = useState(form.replyToEmail || form.financeEmail || "");
   const [testing, setTesting] = useState(false);
   const [testMessage, setTestMessage] = useState("");
@@ -645,7 +1035,6 @@ function EmailSettingsTab({ form, onChange, saving }) {
           {testMessage ? <p className="mt-2 text-xs text-[#6f5b55]">{testMessage}</p> : null}
         </div>
       </SettingsCard>
-      <TabSaveButton saving={saving} />
     </div>
   );
 }
@@ -669,6 +1058,30 @@ function ActionPanel({ saving, onCancel }) {
         <RotateCcw size={16} />
         Cancel
       </button>
+    </div>
+  );
+}
+
+function SettingsTabLayout({ children, configurationStatus, saving, onCancel, asideExtra = null }) {
+  return (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="space-y-5">
+        {children}
+      </div>
+      <aside className="space-y-5">
+        <ConfigurationStatusPanel status={configurationStatus} />
+        {asideExtra}
+        <ActionPanel saving={saving} onCancel={onCancel} />
+      </aside>
+    </div>
+  );
+}
+
+function LastSavedPanel({ value }) {
+  return (
+    <div className="rounded-xl border border-[#f0d2ca] bg-white/95 p-4 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
+      <p className="mb-3 text-xs font-bold text-[#7b6660]">Last saved</p>
+      <p className="text-sm font-bold text-[#251E1F]">{formatDateTime(value)}</p>
     </div>
   );
 }
@@ -777,6 +1190,9 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
     if (!form.general.defaultTax) nextErrors.push("Default tax is required.");
     if (!form.general.priceDisplay) nextErrors.push("Price display is required.");
     if (!form.general.paymentTerms) nextErrors.push("Payment terms are required.");
+    if (form.general.paymentTerms && !paymentTermsHasDueLength(form.general.paymentTerms)) {
+      nextErrors.push("Payment terms must include a number of days, for example Net 45, or be Due on Receipt.");
+    }
     if (form.general.lateFeeValue === "" || Number(form.general.lateFeeValue) < 0) {
       nextErrors.push("Late fee must be 0 or higher.");
     }
@@ -885,29 +1301,51 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
         ) : null}
 
         {currentTab === "numbering" ? (
-          <NumberingTab
-            form={form}
-            options={numberingOptions}
+          <SettingsTabLayout
             configurationStatus={configurationStatus}
-            previewNumbers={numberingPreview}
-            activity={numberingActivity}
-            lastSavedAt={savedForm.updatedAt}
             saving={saving}
             onCancel={handleCancel}
-            onRootFieldChange={setRootField}
-            onSeparatorChange={handleSeparatorChange}
-            onFormatChange={handleFormatChange}
-            onSequenceRuleChange={setSequenceRule}
-          />
+            asideExtra={(
+              <>
+                <NumberingPreviewPanel form={form} previewNumbers={numberingPreview} />
+                <LastSavedPanel value={savedForm.updatedAt} />
+              </>
+            )}
+          >
+            <NumberingTab
+              form={form}
+              options={numberingOptions}
+              activity={numberingActivity}
+              onRootFieldChange={setRootField}
+              onSeparatorChange={handleSeparatorChange}
+              onFormatChange={handleFormatChange}
+              onSequenceRuleChange={setSequenceRule}
+            />
+          </SettingsTabLayout>
         ) : currentTab === "email" ? (
-          <EmailSettingsTab form={form} onChange={setRootField} saving={saving} />
+          <SettingsTabLayout
+            configurationStatus={configurationStatus}
+            saving={saving}
+            onCancel={handleCancel}
+          >
+            <EmailSettingsTab form={form} onChange={setRootField} />
+          </SettingsTabLayout>
         ) : currentTab === "payments" ? (
-          <PaymentSettingsTab form={form} onChange={setRootField} saving={saving} />
+          <SettingsTabLayout
+            configurationStatus={configurationStatus}
+            saving={saving}
+            onCancel={handleCancel}
+          >
+            <PaymentSettingsTab form={form} onChange={setRootField} />
+          </SettingsTabLayout>
         ) : currentTab !== "general" ? (
           <TabPlaceholder label={currentTabConfig.label} />
         ) : (
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-            <div className="space-y-5">
+          <SettingsTabLayout
+            configurationStatus={configurationStatus}
+            saving={saving}
+            onCancel={handleCancel}
+          >
               <SettingsCard title="General & Defaults" icon={FileText}>
                 <div className="grid gap-4 lg:grid-cols-2">
                   {generalSelectFields.map((config) => (
@@ -919,6 +1357,11 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
                       onChange={setSectionField}
                     />
                   ))}
+                  <PaymentTermsSetting
+                    options={options}
+                    value={form.general.paymentTerms}
+                    onChange={setSectionField}
+                  />
                   <Field label="Late Fee" note="Applied after due date">
                     <div className="grid grid-cols-[minmax(0,1fr)_96px] overflow-hidden rounded-lg border border-[#ead3cc] bg-white focus-within:border-[#F38978] focus-within:ring-2 focus-within:ring-[#F38978]/20">
                       <input
@@ -958,7 +1401,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
                   <TextSetting label="Company Name" field="companyName" form={form} onChange={setRootField} />
                   <TextSetting label="Company Registration Number" field="companyRegistrationNumber" form={form} onChange={setRootField} />
                   <TextSetting label="Finance Email" field="financeEmail" form={form} onChange={setRootField} type="email" />
-                  <TextSetting label="Support Email" field="supportEmail" form={form} onChange={setRootField} type="email" />
                   <TextSetting label="Company Address" field="companyAddress" form={form} onChange={setRootField} multiline />
                   <TextSetting label="Registered-office Address" field="registeredOfficeAddress" form={form} onChange={setRootField} multiline />
                 </div>
@@ -992,13 +1434,7 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
                   These settings apply to new invoices. Individual invoice flows can override them when a future invoice creation page provides that control.
                 </p>
               </div>
-            </div>
-
-            <aside className="space-y-5">
-              <ConfigurationStatusPanel status={configurationStatus} />
-              <ActionPanel saving={saving} onCancel={handleCancel} />
-            </aside>
-          </div>
+          </SettingsTabLayout>
         )}
       </form>
     </section>

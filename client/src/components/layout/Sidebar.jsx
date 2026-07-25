@@ -5,6 +5,7 @@ import { ArrowLeft, ChevronDown, LayoutGrid, PanelLeftClose, X } from "lucide-re
 function isPathActive(pathname, item) {
   if (!item?.path) return false;
   if (item.end) return pathname === item.path;
+  if (item.exact) return pathname === item.path;
   return pathname === item.path || pathname.startsWith(`${item.path}/`);
 }
 

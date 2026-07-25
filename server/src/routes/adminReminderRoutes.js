@@ -20,7 +20,15 @@ const {
   getValidationUploadHistory,
   getValidationSummary
 } = require("../controllers/adminDashboardController");
-const { getSettings, postInvoiceLogo, postInvoicePreview, postTestInvoiceEmail, putSettings } = require("../controllers/invoiceSettingsController");
+const {
+  getGstRates,
+  getSettings,
+  postGstRate,
+  postInvoiceLogo,
+  postInvoicePreview,
+  postTestInvoiceEmail,
+  putSettings
+} = require("../controllers/invoiceSettingsController");
 const { getTemplatePreview } = require("../controllers/invoicePreviewController");
 const { authenticateToken, requireRole } = require("../middleware/authMiddleware");
 
@@ -39,6 +47,8 @@ router.get("/dashboard/validation-summary/uploads", getValidationUploadHistory);
 router.get("/dashboard/validation-errors", getValidationErrors);
 router.get("/invoice-settings", getSettings);
 router.put("/invoice-settings", putSettings);
+router.get("/invoice-settings/gst-rates", getGstRates);
+router.post("/invoice-settings/gst-rates", postGstRate);
 router.post("/invoice-settings/logo", postInvoiceLogo);
 router.post("/invoice-settings/preview", postInvoicePreview);
 router.post("/invoice-settings/template-preview", getTemplatePreview);

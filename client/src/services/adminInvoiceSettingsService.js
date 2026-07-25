@@ -23,6 +23,20 @@ export function updateInvoiceSettings(payload) {
   });
 }
 
+export function getInvoiceGstRates() {
+  return apiRequest("/api/admin/invoicing/invoice-settings/gst-rates", {
+    headers: authHeaders()
+  });
+}
+
+export function createInvoiceGstRate(payload) {
+  return apiRequest("/api/admin/invoicing/invoice-settings/gst-rates", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  });
+}
+
 export function uploadInvoiceLogo(payload) {
   return apiRequest("/api/admin/invoicing/invoice-settings/logo", {
     method: "POST",

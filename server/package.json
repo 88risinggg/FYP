@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "db:invoice-upload-history": "node scripts/create-invoice-upload-history-tables.js",
     "db:invoice-settings": "node scripts/create-canonical-invoice-settings.js",
+    "db:invoice-gst-rates": "node scripts/run-invoice-gst-rates-migration.js",
     "db:support-tables": "node scripts/run-support-migration.js",
     "db:payroll-user-workflow": "node scripts/run-payroll-user-workflow-migration.js",
     "db:payroll-rule-metadata": "node scripts/run-payroll-rule-metadata-migration.js",

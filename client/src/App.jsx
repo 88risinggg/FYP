@@ -8,6 +8,7 @@ import PublicInvoiceViewPage from "./pages/PublicInvoiceViewPage.jsx";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage.jsx";
 import PaymentCancelledPage from "./pages/PaymentCancelledPage.jsx";
 import AdminInvoicingDashboard from "./pages/invoicing/AdminInvoicingDashboard.jsx";
+import { AdminGstHistoryPage } from "./pages/invoicing/AdminInvoiceSettingsPage.jsx";
 import AdminReminderCategoryPage from "./pages/invoicing/AdminReminderCategoryPage.jsx";
 import AdminEmailDeliveryPage from "./pages/invoicing/AdminEmailDeliveryPage.jsx";
 import AdminPaymentUpdatesPage from "./pages/invoicing/AdminPaymentUpdatesPage.jsx";
@@ -281,6 +282,14 @@ export default function App() {
         element={
           <AdminInvoicingRoute>
             <AdminRecentStatusChangesPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/gst-management/history"
+        element={
+          <AdminInvoicingRoute>
+            <AdminGstHistoryPage />
           </AdminInvoicingRoute>
         }
       />

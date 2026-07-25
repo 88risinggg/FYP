@@ -123,8 +123,7 @@ async function markOverdueInvoices() {
       `
         SELECT invoice_id
         FROM invoice
-        WHERE status <> 'Paid'
-          AND status <> 'Overdue'
+        WHERE status IN ('Sent', 'Viewed')
           AND due_date < CURDATE()
         FOR UPDATE
       `

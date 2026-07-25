@@ -16,6 +16,7 @@ const { sendWhatsAppReminder } = require("../services/whatsappService");
 const { sendManualReminder } = require("../services/invoiceReminderService");
 const { pool } = require("../config/db");
 const { getCompanyId } = require("../utils/companyScope");
+const { calculateInvoiceLateFee, getInvoiceSettings } = require("../models/invoiceSettingsModel");
 
 const router = express.Router();
 
@@ -23,12 +24,19 @@ router.use(authenticateToken);
 
 router.get("/", getInvoices);
 router.get("/customers", getCustomers);
+router.get("/settings", async (req, res) => {
+  try {
+    res.json({ settings: await getInvoiceSettings(getCompanyId(req)) });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch invoice settings.", detail: error.message });
+  }
+});
 router.get("/next-number", getNextInvoiceNumber);
 router.get("/export/excel", exportInvoicesExcel);
 router.post("/", createInvoice);
 router.post("/schedule", scheduleInvoices);
 router.post("/:id/send", sendInvoice);
-router.patch("/:id/void", allowRoles("Admin", "Finance"), voidInvoice);
+router.patch("/:id/void", allowRoles("Finance"), voidInvoice);
 
 /**
  * GET /api/invoices/:id/pdf
@@ -85,16 +93,18 @@ router.get("/:id/pdf", async (req, res) => {
     const isPayable = !["Paid", "Cancelled", "Refunded"].includes(invoice.status);
     let paymentUrl = invoice.payment_url;
     let qrCodeDataUri = invoice.qr_code_url;
+    const settings = await getInvoiceSettings(companyId);
+    const lateFee = calculateInvoiceLateFee(invoice, settings);
 
     if (isPayable) {
-      const isPlaceholder = !paymentUrl || /cs_test_(sent|viewed|overdue|paid)_/.test(paymentUrl);
+      const isPlaceholder = !paymentUrl || /cs_test_(sent|viewed|overdue|paid)_/.test(paymentUrl) || lateFee.lateFeeAmount > 0;
       if (isPlaceholder) {
         try {
           const { createCheckoutSession } = require("../services/stripeService");
           const result = await createCheckoutSession({
             invoice_id: invoice.invoice_id,
             invoiceId: invoice.invoiceId,
-            total_amount: invoice.total_amount,
+            total_amount: lateFee.amountDue,
             customer_email: invoice.customer_email
           });
           paymentUrl = result.paymentUrl;

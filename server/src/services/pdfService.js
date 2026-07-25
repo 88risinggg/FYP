@@ -10,7 +10,7 @@ const fs = require("fs/promises");
 const path = require("path");
 
 const { pool } = require("../config/db");
-const { defaultSettings, getInvoiceSettings } = require("../models/invoiceSettingsModel");
+const { calculateInvoiceLateFee, defaultSettings, getInvoiceSettings } = require("../models/invoiceSettingsModel");
 const { generateQRCode } = require("./qrCodeService");
 
 // =====================================================
@@ -74,13 +74,55 @@ function formatMoney(value, settings = {}) {
   const precision = settings.decimalPrecision ?? 2;
   const symbol = settings.currencySymbol || "S$";
   const format = settings.currencyFormat || "symbol_before";
-  const formatted = new Intl.NumberFormat("en-SG", {
+  const formatted = new Intl.NumberFormat(settings.currencyLocale || "en-SG", {
     minimumFractionDigits: precision,
     maximumFractionDigits: precision
   }).format(Number(value || 0));
 
   if (format === "symbol_after") return `${formatted} ${symbol}`;
   return `${symbol}${formatted}`;
+}
+
+const invoiceTranslations = {
+  en: {
+    invoice: "INVOICE",
+    invoiceDate: "Invoice Date",
+    invoiceNumber: "Invoice Number",
+    serviceProvider: "Service Provider",
+    description: "Description",
+    qty: "Qty",
+    unitPrice: "Unit Price",
+    amount: "Amount",
+    noItems: "No invoice items",
+    subtotal: "Subtotal",
+    total: "Total",
+    lessAmountPaid: "Less Amount Paid",
+    amountDue: "Amount Due",
+    dueDate: "Due Date",
+    paymentTerm: "Payment Term"
+  },
+  ms: {
+    invoice: "INVOIS",
+    invoiceDate: "Tarikh Invois",
+    invoiceNumber: "Nombor Invois",
+    serviceProvider: "Penyedia Perkhidmatan",
+    description: "Penerangan",
+    qty: "Kuantiti",
+    unitPrice: "Harga Seunit",
+    amount: "Jumlah",
+    noItems: "Tiada item invois",
+    subtotal: "Subjumlah",
+    total: "Jumlah",
+    lessAmountPaid: "Tolak Jumlah Dibayar",
+    amountDue: "Jumlah Perlu Dibayar",
+    dueDate: "Tarikh Akhir",
+    paymentTerm: "Terma Pembayaran"
+  }
+};
+
+function invoiceText(settings, key) {
+  const language = settings.defaultLanguage || settings.general?.defaultLanguage || "en";
+  return (invoiceTranslations[language] || invoiceTranslations.en)[key] || invoiceTranslations.en[key] || key;
 }
 
 async function resolveLogoDataUri(logoUrl) {
@@ -266,21 +308,21 @@ function buildHeroSection(invoice, settings) {
 
   return `<section style="display:grid;grid-template-columns:44.5% 26% 29.5%;min-height:49mm;border-bottom:.3mm solid #c7ced8;">
     <div style="padding:10.5mm 5mm 5mm 0;">
-      <h1 style="margin:0;font-size:27pt;line-height:1;letter-spacing:1.2px;color:${primary};">INVOICE</h1>
+      <h1 style="margin:0;font-size:27pt;line-height:1;letter-spacing:1.2px;color:${primary};">${escapeHtml(invoiceText(settings, "invoice"))}</h1>
       <div style="width:12mm;height:1.1mm;margin:3.8mm 0 5mm;background:${secondary};"></div>
       <p style="margin:0;font-size:8pt;line-height:1.4;font-weight:700;color:#263653;">${escapeHtml(invoice.customer_name || "")}</p>
-      ${invoice.service_provider || invoice.shop_title ? `<p style="margin:1mm 0 0;font-size:7pt;color:#555;">Service Provider: ${escapeHtml(invoice.service_provider || invoice.shop_title || "")}</p>` : ""}
+      ${invoice.service_provider || invoice.shop_title ? `<p style="margin:1mm 0 0;font-size:7pt;color:#555;">${escapeHtml(invoiceText(settings, "serviceProvider"))}: ${escapeHtml(invoice.service_provider || invoice.shop_title || "")}</p>` : ""}
       ${invoice.customer_email ? `<p style="margin:2mm 0 0;font-size:7pt;color:#555;">${escapeHtml(invoice.customer_email)}</p>` : ""}
       ${invoice.customer_address ? `<p style="margin:1mm 0 0;font-size:7pt;color:#555;">${escapeHtml(invoice.customer_address)}</p>` : ""}
     </div>
     <div style="border-left:1px solid #d8dce3;display:grid;grid-template-rows:1fr 1fr;">
       <div style="display:grid;grid-template-columns:13mm 1fr;align-items:center;padding:3.5mm 3mm;border-bottom:.3mm solid #d8dce3;">
         <div style="color:${secondary};text-align:center;"><svg viewBox="0 0 24 24" width="6mm" height="6mm" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></div>
-        <div><p style="margin:0 0 1.4mm;font-size:6pt;font-weight:800;text-transform:uppercase;">Invoice Date</p><p style="margin:0;font-size:7.5pt;font-weight:600;">${escapeHtml(dateStr)}</p></div>
+        <div><p style="margin:0 0 1.4mm;font-size:6pt;font-weight:800;text-transform:uppercase;">${escapeHtml(invoiceText(settings, "invoiceDate"))}</p><p style="margin:0;font-size:7.5pt;font-weight:600;">${escapeHtml(dateStr)}</p></div>
       </div>
       <div style="display:grid;grid-template-columns:13mm 1fr;align-items:center;padding:3.5mm 3mm;">
         <div style="color:${secondary};text-align:center;"><svg viewBox="0 0 24 24" width="6mm" height="6mm" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h9l4 4v16H6z"/><path d="M14 2v5h5M9 12h7M9 16h7"/></svg></div>
-        <div><p style="margin:0 0 1.4mm;font-size:6pt;font-weight:800;text-transform:uppercase;">Invoice Number</p><p style="margin:0;font-size:7.5pt;font-weight:600;">${escapeHtml(invoice.invoiceId)}</p></div>
+        <div><p style="margin:0 0 1.4mm;font-size:6pt;font-weight:800;text-transform:uppercase;">${escapeHtml(invoiceText(settings, "invoiceNumber"))}</p><p style="margin:0;font-size:7.5pt;font-weight:600;">${escapeHtml(invoice.invoiceId)}</p></div>
       </div>
     </div>
     ${companyCard}
@@ -312,12 +354,12 @@ function buildItemsTable(invoice, settings) {
 
   return `<table class="items" style="width:100%;margin-top:5.5mm;border-collapse:collapse;table-layout:fixed;">
     <thead><tr>
-      <th style="width:58%;height:9mm;padding:2.5mm 3.5mm;background:${primary};color:white;border-right:.3mm solid rgba(255,255,255,0.2);font-size:6.7pt;text-align:left;text-transform:uppercase;">Description</th>
-      <th style="width:14%;height:9mm;padding:2.5mm 3.5mm;background:${primary};color:white;border-right:.3mm solid rgba(255,255,255,0.2);font-size:6.7pt;text-align:center;text-transform:uppercase;">Qty</th>
-      <th style="width:14%;height:9mm;padding:2.5mm 3.5mm;background:${primary};color:white;border-right:.3mm solid rgba(255,255,255,0.2);font-size:6.7pt;text-align:center;text-transform:uppercase;">Unit Price</th>
-      <th style="width:14%;height:9mm;padding:2.5mm 3.5mm;background:${primary};color:white;font-size:6.7pt;text-align:center;text-transform:uppercase;">Amount ${escapeHtml(currency)}</th>
+      <th style="width:58%;height:9mm;padding:2.5mm 3.5mm;background:${primary};color:white;border-right:.3mm solid rgba(255,255,255,0.2);font-size:6.7pt;text-align:left;text-transform:uppercase;">${escapeHtml(invoiceText(settings, "description"))}</th>
+      <th style="width:14%;height:9mm;padding:2.5mm 3.5mm;background:${primary};color:white;border-right:.3mm solid rgba(255,255,255,0.2);font-size:6.7pt;text-align:center;text-transform:uppercase;">${escapeHtml(invoiceText(settings, "qty"))}</th>
+      <th style="width:14%;height:9mm;padding:2.5mm 3.5mm;background:${primary};color:white;border-right:.3mm solid rgba(255,255,255,0.2);font-size:6.7pt;text-align:center;text-transform:uppercase;">${escapeHtml(invoiceText(settings, "unitPrice"))}</th>
+      <th style="width:14%;height:9mm;padding:2.5mm 3.5mm;background:${primary};color:white;font-size:6.7pt;text-align:center;text-transform:uppercase;">${escapeHtml(invoiceText(settings, "amount"))} ${escapeHtml(currency)}</th>
     </tr></thead>
-    <tbody>${itemRows || `<tr><td colspan="4" style="padding:8mm;text-align:center;color:#999;">No invoice items</td></tr>`}</tbody>
+    <tbody>${itemRows || `<tr><td colspan="4" style="padding:8mm;text-align:center;color:#999;">${escapeHtml(invoiceText(settings, "noItems"))}</td></tr>`}</tbody>
   </table>`;
 }
 
@@ -335,26 +377,32 @@ function buildSummarySection(invoice, settings) {
     ? items.reduce((sum, item) => sum + Number(item.amount ?? Number(item.quantity || 0) * Number(item.unit_price || 0)), 0)
     : Number(invoice.total_amount || 0);
 
-  // Tax calculation
+  const appliedTaxName = invoice.tax_name || settings.taxName || "GST";
+  const appliedTaxRate = Number(invoice.tax_rate ?? settings.taxPercentage ?? 0);
+  const hasStoredTaxAmount = invoice.tax_amount !== undefined && invoice.tax_amount !== null && invoice.tax_amount !== "";
+
   let taxAmount = 0;
-  if (settings.taxEnabled && settings.taxPercentage > 0) {
+  if (hasStoredTaxAmount) {
+    taxAmount = Number(invoice.tax_amount || 0);
+  } else if (settings.taxEnabled && appliedTaxRate > 0) {
     if (settings.taxInclusive) {
-      taxAmount = subtotal - (subtotal / (1 + settings.taxPercentage / 100));
+      taxAmount = subtotal - (subtotal / (1 + appliedTaxRate / 100));
     } else {
-      taxAmount = subtotal * (settings.taxPercentage / 100);
+      taxAmount = subtotal * (appliedTaxRate / 100);
     }
   }
 
   const total = settings.taxInclusive ? subtotal : subtotal + taxAmount;
   const displayTotal = Number(invoice.total_amount || total);
-  const amountPaid = Math.min(displayTotal, Math.max(0, Number(invoice.amount_paid || 0)));
-  const amountDue = Math.max(0, displayTotal - amountPaid);
+  const lateFee = calculateInvoiceLateFee({ ...invoice, total_amount: displayTotal }, settings);
+  const amountPaid = Math.min(lateFee.amountDue, Math.max(0, Number(invoice.amount_paid || 0)));
+  const amountDue = Math.max(0, lateFee.amountDue - amountPaid);
   const dueDate = formatDate(invoice.due_date, settings.displayDateFormat);
   const paymentTerms = settings.paymentTerms || "Net 30";
 
   let taxRow = "";
-  if (settings.taxEnabled && settings.taxPercentage > 0) {
-    taxRow = `<tr><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;font-weight:800;text-transform:uppercase;">${escapeHtml(settings.taxName)} (${settings.taxPercentage}%)</td><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;text-align:right;">${formatMoney(taxAmount, settings)}</td></tr>`;
+  if (settings.taxEnabled && appliedTaxRate > 0) {
+    taxRow = `<tr><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;font-weight:800;text-transform:uppercase;">${escapeHtml(appliedTaxName)} (${appliedTaxRate}%)</td><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;text-align:right;">${formatMoney(taxAmount, settings)}</td></tr>`;
   }
 
   return `<section class="summary">
@@ -362,14 +410,15 @@ function buildSummarySection(invoice, settings) {
       <div style="width:10mm;height:10mm;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${primary};color:white;">
         <svg viewBox="0 0 24 24" width="5mm" height="5mm" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
       </div>
-      <div><p style="margin:.65mm 0;font-size:7.4pt;"><strong style="font-weight:800;text-transform:uppercase;">Due Date: ${escapeHtml(dueDate)}</strong></p><p style="margin:.65mm 0;font-size:7.4pt;">Payment Term: ${escapeHtml(paymentTerms)}</p></div>
+      <div><p style="margin:.65mm 0;font-size:7.4pt;"><strong style="font-weight:800;text-transform:uppercase;">${escapeHtml(invoiceText(settings, "dueDate"))}: ${escapeHtml(dueDate)}</strong></p><p style="margin:.65mm 0;font-size:7.4pt;">${escapeHtml(invoiceText(settings, "paymentTerm"))}: ${escapeHtml(paymentTerms)}</p></div>
     </div>
     <table style="width:100%;border-collapse:collapse;">
-      <tr><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;font-weight:800;text-transform:uppercase;">Subtotal</td><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;text-align:right;">${formatMoney(subtotal, settings)}</td></tr>
+      <tr><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;font-weight:800;text-transform:uppercase;">${escapeHtml(invoiceText(settings, "subtotal"))}</td><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;text-align:right;">${formatMoney(subtotal, settings)}</td></tr>
       ${taxRow}
-      <tr><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;font-weight:800;text-transform:uppercase;">Total ${escapeHtml(currency)}</td><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;text-align:right;"><strong>${formatMoney(displayTotal, settings)}</strong></td></tr>
-      <tr><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;font-weight:800;text-transform:uppercase;">Less Amount Paid</td><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;text-align:right;">${formatMoney(amountPaid, settings)}</td></tr>
-      <tr><td style="height:10mm;padding:2.6mm 3.5mm;background:${secondary};color:white;font-weight:800;font-size:7.3pt;text-transform:uppercase;">Amount Due ${escapeHtml(currency)}</td><td style="height:10mm;padding:2.6mm 3.5mm;background:${secondary};color:white;font-weight:800;font-size:7.3pt;text-align:right;">${formatMoney(amountDue, settings)}</td></tr>
+      <tr><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;font-weight:800;text-transform:uppercase;">${escapeHtml(invoiceText(settings, "total"))} ${escapeHtml(currency)}</td><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;text-align:right;"><strong>${formatMoney(displayTotal, settings)}</strong></td></tr>
+      ${lateFee.lateFeeAmount > 0 ? `<tr><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;font-weight:800;text-transform:uppercase;">Late Fee (${lateFee.lateFeeRate}%)</td><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;text-align:right;">${formatMoney(lateFee.lateFeeAmount, settings)}</td></tr>` : ""}
+      <tr><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;font-weight:800;text-transform:uppercase;">${escapeHtml(invoiceText(settings, "lessAmountPaid"))}</td><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;text-align:right;">${formatMoney(amountPaid, settings)}</td></tr>
+      <tr><td style="height:10mm;padding:2.6mm 3.5mm;background:${secondary};color:white;font-weight:800;font-size:7.3pt;text-transform:uppercase;">${escapeHtml(invoiceText(settings, "amountDue"))} ${escapeHtml(currency)}</td><td style="height:10mm;padding:2.6mm 3.5mm;background:${secondary};color:white;font-weight:800;font-size:7.3pt;text-align:right;">${formatMoney(amountDue, settings)}</td></tr>
     </table>
   </section>`;
 }

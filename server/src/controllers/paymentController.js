@@ -7,6 +7,7 @@
 
 const { pool } = require("../config/db");
 const { settleInvoiceFromConfirmedPayments } = require("../services/invoicePaymentSettlementService");
+const { calculateInvoiceLateFee, getInvoiceSettings } = require("../models/invoiceSettingsModel");
 
 function toCurrencyNumber(value) {
   const n = Number(value);
@@ -36,6 +37,7 @@ async function ensureInvoiceCanBePaid(connection, invoiceId) {
  */
 async function getPaymentsWorkspace(req, res) {
   try {
+    const settings = await getInvoiceSettings();
     const [outstandingInvoices] = await pool.query(`
       SELECT i.invoice_id, i.invoiceId, i.issue_date, i.due_date, i.total_amount,
              i.status AS database_status, c.name AS customer_name, c.email AS customer_email
@@ -57,7 +59,16 @@ async function getPaymentsWorkspace(req, res) {
     `);
 
     res.json({
-      outstandingInvoices: outstandingInvoices.map((inv) => ({ ...inv, total_amount: toCurrencyNumber(inv.total_amount) })),
+      outstandingInvoices: outstandingInvoices.map((inv) => {
+        const lateFee = calculateInvoiceLateFee({ ...inv, status: inv.database_status }, settings);
+        return {
+          ...inv,
+          total_amount: toCurrencyNumber(inv.total_amount),
+          late_fee_rate: lateFee.lateFeeRate,
+          late_fee_amount: lateFee.lateFeeAmount,
+          amount_due: lateFee.amountDue
+        };
+      }),
       payments
     });
   } catch (error) {
@@ -136,11 +147,14 @@ async function createStripePaymentLink(req, res) {
     const invoice = rows[0];
     const paymentCheck = await ensureInvoiceCanBePaid(pool, invoiceId);
     if (!paymentCheck.allowed) return res.status(400).json({ message: paymentCheck.message });
+    const settings = await getInvoiceSettings();
+    const lateFee = calculateInvoiceLateFee(invoice, settings);
+    const payableAmount = lateFee.amountDue;
 
     // Reuse existing real Stripe URL — avoid creating a new session unnecessarily
     const existingUrl = invoice.payment_url;
     const isRealUrl = existingUrl && existingUrl.startsWith("https://checkout.stripe.com/c/pay/");
-    if (isRealUrl) {
+    if (isRealUrl && lateFee.lateFeeAmount <= 0) {
       return res.json({
         message: "Existing Stripe payment link returned.",
         invoice_id: invoice.invoice_id,
@@ -154,7 +168,7 @@ async function createStripePaymentLink(req, res) {
     const result = await createCheckoutSession({
       invoice_id: invoice.invoice_id,
       invoiceId: invoice.invoiceId,
-      total_amount: invoice.total_amount,
+      total_amount: payableAmount,
       customer_email: invoice.email
     });
 
