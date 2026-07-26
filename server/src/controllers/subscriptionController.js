@@ -33,6 +33,10 @@ const {
   toDateString,
 } = require("../models/subscriptionModel");
 const { generateSubscriptionInvoice } = require("../workers/subscriptionScheduler");
+const {
+  findActivePlan,
+  getSubscriptionSettings,
+} = require("../models/subscriptionSettingsModel");
 
 // ─── Billing frequencies accepted by the system ───────────────────────────────
 const VALID_FREQUENCIES = new Set(["Weekly", "Monthly", "Quarterly", "Yearly"]);
@@ -80,6 +84,38 @@ function validateSubscriptionPayload(body) {
   return errors;
 }
 
+async function applyAdminSubscriptionRules(companyId, body) {
+  const settings = await getSubscriptionSettings(companyId);
+  const approvedPlan = findActivePlan(settings, body.plan_name);
+
+  if (settings.billingRules.requireApprovedPlan && !approvedPlan) {
+    const error = new Error(
+      "This plan is not active in Admin Subscription Settings. Use an approved plan name or ask an administrator to add it."
+    );
+    error.status = 400;
+    throw error;
+  }
+
+  const payload = { ...body };
+  if (approvedPlan && settings.billingRules.lockPlanPricing) {
+    payload.plan_name = approvedPlan.name;
+    payload.amount = approvedPlan.price;
+    payload.billing_frequency = approvedPlan.billingFrequency;
+    payload.description = payload.description || approvedPlan.description;
+  }
+
+  if (payload.auto_renew === undefined) {
+    payload.auto_renew = approvedPlan
+      ? approvedPlan.autoRenewDefault
+      : settings.billingRules.defaultAutoRenew;
+  }
+
+  if (settings.automation.autoSendMode === "always") payload.auto_send = true;
+  if (settings.automation.autoSendMode === "never") payload.auto_send = false;
+
+  return { payload, settings };
+}
+
 // ─── POST /api/subscriptions ──────────────────────────────────────────────────
 // Finance users create subscriptions manually via the Create Subscription form.
 
@@ -88,15 +124,16 @@ async function createSubscriptionHandler(req, res) {
     const companyId = getCompanyId(req);
     const userId = req.user?.userId || null;
 
-    const errors = validateSubscriptionPayload(req.body);
+    const { payload } = await applyAdminSubscriptionRules(companyId, req.body);
+    const errors = validateSubscriptionPayload(payload);
     if (errors.length) {
       return res.status(400).json({ message: errors.join(" ") });
     }
 
     // Duplicate check: same customer + plan name cannot have an active subscription
     const isDuplicate = await hasDuplicateActiveSubscription(
-      Number(req.body.customer_id),
-      String(req.body.plan_name).trim(),
+      Number(payload.customer_id),
+      String(payload.plan_name).trim(),
       null,
       companyId
     );
@@ -107,23 +144,23 @@ async function createSubscriptionHandler(req, res) {
     }
 
     // Calculate initial next_billing_date from start_date + frequency
-    const startDate = toDateString(req.body.start_date);
-    const nextBillingDate = req.body.next_billing_date
-      ? toDateString(req.body.next_billing_date)
-      : toDateString(calcNextBillingDate(startDate, req.body.billing_frequency));
+    const startDate = toDateString(payload.start_date);
+    const nextBillingDate = payload.next_billing_date
+      ? toDateString(payload.next_billing_date)
+      : toDateString(calcNextBillingDate(startDate, payload.billing_frequency));
 
     const insertId = await createSubscriptionRow({
-      customer_id:       Number(req.body.customer_id),
+      customer_id:       Number(payload.customer_id),
       company_id:        companyId || null,
-      plan_name:         String(req.body.plan_name).trim(),
-      description:       req.body.description || null,
-      amount:            Number(req.body.amount),
-      billing_frequency: req.body.billing_frequency,
+      plan_name:         String(payload.plan_name).trim(),
+      description:       payload.description || null,
+      amount:            Number(payload.amount),
+      billing_frequency: payload.billing_frequency,
       start_date:        startDate,
       next_billing_date: nextBillingDate,
-      end_date:          req.body.end_date ? toDateString(req.body.end_date) : null,
-      auto_renew:        req.body.auto_renew !== false,
-      auto_send:         Boolean(req.body.auto_send),
+      end_date:          payload.end_date ? toDateString(payload.end_date) : null,
+      auto_renew:        payload.auto_renew !== false,
+      auto_send:         Boolean(payload.auto_send),
       created_by:        userId,
     });
 
@@ -131,7 +168,7 @@ async function createSubscriptionHandler(req, res) {
     await createNotification({
       type:    "subscription_created",
       title:   "New Subscription Created",
-      message: `Subscription #${insertId} (${req.body.plan_name}) created for customer #${req.body.customer_id}.`,
+      message: `Subscription #${insertId} (${payload.plan_name}) created for customer #${payload.customer_id}.`,
     }).catch(() => {});
 
     res.status(201).json({
@@ -139,7 +176,10 @@ async function createSubscriptionHandler(req, res) {
       subscription_id: insertId,
     });
   } catch (error) {
-    res.status(500).json({ message: "Failed to create subscription.", detail: error.message });
+    res.status(error.status || 500).json({
+      message: error.status === 400 ? error.message : "Failed to create subscription.",
+      ...(error.status === 400 ? {} : { detail: error.message })
+    });
   }
 }
 
@@ -249,6 +289,13 @@ async function generateInvoiceNowHandler(req, res) {
     const companyId = getCompanyId(req);
     const userId = req.user?.userId || null;
     const customAmount = req.body?.amount ? Number(req.body.amount) : null;
+    const settings = await getSubscriptionSettings(companyId);
+
+    if (!settings.billingRules.allowManualInvoiceGeneration) {
+      return res.status(403).json({
+        message: "Manual invoice generation is disabled in Admin Subscription Settings."
+      });
+    }
 
     if (!subscriptionId) {
       return res.status(400).json({ message: "Invalid subscription ID." });
@@ -341,7 +388,8 @@ async function updateSubscriptionHandler(req, res) {
       return res.status(400).json({ message: `Cannot edit a ${existing.status.toLowerCase()} subscription.` });
     }
 
-    const payload = { ...req.body, _isUpdate: true };
+    const configured = await applyAdminSubscriptionRules(companyId, req.body);
+    const payload = { ...configured.payload, _isUpdate: true };
     const errors = validateSubscriptionPayload(payload);
     if (errors.length) {
       return res.status(400).json({ message: errors.join(" ") });
@@ -349,8 +397,8 @@ async function updateSubscriptionHandler(req, res) {
 
     // Duplicate check (exclude self)
     const isDuplicate = await hasDuplicateActiveSubscription(
-      Number(req.body.customer_id),
-      String(req.body.plan_name).trim(),
+      Number(payload.customer_id),
+      String(payload.plan_name).trim(),
       subscriptionId,
       companyId
     );
@@ -361,20 +409,23 @@ async function updateSubscriptionHandler(req, res) {
     }
 
     await updateSubscriptionRow(subscriptionId, {
-      plan_name:         String(req.body.plan_name).trim(),
-      description:       req.body.description || null,
-      amount:            Number(req.body.amount),
-      billing_frequency: req.body.billing_frequency,
-      start_date:        toDateString(req.body.start_date),
-      next_billing_date: toDateString(req.body.next_billing_date || req.body.start_date),
-      end_date:          req.body.end_date ? toDateString(req.body.end_date) : null,
-      auto_renew:        req.body.auto_renew !== false,
-      auto_send:         Boolean(req.body.auto_send),
+      plan_name:         String(payload.plan_name).trim(),
+      description:       payload.description || null,
+      amount:            Number(payload.amount),
+      billing_frequency: payload.billing_frequency,
+      start_date:        toDateString(payload.start_date),
+      next_billing_date: toDateString(payload.next_billing_date || payload.start_date),
+      end_date:          payload.end_date ? toDateString(payload.end_date) : null,
+      auto_renew:        payload.auto_renew !== false,
+      auto_send:         Boolean(payload.auto_send),
     });
 
     res.json({ message: "Subscription updated successfully." });
   } catch (error) {
-    res.status(500).json({ message: "Failed to update subscription.", detail: error.message });
+    res.status(error.status || 500).json({
+      message: error.status === 400 ? error.message : "Failed to update subscription.",
+      ...(error.status === 400 ? {} : { detail: error.message })
+    });
   }
 }
 
@@ -385,6 +436,13 @@ async function pauseSubscriptionHandler(req, res) {
     const subscriptionId = Number(req.params.id);
     const companyId = getCompanyId(req);
     const userId = req.user?.userId || null;
+    const settings = await getSubscriptionSettings(companyId);
+
+    if (!settings.billingRules.allowPause) {
+      return res.status(403).json({
+        message: "Pausing subscriptions is disabled in Admin Subscription Settings."
+      });
+    }
 
     const existing = await findSubscriptionById(subscriptionId, companyId);
     if (!existing) {
@@ -453,6 +511,13 @@ async function cancelSubscriptionHandler(req, res) {
     const subscriptionId = Number(req.params.id);
     const companyId = getCompanyId(req);
     const userId = req.user?.userId || null;
+    const settings = await getSubscriptionSettings(companyId);
+
+    if (!settings.billingRules.allowCancellation) {
+      return res.status(403).json({
+        message: "Cancelling subscriptions is disabled in Admin Subscription Settings."
+      });
+    }
 
     const existing = await findSubscriptionById(subscriptionId, companyId);
     if (!existing) {

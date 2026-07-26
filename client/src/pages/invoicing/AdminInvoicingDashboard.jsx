@@ -1,5 +1,6 @@
 import {
   Bell,
+  CalendarClock,
   FileBarChart,
   LayoutDashboard,
   MessageSquare,
@@ -19,6 +20,7 @@ import AdminReportsPage from "./AdminReportsPage.jsx";
 import AdminReminderSettingsPage from "./AdminReminderSettingsPage.jsx";
 import AdminValidationSummaryPage from "./AdminValidationSummaryPage.jsx";
 import AdminTemplatePreviewPage from "./AdminTemplatePreviewPage.jsx";
+import AdminSubscriptionSettingsPage from "./AdminSubscriptionSettingsPage.jsx";
 import WhatsAppNotificationSettingsPage from "./WhatsAppNotificationSettingsPage.jsx";
 
 const pageTitle = "Automated Invoicing System - Admin Dashboard";
@@ -80,6 +82,17 @@ const invoicingSidebarSections = [
         ]
       },
       {
+        label: "Subscription Settings",
+        icon: CalendarClock,
+        path: "/dashboard/invoicing/admin/subscription-settings",
+        children: [
+          {
+            label: "Settings",
+            path: "/dashboard/invoicing/admin/subscription-settings"
+          }
+        ]
+      },
+      {
         label: "Reminder Settings",
         icon: Bell,
         path: "/dashboard/invoicing/admin/reminder-settings"
@@ -136,6 +149,10 @@ const routeHeadings = {
   "/dashboard/invoicing/admin/reminder-settings": "Reminder Settings",
   "/dashboard/invoicing/admin/whatsapp-settings": "WhatsApp Notification Settings",
   "/dashboard/invoicing/admin/template-preview": "Template Preview",
+  "/dashboard/invoicing/admin/subscription-settings": "Subscription Settings",
+  "/dashboard/invoicing/admin/subscription-settings/plans": "Plans & Pricing",
+  "/dashboard/invoicing/admin/subscription-settings/billing-rules": "Billing Rules",
+  "/dashboard/invoicing/admin/subscription-settings/automation": "Automation Settings",
   "/dashboard/invoicing/admin/audit-logs": "Audit Logs",
   "/dashboard/invoicing/admin/reports": "Reports"
 };
@@ -168,6 +185,10 @@ export default function AdminInvoicingDashboard() {
   const isReminderSettings = normalizedPath === "/dashboard/invoicing/admin/reminder-settings";
   const isWhatsAppSettings = normalizedPath === "/dashboard/invoicing/admin/whatsapp-settings";
   const isTemplatePreview = normalizedPath === "/dashboard/invoicing/admin/template-preview";
+  const subscriptionSettingsMatch = normalizedPath.match(
+    /^\/dashboard\/invoicing\/admin\/subscription-settings(?:\/(plans|billing-rules|automation))?$/
+  );
+  const isSubscriptionSettings = Boolean(subscriptionSettingsMatch);
   const isAuditLogs = normalizedPath === "/dashboard/invoicing/admin/audit-logs";
   const isInvoicePerformance = normalizedPath === "/dashboard/invoicing/admin/dashboard/invoice-performance";
   const isInvoiceList = normalizedPath === "/dashboard/invoicing/admin/invoices";
@@ -184,6 +205,8 @@ export default function AdminInvoicingDashboard() {
       ? "Automated Invoicing System - GST Management"
       : isInvoiceSettings
       ? "Automated Invoicing System - Invoice Settings"
+    : isSubscriptionSettings
+      ? "Automated Invoicing System - Subscription Settings"
     : isReminderSettings
       ? "Automated Invoicing System - Reminder Settings"
     : isWhatsAppSettings
@@ -221,6 +244,8 @@ export default function AdminInvoicingDashboard() {
         <AdminGstManagementPage />
       ) : isInvoiceSettings ? (
         <AdminInvoiceSettingsPage activeTab={invoiceSettingsMatch?.[1] || "general"} />
+      ) : isSubscriptionSettings ? (
+        <AdminSubscriptionSettingsPage activeSection={subscriptionSettingsMatch?.[1] || "plans"} />
       ) : isReminderSettings ? (
         <AdminReminderSettingsPage />
       ) : isWhatsAppSettings ? (

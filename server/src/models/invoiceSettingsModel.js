@@ -547,7 +547,7 @@ async function getInvoiceSettings(companyId = null) {
   const companySql = companyId ? " AND company_id = ?" : "";
   const params = companyId ? [SETTINGS_ROW_ID, companyId] : [SETTINGS_ROW_ID];
   const [rows] = await pool.execute(
-    `SELECT items_json FROM invoice WHERE invoiceId = ?${companySql} LIMIT 1`,
+    `SELECT items_json, created_at FROM invoice WHERE invoiceId = ?${companySql} LIMIT 1`,
     params
   );
 
@@ -558,19 +558,27 @@ async function getInvoiceSettings(companyId = null) {
     );
   }
 
-  return applyEffectiveGst(parseSettingsJson(rows[0].items_json), companyId);
+  const storedSettings = parseSettingsJson(rows[0].items_json);
+  return applyEffectiveGst({
+    ...storedSettings,
+    updatedAt: storedSettings.updatedAt || rows[0].created_at || null
+  }, companyId);
 }
 
 async function getInvoiceSettingsForUpdate(connection, companyId = null) {
   const companySql = companyId ? " AND company_id = ?" : "";
   const params = companyId ? [SETTINGS_ROW_ID, companyId] : [SETTINGS_ROW_ID];
   const [rows] = await connection.execute(
-    `SELECT invoice_id, items_json FROM invoice WHERE invoiceId = ?${companySql} LIMIT 1 FOR UPDATE`,
+    `SELECT invoice_id, items_json, created_at FROM invoice WHERE invoiceId = ?${companySql} LIMIT 1 FOR UPDATE`,
     params
   );
 
   if (rows[0] && rows[0].items_json) {
-    return applyEffectiveGst(parseSettingsJson(rows[0].items_json), companyId);
+    const storedSettings = parseSettingsJson(rows[0].items_json);
+    return applyEffectiveGst({
+      ...storedSettings,
+      updatedAt: storedSettings.updatedAt || rows[0].created_at || null
+    }, companyId);
   }
 
   // Create the settings row if it doesn't exist
@@ -592,6 +600,7 @@ async function saveInvoiceSettings(settings, companyId = null) {
     ...defaultSettings,
     ...applyGeneralSettings(settings),
     ...gstSettings,
+    updatedAt: new Date().toISOString(),
     general: {
       ...defaultSettings.general,
       ...(applyGeneralSettings(settings).general || {}),

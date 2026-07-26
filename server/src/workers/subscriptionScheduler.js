@@ -28,6 +28,7 @@ const {
   reserveNextInvoiceNumber,
   calculateDueDate,
 } = require("../models/invoiceSettingsModel");
+const { getSubscriptionSettings } = require("../models/subscriptionSettingsModel");
 
 // Default: run once every 24 hours (86400000 ms). For dev, set via env var.
 const DEFAULT_INTERVAL_MS = Number(process.env.SUBSCRIPTION_SCHEDULER_INTERVAL_MS || 86400000);
@@ -58,10 +59,19 @@ async function loadDueSubscriptions(limit = BATCH_SIZE) {
        AND s.next_billing_date <= CURDATE()
      ORDER BY s.next_billing_date ASC, s.subscription_id ASC
      LIMIT ?`,
-    [limit]
+    [Math.max(limit * 5, limit)]
   );
 
-  return rows;
+  const settingsByCompany = new Map();
+  await Promise.all(
+    [...new Set(rows.map((row) => Number(row.company_id) || 0))].map(async (companyId) => {
+      settingsByCompany.set(companyId, await getSubscriptionSettings(companyId));
+    })
+  );
+
+  return rows
+    .filter((row) => settingsByCompany.get(Number(row.company_id) || 0)?.automation.automaticInvoiceGeneration)
+    .slice(0, limit);
 }
 
 /**
@@ -90,6 +100,14 @@ async function generateSubscriptionInvoice(subscription, options = {}) {
   const connection = await pool.getConnection();
 
   try {
+    const adminSettings = await getSubscriptionSettings(subscription.company_id);
+    const autoSendMode = adminSettings.automation.autoSendMode;
+    const shouldAutoSend = autoSendMode === "always"
+      ? true
+      : autoSendMode === "never"
+        ? false
+        : Boolean(subscription.auto_send);
+
     await connection.beginTransaction();
 
     // Lock the subscription row to prevent concurrent processing
@@ -174,7 +192,7 @@ async function generateSubscriptionInvoice(subscription, options = {}) {
       }
     ]);
 
-    const initialStatus = subscription.auto_send ? "Sent" : "Draft";
+    const initialStatus = shouldAutoSend ? "Sent" : "Draft";
 
     // Insert the invoice
     const [insertResult] = await connection.query(
@@ -209,7 +227,7 @@ async function generateSubscriptionInvoice(subscription, options = {}) {
     // ─── Post-commit operations (email, notifications) ─────────────────────
     let sent = false;
 
-    if (subscription.auto_send) {
+    if (shouldAutoSend) {
       try {
         await sendInvoiceEmail({
           invoice_id:     newInvoiceId,
@@ -228,12 +246,13 @@ async function generateSubscriptionInvoice(subscription, options = {}) {
         // Mark invoice back to Draft if send fails
         await pool.query("UPDATE invoice SET status = 'Draft' WHERE invoice_id = ?", [newInvoiceId]);
 
-        // Notify Finance about the failure
-        await createNotification({
-          type:    "subscription_invoice_failed",
-          title:   "Subscription Invoice Send Failed",
-          message: `Failed to email invoice ${invoiceNumber} for subscription #${subscription.subscription_id} (${subscription.plan_name}). Error: ${emailErr.message}`,
-        });
+        if (adminSettings.automation.notifyFinanceOnFailure) {
+          await createNotification({
+            type:    "subscription_invoice_failed",
+            title:   "Subscription Invoice Send Failed",
+            message: `Failed to email invoice ${invoiceNumber} for subscription #${subscription.subscription_id} (${subscription.plan_name}). Error: ${emailErr.message}`,
+          });
+        }
       }
     }
 
@@ -286,12 +305,14 @@ async function runSubscriptionSchedulerOnce() {
         notes:          `Error: ${error.message}`,
       }).catch(() => {});
 
-      // Notify Finance
-      await createNotification({
-        type:    "subscription_invoice_failed",
-        title:   "Recurring Invoice Generation Failed",
-        message: `Failed to generate invoice for subscription #${sub.subscription_id} (${sub.plan_name}) — ${sub.customer_name}. Error: ${error.message}`,
-      }).catch(() => {});
+      const adminSettings = await getSubscriptionSettings(sub.company_id).catch(() => null);
+      if (adminSettings?.automation.notifyFinanceOnFailure !== false) {
+        await createNotification({
+          type:    "subscription_invoice_failed",
+          title:   "Recurring Invoice Generation Failed",
+          message: `Failed to generate invoice for subscription #${sub.subscription_id} (${sub.plan_name}) — ${sub.customer_name}. Error: ${error.message}`,
+        }).catch(() => {});
+      }
     }
   }
 
@@ -313,14 +334,20 @@ async function notifyUpcomingRenewals() {
          s.plan_name,
          s.amount,
          s.next_billing_date,
+         s.company_id,
+         DATEDIFF(s.next_billing_date, CURDATE()) AS reminder_lead_days,
          c.name AS customer_name
        FROM subscriptions s
        INNER JOIN customer c ON c.customer_id = s.customer_id
        WHERE s.status = 'Active'
-         AND s.next_billing_date = DATE_ADD(CURDATE(), INTERVAL 7 DAY)`
+         AND s.next_billing_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 90 DAY)`
     );
 
     for (const sub of rows) {
+      const adminSettings = await getSubscriptionSettings(sub.company_id);
+      if (Number(sub.reminder_lead_days) !== adminSettings.automation.renewalReminderDays) {
+        continue;
+      }
       await createNotification({
         type:    "subscription_renewal_upcoming",
         title:   "Upcoming Subscription Renewal",
