@@ -75,7 +75,7 @@ export default function HRLeaveManagement() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [allAppsPage]);
 
   async function fetchData() {
     setLoading(true);
@@ -208,26 +208,6 @@ export default function HRLeaveManagement() {
     { id: "config", label: "Leave Configuration", icon: Settings }
   ];
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex gap-2">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-lg bg-white/80 px-6 py-3">
-              <SkeletonBar width="100px" height="h-4" />
-            </div>
-          ))}
-        </div>
-        <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5 space-y-3">
-          <SkeletonBar width="30%" height="h-4" />
-          {[1, 2, 3, 4].map((i) => (
-            <SkeletonBar key={i} height="h-14" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Toast */}
@@ -276,7 +256,7 @@ export default function HRLeaveManagement() {
       </div>
 
       {/* ─── Pending Approvals Tab ──────────────────────────────────── */}
-      {activeTab === "pending" && (
+      {!loading && activeTab === "pending" && (
         <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
           <h3 className="mb-4 text-lg font-semibold text-[#251E1F]">Pending Leave Approvals</h3>
           {pendingApps.length === 0 ? (
@@ -381,7 +361,7 @@ export default function HRLeaveManagement() {
       )}
 
       {/* ─── All Applications Tab ──────────────────────────────────── */}
-      {activeTab === "all" && (
+      {!loading && activeTab === "all" && (
         <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
           <h3 className="mb-4 text-lg font-semibold text-[#251E1F]">All Staff Leave Applications</h3>
 
@@ -534,7 +514,7 @@ export default function HRLeaveManagement() {
       )}
 
       {/* ─── Leave Configuration Tab ──────────────────────────────── */}
-      {activeTab === "config" && (
+      {!loading && activeTab === "config" && (
         <div className="rounded-xl border border-[#f0d2ca] bg-white/80 p-5">
           <h3 className="mb-4 text-lg font-semibold text-[#251E1F]">Leave Type Configuration</h3>
           <p className="mb-4 text-xs text-[#7b6660]">
