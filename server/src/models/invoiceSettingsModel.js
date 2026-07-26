@@ -32,9 +32,7 @@ const optionLists = {
     { value: "MYR", label: "MYR - Malaysian Ringgit" }
   ],
   languages: [
-    { value: "en", label: "English" },
-    { value: "ms", label: "Malay" },
-    { value: "zh", label: "Chinese" }
+    { value: "en", label: "English" }
   ],
   taxes: [
     { value: "GST_9", label: "GST (9%)", rate: 9, type: "GST" },
@@ -51,8 +49,6 @@ const optionLists = {
     { value: "Due on Receipt", label: "Due on Receipt" }
   ],
   lateFeeTypes: [{ value: "percent", label: "%" }],
-  pdfPaperSizes: [{ value: "A4", label: "A4 (fixed approved layout)" }],
-  excelFormats: [{ value: "xlsx", label: ".xlsx" }],
   separatorStyles: [
     { value: "hyphen", label: "Hyphen (-)" },
     { value: "slash", label: "Slash (/)" },
@@ -85,6 +81,7 @@ const invoiceStatusWorkflow = [
 const defaultSettings = {
   invoicePrefix: "INV",
   invoiceYear: String(new Date().getFullYear()),
+  lastSequenceYear: String(new Date().getFullYear()),
   separatorStyle: "hyphen",
   invoiceFormat: "{PREFIX}-{YYYY}-{NNNN}",
   nextInvoiceNumber: 1,
@@ -211,7 +208,13 @@ function numberToken(value) {
 }
 
 function invoiceYearTokens(settings, date = new Date()) {
-  const fullYear = normalizeInvoiceYear(settings.invoiceYear || date.getFullYear());
+  const parsedDate = new Date(date);
+  const issueYear = Number.isNaN(parsedDate.getTime())
+    ? String(new Date().getFullYear())
+    : String(parsedDate.getFullYear());
+  const fullYear = settings.sequenceRules?.yearlyReset
+    ? issueYear
+    : normalizeInvoiceYear(settings.invoiceYear || issueYear);
   return { YYYY: fullYear, YY: fullYear.slice(-2) };
 }
 
@@ -226,6 +229,34 @@ function buildInvoiceNumber(settings, date = new Date(), nextNumber = settings?.
     .replaceAll("{YYYY}", YYYY)
     .replaceAll("{YY}", YY)
     .replaceAll("{NNNN}", invoiceNumber);
+}
+
+function resolveInvoiceSequence(settings, date = new Date()) {
+  const parsedDate = new Date(date);
+  const issueYear = Number.isNaN(parsedDate.getTime())
+    ? String(new Date().getFullYear())
+    : String(parsedDate.getFullYear());
+  const trackedYear = normalizeInvoiceYear(
+    settings.lastSequenceYear || settings.invoiceYear || issueYear
+  );
+  const yearlyReset = settings.sequenceRules?.yearlyReset === true;
+  const didReset = yearlyReset && Number(issueYear) > Number(trackedYear);
+  const nextTrackedYear = yearlyReset
+    ? String(Math.max(Number(issueYear), Number(trackedYear)))
+    : trackedYear;
+
+  return {
+    didReset,
+    issueYear,
+    nextTrackedYear,
+    previousYear: trackedYear,
+    previousNextNumber: Math.max(1, Number(settings.nextInvoiceNumber) || 1),
+    startNumber: didReset ? 1 : Math.max(1, Number(settings.nextInvoiceNumber) || 1),
+    effectiveSettings: {
+      ...settings,
+      invoiceYear: yearlyReset ? issueYear : settings.invoiceYear
+    }
+  };
 }
 
 function calculateDueDate(settings, issueDate = new Date()) {
@@ -294,8 +325,6 @@ function calculateConfigurationStatus(settings) {
       hasValue(settings?.general?.priceDisplay) &&
       hasValue(settings?.general?.paymentTerms) &&
       hasValidLateFee &&
-      hasValue(settings?.export?.pdfPaperSize) &&
-      hasValue(settings?.export?.excelFormat) &&
       hasValue(settings?.companyName) &&
       hasValue(settings?.financeEmail)
         ? "completed"
@@ -353,7 +382,25 @@ function mapRawToSettings(raw) {
 
   // If it's already in app format (has invoicePrefix key), return enriched
   if (raw.invoicePrefix !== undefined) {
-    const settings = { ...defaultSettings, ...raw };
+    const settings = {
+      ...defaultSettings,
+      ...raw,
+      lastSequenceYear: normalizeInvoiceYear(
+        raw.lastSequenceYear || raw.invoiceYear || defaultSettings.lastSequenceYear
+      ),
+      defaultLanguage: "en",
+      general: {
+        ...defaultSettings.general,
+        ...(raw.general || {}),
+        defaultLanguage: "en"
+      },
+      export: {
+        pdfExportEnabled: true,
+        excelExportEnabled: true,
+        pdfPaperSize: "A4",
+        excelFormat: "xlsx"
+      }
+    };
     return {
       ...settings,
       previewInvoiceNumber: buildInvoiceNumber(settings),
@@ -366,6 +413,7 @@ function mapRawToSettings(raw) {
     settingId: raw.setting_id,
     invoicePrefix: raw.invoice_prefix || defaultSettings.invoicePrefix,
     invoiceYear: normalizeInvoiceYear(raw.invoice_year || defaultSettings.invoiceYear),
+    lastSequenceYear: normalizeInvoiceYear(raw.invoice_year || defaultSettings.lastSequenceYear),
     separatorStyle: raw.separator_style || defaultSettings.separatorStyle,
     invoiceFormat: raw.invoice_format || defaultSettings.invoiceFormat,
     nextInvoiceNumber: numberValue(raw.next_invoice_number, defaultSettings.nextInvoiceNumber),
@@ -442,7 +490,7 @@ function mapRawToSettings(raw) {
     vanidayFieldMapping: raw.vaniday_field_mapping || defaultSettings.vanidayFieldMapping,
     general: {
       defaultCurrency: raw.default_currency || defaultSettings.general.defaultCurrency,
-      defaultLanguage: raw.default_language || defaultSettings.general.defaultLanguage,
+      defaultLanguage: "en",
       defaultTax: raw.default_tax || defaultSettings.general.defaultTax,
       priceDisplay: raw.price_display || defaultSettings.general.priceDisplay,
       paymentTerms: raw.payment_terms || defaultSettings.general.paymentTerms,
@@ -452,10 +500,10 @@ function mapRawToSettings(raw) {
       whatsappNotificationsEnabled: true
     },
     export: {
-      pdfExportEnabled: boolValue(raw.pdf_export_enabled, defaultSettings.export.pdfExportEnabled),
-      excelExportEnabled: boolValue(raw.excel_export_enabled, defaultSettings.export.excelExportEnabled),
+      pdfExportEnabled: true,
+      excelExportEnabled: true,
       pdfPaperSize: "A4",
-      excelFormat: raw.excel_format || defaultSettings.export.excelFormat
+      excelFormat: "xlsx"
     },
     branding: {
       companyLogoUrl: raw.company_logo_url || "",
@@ -489,7 +537,7 @@ function applyGeneralSettings(settings) {
   return {
     ...settings,
     defaultCurrency,
-    defaultLanguage: general.defaultLanguage || settings.defaultLanguage || defaultSettings.general.defaultLanguage,
+    defaultLanguage: "en",
     paymentTerms,
     dueDays,
     lateFeePercent: Number.isFinite(lateFeeValue) ? lateFeeValue : defaultSettings.general.lateFeeValue,
@@ -500,7 +548,7 @@ function applyGeneralSettings(settings) {
     general: {
       ...general,
       defaultCurrency,
-      defaultLanguage: general.defaultLanguage || settings.defaultLanguage || defaultSettings.general.defaultLanguage,
+      defaultLanguage: "en",
       paymentTerms,
       lateFeeValue: Number.isFinite(lateFeeValue) ? lateFeeValue : defaultSettings.general.lateFeeValue,
       onlineViewLinkEnabled: true,
@@ -638,17 +686,18 @@ async function saveInvoiceSettings(settings, companyId = null) {
 }
 
 async function nextAvailableInvoiceNumber(connection, settings, date = new Date(), companyId = null) {
-  let sequence = Math.max(1, Number(settings.nextInvoiceNumber) || 1);
+  const sequenceState = resolveInvoiceSequence(settings, date);
+  let sequence = sequenceState.startNumber;
 
   for (let attempt = 0; attempt < 10000; attempt += 1) {
-    const invoiceId = buildInvoiceNumber(settings, date, sequence);
+    const invoiceId = buildInvoiceNumber(sequenceState.effectiveSettings, date, sequence);
     const companySql = companyId ? " AND company_id = ?" : "";
     const params = companyId ? [invoiceId, companyId] : [invoiceId];
     const [rows] = await connection.execute(
       `SELECT invoice_id FROM invoice WHERE invoiceId = ?${companySql} LIMIT 1`,
       params
     );
-    if (!rows.length) return { invoiceId, sequence };
+    if (!rows.length) return { invoiceId, sequence, ...sequenceState };
     sequence += 1;
   }
 
@@ -666,7 +715,12 @@ async function reserveNextInvoiceNumber(connection, date = new Date(), companyId
   const result = await nextAvailableInvoiceNumber(connection, settings, date, companyId);
 
   // Update nextInvoiceNumber in the settings JSON
-  const updatedSettings = { ...settings, nextInvoiceNumber: result.sequence + 1 };
+  const updatedSettings = {
+    ...settings,
+    invoiceYear: result.nextTrackedYear,
+    lastSequenceYear: result.nextTrackedYear,
+    nextInvoiceNumber: result.sequence + 1
+  };
   delete updatedSettings.previewInvoiceNumber;
   delete updatedSettings.sampleDueDate;
   delete updatedSettings.currentGstRate;
@@ -677,7 +731,16 @@ async function reserveNextInvoiceNumber(connection, date = new Date(), companyId
     companyId ? [JSON.stringify(updatedSettings), SETTINGS_ROW_ID, companyId] : [JSON.stringify(updatedSettings), SETTINGS_ROW_ID]
   );
 
-  return { ...result, settings };
+  if (result.didReset) {
+    await addNumberingActivity([{
+      action: "Automatic Yearly Reset",
+      oldValue: `${result.previousYear} / next ${result.previousNextNumber}`,
+      newValue: `${result.issueYear} / started at ${result.sequence}`,
+      changedBy: "System"
+    }], companyId, connection);
+  }
+
+  return { ...result, settings: updatedSettings };
 }
 
 async function updateInvoiceLogo(companyLogoUrl, companyId = null) {
@@ -693,23 +756,35 @@ async function updateInvoiceLogo(companyLogoUrl, companyId = null) {
   }, companyId);
 }
 
-async function addNumberingActivity(records = []) {
+async function addNumberingActivity(records = [], companyId = null, connection = null) {
   if (!records.length) return [];
+  const db = connection && typeof connection.query === "function" ? connection : pool;
 
   // Store numbering activity in audit_logs
   for (const record of records) {
-    await pool.query(
-      `INSERT INTO audit_logs (module, activity_type, action_description, affected_record, status, previous_value, new_value, user_name, created_at)
-       VALUES ('Invoice', 'invoice_numbering', ?, NULL, 'success', ?, ?, ?, NOW())`,
-      [record.action, record.oldValue ?? "", record.newValue ?? "", record.changedBy || "Admin"]
+    await db.query(
+      `INSERT INTO audit_logs
+        (company_id, module, activity_type, action_description, affected_record, status,
+         previous_value, new_value, user_name, entity_type, created_at)
+       VALUES (?, 'Invoice', 'invoice_numbering', ?, ?, 'Success', ?, ?, ?, 'invoice_settings', NOW())`,
+      [
+        companyId || null,
+        record.action,
+        record.settingId ? String(record.settingId) : null,
+        record.oldValue ?? "",
+        record.newValue ?? "",
+        record.changedBy || "Admin"
+      ]
     );
   }
 
-  return listNumberingActivity();
+  return records;
 }
 
-async function listNumberingActivity(limit = 20) {
+async function listNumberingActivity(limit = 20, companyId = null) {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 100));
+  const companyFilter = companyId ? "AND company_id = ?" : "AND company_id IS NULL";
+  const params = companyId ? [companyId] : [];
 
   const [rows] = await pool.execute(
     `SELECT
@@ -719,15 +794,63 @@ async function listNumberingActivity(limit = 20) {
       previous_value AS oldValue,
       new_value AS newValue,
       user_name AS changedBy,
-      NULL AS notes,
-      created_at AS createdAt
+       created_at AS createdAt
      FROM audit_logs
      WHERE activity_type = 'invoice_numbering'
+       ${companyFilter}
      ORDER BY created_at DESC, audit_log_id DESC
-     LIMIT ${safeLimit}`
+     LIMIT ${safeLimit}`,
+    params
   );
 
   return rows;
+}
+
+async function listNumberingActivityPage(options = {}, companyId = null) {
+  const page = Math.max(1, Number.parseInt(options.page, 10) || 1);
+  const pageSize = Math.max(5, Math.min(Number.parseInt(options.pageSize, 10) || 20, 100));
+  const offset = (page - 1) * pageSize;
+  const companyFilter = companyId ? "AND company_id = ?" : "AND company_id IS NULL";
+  const params = companyId ? [companyId] : [];
+
+  const [countResult, rowsResult] = await Promise.all([
+    pool.execute(
+      `SELECT COUNT(*) AS total
+       FROM audit_logs
+       WHERE activity_type = 'invoice_numbering'
+         ${companyFilter}`,
+      params
+    ),
+    pool.execute(
+      `SELECT
+        audit_log_id AS id,
+        NULL AS settingId,
+        action_description AS action,
+        previous_value AS oldValue,
+        new_value AS newValue,
+        user_name AS changedBy,
+        created_at AS createdAt
+       FROM audit_logs
+       WHERE activity_type = 'invoice_numbering'
+         ${companyFilter}
+       ORDER BY created_at DESC, audit_log_id DESC
+       LIMIT ${pageSize} OFFSET ${offset}`,
+      params
+    )
+  ]);
+
+  const countRow = countResult[0]?.[0];
+  const rows = rowsResult[0] || [];
+  const total = Number(countRow?.total || 0);
+  return {
+    records: rows,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize))
+    }
+  };
 }
 
 module.exports = {
@@ -743,9 +866,11 @@ module.exports = {
   getInvoiceSettingsForUpdate,
   invoiceStatusWorkflow,
   listNumberingActivity,
+  listNumberingActivityPage,
   missingInvoiceSettingsMessage,
   optionLists,
   previewNextInvoiceNumber,
+  resolveInvoiceSequence,
   reserveNextInvoiceNumber,
   saveInvoiceSettings,
   SETTINGS_ROW_ID,

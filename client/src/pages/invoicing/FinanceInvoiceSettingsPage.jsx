@@ -141,7 +141,6 @@ export default function FinanceInvoiceSettingsPage() {
 
   const s = settings || {};
   const general = s.general || {};
-  const exportCfg = s.export || {};
   const branding = s.branding || {};
   const seqRules = s.sequenceRules || {};
   const updatedAt = s.updated_at || s.updatedAt;
@@ -207,7 +206,7 @@ export default function FinanceInvoiceSettingsPage() {
             <SettingsCard title="General Configuration" icon={Globe}>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <ReadOnlyField label="Default Currency" value={general.defaultCurrency || s.defaultCurrency || "SGD"} />
-                <ReadOnlyField label="Default Language" value={general.defaultLanguage || "en"} />
+                <ReadOnlyField label="Default Language" value="English" />
                 <ReadOnlyField label="Default Tax" value={general.defaultTax || "GST_9"} />
                 <ReadOnlyField label="Price Display" value={general.priceDisplay || "tax_exclusive"} />
                 <ReadOnlyField label="Payment Terms" value={general.paymentTerms || s.paymentTerms || "Net 30"} />
@@ -215,15 +214,6 @@ export default function FinanceInvoiceSettingsPage() {
                 <ReadOnlyField label="Late Fee" value={`${general.lateFeeValue ?? s.lateFeePercent ?? 0}% (${general.lateFeeType || "percent"})`} />
                 <ReadOnlyField label="Online View Link" value="Always Enabled" note="Included when invoices are sent." />
                 <ReadOnlyField label="WhatsApp Notifications" value="Always Enabled" note="Configured system-wide." />
-              </div>
-            </SettingsCard>
-
-            <SettingsCard title="Export Settings" icon={FileText}>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <ReadOnlyField label="PDF Export" value={exportCfg.pdfExportEnabled !== false ? "Enabled" : "Disabled"} />
-                <ReadOnlyField label="Excel Export" value={exportCfg.excelExportEnabled !== false ? "Enabled" : "Disabled"} />
-                <ReadOnlyField label="PDF Paper Size" value={exportCfg.pdfPaperSize || "A4"} />
-                <ReadOnlyField label="Excel Format" value={exportCfg.excelFormat || "xlsx"} />
               </div>
             </SettingsCard>
 
@@ -260,8 +250,6 @@ export default function FinanceInvoiceSettingsPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <ReadOnlyField label="Yearly Reset" value={seqRules.yearlyReset ? "Enabled" : "Disabled"} note="Restart numbering when year changes." />
                 <ReadOnlyField label="Allow Manual Override" value={seqRules.allowManualOverride ? "Enabled" : "Disabled"} note="Admins can adjust numbers before sending." />
-                <ReadOnlyField label="Lock After Sent" value={seqRules.lockNumberingAfterSent ? "Enabled" : "Disabled"} note="Prevent edits once invoice is sent." />
-                <ReadOnlyField label="Prevent Duplicates" value={seqRules.preventDuplicateNumbers ? "Enabled" : "Disabled"} note="Block saving duplicate invoice numbers." />
               </div>
             </SettingsCard>
           </div>

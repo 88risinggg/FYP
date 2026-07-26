@@ -154,7 +154,12 @@ async function generateSubscriptionInvoice(subscription, options = {}) {
     // Reserve invoice number
     let invoiceNumber;
     try {
-      invoiceNumber = await reserveNextInvoiceNumber(subscription.company_id);
+      const reserved = await reserveNextInvoiceNumber(
+        connection,
+        new Date(issueDate),
+        subscription.company_id
+      );
+      invoiceNumber = reserved.invoiceId;
     } catch {
       // Fallback: generate from last used number
       const [lastRow] = await connection.query(

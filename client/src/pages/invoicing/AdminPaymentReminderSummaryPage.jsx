@@ -315,7 +315,7 @@ export default function AdminPaymentReminderSummaryPage() {
 
   const reminderSummary = summary?.reminderSummary || {};
   const emailDeliverySummary = summary?.emailDeliverySummary || {};
-  const recentPaymentUpdates = summary?.recentPaymentUpdates || [];
+  const recentPaymentUpdates = (summary?.recentPaymentUpdates || []).slice(0, 5);
   const hasAnyData = Number(reminderSummary.scheduledToday || 0) > 0 ||
     Number(reminderSummary.sentToday || 0) > 0 ||
     Number(reminderSummary.failedToday || 0) > 0 ||
@@ -403,6 +403,7 @@ export default function AdminPaymentReminderSummaryPage() {
           title="Recent Payment Updates"
           action={<Link to={`${basePath}/payment-updates?range=${range}`} className="text-xs font-bold text-[#F38978]">View All</Link>}
         >
+          <p className="mb-3 text-xs text-[#7b6660]">Latest 5 payment updates, newest first.</p>
           <RecentPaymentUpdatesTable payments={recentPaymentUpdates} />
         </Panel>
       </div>

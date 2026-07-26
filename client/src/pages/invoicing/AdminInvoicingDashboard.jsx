@@ -151,6 +151,7 @@ const routeHeadings = {
   "/dashboard/invoicing/admin/invoice-settings": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/general": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/numbering": "Invoice Settings",
+  "/dashboard/invoicing/admin/invoice-settings/numbering/history": "Numbering Settings History",
   "/dashboard/invoicing/admin/invoice-settings/email": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/payments": "Invoice Settings",
   "/dashboard/invoicing/admin/reminder-settings": "Reminder Settings",

@@ -23,14 +23,32 @@ export function updateInvoiceSettings(payload) {
   });
 }
 
-export function getInvoiceGstRates() {
-  return apiRequest("/api/admin/invoicing/invoice-settings/gst-rates", {
+export function getNumberingSettingsHistory({ page = 1, pageSize = 20 } = {}) {
+  const query = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize)
+  });
+  return apiRequest(`/api/admin/invoicing/invoice-settings/numbering-activity?${query}`, {
     headers: authHeaders()
   });
 }
 
-export function createInvoiceGstRate(payload) {
-  return apiRequest("/api/admin/invoicing/invoice-settings/gst-rates", {
+export function getInvoiceGstRates(options = {}) {
+  const query = new URLSearchParams();
+  if (options.limit) query.set("limit", String(options.limit));
+  if (options.order) query.set("order", options.order);
+  const suffix = query.size ? `?${query}` : "";
+  return apiRequest(`/api/admin/invoicing/invoice-settings/gst-rates${suffix}`, {
+    headers: authHeaders()
+  });
+}
+
+export function createInvoiceGstRate(payload, options = {}) {
+  const query = new URLSearchParams();
+  if (options.limit) query.set("limit", String(options.limit));
+  if (options.order) query.set("order", options.order);
+  const suffix = query.size ? `?${query}` : "";
+  return apiRequest(`/api/admin/invoicing/invoice-settings/gst-rates${suffix}`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify(payload)

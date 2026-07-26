@@ -4,7 +4,6 @@ import {
   ChevronDown,
   Circle,
   Clock3,
-  FileSpreadsheet,
   FileText,
   Hash,
   Info,
@@ -42,8 +41,6 @@ const emptyOptions = {
   priceDisplayOptions: [],
   paymentTerms: [],
   lateFeeTypes: [],
-  pdfPaperSizes: [],
-  excelFormats: [],
   separatorStyles: [],
   invoiceFormats: []
 };
@@ -94,7 +91,6 @@ function invoiceSectionSnapshot(settings, section) {
   }
   if (section === "general") {
     snapshot.general = settings?.general;
-    snapshot.export = settings?.export;
   }
   if (section === "numbering") {
     snapshot.sequenceRules = settings?.sequenceRules;
@@ -117,9 +113,7 @@ function validateInvoiceSection(section, form) {
       form.general.defaultLanguage,
       form.general.defaultTax,
       form.general.priceDisplay,
-      form.general.paymentTerms,
-      form.export.pdfPaperSize,
-      form.export.excelFormat
+      form.general.paymentTerms
     ];
     const valid = required.every(hasText)
       && paymentTermsHasDueLength(form.general.paymentTerms)
@@ -209,7 +203,7 @@ const defaultForm = {
   attachPdfInvoice: true,
   general: {
     defaultCurrency: "",
-    defaultLanguage: "",
+    defaultLanguage: "en",
     defaultTax: "",
     priceDisplay: "",
     paymentTerms: "",
@@ -217,12 +211,6 @@ const defaultForm = {
     lateFeeType: "percent",
     onlineViewLinkEnabled: true,
     whatsappNotificationsEnabled: true
-  },
-  export: {
-    pdfExportEnabled: false,
-    excelExportEnabled: false,
-    pdfPaperSize: "",
-    excelFormat: ""
   },
   branding: {
     companyLogoUrl: "",
@@ -261,46 +249,16 @@ const generalToggles = [
   }
 ];
 
-const exportToggles = [
-  {
-    label: "PDF Export",
-    note: "Allow invoices to be exported as PDF",
-    section: "export",
-    field: "pdfExportEnabled"
-  },
-  {
-    label: "Excel Export",
-    note: "Allow invoices to be exported as Excel",
-    section: "export",
-    field: "excelExportEnabled"
-  }
-];
-
-const exportSelectFields = [
-  { label: "PDF Paper Size", section: "export", field: "pdfPaperSize", optionsKey: "pdfPaperSizes" },
-  { label: "Excel Format", section: "export", field: "excelFormat", optionsKey: "excelFormats" }
-];
-
 const sequenceRuleFields = [
   {
     label: "Yearly Reset",
-    note: "Restart the invoice sequence when the saved invoice year changes.",
+    note: "Start the first invoice of each new year at 0001. The full invoice number still includes the year.",
     field: "yearlyReset"
   },
   {
     label: "Allow Manual Override",
-    note: "Permit approved admins to adjust generated numbers before sending.",
+    note: "Allow Admin to adjust the next number that will be generated. Existing invoice numbers remain unchanged.",
     field: "allowManualOverride"
-  },
-  {
-    label: "Lock Numbering After Sent",
-    note: "Prevent number edits once an invoice has been sent.",
-    field: "lockNumberingAfterSent"
-  },
-  {
-    label: "Prevent Duplicate Numbers",
-    note: "Block saving when another invoice already has the same number.",
-    field: "preventDuplicateNumbers"
   }
 ];
 
@@ -325,7 +283,6 @@ function normalizeSettings(settings) {
     ...defaultForm,
     ...(settings || {}),
     general: { ...defaultForm.general, ...(settings?.general || {}) },
-    export: { ...defaultForm.export, ...(settings?.export || {}) },
     branding: { ...defaultForm.branding, ...(settings?.branding || {}) },
     sequenceRules: { ...defaultForm.sequenceRules, ...(settings?.sequenceRules || {}) }
   };
@@ -419,6 +376,19 @@ function SelectField({ value, onChange, options, placeholder = "Select option" }
 }
 
 function SettingsSelect({ config, options, value, onChange }) {
+  if (config.field === "defaultLanguage") {
+    return (
+      <Field label={config.label} note="Invoices are issued in English.">
+        <input
+          type="text"
+          readOnly
+          value="English"
+          className="h-11 w-full rounded-lg border border-[#ead3cc] bg-[#fff8f5] px-3 text-sm font-semibold text-[#251E1F] outline-none"
+        />
+      </Field>
+    );
+  }
+
   if (config.field === "defaultTax") {
     const selected = options[config.optionsKey].find((option) => option.value === value);
     return (
@@ -511,7 +481,7 @@ function GstManagementTab() {
     setLoading(true);
     setError("");
     try {
-      setData(await getInvoiceGstRates());
+      setData(await getInvoiceGstRates({ limit: 5, order: "latest" }));
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -533,7 +503,7 @@ function GstManagementTab() {
         ratePercentage: Number(form.ratePercentage),
         effectiveFrom: form.effectiveFrom,
         effectiveTo: form.effectiveTo || null
-      });
+      }, { limit: 5, order: "latest" });
       setData(nextData);
       setForm({ ratePercentage: "", effectiveFrom: "", effectiveTo: "" });
       setMessage("GST rate scheduled.");
@@ -659,13 +629,14 @@ function GstManagementTab() {
       </SettingsCard>
 
       <SettingsCard title="GST Rate History" icon={Clock3}>
-        <div className="-mt-2 mb-4 flex justify-end">
+        <div className="-mt-2 mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-[#7b6660]">Latest 5 GST rate changes, newest first.</p>
           <button
             type="button"
             onClick={() => navigate("/dashboard/invoicing/admin/gst-management/history")}
             className="inline-flex h-10 items-center justify-center rounded-lg border border-[#F38978]/30 bg-white px-4 text-sm font-bold text-[#F38978] transition hover:bg-[#FDD9CD]/30"
           >
-            View Full History
+            View All
           </button>
         </div>
         <div className="overflow-hidden rounded-lg border border-[#f0d2ca]">
@@ -960,10 +931,21 @@ function NumberingPreviewPanel({ form, previewNumbers }) {
 }
 
 function RecentNumberingActivity({ activity }) {
+  const recentActivity = activity.slice(0, 5);
+
   return (
-    <SettingsCard title="Recent Numbering Activity" icon={Clock3}>
+    <SettingsCard title="Numbering Settings History" icon={Clock3}>
+      <div className="-mt-2 mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-[#7b6660]">Latest 5 numbering setting changes, newest first.</p>
+        <Link
+          to="/dashboard/invoicing/admin/invoice-settings/numbering/history"
+          className="text-xs font-bold text-[#F38978] hover:text-[#d86150]"
+        >
+          View All
+        </Link>
+      </div>
       <div className="overflow-x-auto">
-        <table className="min-w-[760px] w-full text-left text-sm">
+        <table className="min-w-[680px] w-full text-left text-sm">
           <thead className="border-b border-[#f0d2ca] text-xs font-bold uppercase text-[#7b6660]">
             <tr>
               <th className="px-3 py-3">Date &amp; Time</th>
@@ -971,19 +953,18 @@ function RecentNumberingActivity({ activity }) {
               <th className="px-3 py-3">Old Value</th>
               <th className="px-3 py-3">New Value</th>
               <th className="px-3 py-3">Changed By</th>
-              <th className="px-3 py-3">Notes</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#f5e2dc]">
-            {activity.length === 0 ? (
+            {recentActivity.length === 0 ? (
               <tr>
-                <td colSpan="6" className="px-3 py-8 text-center text-sm font-semibold text-[#7b6660]">
+                <td colSpan="5" className="px-3 py-8 text-center text-sm font-semibold text-[#7b6660]">
                   No numbering activity yet.
                 </td>
               </tr>
             ) : (
-              activity.map((item) => (
-                <tr key={item.id} className="align-top">
+              recentActivity.map((item) => (
+                <tr key={item.id} className="align-top transition hover:bg-[#fff8f5]">
                   <td className="whitespace-nowrap px-3 py-3 font-semibold text-[#251E1F]">
                     {formatDateTime(item.createdAt)}
                   </td>
@@ -991,7 +972,6 @@ function RecentNumberingActivity({ activity }) {
                   <td className="px-3 py-3 text-[#7b6660]">{item.oldValue}</td>
                   <td className="px-3 py-3 font-semibold text-[#251E1F]">{item.newValue}</td>
                   <td className="px-3 py-3 text-[#7b6660]">{item.changedBy}</td>
-                  <td className="px-3 py-3 text-[#7b6660]">{item.notes || "-"}</td>
                 </tr>
               ))
             )}
@@ -1049,7 +1029,7 @@ function NumberingTab({
               options={options.invoiceFormats}
             />
           </Field>
-          <Field label="Next Invoice Number" note="Usually read-only because the system calculates the next available number automatically.">
+          <Field label="Next Invoice Number" note="The server advances this automatically. Enable Manual Override only for an approved correction.">
             <input
               type="number"
               min="1"
@@ -1076,8 +1056,11 @@ function NumberingTab({
               key={rule.field}
               label={rule.label}
               note={rule.note}
-              checked={form.sequenceRules[rule.field]}
-              onChange={(value) => onSequenceRuleChange(rule.field, value)}
+              checked={rule.locked ? true : form.sequenceRules[rule.field]}
+              disabled={rule.locked}
+              onChange={(value) => {
+                if (!rule.locked) onSequenceRuleChange(rule.field, value);
+              }}
             />
           ))}
         </div>
@@ -1355,8 +1338,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
     if (form.general.lateFeeValue === "" || Number(form.general.lateFeeValue) < 0) {
       nextErrors.push("Late fee must be 0 or higher.");
     }
-    if (!form.export.pdfPaperSize) nextErrors.push("PDF paper size is required.");
-    if (!form.export.excelFormat) nextErrors.push("Excel format is required.");
     if (!form.invoicePrefix) nextErrors.push("Invoice prefix is required.");
     if (!/^\d{4}$/.test(String(form.invoiceYear || ""))) nextErrors.push("Enter a valid four-digit invoice year.");
     if (!form.separatorStyle) nextErrors.push("Separator style is required.");
@@ -1552,28 +1533,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
                   <TextSetting label="Finance Email" field="financeEmail" form={form} onChange={setRootField} type="email" />
                   <TextSetting label="Company Address" field="companyAddress" form={form} onChange={setRootField} multiline />
                   <TextSetting label="Registered-office Address" field="registeredOfficeAddress" form={form} onChange={setRootField} multiline />
-                </div>
-              </SettingsCard>
-
-              <SettingsCard title="Export Settings" icon={FileSpreadsheet}>
-                <div className="grid gap-4 lg:grid-cols-2">
-                  {exportToggles.map((config) => (
-                    <SettingsToggle
-                      key={config.field}
-                      config={config}
-                      checked={form[config.section][config.field]}
-                      onChange={setSectionField}
-                    />
-                  ))}
-                  {exportSelectFields.map((config) => (
-                    <SettingsSelect
-                      key={config.field}
-                      config={config}
-                      options={options}
-                      value={form[config.section][config.field]}
-                      onChange={setSectionField}
-                    />
-                  ))}
                 </div>
               </SettingsCard>
 
