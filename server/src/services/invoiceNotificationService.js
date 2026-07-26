@@ -9,6 +9,7 @@
  */
 
 const { pool } = require("../config/db");
+const { currentCompanyId } = require("./tenantContext");
 
 /**
  * Create a notification for Finance users using the existing notification table.
@@ -22,30 +23,31 @@ const { pool } = require("../config/db");
  */
 async function createNotification(data) {
   try {
+    const companyId = currentCompanyId();
     const { type, title, message, userId } = data;
 
     if (userId) {
       // Verify the user is Finance role before creating notification
       const [userRows] = await pool.query(
-        "SELECT user_id, role_name FROM user WHERE user_id = ? AND role_name = 'Finance' AND status = 1 LIMIT 1",
-        [userId]
+        "SELECT user_id, role_name FROM user WHERE user_id = ? AND company_id = ? AND role_name = 'Finance' AND status = 1 LIMIT 1",
+        [userId, companyId]
       );
       if (userRows.length > 0) {
         await pool.query(
-          "INSERT INTO notification (user_id, type, title, message, is_read, created_at) VALUES (?, ?, ?, ?, 0, NOW())",
-          [userId, type || "system", title, message || null]
+          "INSERT INTO notification (company_id, user_id, type, title, message, is_read, created_at) VALUES (?, ?, ?, ?, ?, 0, NOW())",
+          [companyId, userId, type || "system", title, message || null]
         );
       }
     } else {
       // Notify only Finance users
       const [users] = await pool.query(
-        "SELECT user_id FROM user WHERE role_name = 'Finance' AND status = 1"
+        "SELECT user_id FROM user WHERE company_id = ? AND role_name = 'Finance' AND status = 1", [companyId]
       );
 
       if (users.length > 0) {
-        const values = users.map((u) => [u.user_id, type || "system", title, message || null, 0]);
+        const values = users.map((u) => [companyId, u.user_id, type || "system", title, message || null, 0]);
         await pool.query(
-          "INSERT INTO notification (user_id, type, title, message, is_read, created_at) VALUES ?",
+          "INSERT INTO notification (company_id, user_id, type, title, message, is_read, created_at) VALUES ?",
           [values.map((v) => [...v, new Date()])]
         );
       }

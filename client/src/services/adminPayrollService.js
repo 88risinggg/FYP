@@ -88,3 +88,10 @@ export function updatePayrollSetting(settingKey, payload) {
     body: JSON.stringify(payload)
   });
 }
+
+export function publishPayrollRules(changes, changeReason) {
+  return apiRequest("/api/payroll/admin/rules/publish", {
+    method: "POST",
+    body: JSON.stringify({ changes, changeReason })
+  });
+}

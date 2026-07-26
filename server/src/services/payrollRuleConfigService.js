@@ -34,6 +34,16 @@ function defaultMetadata(key) {
   return { ruleCategory: "Operational Reference", usageType: RULE_USAGE.REFERENCE, effectiveFrom: null };
 }
 
+function defaultReference(key) {
+  if (/^cpf_|^compliance_cpf/.test(key)) return { reference_title: "CPF Board contribution requirements", reference_url: "https://www.cpf.gov.sg/employer/employer-obligations/how-much-cpf-contributions-to-pay" };
+  if (/^sdl_|^compliance_sdl/.test(key)) return { reference_title: "CPF Board Skills Development Levy", reference_url: "https://www.cpf.gov.sg/employer/employer-obligations/skills-development-levy" };
+  if (/^(mbmf|cdac|sinda|ecf)_/.test(key)) return { reference_title: "CPF Board self-help group contributions", reference_url: "https://www.cpf.gov.sg/service/article/must-my-employees-contribute-to-the-self-help-group-shg-funds" };
+  if (/^foreign_worker_levy_/.test(key)) return { reference_title: "MOM foreign worker quota and levy", reference_url: "https://www.mom.gov.sg/passes-and-permits/work-permit-for-foreign-worker/foreign-worker-levy" };
+  if (/^iras_/.test(key)) return { reference_title: "IRAS Auto-Inclusion Scheme for employment income", reference_url: "https://www.iras.gov.sg/taxes/individual-income-tax/employers/auto-inclusion-scheme-%28ais%29-for-employment-income" };
+  if (/^ir21_/.test(key)) return { reference_title: "IRAS tax clearance for Foreign and SPR employees", reference_url: "https://www.iras.gov.sg/taxes/individual-income-tax/employers/tax-clearance-for-foreign-spr-employees-%28ir21%29" };
+  return { reference_title: null, reference_url: null };
+}
+
 const DEFAULT_SETTINGS = [
   ["cpf_monthly_wage_ceiling", "8000", "Monthly CPF ordinary wage ceiling."],
   ["cpf_wage_ceiling_effective_from", "2026-01-01", "Effective date for the CPF wage ceiling."],
@@ -70,10 +80,13 @@ async function ensurePayrollConfigurationTable(connection = getPool()) {
   await connection.execute(
     `CREATE TABLE IF NOT EXISTS payroll_configuration (
       configuration_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      company_id INT NULL,
       configuration_type VARCHAR(40) NOT NULL DEFAULT 'setting',
       configuration_key VARCHAR(191) NOT NULL,
       configuration_value LONGTEXT NOT NULL,
       description VARCHAR(500) NULL,
+      reference_title VARCHAR(255) NULL,
+      reference_url VARCHAR(1000) NULL,
       effective_from DATE NULL,
       rule_category VARCHAR(80) NULL,
       usage_type VARCHAR(24) NULL,
@@ -82,7 +95,7 @@ async function ensurePayrollConfigurationTable(connection = getPool()) {
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (configuration_id),
-      UNIQUE KEY uq_payroll_configuration_type_key (configuration_type, configuration_key),
+      UNIQUE KEY uq_payroll_configuration_company_type_key (company_id, configuration_type, configuration_key),
       KEY idx_payroll_configuration_updated_by (updated_by)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
   );
@@ -91,6 +104,8 @@ async function ensurePayrollConfigurationTable(connection = getPool()) {
     ["rule_category", "VARCHAR(80) NULL AFTER effective_from"],
     ["usage_type", "VARCHAR(24) NULL AFTER rule_category"],
     ["is_active", "TINYINT(1) NOT NULL DEFAULT 1 AFTER usage_type"]
+    ,["reference_title", "VARCHAR(255) NULL AFTER description"]
+    ,["reference_url", "VARCHAR(1000) NULL AFTER reference_title"]
   ];
   for (const [column, definition] of requiredColumns) {
     const [rows] = await connection.execute(`SHOW COLUMNS FROM payroll_configuration LIKE '${column}'`);
@@ -103,15 +118,16 @@ async function ensurePayrollConfigurationTable(connection = getPool()) {
 
 async function listStoredPayrollSettings(connection = getPool()) {
   await ensurePayrollConfigurationTable(connection);
+  const companyId = require("./tenantContext").currentCompanyId();
   const [rows] = await connection.execute(
     `SELECT pc.configuration_id AS setting_id, pc.configuration_key AS setting_key,
-            pc.configuration_value AS setting_value, pc.description, pc.effective_from,
+            pc.configuration_value AS setting_value, pc.description, pc.reference_title, pc.reference_url, pc.effective_from,
             pc.rule_category, pc.usage_type, pc.is_active, pc.created_at, pc.updated_at,
             COALESCE(u.name, 'System') AS updated_by_name
      FROM payroll_configuration pc
      LEFT JOIN user u ON u.user_id = pc.updated_by
-     WHERE pc.configuration_type = 'setting'
-     ORDER BY pc.configuration_key`
+     WHERE pc.configuration_type = 'setting' AND pc.company_id = ?
+     ORDER BY pc.configuration_key`, [companyId]
   );
   const storedByKey = new Map(rows.map((row) => [row.setting_key, row]));
   const defaults = DEFAULT_SETTINGS
@@ -120,6 +136,7 @@ async function listStoredPayrollSettings(connection = getPool()) {
       ...(() => {
         const metadata = defaultMetadata(key);
         return {
+          ...defaultReference(key),
           effective_from: metadata.effectiveFrom,
           rule_category: metadata.ruleCategory,
           usage_type: metadata.usageType,
@@ -136,24 +153,27 @@ async function listStoredPayrollSettings(connection = getPool()) {
   return [...rows, ...defaults].sort((a, b) => a.setting_key.localeCompare(b.setting_key));
 }
 
-async function upsertStoredPayrollSetting({ settingKey, settingValue, description, effectiveFrom, ruleCategory, usageType, isActive, updatedBy }, connection = getPool()) {
+async function upsertStoredPayrollSetting({ settingKey, settingValue, description, referenceTitle, referenceUrl, effectiveFrom, ruleCategory, usageType, isActive, updatedBy }, connection = getPool()) {
   await ensurePayrollConfigurationTable(connection);
+  const companyId = require("./tenantContext").currentCompanyId();
   const metadata = defaultMetadata(settingKey);
   await connection.execute(
     `INSERT INTO payroll_configuration
-       (configuration_type, configuration_key, configuration_value, description, effective_from,
+       (company_id, configuration_type, configuration_key, configuration_value, description, reference_title, reference_url, effective_from,
         rule_category, usage_type, is_active, updated_by)
-     VALUES ('setting', ?, ?, ?, COALESCE(?, CURRENT_DATE), ?, ?, ?, ?)
+     VALUES (?, 'setting', ?, ?, ?, ?, ?, COALESCE(?, CURRENT_DATE), ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        configuration_value = VALUES(configuration_value),
        description = VALUES(description),
+       reference_title = VALUES(reference_title),
+       reference_url = VALUES(reference_url),
        effective_from = COALESCE(VALUES(effective_from), CURRENT_DATE),
        rule_category = VALUES(rule_category),
        usage_type = VALUES(usage_type),
        is_active = VALUES(is_active),
        updated_by = VALUES(updated_by),
        updated_at = CURRENT_TIMESTAMP`,
-    [settingKey, settingValue, description || null, effectiveFrom || metadata.effectiveFrom,
+    [companyId, settingKey, settingValue, description || null, referenceTitle || null, referenceUrl || null, effectiveFrom || metadata.effectiveFrom,
       ruleCategory || metadata.ruleCategory, usageType || metadata.usageType,
       isActive === false || Number(isActive) === 0 ? 0 : 1, updatedBy || null]
   );
@@ -245,6 +265,8 @@ function buildEffectiveRuleCatalogue(settings = [], asOf = new Date()) {
     return {
       key, name, category, usage, value, details,
       source: stored.length ? "Admin Override" : "System Default",
+      referenceTitle: members.map((setting) => setting.reference_title).find(Boolean) || null,
+      referenceUrl: members.map((setting) => setting.reference_url).find(Boolean) || null,
       effectiveFrom,
       status: active ? "Active" : "Inactive",
       isActive: Boolean(active),

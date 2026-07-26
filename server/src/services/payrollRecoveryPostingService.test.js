@@ -1,4 +1,5 @@
 const { postPayrollRecoveries, _test } = require("./payrollRecoveryPostingService");
+const { runWithTenant } = require("./tenantContext");
 
 describe("Payroll recovery posting references", () => {
   test("uses the persisted source record identifier", () => {
@@ -25,9 +26,9 @@ describe("Payroll recovery posting references", () => {
       if (sql.includes("UPDATE payroll SET deduction_breakdown")) return [{ affectedRows: 1 }];
       throw new Error(`Unexpected query: ${sql}`);
     }) };
-    const postings = await postPayrollRecoveries({ connection, payrollRunId: 3, userId: 5 });
+    const postings = await runWithTenant(1, () => postPayrollRecoveries({ connection, payrollRunId: 3, userId: 5 }));
     expect(postings).toEqual([{ claimRecordId: "ADV-1", appliedAmount: 960, deferredAmount: 206.66, balanceAfter: 1040 }]);
-    expect(updates[0]).toEqual([1040, 960, "ADV-1"]);
+    expect(updates[0]).toEqual([1040, 960, "ADV-1", 1]);
   });
 
   test("does not reduce the balance again when the run was already posted", async () => {
@@ -35,6 +36,6 @@ describe("Payroll recovery posting references", () => {
       if (sql.includes("FROM payroll WHERE")) return [[{ payroll_id: 9, staff_employee_id: 7, deduction_breakdown: { otherDeductions: [{ sourceRecordId: "ADV-1", amount: 960, recoveryPostedAt: "2026-07-26T00:00:00.000Z" }] } }]];
       throw new Error("Balance update must not run for a duplicate posting.");
     }) };
-    await expect(postPayrollRecoveries({ connection, payrollRunId: 3, userId: 5 })).resolves.toEqual([]);
+    await expect(runWithTenant(1, () => postPayrollRecoveries({ connection, payrollRunId: 3, userId: 5 }))).resolves.toEqual([]);
   });
 });

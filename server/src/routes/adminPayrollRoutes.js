@@ -20,6 +20,7 @@ const {
   previewPayslipLayout,
   previewSamplePayslip,
   resetUserPassword,
+  publishPayrollRuleChanges,
   updatePayrollSetting
 } = require("../controllers/adminPayrollController");
 const { authenticateToken } = require("../middleware/authMiddleware");
@@ -61,7 +62,7 @@ function requireAdmin(req, res, next) {
 }
 
 function requirePayrollConfigReader(req, res, next) {
-  if (!["Admin", "Finance"].includes(req.user?.role)) {
+  if (!["Admin", "Finance", "HR"].includes(req.user?.role)) {
     return res.status(403).json({
       message: "Payroll config access required"
     });
@@ -91,5 +92,6 @@ router.patch("/users/:userId/status", changeUserStatus);
 router.patch("/users/:userId/role", changeUserRole);
 router.post("/users/:userId/reset-password", resetUserPassword);
 router.patch("/settings/:settingKey", updatePayrollSetting);
+router.post("/rules/publish", publishPayrollRuleChanges);
 
 module.exports = router;

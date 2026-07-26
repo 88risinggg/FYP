@@ -43,6 +43,7 @@ function getAllowedModules(roleName) {
     Finance: ["invoicing", "payroll"],
     HR: ["payroll"],
     Staff: ["payroll"]
+    ,PlatformOperator: ["platform"]
   };
 
   return modulesByRole[roleName] || [];
@@ -84,6 +85,15 @@ function authPayload(user) {
       name: user.name,
       role: user.role_name,
       companyId: user.company_id || null,
+      company: user.company_id ? {
+        workspaceId: user.workspace_id,
+        name: user.company_name,
+        legalName: user.company_legal_name || user.company_name,
+        logoUrl: user.company_logo && user.workspace_id ? `/api/company/branding/${user.workspace_id}/logo` : null,
+        brandColor: user.company_brand_color || "#F38978",
+        timezone: user.company_timezone || "Asia/Singapore",
+        currency: user.company_currency || "SGD"
+      } : null,
       allowedModules: getAllowedModules(user.role_name)
     }
   };
@@ -96,6 +106,7 @@ function buildUserResponse(user) {
     name: user.name,
     role: user.role_name,
     companyId: user.company_id || null,
+    company: user.company_id ? { workspaceId: user.workspace_id, name: user.company_name, legalName: user.company_legal_name || user.company_name, logoUrl: user.company_logo && user.workspace_id ? `/api/company/branding/${user.workspace_id}/logo` : null, brandColor: user.company_brand_color || "#F38978", timezone: user.company_timezone || "Asia/Singapore", currency: user.company_currency || "SGD" } : null,
     allowedModules: getAllowedModules(user.role_name)
   };
 }
@@ -166,6 +177,7 @@ async function login(req, res) {
       const failure = await recordFailedLogin(user.user_id, LOGIN_FAILURE_LIMIT);
       if (failure.newlyLocked) {
         await notifyRoles("Admin", {
+          companyId: user.company_id,
           type: "security_account_locked",
           title: "User account locked",
           message: `${user.name} (${user.email}) was locked at ${new Date().toISOString()} after ${LOGIN_FAILURE_LIMIT} failed password attempts.`,

@@ -3,6 +3,7 @@ const { submitModernTreasuryPayrollBatch } = require("./modernTreasuryPaymentSer
 const { notifyRoles } = require("./payrollNotificationService");
 const { writeAuditLog, MODULE } = require("./auditService");
 const { getPayrollRunComplianceErrors } = require("../models/financePayrollModel");
+const { currentCompanyId, runWithTenant } = require("./tenantContext");
 
 const TIMEZONE = "Asia/Singapore";
 const SINGAPORE_OFFSET_MS = 8 * 60 * 60 * 1000;
@@ -42,9 +43,10 @@ function calculatePeriodSchedule(config, year, month, holidayDates = []) {
 }
 
 async function getFinanceScheduleConfig(connection = pool) {
+  const companyId = currentCompanyId();
   const [rows] = await connection.query(
     `SELECT configuration_key, configuration_value, updated_at, updated_by
-     FROM payroll_configuration WHERE configuration_type = 'finance_schedule'`
+     FROM payroll_configuration WHERE configuration_type = 'finance_schedule' AND company_id = ?`, [companyId]
   );
   const values = Object.fromEntries(rows.map((row) => [row.configuration_key, row.configuration_value]));
   const latest = rows.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
@@ -61,6 +63,7 @@ async function getFinanceScheduleConfig(connection = pool) {
 }
 
 async function saveFinanceScheduleConfig(input, userId) {
+  const companyId = currentCompanyId();
   const enabled = Boolean(input.enabled);
   const releaseDay = validDay(input.salaryReleaseDay);
   const cutoffDay = validDay(input.claimCutoffDay);
@@ -77,10 +80,10 @@ async function saveFinanceScheduleConfig(input, userId) {
     await connection.beginTransaction();
     for (const [key, value] of Object.entries(values)) {
       await connection.query(
-        `INSERT INTO payroll_configuration (configuration_type, configuration_key, configuration_value, description, updated_by)
-         VALUES ('finance_schedule', ?, ?, 'Finance payroll operational schedule', ?)
+        `INSERT INTO payroll_configuration (company_id, configuration_type, configuration_key, configuration_value, description, updated_by)
+         VALUES (?, 'finance_schedule', ?, ?, 'Finance payroll operational schedule', ?)
          ON DUPLICATE KEY UPDATE configuration_value = ?, updated_by = ?, updated_at = NOW()`,
-        [key, value, userId || null, value, userId || null]
+        [companyId, key, value, userId || null, value, userId || null]
       );
     }
     await connection.commit();
@@ -90,8 +93,8 @@ async function saveFinanceScheduleConfig(input, userId) {
 
 async function getHolidayDates(connection, year, month) {
   const [rows] = await connection.query(
-    `SELECT DATE_FORMAT(holiday_date, '%Y-%m-%d') AS holiday_date FROM public_holidays WHERE status = 'Active' AND YEAR(holiday_date) = ? AND MONTH(holiday_date) = ?`,
-    [year, month]
+    `SELECT DATE_FORMAT(holiday_date, '%Y-%m-%d') AS holiday_date FROM public_holidays WHERE company_id = ? AND status = 'Active' AND YEAR(holiday_date) = ? AND MONTH(holiday_date) = ?`,
+    [currentCompanyId(), year, month]
   );
   return rows.map((row) => String(row.holiday_date).slice(0, 10));
 }
@@ -112,15 +115,15 @@ async function applyScheduleDefaultsToRun(runId, connection = pool) {
     `UPDATE payroll_run SET effective_claim_cutoff_at = COALESCE(effective_claim_cutoff_at, ?),
        scheduled_release_at = COALESCE(scheduled_release_at, ?),
        release_schedule_status = COALESCE(release_schedule_status, 'Draft')
-     WHERE payroll_month = ? AND payroll_year = ? AND approved_at IS NULL`,
-    [dates.claimCutoffAt, dates.scheduledReleaseAt, month, year]
+     WHERE payroll_month = ? AND payroll_year = ? AND company_id = ? AND approved_at IS NULL`,
+    [dates.claimCutoffAt, dates.scheduledReleaseAt, month, year, currentCompanyId()]
   );
   return dates;
 }
 
 async function updateRunSchedule(runId, input, userId) {
   const [month, year] = String(runId).split("_").map(Number);
-  const [[run]] = await pool.query(`SELECT * FROM payroll_run WHERE payroll_month = ? AND payroll_year = ? LIMIT 1`, [month, year]);
+  const [[run]] = await pool.query(`SELECT * FROM payroll_run WHERE payroll_month = ? AND payroll_year = ? AND company_id = ? LIMIT 1`, [month, year, currentCompanyId()]);
   if (!run) throw new Error("Payroll run not found.");
   if (run.payment_reference || run.payment_attempted_at || ["Released", "Processing"].includes(run.release_schedule_status)) throw new Error("A released or processing payroll run cannot be rescheduled.");
   const cutoff = String(input.claimCutoffAt || "").replace("T", " ").slice(0, 19);
@@ -130,15 +133,15 @@ async function updateRunSchedule(runId, input, userId) {
   await pool.query(
     `UPDATE payroll_run SET effective_claim_cutoff_at = ?, scheduled_release_at = ?,
        release_schedule_status = 'Draft', release_confirmed_by = NULL, release_confirmed_at = NULL,
-       release_failure_reason = NULL, updated_at = NOW() WHERE payroll_run_id = ?`,
-    [cutoff, release, run.payroll_run_id]
+       release_failure_reason = NULL, updated_at = NOW() WHERE payroll_run_id = ? AND company_id = ?`,
+    [cutoff, release, run.payroll_run_id, currentCompanyId()]
   );
   await writeAuditLog({ module: MODULE.PAYROLL, activityType: "Payroll Schedule", action: `Updated release schedule for ${runId}`, entityId: runId, entityType: "payroll_run", userId });
 }
 
 async function confirmRunSchedule(runId, userId) {
   const [month, year] = String(runId).split("_").map(Number);
-  const [[run]] = await pool.query(`SELECT * FROM payroll_run WHERE payroll_month = ? AND payroll_year = ? LIMIT 1`, [month, year]);
+  const [[run]] = await pool.query(`SELECT * FROM payroll_run WHERE payroll_month = ? AND payroll_year = ? AND company_id = ? LIMIT 1`, [month, year, currentCompanyId()]);
   if (!run?.approved_at) throw new Error("Finance approval is required before scheduling release.");
   if (!run.scheduled_release_at || !run.effective_claim_cutoff_at) throw new Error("Set the effective cutoff and release dates first.");
   if (run.payment_reference) throw new Error("This payroll run has already been released.");
@@ -147,7 +150,7 @@ async function confirmRunSchedule(runId, userId) {
   await pool.query(
     `UPDATE payroll_run SET release_schedule_status = 'Confirmed', release_confirmed_by = ?,
        release_confirmed_at = NOW(), payment_attempted_at = NULL, release_failure_reason = NULL, updated_at = NOW()
-     WHERE payroll_run_id = ?`, [userId || null, run.payroll_run_id]
+     WHERE payroll_run_id = ? AND company_id = ?`, [userId || null, run.payroll_run_id, currentCompanyId()]
   );
   await writeAuditLog({ module: MODULE.PAYROLL, activityType: "Payroll Schedule", action: `Confirmed scheduled release for ${runId}`, entityId: runId, entityType: "payroll_run", userId });
 }
@@ -157,7 +160,7 @@ async function cancelRunSchedule(runId, userId) {
   const [result] = await pool.query(
     `UPDATE payroll_run SET release_schedule_status = 'Cancelled', release_confirmed_by = NULL,
        release_confirmed_at = NULL, updated_at = NOW()
-     WHERE payroll_month = ? AND payroll_year = ? AND payment_attempted_at IS NULL AND payment_reference IS NULL`, [month, year]
+     WHERE payroll_month = ? AND payroll_year = ? AND company_id = ? AND payment_attempted_at IS NULL AND payment_reference IS NULL`, [month, year, currentCompanyId()]
   );
   if (!result.affectedRows) throw new Error("This schedule can no longer be cancelled.");
   await writeAuditLog({ module: MODULE.PAYROLL, activityType: "Payroll Schedule", action: `Cancelled scheduled release for ${runId}`, entityId: runId, entityType: "payroll_run", userId });
@@ -168,8 +171,8 @@ async function markRunForManualRetry(runId, userId) {
   const [result] = await pool.query(
     `UPDATE payroll_run SET release_schedule_status = 'Confirmed', payment_attempted_at = NULL,
        release_failure_reason = NULL, release_confirmed_by = ?, release_confirmed_at = NOW(), updated_at = NOW()
-     WHERE payroll_month = ? AND payroll_year = ? AND release_schedule_status = 'Release Failed' AND payment_reference IS NULL`,
-    [userId || null, month, year]
+     WHERE payroll_month = ? AND payroll_year = ? AND company_id = ? AND release_schedule_status = 'Release Failed' AND payment_reference IS NULL`,
+    [userId || null, month, year, currentCompanyId()]
   );
   if (!result.affectedRows) throw new Error("Only a failed unreleased run can be retried.");
 }
@@ -184,8 +187,8 @@ async function claimTargetForApproval(connection, now = new Date()) {
   ({ month, year } = targetPeriodForCutoff(year, month, localNowString(now), schedule.claimCutoffAt));
   const [[locked]] = await connection.query(
     `SELECT COUNT(*) AS count FROM payroll_run WHERE payroll_month = ? AND payroll_year = ?
-       AND (approved_at IS NOT NULL OR LOWER(status) IN ('payment processed','payslips sent','reconciled'))`,
-    [month, year]
+       AND company_id = ? AND (approved_at IS NOT NULL OR LOWER(status) IN ('payment processed','payslips sent','reconciled'))`,
+    [month, year, currentCompanyId()]
   );
   if (Number(locked.count) > 0) ({ month, year } = nextPeriod(year, month));
   return { month, year, cutoffAt: schedule.claimCutoffAt };
@@ -202,15 +205,17 @@ async function executeScheduledRelease(payrollRunId) {
     await connection.commit();
   } catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }
 
-  const runId = `${run.payroll_month}_${run.payroll_year}`;
-  try {
+  return runWithTenant(run.company_id, async () => {
+   const runId = `${run.payroll_month}_${run.payroll_year}`;
+   try {
     const errors = await getPayrollRunComplianceErrors(runId);
     if (errors.length) throw new Error(`Server compliance validation failed: ${errors.map((item) => item.message).join("; ")}`);
     const configuration = typeof run.configuration_json === "object" ? run.configuration_json : JSON.parse(run.configuration_json || "{}");
     const recipients = configuration.paymentRecipients || {};
     const [rows] = await pool.query(
       `SELECT p.staff_employee_id, p.net_salary, p.payslip_status, s.name, s.email, s.bank, s.account_no
-       FROM payroll p JOIN staff s ON s.employee_id = p.staff_employee_id WHERE p.payroll_run_id = ?`, [payrollRunId]
+       FROM payroll p JOIN staff s ON s.employee_id = p.staff_employee_id AND s.company_id = p.company_id
+       WHERE p.payroll_run_id = ? AND p.company_id = ?`, [payrollRunId, run.company_id]
     );
     const approved = rows.filter((row) => ["Approved", "finance_approved"].includes(row.payslip_status));
     if (!approved.length) throw new Error("No approved employee payments are available.");
@@ -225,24 +230,25 @@ async function executeScheduledRelease(payrollRunId) {
     configuration.workflow = { ...(configuration.workflow || {}), paidAt: now, paymentProvider: result.provider, paymentTransferCount: result.transferCount };
     await pool.query(
       `UPDATE payroll_run SET status = 'Payment Processed', release_schedule_status = 'Released', payment_reference = ?,
-       configuration_json = ?, release_failure_reason = NULL, updated_at = NOW() WHERE payroll_run_id = ?`,
-      [result.batchReference, JSON.stringify(configuration), payrollRunId]
+       configuration_json = ?, release_failure_reason = NULL, updated_at = NOW() WHERE payroll_run_id = ? AND company_id = ?`,
+      [result.batchReference, JSON.stringify(configuration), payrollRunId, run.company_id]
     );
-    await pool.query(`UPDATE payroll SET run_status = 'Payment Processed', payment_reference = ?, configuration_json = ? WHERE payroll_run_id = ?`, [result.batchReference, JSON.stringify(configuration), payrollRunId]);
+    await pool.query(`UPDATE payroll SET run_status = 'Payment Processed', payment_reference = ?, configuration_json = ? WHERE payroll_run_id = ? AND company_id = ?`, [result.batchReference, JSON.stringify(configuration), payrollRunId, run.company_id]);
     await writeAuditLog({ module: MODULE.PAYROLL, activityType: "Payroll Payment", action: `Automatically released scheduled payroll ${runId}`, entityId: runId, entityType: "payroll_run", status: "Success" });
     await notifyRoles("Finance", { type: "payroll_release_success", title: "Scheduled payroll released", message: `Payroll ${runId} was released successfully.`, entityType: "payroll_run", entityId: runId, actionPath: "/dashboard/payroll/finance/payroll-runs" });
     return { released: true, result };
   } catch (error) {
-    await pool.query(`UPDATE payroll_run SET release_schedule_status = 'Release Failed', release_failure_reason = ?, updated_at = NOW() WHERE payroll_run_id = ?`, [String(error.message).slice(0, 1000), payrollRunId]);
+    await pool.query(`UPDATE payroll_run SET release_schedule_status = 'Release Failed', release_failure_reason = ?, updated_at = NOW() WHERE payroll_run_id = ? AND company_id = ?`, [String(error.message).slice(0, 1000), payrollRunId, run.company_id]);
     await writeAuditLog({ module: MODULE.PAYROLL, activityType: "Payroll Payment", action: `Scheduled payroll release failed for ${runId}: ${error.message}`, entityId: runId, entityType: "payroll_run", status: "Failed" });
     await notifyRoles("Finance", { type: "payroll_release_failed", title: "Scheduled payroll release failed", message: `Payroll ${runId} was not released: ${error.message}`, entityType: "payroll_run", entityId: runId, actionPath: "/dashboard/payroll/finance/payroll-schedule" });
     return { released: false, error: error.message };
-  }
+   }
+  });
 }
 
 async function processDueScheduledReleases() {
   const [rows] = await pool.query(
-    `SELECT payroll_run_id FROM payroll_run WHERE release_schedule_status = 'Confirmed'
+    `SELECT payroll_run_id, company_id FROM payroll_run WHERE release_schedule_status = 'Confirmed'
        AND payment_attempted_at IS NULL AND payment_reference IS NULL
        AND scheduled_release_at <= CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+08:00') ORDER BY scheduled_release_at LIMIT 10`
   );

@@ -43,8 +43,6 @@ export function getFinanceAutoAdvance(action, run = {}) {
   }
   return ({
     "approve-payroll": { path: "/dashboard/payroll/finance/payment-preparation", label: "Payment Preparation" },
-    "confirm-payment": { path: "/dashboard/payroll/finance/payslip-delivery", label: "Payslip Delivery" },
-    "send-payslips": { path: "/dashboard/payroll/finance/statutory-ledger", label: "Statutory & Ledger" },
     "record-statutory-ledger": { path: "/dashboard/payroll/finance/reconciliation-reports", label: "Reconciliation & Reports" },
     reconcile: { path: "/dashboard/payroll/finance/payroll-completion", label: "Payroll Run Completion" }
   })[action] || null;

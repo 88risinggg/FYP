@@ -4,35 +4,44 @@ const { pool } = require("../config/db");
 const { notifyUser } = require("./payrollNotificationService");
 const { listPayslipLayouts } = require("../models/adminPayrollModel");
 const { generatePayslipPDF } = require("./payslipPdfService");
+const { currentCompanyId } = require("./tenantContext");
 
 const OUTPUT_ROOT = path.join(__dirname, "..", "..", "uploads", "payslips");
 
 async function getIncludedClaims(payrollId) {
+  const companyId = currentCompanyId();
   const [rows] = await pool.query(
     `SELECT record_id AS claim_id, claim_category AS claim_type, amount,
             description, expense_date, payroll_approved_at, included_payroll_id
      FROM claims_and_loans
      WHERE type = 'expense_claim'
        AND payroll_inclusion_status = 'included'
-       AND included_payroll_id = ?
+       AND included_payroll_id = ? AND company_id = ?
      ORDER BY payroll_approved_at, record_id`,
-    [payrollId]
+    [payrollId, companyId]
   );
   return rows;
 }
 
 async function getPayslipDataset(payrollId) {
+  const companyId = currentCompanyId();
   const [rows] = await pool.query(
     `SELECT p.*, p.payroll_id AS payslip_id,
             s.employee_id, s.employee_code, s.name AS employee_name,
             s.user_user_id, u.status AS user_account_status, s.email AS staff_email, s.base_salary,
-            s.department_name
+            s.department_name, s.hire_date, s.status AS employment_status,
+            c.display_name AS company_name, c.legal_name AS company_legal_name,
+            c.registration_number AS company_registration_number, c.gst_number AS company_gst_number,
+            c.company_email, c.company_phone, c.company_address, c.company_website,
+            c.logo_path AS company_logo_path, c.brand_color AS company_brand_color,
+            c.currency AS company_currency, c.timezone AS company_timezone
      FROM payroll p
-     INNER JOIN staff s ON s.employee_id = p.staff_employee_id
+     INNER JOIN staff s ON s.employee_id = p.staff_employee_id AND s.company_id=p.company_id
+     INNER JOIN companies c ON c.company_id=p.company_id
      LEFT JOIN user u ON u.user_id = s.user_user_id
-     WHERE p.payroll_id = ?
+     WHERE p.payroll_id = ? AND p.company_id = ?
      LIMIT 1`,
-    [payrollId]
+    [payrollId, companyId]
   );
   if (!rows.length) return null;
   const payslip = rows[0];
@@ -62,11 +71,11 @@ async function generateAndSendPayslip(payrollId, options = {}) {
     return { status: 409, message: `Employee ${payslip.employee_id}'s linked user account is awaiting Admin activation` };
   }
 
-  const periodDirectory = path.join(OUTPUT_ROOT, `${payslip.payroll_year}-${String(payslip.payroll_month).padStart(2, "0")}`);
+  const periodDirectory = path.join(OUTPUT_ROOT, String(currentCompanyId()), `${payslip.payroll_year}-${String(payslip.payroll_month).padStart(2, "0")}`);
   fs.mkdirSync(periodDirectory, { recursive: true });
   const fileName = `payslip-${payslip.payroll_id}-${safeFilePart(payslip.employee_id)}.pdf`;
   const absolutePath = path.join(periodDirectory, fileName);
-  const publicPath = `/uploads/payslips/${payslip.payroll_year}-${String(payslip.payroll_month).padStart(2, "0")}/${fileName}`;
+  const publicPath = `uploads/payslips/${currentCompanyId()}/${payslip.payroll_year}-${String(payslip.payroll_month).padStart(2, "0")}/${fileName}`;
   const pdf = await generatePayslipPDF(payslip, options.browser || null);
   fs.writeFileSync(absolutePath, pdf);
 
@@ -75,8 +84,8 @@ async function generateAndSendPayslip(payrollId, options = {}) {
      SET payslip_status = 'sent_to_staff', payslip_sent_at = NOW(),
          payslip_generated_at = NOW(), payslip_file_path = ?,
          payslip_is_read = 0, payslip_read_at = NULL
-     WHERE payroll_id = ? AND payslip_status IN ('Approved', 'finance_approved', 'Sent', 'sent_to_staff')`,
-    [publicPath, payrollId]
+     WHERE payroll_id = ? AND company_id=? AND payslip_status IN ('Approved', 'finance_approved', 'Sent', 'sent_to_staff')`,
+    [publicPath, payrollId, currentCompanyId()]
   );
   if (!result.affectedRows) {
     fs.unlinkSync(absolutePath);

@@ -8,6 +8,7 @@
 
 const uploadSessionStore = require("./uploadSessionStore");
 const { pool } = require("../config/db");
+const { currentCompanyId } = require("./tenantContext");
 
 /**
  * Maximum number of row IDs allowed in a single commit request.
@@ -24,6 +25,7 @@ const MAX_SELECTED_ROWS = 5000;
  * @throws {Error} With message containing 'expired' (410), 'forbidden' (403), or validation errors (400)
  */
 async function commitUpload(sessionId, selectedRowIds, userId) {
+  const companyId = currentCompanyId();
   // Step 1: Validate selectedRowIds is non-empty and within limit
   if (!Array.isArray(selectedRowIds) || selectedRowIds.length === 0) {
     throw new Error("selectedRowIds must be a non-empty array");
@@ -54,6 +56,10 @@ async function commitUpload(sessionId, selectedRowIds, userId) {
       // Expired — clean it up and throw 410
       uploadSessionStore.sessions.delete(sessionId);
       throw new Error("Upload session expired or not found");
+    }
+
+    if (Number(rawSession.companyId) !== companyId) {
+      throw new Error("Session belongs to another company — access forbidden");
     }
 
     // Session exists and is not expired, but userId doesn't match → 403
@@ -104,8 +110,8 @@ async function commitUpload(sessionId, selectedRowIds, userId) {
       const checkEmail = row.data.email || null;
 
       if (checkEmpId || checkEmail) {
-        let dupSql = "SELECT employee_id FROM staff WHERE ";
-        const dupParams = [];
+        let dupSql = "SELECT employee_id FROM staff WHERE company_id = ? AND (";
+        const dupParams = [companyId];
         const conditions = [];
 
         if (checkEmpId && Number.isInteger(Number(checkEmpId)) && Number(checkEmpId) > 0) {
@@ -118,7 +124,7 @@ async function commitUpload(sessionId, selectedRowIds, userId) {
         }
 
         if (conditions.length > 0) {
-          dupSql += conditions.join(" OR ") + " LIMIT 1";
+          dupSql += conditions.join(" OR ") + ") LIMIT 1";
           const [existing] = await connection.query(dupSql, dupParams);
 
           if (existing.length > 0) {
@@ -145,10 +151,11 @@ async function commitUpload(sessionId, selectedRowIds, userId) {
 
       if (hasValidEmpId) {
         await connection.query(
-          `INSERT INTO staff (employee_id, name, email, phone, hire_date, base_salary,
+          `INSERT INTO staff (company_id, employee_id, name, email, phone, hire_date, base_salary,
            status, department_name, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
           [
+            companyId,
             Number(empId),
             row.data.name,
             row.data.email || null,
@@ -161,10 +168,11 @@ async function commitUpload(sessionId, selectedRowIds, userId) {
         );
       } else {
         await connection.query(
-          `INSERT INTO staff (name, email, phone, hire_date, base_salary,
+          `INSERT INTO staff (company_id, name, email, phone, hire_date, base_salary,
            status, department_name, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
           [
+            companyId,
             row.data.name,
             row.data.email || null,
             row.data.phone || null,

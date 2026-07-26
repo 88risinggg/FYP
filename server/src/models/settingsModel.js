@@ -8,6 +8,7 @@
  */
 
 const { pool } = require("../config/db");
+const { currentCompanyId } = require("../services/tenantContext");
 
 let privacyTablesPromise;
 
@@ -500,8 +501,9 @@ async function upsertPrivacySettings(userId, data) {
 
 async function getPersonalDataExport(userId) {
   await ensurePrivacyTables();
+  const companyId = currentCompanyId();
   const [[users], privacy, notifications, appearance, audit] = await Promise.all([
-    pool.query("SELECT * FROM user WHERE user_id = ?", [userId]),
+    pool.query("SELECT * FROM user WHERE user_id = ? AND company_id = ?", [userId, companyId]),
     getPrivacySettings(userId),
     getNotificationSettings(userId),
     getAppearanceSettings(userId),
@@ -514,17 +516,18 @@ async function getPersonalDataExport(userId) {
 
 async function createAccountActionRequest(userId, requestType) {
   await ensurePrivacyTables();
-  const [users] = await pool.query("SELECT name, email FROM user WHERE user_id = ?", [userId]);
+  const companyId = currentCompanyId();
+  const [users] = await pool.query("SELECT name, email FROM user WHERE user_id = ? AND company_id = ?", [userId, companyId]);
   if (!users[0]) return null;
   const [pending] = await pool.query(
-    "SELECT * FROM account_action_requests WHERE user_id = ? AND request_type = ? AND status = 'pending' LIMIT 1",
-    [userId, requestType]
+    "SELECT * FROM account_action_requests WHERE user_id = ? AND company_id = ? AND request_type = ? AND status = 'pending' LIMIT 1",
+    [userId, companyId, requestType]
   );
   if (pending[0]) return { ...pending[0], alreadyPending: true };
   const [result] = await pool.query(
-    `INSERT INTO account_action_requests (user_id, user_name, user_email, request_type)
-     VALUES (?, ?, ?, ?)`,
-    [userId, users[0].name, users[0].email, requestType]
+    `INSERT INTO account_action_requests (company_id, user_id, user_name, user_email, request_type)
+     VALUES (?, ?, ?, ?, ?)`,
+    [companyId, userId, users[0].name, users[0].email, requestType]
   );
   return {
     request_id: result.insertId,
@@ -538,16 +541,17 @@ async function createAccountActionRequest(userId, requestType) {
 }
 
 async function notifyAdminsOfDeletionRequest(request) {
-  const [admins] = await pool.query("SELECT user_id FROM user WHERE role_name = 'Admin' AND status = 1");
+  const companyId = currentCompanyId();
+  const [admins] = await pool.query("SELECT user_id FROM user WHERE company_id = ? AND role_name = 'Admin' AND status = 1", [companyId]);
   if (!admins.length) return 0;
   const marker = `Deletion request #${request.request_id}`;
   const [notified] = await pool.query(
-    "SELECT user_id FROM notification WHERE type = 'account_deletion_request' AND message LIKE ?",
-    [`%${marker}%`]
+    "SELECT user_id FROM notification WHERE company_id = ? AND type = 'account_deletion_request' AND message LIKE ?",
+    [companyId, `%${marker}%`]
   );
   const notifiedIds = new Set(notified.map((item) => Number(item.user_id)));
   const values = admins.filter((admin) => !notifiedIds.has(Number(admin.user_id))).map((admin) => [
-    admin.user_id,
+    companyId, admin.user_id,
     "account_deletion_request",
     "Account deletion approval required",
     `${marker}: ${request.user_name} (${request.user_email}) requested account deletion. Review it in Settings > Danger Zone.`,
@@ -556,7 +560,7 @@ async function notifyAdminsOfDeletionRequest(request) {
   ]);
   if (!values.length) return 0;
   const [result] = await pool.query(
-    "INSERT INTO notification (user_id, type, title, message, is_read, created_at) VALUES ?",
+    "INSERT INTO notification (company_id, user_id, type, title, message, is_read, created_at) VALUES ?",
     [values]
   );
   return result.affectedRows || values.length;
@@ -564,22 +568,25 @@ async function notifyAdminsOfDeletionRequest(request) {
 
 async function listDeletionRequests() {
   await ensurePrivacyTables();
+  const companyId = currentCompanyId();
   const [rows] = await pool.query(
     `SELECT request_id, user_id, user_name, user_email, status, requested_at, reviewed_at, reviewed_by, review_note
-     FROM account_action_requests WHERE request_type = 'account_deletion'
-     ORDER BY FIELD(status, 'pending', 'rejected', 'approved'), requested_at DESC`
+     FROM account_action_requests WHERE request_type = 'account_deletion' AND company_id = ?
+     ORDER BY FIELD(status, 'pending', 'rejected', 'approved'), requested_at DESC`,
+    [companyId]
   );
   return rows;
 }
 
 async function reviewDeletionRequest(requestId, adminId, decision, note = "") {
   await ensurePrivacyTables();
+  const companyId = currentCompanyId();
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
     const [rows] = await connection.query(
-      "SELECT * FROM account_action_requests WHERE request_id = ? AND request_type = 'account_deletion' FOR UPDATE",
-      [requestId]
+      "SELECT * FROM account_action_requests WHERE request_id = ? AND request_type = 'account_deletion' AND company_id = ? FOR UPDATE",
+      [requestId, companyId]
     );
     const request = rows[0];
     if (!request || request.status !== "pending") {
@@ -587,19 +594,19 @@ async function reviewDeletionRequest(requestId, adminId, decision, note = "") {
       return null;
     }
     if (decision === "approved") {
-      const [[target]] = await connection.query("SELECT role_name FROM user WHERE user_id = ?", [request.user_id]);
+      const [[target]] = await connection.query("SELECT role_name FROM user WHERE user_id = ? AND company_id = ?", [request.user_id, companyId]);
       if (target?.role_name === "Admin") {
-        const [[count]] = await connection.query("SELECT COUNT(*) AS total FROM user WHERE role_name = 'Admin' AND status = 1");
+        const [[count]] = await connection.query("SELECT COUNT(*) AS total FROM user WHERE role_name = 'Admin' AND status = 1 AND company_id = ?", [companyId]);
         if (Number(count.total) <= 1) { await connection.rollback(); throw new Error("The final active Admin account cannot be deleted"); }
       }
-      await connection.query("UPDATE staff SET user_user_id = NULL WHERE user_user_id = ?", [request.user_id]);
+      await connection.query("UPDATE staff SET user_user_id = NULL WHERE user_user_id = ? AND company_id = ?", [request.user_id, companyId]);
     }
     await connection.query(
       `UPDATE account_action_requests SET status = ?, reviewed_at = NOW(), reviewed_by = ?, review_note = ?
-       WHERE request_id = ?`,
-      [decision, adminId, note || null, requestId]
+       WHERE request_id = ? AND company_id = ?`,
+      [decision, adminId, note || null, requestId, companyId]
     );
-    if (decision === "approved") await connection.query("DELETE FROM user WHERE user_id = ?", [request.user_id]);
+    if (decision === "approved") await connection.query("DELETE FROM user WHERE user_id = ? AND company_id = ?", [request.user_id, companyId]);
     await connection.commit();
     return { ...request, status: decision };
   } catch (error) {
@@ -611,25 +618,26 @@ async function reviewDeletionRequest(requestId, adminId, decision, note = "") {
 }
 
 async function deleteUserAccountByAdmin(userId, adminId, note = "Deleted from Payroll User Management") {
+  const companyId = currentCompanyId();
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    const [rows] = await connection.query("SELECT user_id, name, email, role_name FROM user WHERE user_id = ? FOR UPDATE", [userId]);
+    const [rows] = await connection.query("SELECT user_id, name, email, role_name FROM user WHERE user_id = ? AND company_id = ? FOR UPDATE", [userId, companyId]);
     const user = rows[0];
     if (!user) { await connection.rollback(); return { notFound: true }; }
     if (Number(user.user_id) === Number(adminId)) { await connection.rollback(); return { selfDelete: true }; }
     if (user.role_name === "Admin") {
-      const [[count]] = await connection.query("SELECT COUNT(*) AS total FROM user WHERE role_name = 'Admin' AND status = 1");
+      const [[count]] = await connection.query("SELECT COUNT(*) AS total FROM user WHERE role_name = 'Admin' AND status = 1 AND company_id = ?", [companyId]);
       if (Number(count.total) <= 1) { await connection.rollback(); return { lastAdmin: true }; }
     }
-    const [pending] = await connection.query("SELECT request_id FROM account_action_requests WHERE user_id = ? AND request_type = 'account_deletion' AND status = 'pending' ORDER BY request_id DESC LIMIT 1", [userId]);
+    const [pending] = await connection.query("SELECT request_id FROM account_action_requests WHERE user_id = ? AND request_type = 'account_deletion' AND status = 'pending' AND company_id = ? ORDER BY request_id DESC LIMIT 1", [userId, companyId]);
     if (pending[0]) {
-      await connection.query("UPDATE account_action_requests SET status = 'approved', reviewed_at = NOW(), reviewed_by = ?, review_note = ? WHERE request_id = ?", [adminId, note, pending[0].request_id]);
+      await connection.query("UPDATE account_action_requests SET status = 'approved', reviewed_at = NOW(), reviewed_by = ?, review_note = ? WHERE request_id = ? AND company_id = ?", [adminId, note, pending[0].request_id, companyId]);
     } else {
-      await connection.query(`INSERT INTO account_action_requests (user_id, user_name, user_email, request_type, status, requested_at, reviewed_at, reviewed_by, review_note) VALUES (?, ?, ?, 'account_deletion', 'approved', NOW(), NOW(), ?, ?)`, [userId, user.name, user.email, adminId, note]);
+      await connection.query(`INSERT INTO account_action_requests (company_id, user_id, user_name, user_email, request_type, status, requested_at, reviewed_at, reviewed_by, review_note) VALUES (?, ?, ?, ?, 'account_deletion', 'approved', NOW(), NOW(), ?, ?)`, [companyId, userId, user.name, user.email, adminId, note]);
     }
-    await connection.query("UPDATE staff SET user_user_id = NULL WHERE user_user_id = ?", [userId]);
-    await connection.query("DELETE FROM user WHERE user_id = ?", [userId]);
+    await connection.query("UPDATE staff SET user_user_id = NULL WHERE user_user_id = ? AND company_id = ?", [userId, companyId]);
+    await connection.query("DELETE FROM user WHERE user_id = ? AND company_id = ?", [userId, companyId]);
     await connection.commit();
     return { deleted: true, user: { userId, name: user.name, email: user.email } };
   } catch (error) { await connection.rollback(); throw error; }

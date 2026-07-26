@@ -215,8 +215,8 @@ async function createReminder({ subscriptionId, customerId, companyId, customerN
   // Duplicate prevention
   const [existing] = await pool.query(
     `SELECT reminder_id FROM subscription_reminders
-     WHERE subscription_id = ? AND reminder_type = ? AND status = 'Active'`,
-    [subscriptionId, reminderType]
+     WHERE subscription_id = ? AND company_id = ? AND reminder_type = ? AND status = 'Active'`,
+    [subscriptionId, companyId, reminderType]
   );
 
   if (existing.length > 0) {
@@ -242,14 +242,14 @@ async function createReminder({ subscriptionId, customerId, companyId, customerN
       : `Subscription #${subscriptionId} — ${label}`;
 
     const [financeUsers] = await pool.query(
-      "SELECT user_id FROM user WHERE role_name = 'Finance'"
+      "SELECT user_id FROM user WHERE company_id = ? AND role_name = 'Finance' AND status = 1", [companyId]
     );
 
     for (const { user_id } of financeUsers) {
       await pool.query(
-        `INSERT INTO notification (user_id, type, title, message, is_read, created_at)
-         VALUES (?, 'subscription_reminder', ?, ?, 0, NOW())`,
-        [user_id, title, message]
+        `INSERT INTO notification (company_id, user_id, type, title, message, is_read, created_at)
+         VALUES (?, ?, 'subscription_reminder', ?, ?, 0, NOW())`,
+        [companyId, user_id, title, message]
       ).catch(() => {}); // non-fatal if notification table doesn't exist
     }
   } catch (_) {

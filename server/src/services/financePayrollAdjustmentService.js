@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const { pool } = require("../config/db");
 const { calculateEmployeePayroll } = require("./statutoryPayrollEngine");
+const { currentCompanyId } = require("./tenantContext");
 
 const parseJson = (value, fallback = {}) => {
   if (!value) return fallback;
@@ -157,6 +158,8 @@ function fallbackExplanation(row) {
 }
 
 async function loadRunContext(connection, runId, lock = false) {
+  const companyId = currentCompanyId();
+  if (!companyId) throw Object.assign(new Error("A company workspace is required."), { code: "TENANT_REQUIRED" });
   const [month, year] = String(runId).split("_").map(Number);
   if (!month || !year) throw new Error("Invalid payroll run ID.");
   const [rows] = await connection.query(
@@ -166,8 +169,9 @@ async function loadRunContext(connection, runId, lock = false) {
      JOIN staff s ON s.employee_id = p.staff_employee_id
      LEFT JOIN payroll_configuration pc ON pc.configuration_id = pr.configuration_id
        AND pc.configuration_type = 'rules_snapshot'
-     WHERE pr.payroll_month = ? AND pr.payroll_year = ? ORDER BY p.payroll_id${lock ? " FOR UPDATE" : ""}`,
-    [month, year]
+     WHERE pr.company_id = ? AND p.company_id = ? AND s.company_id = ?
+       AND pr.payroll_month = ? AND pr.payroll_year = ? ORDER BY p.payroll_id${lock ? " FOR UPDATE" : ""}`,
+    [companyId, companyId, companyId, month, year]
   );
   if (!rows.length) throw new Error("Payroll run not found.");
   const configuration = parseJson(rows[0].configuration_json, {});
@@ -186,12 +190,13 @@ async function loadRunContext(connection, runId, lock = false) {
 }
 
 async function recoveriesForStaff(connection, employeeId) {
+  const companyId = currentCompanyId();
   const [rows] = await connection.query(
     `SELECT record_id, type, monthly_installment, outstanding_balance FROM claims_and_loans
-     WHERE staff_employee_id = ? AND type IN ('loan','advance_request')
+     WHERE company_id = ? AND staff_employee_id = ? AND type IN ('loan','advance_request')
        AND status IN ('approved','released','finance_approved')
        AND COALESCE(monthly_installment,0) > 0 AND COALESCE(outstanding_balance,0) > 0
-     ORDER BY record_id`, [employeeId]
+     ORDER BY record_id`, [companyId, employeeId]
   );
   return rows.map((item) => ({
     sourceRecordId: item.record_id,
@@ -279,11 +284,12 @@ async function generateAdjustmentProposals(runId, userId) {
 }
 
 async function listAdjustmentProposals(runId) {
+  const companyId = currentCompanyId();
   const [month, year] = String(runId).split("_").map(Number);
   const [rows] = await pool.query(
     `SELECT p.payroll_id, p.staff_employee_id, p.configuration_json, s.name AS employee
      FROM payroll p JOIN staff s ON s.employee_id=p.staff_employee_id
-     WHERE p.payroll_month=? AND p.payroll_year=? ORDER BY s.name,p.payroll_id`, [month, year]
+     WHERE p.company_id=? AND s.company_id=? AND p.payroll_month=? AND p.payroll_year=? ORDER BY s.name,p.payroll_id`, [companyId, companyId, month, year]
   );
   return rows.flatMap((row) => (parseJson(row.configuration_json, {}).financeAdjustments || []).map((stored) => {
     const proposal = { ...stored, payrollId: stored.payrollId || row.payroll_id, staffEmployeeId: stored.staffEmployeeId || row.staff_employee_id, employee: row.employee };

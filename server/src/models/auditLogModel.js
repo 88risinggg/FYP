@@ -1,5 +1,6 @@
 const { pool } = require("../config/db");
 const { inferModule, writeAuditLog } = require("../services/auditService");
+const { currentCompanyId } = require("../services/tenantContext");
 
 function isMissingAuditTable(error) {
   return error?.code === "ER_NO_SUCH_TABLE" || error?.code === "ER_BAD_FIELD_ERROR";
@@ -61,8 +62,8 @@ function getDeviceInfo(req) {
 }
 
 function buildAuditFilters(filters) {
-  const where = [];
-  const params = [];
+  const where = ["company_id = ?"];
+  const params = [currentCompanyId()];
 
   if (filters.startDate) {
     where.push("DATE(created_at) >= ?");

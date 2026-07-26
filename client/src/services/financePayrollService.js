@@ -35,6 +35,14 @@ export function getFinancePayrollWorkflow(runId) {
   return apiRequest(`/api/payroll/finance/runs/${runId}/workflow`);
 }
 
+export function getFinanceRuleAcknowledgement() {
+  return apiRequest("/api/payroll/finance/rule-acknowledgement");
+}
+
+export function acknowledgeFinancePayrollRules() {
+  return apiRequest("/api/payroll/finance/rule-acknowledgement", { method: "POST" });
+}
+
 export function performFinancePayrollWorkflowAction(runId, action, payload = {}) {
   const path = action === "approve-payroll"
     ? `/api/payroll/finance/runs/${runId}/approve`

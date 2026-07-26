@@ -8,6 +8,12 @@
  */
 
 const { pool } = require("../config/db");
+const { currentCompanyId } = require("./tenantContext");
+
+function tenantId(explicitCompanyId) {
+  if (Number(explicitCompanyId) > 0) return Number(explicitCompanyId);
+  try { return currentCompanyId(); } catch { return null; }
+}
 
 // ─── Module constants ─────────────────────────────────────────────────────────
 const MODULE = {
@@ -70,6 +76,7 @@ async function writeAuditLog(connOrOpts, action, activityType, entityId, userId,
       deviceInfo:      opts.deviceInfo || opts.extra?.deviceInfo || null,
       entityType:      opts.entityType || null,
       status:          opts.status || "Success",
+      companyId:       tenantId(opts.companyId),
     });
   }
 
@@ -89,17 +96,19 @@ async function writeAuditLog(connOrOpts, action, activityType, entityId, userId,
     deviceInfo:    extra.deviceInfo || null,
     entityType:    extra.entityType || null,
     status:        "Success",
+    companyId:     tenantId(extra.companyId),
   });
 }
 
 async function _insert(conn, opts) {
   const sql = `
     INSERT INTO audit_logs
-      (user_id, user_name, module, activity_type, action_description, affected_record,
+      (company_id, user_id, user_name, module, activity_type, action_description, affected_record,
        status, created_at, previous_value, new_value, ip_address, device_info, entity_type)
-    VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?)
   `;
   const params = [
+    opts.companyId || null,
     opts.userId   || null,
     opts.userName || null,
     opts.module   || MODULE.SYSTEM,
@@ -132,8 +141,8 @@ async function _insert(conn, opts) {
  *   module, startDate, endDate, userId, activityType, keyword, page, limit
  */
 async function listAuditLogs(filters = {}) {
-  const where = [];
-  const params = [];
+  const where = ["a.company_id = ?"];
+  const params = [currentCompanyId()];
 
   if (filters.module) {
     where.push("a.module = ?");
@@ -212,8 +221,9 @@ async function listAuditLogs(filters = {}) {
  * getAuditSummary — module-aware summary stats.
  */
 async function getAuditSummary(module) {
-  const moduleWhere = module ? "WHERE module = ?" : "";
-  const moduleParams = module ? [module] : [];
+  const companyId = currentCompanyId();
+  const moduleWhere = `WHERE company_id = ?${module ? " AND module = ?" : ""}`;
+  const moduleParams = module ? [companyId, module] : [companyId];
 
   const [rows] = await pool.query(
     `SELECT activity_type, COUNT(*) AS cnt FROM audit_logs ${moduleWhere} GROUP BY activity_type ORDER BY cnt DESC`,
@@ -221,8 +231,8 @@ async function getAuditSummary(module) {
   );
 
   const [todayRows] = await pool.query(
-    `SELECT COUNT(*) AS cnt FROM audit_logs WHERE DATE(created_at) = CURDATE() ${module ? "AND module = ?" : ""}`,
-    module ? [module] : []
+    `SELECT COUNT(*) AS cnt FROM audit_logs WHERE company_id=? AND DATE(created_at) = CURDATE() ${module ? "AND module = ?" : ""}`,
+    module ? [companyId, module] : [companyId]
   );
 
   const [totalRows] = await pool.query(
@@ -230,8 +240,8 @@ async function getAuditSummary(module) {
     moduleParams
   );
   const [riskRows] = await pool.query(
-    `SELECT COUNT(*) AS cnt FROM audit_logs WHERE LOWER(status) IN ('failed', 'failure', 'warning', 'error') ${module ? "AND module = ?" : ""}`,
-    module ? [module] : []
+    `SELECT COUNT(*) AS cnt FROM audit_logs WHERE company_id=? AND LOWER(status) IN ('failed', 'failure', 'warning', 'error') ${module ? "AND module = ?" : ""}`,
+    module ? [companyId, module] : [companyId]
   );
   const [actorRows] = await pool.query(
     `SELECT COUNT(DISTINCT user_id) AS cnt FROM audit_logs ${moduleWhere}`,
@@ -249,7 +259,7 @@ async function getAuditSummary(module) {
 }
 
 async function getDistinctModules() {
-  const [rows] = await pool.query("SELECT DISTINCT module FROM audit_logs WHERE module IS NOT NULL AND module <> '' ORDER BY module");
+  const [rows] = await pool.query("SELECT DISTINCT module FROM audit_logs WHERE company_id=? AND module IS NOT NULL AND module <> '' ORDER BY module", [currentCompanyId()]);
   return rows.map((row) => row.module);
 }
 
@@ -257,11 +267,11 @@ async function getDistinctModules() {
  * getDistinctUsers — users who have created audit log entries (module-filtered).
  */
 async function getDistinctUsers(module) {
-  const where = module ? "WHERE a.module = ?" : "";
+  const where = `WHERE a.company_id=?${module ? " AND a.module = ?" : ""}`;
   const [rows] = await pool.query(
     `SELECT DISTINCT a.user_id AS userId, COALESCE(u.name, NULLIF(a.user_name, ''), 'System') AS name
      FROM audit_logs a LEFT JOIN user u ON u.user_id = a.user_id ${where} ORDER BY name`,
-    module ? [module] : []
+    module ? [currentCompanyId(), module] : [currentCompanyId()]
   );
   return rows.filter(r => r.userId);
 }
@@ -270,10 +280,10 @@ async function getDistinctUsers(module) {
  * getDistinctActivityTypes — distinct activity_type values (module-filtered).
  */
 async function getDistinctActivityTypes(module) {
-  const where = module ? "WHERE module = ?" : "";
+  const where = `WHERE company_id=?${module ? " AND module = ?" : ""}`;
   const [rows] = await pool.query(
     `SELECT DISTINCT activity_type FROM audit_logs ${where} ORDER BY activity_type`,
-    module ? [module] : []
+    module ? [currentCompanyId(), module] : [currentCompanyId()]
   );
   return rows.map(r => r.activity_type).filter(Boolean);
 }

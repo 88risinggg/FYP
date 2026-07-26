@@ -14,6 +14,7 @@ const { normalizeRow, mapHeaders } = require("./uploadNormalizer");
 const { validateRow } = require("./uploadRowValidator");
 const uploadSessionStore = require("./uploadSessionStore");
 const { pool } = require("../config/db");
+const { currentCompanyId } = require("./tenantContext");
 
 // Supported file extensions
 const SUPPORTED_EXTENSIONS = [".csv", ".xlsx"];
@@ -134,8 +135,9 @@ async function validateUpload(filePath, originalName, userId) {
     try {
       if (employeeIds.length > 0 || emails.length > 0) {
         const [existingRows] = await pool.query(
-          `SELECT * FROM staff WHERE employee_id IN (?) OR email IN (?)`,
+          `SELECT * FROM staff WHERE company_id = ? AND (employee_id IN (?) OR email IN (?))`,
           [
+            currentCompanyId(),
             employeeIds.length > 0 ? employeeIds : [""],
             emails.length > 0 ? emails : [""],
           ]

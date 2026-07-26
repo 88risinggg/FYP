@@ -1,5 +1,16 @@
 const { pool } = require('../config/db');
 const { addAudit } = require('../services/audit');
+const { requireCompanyId } = require('../utils/companyScope');
+const { getCompany } = require('../services/companyService');
+const { encryptTenantPayload } = require('../services/tenantCryptoService');
+
+const sensitiveStaff = (body) => ({
+  name: body.name || body.staff_name || null, dateOfBirth: body.date_of_birth || null, email: body.email || null,
+  phone: body.phone || null, address: body.address || null, race: body.race || null, religion: body.religion || null,
+  baseSalary: body.base_salary == null ? null : Number(body.base_salary), bank: body.bank || null,
+  accountNumber: body.account_no || null, emergencyContactName: body.emergency_contact_name || null,
+  emergencyContactRelationship: body.emergency_contact_relationship || null, emergencyContactPhone: body.emergency_contact_phone || null
+});
 
 /**
  * Create staff record
@@ -7,14 +18,15 @@ const { addAudit } = require('../services/audit');
  */
 async function createStaff(req, res) {
   const body = req.body || {};
+  const companyId = requireCompanyId(req);
   const now = new Date();
   try {
     const [result] = await pool.query(
       `INSERT INTO staff
         (employee_code, name, date_of_birth, gender, email, phone, address,
          department_name, hire_date, status, race, religion, base_salary,
-         bank, account_no, user_user_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         bank, account_no, user_user_id, created_at, updated_at, company_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         body.employee_code || null,
         body.name || body.staff_name || '',
@@ -33,11 +45,15 @@ async function createStaff(req, res) {
         body.account_no || null,
         body.user_user_id || null,
         now,
-        now
+        now,
+        companyId
       ]
     );
     const insertId = result.insertId;
-    const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? LIMIT 1', [insertId]);
+    const company = await getCompany(companyId);
+    const encrypted = encryptTenantPayload(company, 'staff', insertId, 'sensitive_payload', sensitiveStaff(body));
+    await pool.query('UPDATE staff SET sensitive_payload=? WHERE employee_id=? AND company_id=?', [encrypted, insertId, companyId]);
+    const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? AND company_id=? LIMIT 1', [insertId, companyId]);
     addAudit(
       req.user && req.user.email ? req.user.email : 'system',
       `Added staff record ${insertId}`,
@@ -55,7 +71,8 @@ async function createStaff(req, res) {
  */
 async function getStaffList(req, res) {
   try {
-    const [rows] = await pool.query('SELECT * FROM staff ORDER BY name');
+    const companyId = requireCompanyId(req);
+    const [rows] = await pool.query('SELECT * FROM staff WHERE company_id=? ORDER BY name', [companyId]);
     return res.json(rows);
   } catch (err) {
     return res.status(500).json({ message: 'Failed to retrieve staff list', error: err.message });
@@ -69,9 +86,10 @@ async function getStaffList(req, res) {
 async function getStaffById(req, res) {
   const id = req.params.id || req.params.employeeId;
   try {
+    const companyId = requireCompanyId(req);
     const [rows] = await pool.query(
-      'SELECT * FROM staff WHERE employee_id = ? LIMIT 1',
-      [id]
+      'SELECT * FROM staff WHERE employee_id = ? AND company_id=? LIMIT 1',
+      [id, companyId]
     );
     if (!rows.length) return res.status(404).json({ message: 'Staff profile not found' });
     return res.json(rows[0]);
@@ -86,6 +104,7 @@ async function getStaffById(req, res) {
  */
 async function updateStaff(req, res) {
   const employeeId = req.params.id || req.params.employeeId;
+  const companyId = requireCompanyId(req);
 
   // Staff-role self-update restriction
   if (req.user && req.user.role === 'Staff' && req.user.employeeId !== employeeId) {
@@ -113,17 +132,21 @@ async function updateStaff(req, res) {
 
   updates.push('updated_at = ?');
   values.push(new Date());
-  values.push(employeeId);
+  values.push(employeeId, companyId);
 
   try {
     const [result] = await pool.query(
-      `UPDATE staff SET ${updates.join(', ')} WHERE employee_id = ?`,
+      `UPDATE staff SET ${updates.join(', ')} WHERE employee_id = ? AND company_id=?`,
       values
     );
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: 'Staff profile not found' });
     }
-    const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? LIMIT 1', [employeeId]);
+    const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? AND company_id=? LIMIT 1', [employeeId, companyId]);
+    const company = await getCompany(companyId);
+    const merged = { ...rows[0], ...req.body };
+    const encrypted = encryptTenantPayload(company, 'staff', employeeId, 'sensitive_payload', sensitiveStaff(merged));
+    await pool.query('UPDATE staff SET sensitive_payload=? WHERE employee_id=? AND company_id=?', [encrypted, employeeId, companyId]);
     addAudit(
       req.user && req.user.email ? req.user.email : 'system',
       `Updated profile for ${employeeId}`,
@@ -142,9 +165,10 @@ async function updateStaff(req, res) {
 async function deleteStaff(req, res) {
   const id = req.params.id || req.params.employeeId;
   try {
-    const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? LIMIT 1', [id]);
+    const companyId = requireCompanyId(req);
+    const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? AND company_id=? LIMIT 1', [id, companyId]);
     if (!rows.length) return res.status(404).json({ message: 'Staff record not found' });
-    await pool.query('DELETE FROM staff WHERE employee_id = ?', [id]);
+    await pool.query('DELETE FROM staff WHERE employee_id = ? AND company_id=?', [id, companyId]);
     addAudit(
       req.user && req.user.email ? req.user.email : 'system',
       `Deleted staff record ${id}`,
@@ -162,6 +186,7 @@ async function deleteStaff(req, res) {
  */
 async function importProfiles(req, res) {
   const profiles = Array.isArray(req.body) ? req.body : [req.body];
+  const companyId = requireCompanyId(req);
   const created = [];
   const now = new Date();
 
@@ -172,8 +197,8 @@ async function importProfiles(req, res) {
 
       // Upsert: update if exists, insert if not
       const [existing] = await pool.query(
-        'SELECT employee_id FROM staff WHERE employee_id = ? LIMIT 1',
-        [employeeId]
+        'SELECT employee_id FROM staff WHERE employee_id = ? AND company_id=? LIMIT 1',
+        [employeeId, companyId]
       );
 
       if (existing.length) {
@@ -196,7 +221,7 @@ async function importProfiles(req, res) {
             account_no = COALESCE(?, account_no),
             user_user_id = COALESCE(?, user_user_id),
             updated_at = ?
-           WHERE employee_id = ?`,
+           WHERE employee_id = ? AND company_id=?`,
           [
             p.employee_code || null,
             p.name || p.staff_name || null,
@@ -215,7 +240,8 @@ async function importProfiles(req, res) {
             p.account_no || null,
             p.user_user_id || null,
             now,
-            employeeId
+            employeeId,
+            companyId
           ]
         );
       } else {
@@ -223,8 +249,8 @@ async function importProfiles(req, res) {
           `INSERT INTO staff
             (employee_id, employee_code, name, email, phone, date_of_birth, gender,
              address, department_name, hire_date, status, race, religion,
-             base_salary, bank, account_no, user_user_id, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             base_salary, bank, account_no, user_user_id, created_at, updated_at, company_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             employeeId,
             p.employee_code || null,
@@ -244,12 +270,18 @@ async function importProfiles(req, res) {
             p.account_no || null,
             p.user_user_id || null,
             p.created_at || now,
-            now
+            now,
+            companyId
           ]
         );
       }
 
-      const [saved] = await pool.query('SELECT * FROM staff WHERE employee_id = ? LIMIT 1', [employeeId]);
+      const [saved] = await pool.query('SELECT * FROM staff WHERE employee_id = ? AND company_id=? LIMIT 1', [employeeId, companyId]);
+      if (saved.length) {
+        const company = await getCompany(companyId);
+        const encrypted = encryptTenantPayload(company, 'staff', employeeId, 'sensitive_payload', sensitiveStaff(saved[0]));
+        await pool.query('UPDATE staff SET sensitive_payload=? WHERE employee_id=? AND company_id=?', [encrypted, employeeId, companyId]);
+      }
       if (saved.length) created.push(saved[0]);
     }
 

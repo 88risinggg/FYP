@@ -5,6 +5,9 @@ const path = require("path");
 const ExcelJS = require("exceljs");
 const { getEffectivePayrollRules } = require("../services/payrollRuleConfigService");
 const { generatePayslipPDF } = require("../services/payslipPdfService");
+const { getCompany } = require("../services/companyService");
+const { currentCompanyId } = require("../services/tenantContext");
+const { getPublishedRuleState, getRuleAcknowledgement, publishPayrollRules, recordCurrentRulesPublication } = require("../services/payrollRuleGovernanceService");
 
 const {
   createUserAccount,
@@ -200,7 +203,9 @@ async function exportAdminPayrollReport(req, res) {
 
 async function getAdminEffectivePayrollRules(req, res) {
   try {
-    return res.json(await getEffectivePayrollRules());
+    const [catalogue, publication] = await Promise.all([getEffectivePayrollRules(), getPublishedRuleState()]);
+    const acknowledgement = req.user?.role === "Finance" ? await getRuleAcknowledgement(req.user?.userId) : null;
+    return res.json({ ...catalogue, publication, acknowledgement });
   } catch (error) {
     console.error("Effective payroll rules error:", error.message);
     return res.status(500).json({ message: "Failed to load effective payroll rules." });
@@ -374,7 +379,8 @@ async function previewPayslipLayout(req, res) {
 
 async function previewSamplePayslip(req, res) {
   try {
-    const pdf = await generatePayslipPDF({ employee_name: "Sample Employee", employee_id: "EMP-SAMPLE", department: "Finance", payroll_month: new Date().getMonth() + 1, payroll_year: new Date().getFullYear(), basic_salary: 4200, gross_pay: 4400, total_deductions: 865, net_pay: 3535, employee_cpf: 840, employer_cpf: 714, mbmf: 15, sdl: 11.25, allowances: 200, bank_name: "Sample Bank", bank_account: "****1234" });
+    const company = await getCompany(currentCompanyId());
+    const pdf = await generatePayslipPDF({ employee_name: "Sample Employee", employee_id: "EMP-SAMPLE", employee_code: "EMP-0001", department_name: "Finance", work_location: "Singapore", employment_type: "Full-Time", working_days: 22, payroll_id: 1, payroll_month: new Date().getMonth() + 1, payroll_year: new Date().getFullYear(), basic_salary: 4200, gross_salary: 4400, total_allowances: 200, total_deductions: 855, net_salary: 3545, employee_cpf: 840, employer_cpf: 714, deduction_breakdown: { sdl: 11.25, selfHelpGroups: [{ fund: "Employee MBMF", amount: 15 }] }, company_name: company?.display_name, company_legal_name: company?.legal_name, company_registration_number: company?.registration_number, company_gst_number: company?.gst_number, company_email: company?.company_email, company_phone: company?.company_phone, company_address: company?.company_address, company_website: company?.company_website, company_logo_path: company?.logo_path, company_brand_color: company?.brand_color, company_currency: company?.currency, company_timezone: company?.timezone });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", "inline; filename=sample-payslip.pdf");
     return res.send(pdf);
@@ -642,6 +648,7 @@ async function updatePayrollSetting(req, res) {
       ipAddress: req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || req.ip || null,
       deviceInfo: String(req.headers["user-agent"] || "").slice(0, 500) || null
     });
+    await recordCurrentRulesPublication({ userId: req.user?.userId, changeReason: `Updated ${settingKey}`, changes: [{ settingKey, before: null, after: settingValue, effectiveFrom, referenceTitle: req.body.referenceTitle || null, referenceUrl: req.body.referenceUrl || null }] });
 
     const [stats, settings, auditLogs, mbmfEligibility] = await Promise.all([
       getDashboardStats(),
@@ -663,6 +670,23 @@ async function updatePayrollSetting(req, res) {
   }
 }
 
+async function publishPayrollRuleChanges(req, res) {
+  try {
+    const result = await publishPayrollRules({
+      changes: req.body?.changes,
+      changeReason: req.body?.changeReason,
+      userId: req.user?.userId
+    });
+    const [stats, settings, auditLogs, mbmfEligibility] = await Promise.all([
+      getDashboardStats(), listPayrollSettings(), listAuditLogs(), listMbmfEligibilitySummary()
+    ]);
+    return res.json({ ...result, stats, settings, auditLogs, mbmfEligibility });
+  } catch (error) {
+    const status = ["NO_RULE_CHANGES", "RULE_CHANGE_REASON_REQUIRED", "INVALID_RULE_CHANGE", "RULE_REFERENCE_REQUIRED", "INVALID_RULE_REFERENCE"].includes(error.code) ? 400 : 500;
+    return res.status(status).json({ code: error.code || "RULE_PUBLICATION_FAILED", message: status === 500 ? "The payroll rule publication transaction failed and was rolled back." : error.message });
+  }
+}
+
 module.exports = {
   addUser,
   addPayslipLayout,
@@ -680,5 +704,6 @@ module.exports = {
   previewSamplePayslip,
   resetUserPassword,
   updatePayrollSetting,
+  publishPayrollRuleChanges,
   normalizeInsightQuery
 };

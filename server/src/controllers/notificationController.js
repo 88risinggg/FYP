@@ -1,5 +1,6 @@
 const { pool } = require("../config/db");
 const { notifyUser } = require("../services/payrollNotificationService");
+const { currentCompanyId } = require("../services/tenantContext");
 
 /**
  * Ensures the notification table exists and has up-to-date schema.
@@ -26,11 +27,11 @@ async function getNotificationsByUserId(req, res) {
               n.action_path, n.actor_user_id, n.entity_type, n.entity_id, n.channel,
               n.metadata, n.delivery_status, n.sent_at, n.error_message, actor.name AS actor_name
        FROM notification n
-       LEFT JOIN user actor ON actor.user_id = n.actor_user_id
-       WHERE n.user_id = ?
+       LEFT JOIN user actor ON actor.user_id = n.actor_user_id AND actor.company_id = n.company_id
+       WHERE n.user_id = ? AND n.company_id = ?
        ORDER BY n.created_at DESC
        LIMIT 50`,
-      [userId]
+      [userId, currentCompanyId()]
     );
 
     return res.json(rows);
@@ -52,8 +53,8 @@ async function markAsRead(req, res) {
 
   try {
     const [result] = await pool.query(
-      "UPDATE notification SET is_read = 1 WHERE notification_id = ? AND user_id = ?",
-      [notificationId, req.user.userId]
+      "UPDATE notification SET is_read = 1 WHERE notification_id = ? AND user_id = ? AND company_id = ?",
+      [notificationId, req.user.userId, currentCompanyId()]
     );
 
     if (result.affectedRows === 0) {
@@ -80,8 +81,8 @@ async function markAllAsRead(req, res) {
 
   try {
     await pool.query(
-      "UPDATE notification SET is_read = 1 WHERE user_id = ? AND is_read = 0",
-      [userId]
+      "UPDATE notification SET is_read = 1 WHERE user_id = ? AND company_id = ? AND is_read = 0",
+      [userId, currentCompanyId()]
     );
 
     return res.json({ message: "All notifications marked as read" });
@@ -109,9 +110,12 @@ async function createNotification(req, res) {
   }
 
   try {
+    const companyId = currentCompanyId();
+    const [[recipient]] = await pool.query("SELECT user_id FROM user WHERE user_id = ? AND company_id = ? LIMIT 1", [user_id, companyId]);
+    if (!recipient) return res.status(404).json({ message: "Notification recipient not found in this company." });
     const [result] = await pool.query(
-      "INSERT INTO notification (user_id, type, title, message, is_read, created_at) VALUES (?, ?, ?, ?, 0, NOW())",
-      [user_id, type || "system", title, message || null]
+      "INSERT INTO notification (company_id, user_id, type, title, message, is_read, created_at) VALUES (?, ?, ?, ?, ?, 0, NOW())",
+      [companyId, user_id, type || "system", title, message || null]
     );
 
     return res.status(201).json({ notification_id: result.insertId, message: "Notification created" });
@@ -145,8 +149,8 @@ async function getMyNotifications(req, res) {
 async function getUnreadCount(req, res) {
   try {
     const [[row]] = await pool.execute(
-      "SELECT COUNT(*) AS count FROM notification WHERE user_id = ? AND is_read = 0",
-      [req.user.userId]
+      "SELECT COUNT(*) AS count FROM notification WHERE user_id = ? AND company_id = ? AND is_read = 0",
+      [req.user.userId, currentCompanyId()]
     );
     return res.json({ count: Number(row.count || 0) });
   } catch (_error) {

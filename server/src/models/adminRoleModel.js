@@ -196,9 +196,10 @@ async function getRoleOptions() {
 }
 
 async function listRoleActivity({ limit = 5, roleId = null } = {}) {
+  const { currentCompanyId } = require("../services/tenantContext");
   const safeLimit = Math.min(Math.max(Number(limit || 5), 1), 50);
-  const params = [];
-  const where = ["activity_type = 'Role Management'"];
+  const params = [currentCompanyId()];
+  const where = ["company_id = ?", "activity_type = 'Role Management'"];
 
   if (roleId) {
     where.push("affected_record = ?");

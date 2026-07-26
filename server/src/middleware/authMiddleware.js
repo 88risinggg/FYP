@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const { pool } = require("../config/db");
 const { findUserById } = require("../models/authModel");
+const { validateSupportContext } = require("./tenantMiddleware");
 
 /**
  * JWT authentication middleware.
@@ -46,8 +47,10 @@ async function authenticateToken(req, res, next) {
     req.user = {
       ...payload,
       email: user.email,
-      role: user.role_name,
+      role: payload.supportGrantId ? payload.role : user.role_name,
+      operatorRole: payload.supportGrantId ? user.role_name : null,
       companyId: user.company_id || payload.companyId || null
+      ,supportGrantId: payload.supportGrantId || null
     };
 
     // Resolve staffId (employee_id) for Staff users from the staff table
@@ -64,7 +67,7 @@ async function authenticateToken(req, res, next) {
       // Non-blocking — staffId simply won't be set if staff record doesn't exist
     }
 
-    next();
+    return validateSupportContext(req, res, next);
   } catch (error) {
     res.status(401).json({
       code: "AUTH_INVALID",

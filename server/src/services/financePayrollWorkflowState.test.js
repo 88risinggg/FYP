@@ -34,5 +34,13 @@ describe("finance payroll workflow state", () => {
     expect(state.stages.find((stage) => stage.key === "staff").status).toBe("completed");
     expect(state.stages.find((stage) => stage.key === "approval").status).toBe("completed");
     expect(state.currentStage).toBe("payslips");
+    expect(state.stages.find((stage) => stage.key === "payslips")).toMatchObject({ label: "Payslip Delivery (HR)", owner: "HR", status: "current" });
+    expect(state.payslipProgress).toMatchObject({ total: 1, owner: "HR" });
+  });
+
+  test("shows failed HR payslip delivery without completing the stage", () => {
+    const state = buildFinanceWorkflowState({ id: "5_2026", reviewedAt: "x", approvedAt: "x", paymentFileGeneratedAt: "x", paymentRecipientsConfigured: 1, paidAt: "x", payslipDelivery: { failed: 1 }, employees: [employee] });
+    expect(state.stages.find((stage) => stage.key === "payslips").status).toBe("failed");
+    expect(state.payslipProgress.failed).toBe(1);
   });
 });

@@ -21,7 +21,7 @@ import {
 import Sidebar from "./Sidebar.jsx";
 import VanidayLogo from "../branding/VanidayLogo.jsx";
 import payNivoLogo from "../../assets/paynivo-logo.png";
-import { clearSession, getStoredSession } from "../../services/sessionService.js";
+import { clearSession, getStoredSession, leaveSupportSession } from "../../services/sessionService.js";
 import { apiRequest } from "../../services/apiClient.js";
 
 const defaultSidebarSections = [
@@ -105,6 +105,30 @@ export default function DashboardLayout({
   const navigate = useNavigate();
   const location = useLocation();
   const roleProfile = roleProfiles[user?.role];
+  const storedUser = getStoredSession()?.user;
+  const sessionCompany = user?.company || storedUser?.company || null;
+  const [company, setCompany] = useState(sessionCompany);
+  useEffect(() => {
+    if (!sessionCompany?.workspaceId) { setCompany(sessionCompany); return; }
+    let active = true;
+    apiRequest("/api/company/profile").then((result) => {
+      if (!active || !result?.company) return;
+      setCompany(result.company);
+      try {
+        const stored = getStoredSession();
+        if (stored?.user) localStorage.setItem("authUser", JSON.stringify({ ...stored.user, company: result.company }));
+      } catch { /* The live header can still use the refreshed profile. */ }
+    }).catch(() => setCompany(sessionCompany));
+    return () => { active = false; };
+  }, [sessionCompany?.workspaceId, sessionCompany?.logoUrl, sessionCompany?.legalName]);
+  useEffect(() => {
+    const updateBranding = (event) => {
+      if (event.detail) setCompany(event.detail);
+    };
+    window.addEventListener("paynivo:company-profile-updated", updateBranding);
+    return () => window.removeEventListener("paynivo:company-profile-updated", updateBranding);
+  }, []);
+  const supportContext = user?.supportContext || storedUser?.supportContext || null;
   const displayName = profileName || user?.name || roleProfile?.name || "User";
   const displayRole = profileRole || roleProfile?.role || user?.role || "User";
   const displayEmail = user?.email || "No email available";
@@ -650,11 +674,11 @@ export default function DashboardLayout({
                     <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full border border-white/10 bg-white/[0.03]" />
                     <div className="relative flex min-w-0 items-center gap-3">
                       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white shadow-lg shadow-black/20">
-                        <img src={payNivoLogo} alt="" className="h-10 w-10 object-contain" aria-hidden="true" />
+                        <img src={company?.logoUrl || payNivoLogo} alt="" className="h-10 w-10 object-contain" aria-hidden="true" />
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-bold tracking-wide">PayNivo</p>
-                        <p className="mt-0.5 truncate text-[11px] text-white/60">Business workspace</p>
+                        <p className="truncate text-sm font-bold tracking-wide" title={company?.legalName || company?.name || "PayNivo"}>{company?.legalName || company?.name || "PayNivo"}</p>
+                        <p className="mt-0.5 truncate text-[11px] text-white/60">{company ? "Powered by PayNivo" : "Platform workspace"}</p>
                       </div>
                     </div>
                     <button
@@ -730,6 +754,7 @@ export default function DashboardLayout({
           </div>
         </header>
 
+        {supportContext ? <div className="sticky top-[73px] z-30 flex flex-wrap items-center justify-between gap-3 border-b border-amber-300 bg-amber-100 px-4 py-2 text-sm text-amber-950 shadow-sm sm:px-6" role="status"><span><strong>PayNivo support session</strong> · {supportContext.mode === "read_write" ? "Limited read/write" : "Read-only"} access to {company?.name || "this workspace"}. High-risk actions and exports remain blocked.</span><button type="button" className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold" onClick={() => { if (leaveSupportSession()) location.href = "/platform/companies"; }}>Exit support session</button></div> : null}
         <main className={`px-4 py-6 sm:px-6 ${moduleClassName}`}>
           {children}
         </main>

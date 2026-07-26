@@ -20,6 +20,8 @@ require("../models/advanceModel");
 const { createNotificationInternal } = require("../controllers/notificationController");
 const { notifyRoles, notifyUser } = require("../services/payrollNotificationService");
 const { generateAndSendPayslip } = require("../services/payslipDeliveryService");
+const { deliverRunPayslips, findRun } = require("../services/payrollRunPayslipService");
+const { buildFinanceWorkflowState } = require("../services/financePayrollWorkflowState");
 const { writeAuditLog } = require("../services/auditService");
 const {
   createFinancePayrollRunFromStaff,
@@ -32,6 +34,24 @@ const uploadsDir = path.join(__dirname, "..", "..", "uploads");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
 const upload = multer({ dest: uploadsDir });
+
+router.get("/payroll-runs/:runId/workflow", authenticateToken, allowRoles("HR"), async (req, res) => {
+  const run = await findRun(req.params.runId);
+  if (!run) return res.status(404).json({ code: "PAYROLL_RUN_NOT_FOUND", message: "Payroll run not found." });
+  return res.json({ run, workflow: buildFinanceWorkflowState(run) });
+});
+
+router.post("/payroll-runs/:runId/payslips/send", authenticateToken, allowRoles("HR"), async (req, res) => {
+  try {
+    const result = await deliverRunPayslips({ runId: req.params.runId, userId: req.user?.userId, actor: req.user?.email || "HR" });
+    await writeAuditLog({ module: "Payroll", activityType: "Payslip Delivery", action: `HR delivered payroll-run payslips for ${req.params.runId}`, entityId: req.params.runId, entityType: "payroll_run", userId: req.user?.userId, status: result.delivery.failed ? "Partial" : "Success" });
+    await notifyRoles("Finance", { type: result.delivery.failed ? "payslip_delivery_attention" : "payslip_delivery_complete", title: result.delivery.failed ? "HR payslip delivery needs attention" : "HR completed payslip delivery", message: result.delivery.failed ? `${result.delivery.failed} payslip(s) remain unsuccessful for ${req.params.runId}.` : `All payslips for ${req.params.runId} were delivered by HR.`, entityType: "payroll_run", entityId: req.params.runId, actionPath: "/dashboard/payroll/finance/statutory-ledger" });
+    return res.status(result.delivery.failed ? 409 : 200).json(result.delivery.failed ? { ...result, code: "PAYSLIP_DELIVERY_INCOMPLETE", message: `${result.delivery.failed} payslip(s) could not be delivered. Retry sends only unsuccessful records.` } : result);
+  } catch (error) {
+    const status = ["PAYROLL_RUN_NOT_FOUND"].includes(error.code) ? 404 : ["PAYMENT_NOT_CONFIRMED"].includes(error.code) ? 409 : 500;
+    return res.status(status).json({ code: error.code || "PAYSLIP_DELIVERY_FAILED", message: error.message || "Unable to deliver payroll-run payslips." });
+  }
+});
 
 function generateStaffId() {
   const next = staffProfiles.length + 1;
@@ -150,7 +170,7 @@ router.get("/search", authenticateToken, allowRoles("HR"), (req, res) => {
 
   (async () => {
     try {
-      const [rows] = await pool.query("SELECT * FROM staff LIMIT 1000");
+      const [rows] = await pool.query("SELECT * FROM staff WHERE company_id = ? LIMIT 1000", [req.user.companyId]);
       const results = Array.isArray(rows)
         ? rows.filter((row) => recordMatchesSearch(row, q)).map(normalizeSearchResult)
         : [];
@@ -166,22 +186,8 @@ router.get("/search", authenticateToken, allowRoles("HR"), (req, res) => {
         return res.json([...results, ...payrollRunResults, ...payslipResults].slice(0, 10));
       }
     } catch (_err) {
-      // fall through to in-memory search
+      return res.status(500).json({ message: "Unable to search this company workspace." });
     }
-
-    const staffResults = staffProfiles
-      .filter((staff) => recordMatchesSearch(staff, q))
-      .map(normalizeSearchResult);
-
-    const payrollRunResults = payrollRuns
-      .filter((run) => recordMatchesSearch(run, q))
-      .map(normalizePayrollRunResult);
-
-    const payslipResults = payslips
-      .filter((payslip) => recordMatchesSearch(payslip, q))
-      .map(normalizePayslipResult);
-
-    return res.json([...staffResults, ...payrollRunResults, ...payslipResults].slice(0, 10));
   })();
 });
 
@@ -191,15 +197,10 @@ router.get("/staff/:id", authenticateToken, allowRoles("HR", "Finance"), (req, r
   // Prefer DB-backed lookup using `staff` table and `employee_id` column
   (async () => {
     try {
-      const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? LIMIT 1', [id]);
+      const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? AND company_id = ? LIMIT 1', [id, req.user.companyId]);
       if (!rows || rows.length === 0) return res.status(404).json({ message: 'Staff record not found' });
       return res.json(rows[0]);
-    } catch (err) {
-      // Fallback to in-memory if DB not configured
-      const staff = staffProfiles.find(s => s.staff_id === id || s.employee_id === id);
-      if (!staff) return res.status(404).json({ message: 'Staff record not found' });
-      return res.json(staff);
-    }
+    } catch (err) { return res.status(500).json({ message: 'Failed to load staff record' }); }
   })();
 });
 
@@ -264,8 +265,8 @@ router.put("/staff/:id", authenticateToken, allowRoles("HR"), (req, res) => {
       }
 
       values.push(new Date().toISOString().slice(0, 19).replace('T', ' '));
-      values.push(id);
-      const sql = `UPDATE staff SET ${setParts.join(', ')}, updated_at = ? WHERE employee_id = ?`;
+      values.push(id, req.user.companyId);
+      const sql = `UPDATE staff SET ${setParts.join(', ')}, updated_at = ? WHERE employee_id = ? AND company_id = ?`;
 
       const [result] = await pool.query(sql, values);
 
@@ -273,7 +274,7 @@ router.put("/staff/:id", authenticateToken, allowRoles("HR"), (req, res) => {
         return res.status(404).json({ message: 'Staff record not found' });
       }
 
-      const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? LIMIT 1', [id]);
+      const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? AND company_id = ? LIMIT 1', [id, req.user.companyId]);
 
       try {
         await writeAuditLog({ module: "HR", activityType: "staff_updated", action: `Updated staff record ${id}`,
@@ -294,14 +295,9 @@ router.delete("/staff/:id", authenticateToken, allowRoles("HR"), (req, res) => {
   const { id } = req.params;
   (async () => {
     try {
-      const [result] = await pool.query('DELETE FROM staff WHERE employee_id = ?', [id]);
+      const [result] = await pool.query('DELETE FROM staff WHERE employee_id = ? AND company_id = ?', [id, req.user.companyId]);
       if (result.affectedRows === 0) {
-        // fallback to in-memory
-        const index = staffProfiles.findIndex(s => s.staff_id === id || s.employee_id === id);
-        if (index === -1) return res.status(404).json({ message: 'Staff record not found' });
-        const deletedStaff = staffProfiles.splice(index, 1)[0];
-        addAudit(req.user.email, `Deleted staff record ${id}`, 'HR');
-        return res.json({ message: 'Staff record deleted (in-memory)', deletedStaff });
+        return res.status(404).json({ message: 'Staff record not found' });
       }
       try {
         await writeAuditLog({ module: "HR", activityType: "staff_deleted", action: `Deleted staff record ${id}`,
@@ -309,28 +305,22 @@ router.delete("/staff/:id", authenticateToken, allowRoles("HR"), (req, res) => {
           ipAddress: req.ip, deviceInfo: req.get("user-agent"), status: "Success" });
       } catch (e) {}
       return res.json({ message: 'Staff record deleted successfully', deletedId: id });
-    } catch (err) {
-      const index = staffProfiles.findIndex(s => s.staff_id === id || s.employee_id === id);
-      if (index === -1) return res.status(404).json({ message: 'Staff record not found' });
-      const deletedStaff = staffProfiles.splice(index, 1)[0];
-      addAudit(req.user.email, `Deleted staff record ${id}`, 'HR');
-      return res.json({ message: 'Staff record deleted (in-memory)', deletedStaff });
-    }
+    } catch (err) { return res.status(500).json({ message: 'Failed to delete staff record' }); }
   })();
 });
 // ----- End parameterized routes -----
 
-router.get("/staff", authenticateToken, allowRoles("HR", "Finance"), (_req, res) => {
+router.get("/staff", authenticateToken, allowRoles("HR", "Finance"), (req, res) => {
   (async () => {
     try {
       const [rows] = await pool.query(
-        'SELECT employee_id, employee_code, name, date_of_birth, gender, email, phone, address, department_name, hire_date, status, race, religion, base_salary, bank, account_no, user_user_id, created_at, updated_at FROM staff LIMIT 1000'
+        'SELECT employee_id, employee_code, name, date_of_birth, gender, email, phone, address, department_name, hire_date, status, race, religion, base_salary, bank, account_no, user_user_id, created_at, updated_at FROM staff WHERE company_id = ? LIMIT 1000', [req.user.companyId]
       );
       // If DB has rows, return them; otherwise fall back to in-memory staffProfiles
       if (Array.isArray(rows) && rows.length > 0) return res.json(rows);
-      return res.json(staffProfiles);
+      return res.json([]);
     } catch (err) {
-      return res.json(staffProfiles);
+      return res.status(500).json({ message: "Unable to load this company staff directory." });
     }
   })();
 });
@@ -342,13 +332,13 @@ router.post("/staff", authenticateToken, allowRoles("HR"), (req, res) => {
       const employee_id = body.employee_id || body.staff_id || generateStaffId();
       const now = new Date().toISOString();
       const insertCols = [
-        'employee_id','employee_code','name','date_of_birth','email','phone','address',
+        'company_id','employee_id','employee_code','name','date_of_birth','email','phone','address',
         'department_name','hire_date','base_salary','status',
         'created_at','updated_at','user_user_id',
         'race','religion','bank','account_no'
       ];
       const values = [
-        employee_id,
+        req.user.companyId, employee_id,
         body.employee_code || null,
         body.name || body.staff_name || '',
         body.date_of_birth || null,
@@ -371,7 +361,7 @@ router.post("/staff", authenticateToken, allowRoles("HR"), (req, res) => {
       const sql = `INSERT INTO staff (${insertCols.join(',')}) VALUES (${placeholders})`;
       const [result] = await pool.query(sql, values);
       if (result.affectedRows === 1) {
-        const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? LIMIT 1', [employee_id]);
+        const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? AND company_id = ? LIMIT 1', [employee_id, req.user.companyId]);
         upsertStaffProfile(rows[0]);
         // insert audit
         try {
@@ -382,36 +372,16 @@ router.post("/staff", authenticateToken, allowRoles("HR"), (req, res) => {
         } catch (e) {}
         return res.status(201).json(rows[0]);
       }
-      // fallback to in-memory
-      const staff_id = employee_id;
-      const profile = {
-        staff_id,
-        staff_name: body.staff_name || body.name || "",
-        email: body.email || "",
-        phone: body.phone || "",
-        department_id: body.department_id || ""
-      };
-      staffProfiles.push(profile);
-      addAudit(req.user.email, `Added staff record ${profile.staff_id}`, "HR");
-      return res.status(201).json(profile);
+      return res.status(500).json({ message: "Staff record was not saved." });
     } catch (err) {
-      // fallback to in-memory
-      const staff_id = body.employee_id || body.staff_id || generateStaffId();
-      const profile = {
-        staff_id,
-        staff_name: body.staff_name || body.name || "",
-        email: body.email || "",
-        phone: body.phone || "",
-        department_id: body.department_id || ""
-      };
-      staffProfiles.push(profile);
-      addAudit(req.user.email, `Added staff record ${profile.staff_id}`, "HR");
-      return res.status(201).json(profile);
+      return res.status(500).json({ message: "Failed to save staff record", error: err.message });
     }
   })();
 });
 
-router.post("/import-staff", authenticateToken, allowRoles("HR"), upload.single("file"), async (req, res) => {
+router.post("/import-staff", authenticateToken, allowRoles("HR"), upload.single("file"), async (_req, res) => {
+  return res.status(410).json({ code: "LEGACY_IMPORT_DISABLED", message: "Use the tenant-scoped employee Excel import in Staff Management." });
+  /*
   try {
     if (!req.file) return res.status(400).json({ message: "File required" });
     const rows = await parseFile(req.file.path, req.file.originalname);
@@ -440,6 +410,7 @@ router.post("/import-staff", authenticateToken, allowRoles("HR"), upload.single(
   } catch (err) {
     res.status(400).json({ message: "Import failed", error: err.message });
   }
+  */
 });
 
 // ----- START: employee upload/validation + optional create endpoint -----
@@ -841,8 +812,8 @@ router.post("/payroll-run", authenticateToken, allowRoles("HR"), async (req, res
 
     // FR1: Ensure same period doesn't create redundant runs
     const [existing] = await pool.query(
-      'SELECT payroll_id FROM payroll WHERE payroll_month = ? AND payroll_year = ? LIMIT 1',
-      [numMonth, numYear]
+      'SELECT payroll_id FROM payroll WHERE payroll_month = ? AND payroll_year = ? AND company_id = ? LIMIT 1',
+      [numMonth, numYear, req.user.companyId]
     );
     if (existing.length > 0) {
       return res.status(409).json({
@@ -859,16 +830,16 @@ router.post("/payroll-run", authenticateToken, allowRoles("HR"), async (req, res
   }
 });
 
-router.get("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), async (_req, res) => {
+router.get("/payroll-run", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT p.payroll_month, p.payroll_year, p.run_status AS status,
               p.run_created_at AS created_at, p.run_updated_at AS updated_at,
               COUNT(p.payroll_id) AS total_payslips
-       FROM payroll p
+       FROM payroll p WHERE p.company_id = ?
        GROUP BY p.payroll_month, p.payroll_year, p.run_status, p.run_created_at, p.run_updated_at
        ORDER BY p.payroll_year DESC, p.payroll_month DESC`
-    );
+    , [req.user.companyId]);
     return res.json(rows.map(r => ({ ...r, payroll_run_id: `${r.payroll_month}_${r.payroll_year}` })));
   } catch (err) {
     return res.status(500).json({ message: "Failed to fetch payroll runs", error: err.message });
@@ -886,9 +857,9 @@ router.get("/payroll-run/:id", authenticateToken, allowRoles("Admin", "HR"), asy
               p.run_created_at AS created_at, p.configuration_json,
               COUNT(p.payroll_id) AS total_payslips
        FROM payroll p
-       WHERE p.payroll_month = ? AND p.payroll_year = ?
+       WHERE p.payroll_month = ? AND p.payroll_year = ? AND p.company_id = ?
        GROUP BY p.payroll_month, p.payroll_year, p.run_status, p.run_created_at, p.configuration_json`,
-      [month, year]
+      [month, year, req.user.companyId]
     );
     if (!rows.length) return res.status(404).json({ message: "Payroll run not found" });
     return res.json({ ...rows[0], payroll_run_id: req.params.id });
@@ -922,10 +893,10 @@ router.get("/payroll-run/:id/payslips", authenticateToken, allowRoles("HR"), asy
         p.payroll_id AS payslip_id,
         p.payslip_status
       FROM payroll p
-      JOIN staff s ON s.employee_id = p.staff_employee_id
-      WHERE p.payroll_month = ? AND p.payroll_year = ?
+      JOIN staff s ON s.employee_id = p.staff_employee_id AND s.company_id = p.company_id
+      WHERE p.payroll_month = ? AND p.payroll_year = ? AND p.company_id = ?
       ORDER BY p.staff_employee_id ASC`,
-      [month, year]
+      [month, year, req.user.companyId]
     );
 
     return res.json(rows);
@@ -942,8 +913,8 @@ router.put("/payroll-run/:id/lock", authenticateToken, allowRoles("HR"), async (
     }
 
     const [rows] = await pool.query(
-      "SELECT payroll_id, run_status FROM payroll WHERE payroll_month = ? AND payroll_year = ? LIMIT 1",
-      [month, year]
+      "SELECT payroll_id, run_status FROM payroll WHERE payroll_month = ? AND payroll_year = ? AND company_id = ? LIMIT 1",
+      [month, year, req.user.companyId]
     );
     if (!rows.length) {
       return res.status(404).json({ message: "Payroll run not found" });
@@ -958,8 +929,8 @@ router.put("/payroll-run/:id/lock", authenticateToken, allowRoles("HR"), async (
     }
 
     await pool.query(
-      "UPDATE payroll SET run_status = ? WHERE payroll_month = ? AND payroll_year = ?",
-      ["Closed", month, year]
+      "UPDATE payroll SET run_status = ? WHERE payroll_month = ? AND payroll_year = ? AND company_id = ?",
+      ["Closed", month, year, req.user.companyId]
     );
 
     addAudit(req.user.email, `Locked payroll run ${req.params.id}`, "HR");
@@ -988,7 +959,7 @@ router.post(
       }
 
       // Verify payroll run exists in DB
-      const [runRows] = await pool.query('SELECT * FROM payroll_run WHERE payroll_run_id = ? LIMIT 1', [payroll_run_id]);
+      const [runRows] = await pool.query('SELECT * FROM payroll_run WHERE payroll_run_id = ? AND company_id = ? LIMIT 1', [payroll_run_id, req.user.companyId]);
       if (!runRows.length) {
         return res.status(404).json({ message: "Payroll run not found" });
       }
@@ -1002,7 +973,7 @@ router.post(
       }
 
       // Get active staff from DB
-      const [staffFromDb] = await pool.query("SELECT * FROM staff WHERE status = 1 OR status = 'Active'");
+      const [staffFromDb] = await pool.query("SELECT * FROM staff WHERE company_id = ? AND (status = 1 OR status = 'Active')", [req.user.companyId]);
 
       // Resolve the current Admin rules once and use the same snapshot for every payslip.
       const activeRules = await getActivePayrollRules();
@@ -1027,8 +998,8 @@ router.post(
         for (const slip of generatedPayslips) {
           // Check for duplicate (same employee + same payroll period)
           const [dupCheck] = await conn.query(
-            'SELECT payroll_id FROM payroll WHERE staff_employee_id = ? AND payroll_month = ? AND payroll_year = ? LIMIT 1',
-            [slip.employee_id, payrollRun.payroll_month, payrollRun.payroll_year]
+            'SELECT payroll_id FROM payroll WHERE staff_employee_id = ? AND payroll_month = ? AND payroll_year = ? AND company_id = ? LIMIT 1',
+            [slip.employee_id, payrollRun.payroll_month, payrollRun.payroll_year, req.user.companyId]
           );
           if (dupCheck.length > 0) {
             skipped.push({ row_identifier: slip.employee_id, reason: 'Duplicate payslip for payroll period' });
@@ -1041,8 +1012,8 @@ router.post(
               staff_employee_id, payroll_month, payroll_year, payroll_run_id,
               gross_salary, total_allowances, total_deductions, employee_cpf,
               employer_cpf, mbmf_amount, deduction_breakdown, net_salary,
-              source, payslip_status
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'upload_automated_2026', ?)`,
+              source, payslip_status, company_id
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'upload_automated_2026', ?, ?)`,
             [
               slip.employee_id,
               payrollRun.payroll_month,
@@ -1057,7 +1028,7 @@ router.post(
               slip.mbmf_amount || 0,
               JSON.stringify(slip.deduction_breakdown || {}),
               slip.net_pay || 0,
-              slip.status
+              slip.status, req.user.companyId
             ]
           );
 
@@ -1066,8 +1037,8 @@ router.post(
 
         // Update payroll run status
         await conn.query(
-          'UPDATE payroll_run SET status = ?, updated_at = NOW() WHERE payroll_run_id = ?',
-          ['Payslips Generated', payroll_run_id]
+          'UPDATE payroll_run SET status = ?, updated_at = NOW() WHERE payroll_run_id = ? AND company_id = ?',
+          ['Payslips Generated', payroll_run_id, req.user.companyId]
         );
 
         await conn.commit();
@@ -1152,6 +1123,8 @@ router.post("/payslips/quick-generate", authenticateToken, allowRoles("HR"), asy
 
 // Legacy implementation retained temporarily for reference. The route above
 // handles requests first and uses the central statutory calculation engine.
+router.use("/legacy-payslips", (_req, res) => res.status(410).json({ code: "LEGACY_PAYROLL_ROUTE_DISABLED", message: "This legacy unscoped payroll path is disabled. Use the company-scoped Payroll Runs workflow." }));
+
 router.post("/legacy-payslips/quick-generate", authenticateToken, allowRoles("HR"), async (req, res) => {
   try {
     const { period_month, period_year } = req.body || {};
@@ -1314,8 +1287,8 @@ router.post("/legacy-payslips/quick-generate", authenticateToken, allowRoles("HR
 // ----- Payslip Retrieval -----
 router.get("/payslips", authenticateToken, allowRoles("HR", "Finance", "Staff"), async (req, res, next) => {
   try {
-    const conditions = [];
-    const params = [];
+    const conditions = ["p.company_id = ?", "s.company_id = p.company_id"];
+    const params = [req.user.companyId];
     if (req.user.role === "Finance") conditions.push("p.payslip_status IN ('finance_pending','finance_approved')");
     if (req.user.role === "Staff") {
       conditions.push("s.user_user_id = ? AND p.payslip_status IN ('Sent','sent_to_staff')");
@@ -1335,7 +1308,7 @@ router.get("/payslips", authenticateToken, allowRoles("HR", "Finance", "Staff"),
         s.name AS staff_name, s.employee_id,
         s.email AS staff_email, s.base_salary, s.department_name
        FROM payroll p
-       JOIN staff s ON s.employee_id = p.staff_employee_id
+       JOIN staff s ON s.employee_id = p.staff_employee_id AND s.company_id = p.company_id
        ${where}
        ORDER BY p.created_at DESC, p.payroll_id DESC`,
       params
@@ -1954,9 +1927,9 @@ router.get("/notifications", authenticateToken, allowRoles("HR", "Admin"), async
       `SELECT n.notification_id AS notif_id, n.type, n.title, n.message,
               n.created_at AS timestamp, n.is_read AS \`read\`, n.action_path,
               n.delivery_status, actor.name AS actor_name
-       FROM notification n LEFT JOIN user actor ON actor.user_id = n.actor_user_id
-       WHERE n.user_id = ? ORDER BY n.created_at DESC LIMIT 100`,
-      [req.user.userId]
+       FROM notification n LEFT JOIN user actor ON actor.user_id = n.actor_user_id AND actor.company_id = n.company_id
+       WHERE n.user_id = ? AND n.company_id = ? ORDER BY n.created_at DESC LIMIT 100`,
+      [req.user.userId, req.user.companyId]
     );
     return res.json(rows.map((row) => ({ ...row, priority: row.read ? "Low" : "High" })));
   } catch (error) {
@@ -1981,13 +1954,13 @@ router.get("/audit-log", authenticateToken, allowRoles("HR", "Admin"), async (re
 });
 
 // --- Staff Records Excel Export (server-side using ExcelJS) ---
-router.get("/staff/export/excel", authenticateToken, allowRoles("HR"), async (req, res) => {
+router.get("/staff/export/excel", authenticateToken, allowRoles("Admin", "HR"), async (req, res) => {
   try {
     const ExcelJS = require("exceljs");
     const [rows] = await pool.query(
       `SELECT employee_id, name, email, phone, department_name, hire_date,
               base_salary, status, race, religion, bank, account_no
-       FROM staff LIMIT 5000`
+       FROM staff WHERE company_id=? LIMIT 5000`, [req.user.companyId]
     );
 
     const workbook = new ExcelJS.Workbook();

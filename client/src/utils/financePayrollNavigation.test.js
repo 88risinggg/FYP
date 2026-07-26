@@ -10,7 +10,6 @@ describe("Finance payroll navigation", () => {
     "/dashboard/payroll/finance/payroll-approval",
     "/dashboard/payroll/finance/payment-preparation",
     "/dashboard/payroll/finance/payment-release",
-    "/dashboard/payroll/finance/payslip-delivery",
     "/dashboard/payroll/finance/statutory-ledger",
     "/dashboard/payroll/finance/reconciliation-reports",
     "/dashboard/payroll/finance/payslips-approval",
@@ -24,7 +23,8 @@ describe("Finance payroll navigation", () => {
     "/dashboard/payroll/finance/compliance-rules",
     "/dashboard/payroll/finance/activity-log",
     "/dashboard/payroll/finance/payroll-schedule",
-    "/dashboard/payroll/finance/staff-records"
+    "/dashboard/payroll/finance/staff-records",
+    "/dashboard/payroll/finance/payslip-delivery"
   ])("omits the tracker from reference/history route %s", (path) => {
     expect(shouldShowFinanceTracker(path)).toBe(false);
   });

@@ -3,7 +3,6 @@ require("./config/timezone");
 
 const cors = require("cors");
 const express = require("express");
-const path = require("path");
 
 // Route imports
 const healthRoutes = require("./routes/healthRoutes");
@@ -31,6 +30,7 @@ const adminAuditLogRoutes = require("./routes/adminAuditLogRoutes");
 const auditLogRoutes = require("./routes/auditLogRoutes");
 const publicRoutes = require("./routes/publicRoutes");
 const financePayrollRoutes = require("./routes/financePayrollRoutes");
+const payrollWorkflowRoutes = require("./routes/payrollWorkflowRoutes");
 const payrollUserRoutes = require("./routes/payrollUserRoutes");
 const claimRoutes = require("./routes/claimRoutes");
 const payrollRequestRoutes = require("./routes/payrollRequestRoutes");
@@ -41,6 +41,9 @@ const subscriptionRoutes = require("./routes/subscriptionRoutes");
 const subscriptionReminderRoutes = require("./routes/subscriptionReminderRoutes");
 const financeReminderRoutes = require("./routes/financeReminderRoutes");
 const whatsappNotificationRoutes = require("./routes/whatsappNotificationRoutes");
+const companyRoutes = require("./routes/companyRoutes");
+const { authenticateToken } = require("./middleware/authMiddleware");
+const { requireTenant } = require("./middleware/tenantMiddleware");
 
 const app = express();
 
@@ -72,54 +75,56 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: "5mb" }));
 
-// Static file serving for payslip PDF downloads
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Tenant files must be served by authenticated preview/download endpoints.
+app.use('/uploads', (_req, res) => res.status(404).json({ code: "AUTHENTICATED_FILE_ROUTE_REQUIRED", message: "Use the authenticated file preview or download endpoint." }));
 
 // Routes — Invoicing module
 app.use("/api/health", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/public", publicRoutes);
-app.use("/api/invoices", invoiceRoutes);
-app.use("/api/customers", customerRoutes);
-app.use("/api/bulk-invoices", bulkInvoiceRoutes);
+app.use("/api/company", companyRoutes);
+app.use("/api/invoices", authenticateToken, requireTenant, invoiceRoutes);
+app.use("/api/customers", authenticateToken, requireTenant, customerRoutes);
+app.use("/api/bulk-invoices", authenticateToken, requireTenant, bulkInvoiceRoutes);
 app.use("/api/payments", paymentRoutes);
-app.use("/api/reports", reportRoutes);
-app.use("/api/fraud", fraudRoutes);
-app.use("/api/vaniday-import", vanidayImportRoutes);
-app.use("/api/subscriptions", subscriptionRoutes);
-app.use("/api/subscription-reminders", subscriptionReminderRoutes);
-app.use("/api/finance-reminders", financeReminderRoutes);
-app.use("/api/whatsapp-notifications", whatsappNotificationRoutes);
+app.use("/api/reports", authenticateToken, requireTenant, reportRoutes);
+app.use("/api/fraud", authenticateToken, requireTenant, fraudRoutes);
+app.use("/api/vaniday-import", authenticateToken, requireTenant, vanidayImportRoutes);
+app.use("/api/subscriptions", authenticateToken, requireTenant, subscriptionRoutes);
+app.use("/api/subscription-reminders", authenticateToken, requireTenant, subscriptionReminderRoutes);
+app.use("/api/finance-reminders", authenticateToken, requireTenant, financeReminderRoutes);
+app.use("/api/whatsapp-notifications", authenticateToken, requireTenant, whatsappNotificationRoutes);
 
 // Routes — Payroll module
-app.use("/api/profile", profileRoutes);
-app.use("/api/payslips", payslipRoutes);
-app.use("/api/notifications", notificationRoutes);
-app.use("/api/payroll/admin", adminPayrollRoutes);
-app.use("/api/hr/reports", hrReportRoutes);
-app.use("/api/hr/public-holidays", publicHolidayRoutes);
-app.use("/api/hr", hrRoutes);
-app.use("/api/staff", staffRoutes);
-app.use("/api/payroll/finance", financePayrollRoutes);
-app.use("/api/payroll/users", payrollUserRoutes);
+app.use("/api/profile", authenticateToken, requireTenant, profileRoutes);
+app.use("/api/payslips", authenticateToken, requireTenant, payslipRoutes);
+app.use("/api/notifications", authenticateToken, requireTenant, notificationRoutes);
+app.use("/api/payroll/admin", authenticateToken, requireTenant, adminPayrollRoutes);
+app.use("/api/hr/reports", authenticateToken, requireTenant, hrReportRoutes);
+app.use("/api/hr/public-holidays", authenticateToken, requireTenant, publicHolidayRoutes);
+app.use("/api/hr", authenticateToken, requireTenant, hrRoutes);
+app.use("/api/staff", authenticateToken, requireTenant, staffRoutes);
+app.use("/api/payroll/finance", authenticateToken, requireTenant, financePayrollRoutes);
+app.use("/api/payroll/workflow", authenticateToken, requireTenant, payrollWorkflowRoutes);
+app.use("/api/payroll/users", authenticateToken, requireTenant, payrollUserRoutes);
 app.use("/api/payroll/payments", paymentRoutes);
-app.use("/api/payroll", payrollRoutes);
-app.use("/api/leave", leaveRoutes);
-app.use("/api/claims", claimRoutes);
-app.use("/api/payroll-requests", payrollRequestRoutes);
+app.use("/api/payroll", authenticateToken, requireTenant, payrollRoutes);
+app.use("/api/leave", authenticateToken, requireTenant, leaveRoutes);
+app.use("/api/claims", authenticateToken, requireTenant, claimRoutes);
+app.use("/api/payroll-requests", authenticateToken, requireTenant, payrollRequestRoutes);
 
 // Routes — Admin module
-app.use("/api/admin/users", adminUserRoutes);
-app.use("/api/admin/roles", adminRoleRoutes);
-app.use("/api/admin/invoicing", adminReminderRoutes);
-app.use("/api/admin/invoicing/audit-logs", adminAuditLogRoutes);
-app.use("/api/audit-logs", auditLogRoutes);
+app.use("/api/admin/users", authenticateToken, requireTenant, adminUserRoutes);
+app.use("/api/admin/roles", authenticateToken, requireTenant, adminRoleRoutes);
+app.use("/api/admin/invoicing", authenticateToken, requireTenant, adminReminderRoutes);
+app.use("/api/admin/invoicing/audit-logs", authenticateToken, requireTenant, adminAuditLogRoutes);
+app.use("/api/audit-logs", authenticateToken, requireTenant, auditLogRoutes);
 
 // Routes — Settings module
-app.use("/api/settings", settingsRoutes);
+app.use("/api/settings", authenticateToken, requireTenant, settingsRoutes);
 
 // Routes — Finance Dashboard
-app.use("/api/finance", financeDashboardRoutes);
+app.use("/api/finance", authenticateToken, requireTenant, financeDashboardRoutes);
 
 // 404 handler
 app.use((req, res) => {

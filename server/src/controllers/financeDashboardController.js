@@ -9,6 +9,7 @@
  */
 
 const { pool } = require("../config/db");
+const { currentCompanyId } = require("../services/tenantContext");
 
 // Types used for finance/invoice notifications
 const FINANCE_NOTIFICATION_TYPES = [
@@ -195,10 +196,10 @@ async function getFinanceNotifications(req, res) {
         is_read,
         created_at
       FROM notification
-      WHERE user_id = ?
+      WHERE user_id = ? AND company_id = ?
       ORDER BY created_at DESC
       LIMIT 50
-    `, [userId]);
+    `, [userId, currentCompanyId()]);
 
     res.json({ notifications: rows });
   } catch (error) {
@@ -226,8 +227,8 @@ async function getUnreadCount(req, res) {
     }
 
     const [rows] = await pool.query(
-      "SELECT COUNT(*) AS count FROM notification WHERE user_id = ? AND is_read = 0",
-      [userId]
+      "SELECT COUNT(*) AS count FROM notification WHERE user_id = ? AND company_id = ? AND is_read = 0",
+      [userId, currentCompanyId()]
     );
 
     res.json({ count: Number(rows[0]?.count || 0) });
@@ -250,8 +251,8 @@ async function markNotificationRead(req, res) {
     const userId = req.user?.userId;
 
     await pool.query(
-      "UPDATE notification SET is_read = 1 WHERE notification_id = ? AND user_id = ?",
-      [notificationId, userId]
+      "UPDATE notification SET is_read = 1 WHERE notification_id = ? AND user_id = ? AND company_id = ?",
+      [notificationId, userId, currentCompanyId()]
     );
 
     res.json({ success: true });
@@ -273,8 +274,8 @@ async function markAllNotificationsRead(req, res) {
     const userId = req.user?.userId;
 
     await pool.query(
-      "UPDATE notification SET is_read = 1 WHERE user_id = ? AND is_read = 0",
-      [userId]
+      "UPDATE notification SET is_read = 1 WHERE user_id = ? AND company_id = ? AND is_read = 0",
+      [userId, currentCompanyId()]
     );
 
     res.json({ success: true });

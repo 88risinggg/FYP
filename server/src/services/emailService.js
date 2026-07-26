@@ -87,7 +87,7 @@ async function sendAuthOtpEmail({ to, otp, purpose }) {
   });
 }
 
-async function sendAccountSetupEmail({ to, name, setupUrl }) {
+async function sendAccountSetupEmail({ to, name, setupUrl, temporaryPassword }) {
   const transporter = createTransporter();
   return transporter.sendMail({
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
@@ -96,10 +96,12 @@ async function sendAccountSetupEmail({ to, name, setupUrl }) {
     text: [
       `Hello ${name || "there"},`,
       "Your PayNivo account has been approved by an administrator.",
+      temporaryPassword ? `Sign in with your email address and this one-time temporary password: ${temporaryPassword}` : null,
+      temporaryPassword ? "After signing in, you must replace the temporary password before accessing the workspace." : null,
       `Use this one-time link to accept the Terms and Privacy Policy and create your password: ${setupUrl}`,
       "The link expires in 24 hours and cannot be used after your password has been created.",
       "If you were not expecting this account, contact your administrator."
-    ].join("\n\n")
+    ].filter(Boolean).join("\n\n")
   });
 }
 

@@ -6,7 +6,9 @@ jest.mock("../config/db", () => ({
 jest.mock("../services/auditService", () => ({ writeAuditLog: jest.fn() }));
 
 const { pool } = require("../config/db");
+const { runWithTenant } = require("../services/tenantContext");
 const { listManagedUsers } = require("./payrollUserModel");
+const listTenantUsers = () => runWithTenant(2, () => listManagedUsers());
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -21,7 +23,7 @@ test("combines linked accounts and unlinked staff without a UNION", async () => 
       staff_email: "aaron@example.com", employment_status: 1
     }]]);
 
-  const users = await listManagedUsers();
+  const users = await listTenantUsers();
 
   expect(pool.query).toHaveBeenCalledTimes(2);
   expect(pool.query.mock.calls[0][0]).not.toMatch(/UNION/i);
@@ -37,11 +39,11 @@ test("sorts pending activation requests before names", async () => {
     ]])
     .mockResolvedValueOnce([[]]);
 
-  const users = await listManagedUsers();
+  const users = await listTenantUsers();
   expect(users.map((user) => user.user_id)).toEqual([2, 1]);
 });
 
 test("returns an empty collection when both sources are empty", async () => {
   pool.query.mockResolvedValueOnce([[]]).mockResolvedValueOnce([[]]);
-  await expect(listManagedUsers()).resolves.toEqual([]);
+  await expect(listTenantUsers()).resolves.toEqual([]);
 });

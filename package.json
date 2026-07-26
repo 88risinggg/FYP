@@ -5,7 +5,11 @@
   "scripts": {
     "client": "npm run dev --prefix client",
     "server": "npm run dev --prefix server",
-    "dev": "concurrently \"npm run server\" \"npm run client\""
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "db:multi-tenant": "npm run db:multi-tenant --prefix server",
+    "db:encrypt-tenants": "npm run db:encrypt-tenants --prefix server",
+    "verify:multi-tenant": "npm run verify:multi-tenant --prefix server",
+    "setup:platform-operator": "npm run setup:platform-operator --prefix server"
   },
   "repository": {
     "type": "git",

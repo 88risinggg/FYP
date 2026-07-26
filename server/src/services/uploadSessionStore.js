@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { currentCompanyId } = require("./tenantContext");
 
 class UploadSessionStore {
   /**
@@ -29,6 +30,7 @@ class UploadSessionStore {
     this.sessions.set(sessionId, {
       validationResult,
       userId,
+      companyId: currentCompanyId(),
       createdAt: Date.now(),
     });
 
@@ -57,7 +59,7 @@ class UploadSessionStore {
     }
 
     // Check user ownership — return null without revealing whether session exists
-    if (session.userId !== userId) {
+    if (session.userId !== userId || Number(session.companyId) !== currentCompanyId()) {
       return null;
     }
 

@@ -16,6 +16,7 @@ describe("central audit service", () => {
     const connection = { query: jest.fn().mockResolvedValue([{ insertId: 1 }]) };
     await writeAuditLog({
       connection,
+      companyId: 2,
       module: "Payroll",
       activityType: "Payroll Configuration",
       action: "Updated CPF ceiling",
@@ -31,7 +32,7 @@ describe("central audit service", () => {
     });
 
     const [, values] = connection.query.mock.calls[0];
-    expect(values).toEqual([7, "Admin User", "Payroll", "Payroll Configuration", "Updated CPF ceiling",
+    expect(values).toEqual([2, 7, "Admin User", "Payroll", "Payroll Configuration", "Updated CPF ceiling",
       "cpf_monthly_wage_ceiling", "Success", "7000", "8000", "127.0.0.1", "test-agent", "payroll_setting"]);
   });
 });

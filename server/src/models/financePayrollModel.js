@@ -12,6 +12,7 @@ const {
   calculateEmployeePayroll
 } = require("../services/statutoryPayrollEngine");
 const { getActivePayrollRules } = require("../services/payrollRuleConfigService");
+const { currentCompanyId } = require("../services/tenantContext");
 const { postPayrollRecoveries } = require("../services/payrollRecoveryPostingService");
 const { getUnpaidLeaveDaysForMonth, calculateUnpaidLeaveDeduction } = require("../controllers/leaveController");
 
@@ -162,6 +163,7 @@ async function buildEmployeeFromPayroll(row, paymentRecipient = {}) {
 }
 
 async function getPayrollRows(connection, month, year) {
+  const companyId = currentCompanyId();
   const [rows] = await connection.execute(
     `SELECT
       p.*, s.employee_id, s.employee_code, s.name, s.email, s.base_salary, s.department_name,
@@ -179,9 +181,10 @@ async function getPayrollRows(connection, month, year) {
      LEFT JOIN payroll_run pr ON pr.payroll_run_id = p.payroll_run_id
      LEFT JOIN payroll_configuration pc
        ON pc.configuration_id = pr.configuration_id AND pc.configuration_type = 'rules_snapshot'
-     WHERE p.payroll_month = ? AND p.payroll_year = ?
+     WHERE p.payroll_month = ? AND p.payroll_year = ? AND p.company_id = ?
+       AND s.company_id = ? AND pr.company_id = ?
      ORDER BY s.name`,
-    [month, year]
+    [month, year, companyId, companyId, companyId]
   );
   return rows;
 }
@@ -230,7 +233,7 @@ async function listFinancePayrollRuns() {
   const activeRulesHash = getRulesHash(await getActivePayrollRules());
   // Get distinct runs by month/year
   const [periods] = await pool.execute(
-    `SELECT DISTINCT payroll_month, payroll_year FROM payroll ORDER BY payroll_year DESC, payroll_month DESC`
+    `SELECT DISTINCT payroll_month, payroll_year FROM payroll WHERE company_id=? ORDER BY payroll_year DESC, payroll_month DESC`, [currentCompanyId()]
   );
   const result = [];
   for (const period of periods) {
@@ -253,8 +256,8 @@ async function getPayrollRunComplianceErrors(runId) {
      LEFT JOIN payroll_run pr ON pr.payroll_run_id = p.payroll_run_id
      LEFT JOIN payroll_configuration pc
        ON pc.configuration_id = pr.configuration_id AND pc.configuration_type = 'rules_snapshot'
-     WHERE p.payroll_month = ? AND p.payroll_year = ?`,
-    [month, year]
+     WHERE p.payroll_month = ? AND p.payroll_year = ? AND p.company_id=? AND s.company_id=? AND pr.company_id=?`,
+    [month, year, currentCompanyId(), currentCompanyId(), currentCompanyId()]
   );
   if (!rows.length) return [];
   const stored = parseJson(rows[0].run_configuration_json || rows[0].configuration_json, {});
@@ -309,16 +312,17 @@ async function getPayrollRunComplianceErrors(runId) {
 }
 
 async function getQueuedClaims(connection, month, year) {
+  const companyId = currentCompanyId();
   const [rows] = await connection.execute(
     `SELECT record_id, staff_employee_id, claim_category, amount, expense_date
      FROM claims_and_loans
      WHERE type = 'expense_claim'
-       AND status = 'payroll_approved'
+       AND status = 'payroll_approved' AND company_id=?
        AND payroll_inclusion_status = 'queued'
        AND ((payroll_target_month = ? AND payroll_target_year = ?)
          OR (payroll_target_month IS NULL AND payroll_target_year IS NULL))
      FOR UPDATE`,
-    [month, year]
+    [companyId, month, year]
   );
   return rows;
 }
@@ -329,10 +333,10 @@ async function getApprovedRecoveries(connection) {
       `SELECT record_id, type, staff_employee_id, monthly_installment, outstanding_balance
        FROM claims_and_loans
        WHERE type IN ('loan', 'advance_request')
-         AND status IN ('approved', 'released', 'finance_approved')
+         AND status IN ('approved', 'released', 'finance_approved') AND company_id=?
          AND COALESCE(monthly_installment, 0) > 0
          AND COALESCE(outstanding_balance, 0) > 0`
-    );
+    , [currentCompanyId()]);
     return rows;
   } catch {
     return [];
@@ -341,8 +345,8 @@ async function getApprovedRecoveries(connection) {
 
 async function getApprovedAdjustmentOverrides(connection, payrollRunId) {
   const [rows] = await connection.execute(
-    "SELECT staff_employee_id, configuration_json FROM payroll WHERE payroll_run_id = ?",
-    [payrollRunId]
+    "SELECT staff_employee_id, configuration_json FROM payroll WHERE payroll_run_id = ? AND company_id=?",
+    [payrollRunId, currentCompanyId()]
   );
   const overrides = new Map();
   for (const row of rows) {
@@ -354,17 +358,50 @@ async function getApprovedAdjustmentOverrides(connection, payrollRunId) {
   return overrides;
 }
 
+const adjustmentExceptionCode = (message) => {
+  const text = String(message || "").toLowerCase();
+  if (text.includes("date of birth")) return "DOB_REQUIRED";
+  if (text.includes("bank")) return "BANK_DETAILS_REQUIRED";
+  if (text.includes("department")) return "DEPARTMENT_REQUIRED";
+  if (text.includes("base salary")) return "BASE_SALARY_REQUIRED";
+  if (text.includes("cpf scheme") || text.includes("manual review")) return "CPF_MANUAL_REVIEW";
+  return null;
+};
+
+function reconcileAdjustmentProposals(proposals, complianceExceptions, recalculatedAt) {
+  const currentBlockerCodes = new Set((complianceExceptions || []).map(adjustmentExceptionCode).filter(Boolean));
+  return (proposals || []).map((proposal) => {
+    if (proposal.status !== "Pending") return proposal;
+    const isSourceBlocker = proposal.proposalType === "source_blocker" || !proposal.actionable;
+    if (isSourceBlocker && !currentBlockerCodes.has(proposal.exceptionCode)) {
+      return {
+        ...proposal,
+        status: "Resolved",
+        resolvedAt: recalculatedAt,
+        resolutionReason: "The source record was corrected and payroll recalculation confirmed that this blocker no longer applies."
+      };
+    }
+    return {
+      ...proposal,
+      status: "Stale",
+      staleAt: recalculatedAt,
+      staleReason: "Payroll was recalculated. Regenerate suggestions if this exception still requires Finance action."
+    };
+  });
+}
+
 async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail }) {
   await ensureFinancePayrollTables();
   const activeRules = await getActivePayrollRules();
   const connection = await pool.getConnection();
+  const companyId = currentCompanyId();
   try {
     await connection.beginTransaction();
     const [[existing]] = await connection.execute(
       `SELECT
-         EXISTS(SELECT 1 FROM payroll WHERE payroll_month = ? AND payroll_year = ?) AS payroll_exists,
-         (SELECT payroll_run_id FROM payroll_run WHERE payroll_month = ? AND payroll_year = ? LIMIT 1) AS empty_run_id`,
-      [month, year, month, year]
+         EXISTS(SELECT 1 FROM payroll WHERE payroll_month = ? AND payroll_year = ? AND company_id=?) AS payroll_exists,
+         (SELECT payroll_run_id FROM payroll_run WHERE payroll_month = ? AND payroll_year = ? AND company_id=? LIMIT 1) AS empty_run_id`,
+      [month, year, companyId, month, year, companyId]
     );
     if (Number(existing.payroll_exists) === 1) {
       const error = new Error("A payroll run already exists for this period.");
@@ -376,8 +413,9 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
       `SELECT employee_id, employee_code, name, email, date_of_birth, base_salary,
               bank, account_no, race, religion, status, department_name
        FROM staff
-       WHERE status = 1
+       WHERE status = 1 AND company_id=?
        ORDER BY name`
+      ,[companyId]
     );
     if (!staffRows.length) {
       await connection.rollback();
@@ -401,10 +439,10 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
     const rulesSnapshot = JSON.stringify(activeRules);
     const [configurationResult] = await connection.execute(
       `INSERT INTO payroll_configuration
-        (configuration_type, configuration_key, configuration_value, description, updated_by)
-       VALUES ('rules_snapshot', SHA2(?, 256), ?, 'Immutable rules used by a payroll run', ?)
+        (company_id, configuration_type, configuration_key, configuration_value, description, updated_by)
+       VALUES (?, 'rules_snapshot', SHA2(?, 256), ?, 'Immutable rules used by a payroll run', ?)
        ON DUPLICATE KEY UPDATE configuration_id = LAST_INSERT_ID(configuration_id)`,
-      [rulesSnapshot, rulesSnapshot, userId || null]
+      [companyId, rulesSnapshot, rulesSnapshot, userId || null]
     );
     let payrollRunId = Number(existing.empty_run_id || 0);
     if (payrollRunId) {
@@ -418,9 +456,9 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
     } else {
       const [runResult] = await connection.execute(
         `INSERT INTO payroll_run
-          (payroll_month, payroll_year, status, configuration_id, configuration_json, created_at, updated_at)
-         VALUES (?, ?, 'Submitted for Finance Review', ?, ?, NOW(), NOW())`,
-        [month, year, configurationResult.insertId, JSON.stringify(configuration)]
+          (company_id, payroll_month, payroll_year, status, configuration_id, configuration_json, created_at, updated_at)
+         VALUES (?, ?, ?, 'Submitted for Finance Review', ?, ?, NOW(), NOW())`,
+        [companyId, month, year, configurationResult.insertId, JSON.stringify(configuration)]
       );
       payrollRunId = runResult.insertId;
     }
@@ -461,9 +499,9 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
       const [existingPayslip] = await connection.execute(
         `SELECT payroll_id
          FROM payroll
-         WHERE staff_employee_id = ? AND payroll_month = ? AND payroll_year = ?
+         WHERE staff_employee_id = ? AND payroll_month = ? AND payroll_year = ? AND company_id=?
          LIMIT 1`,
-        [staff.employee_id, month, year]
+        [staff.employee_id, month, year, companyId]
       );
       if (existingPayslip.length > 0) {
         continue;
@@ -473,16 +511,16 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
           staff_employee_id, payroll_month, payroll_year, payroll_run_id, gross_salary,
           total_allowances, total_deductions, employee_cpf, employer_cpf, mbmf_amount,
           deduction_breakdown, net_salary, source, payslip_status,
-          run_status, run_created_by, run_created_at, configuration_json
+          run_status, run_created_by, run_created_at, configuration_json, company_id
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'automated_2026', ?,
-          'Submitted for Finance Review', ?, NOW(), ?)`,
+          'Submitted for Finance Review', ?, NOW(), ?, ?)`,
         [
           staff.employee_id, month, year, payrollRunId, calculation.grossSalary,
           calculation.allowanceTotal, calculation.totalDeductions, calculation.cpfEmployee,
           calculation.cpfEmployer, calculation.mbmfAmount, JSON.stringify(breakdown),
           calculation.netSalary,
           calculation.complianceExceptions.length ? "Hold" : "Draft",
-          userId || null, JSON.stringify(configuration)
+          userId || null, JSON.stringify(configuration), companyId
         ]
       );
       if (staffClaims.length) {
@@ -490,8 +528,8 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
           `UPDATE claims_and_loans
            SET payroll_inclusion_status = 'included', included_payroll_id = ?, payroll_included_at = NOW()
            WHERE record_id IN (${staffClaims.map(() => "?").join(",")})
-             AND payroll_inclusion_status = 'queued'`,
-          [payrollResult.insertId, ...staffClaims.map((claim) => claim.record_id)]
+             AND payroll_inclusion_status = 'queued' AND company_id=?`,
+          [payrollResult.insertId, ...staffClaims.map((claim) => claim.record_id), companyId]
         );
       }
     }
@@ -532,10 +570,10 @@ async function recalculateFinancePayrollRun({ runId, userId, userEmail, connecti
     const rulesSnapshot = JSON.stringify(activeRules);
     const [configurationResult] = await connection.execute(
       `INSERT INTO payroll_configuration
-        (configuration_type, configuration_key, configuration_value, description, updated_by)
-       VALUES ('rules_snapshot', SHA2(?, 256), ?, 'Immutable rules used by a recalculated payroll run', ?)
+        (company_id, configuration_type, configuration_key, configuration_value, description, updated_by)
+       VALUES (?, 'rules_snapshot', SHA2(?, 256), ?, 'Immutable rules used by a recalculated payroll run', ?)
        ON DUPLICATE KEY UPDATE configuration_id = LAST_INSERT_ID(configuration_id)`,
-      [rulesSnapshot, rulesSnapshot, userId || null]
+      [currentCompanyId(), rulesSnapshot, rulesSnapshot, userId || null]
     );
     const now = new Date().toISOString();
     const configuration = {
@@ -587,6 +625,11 @@ async function recalculateFinancePayrollRun({ runId, userId, userEmail, connecti
         cpfWageBase: calculation.cpfWageBase,
         sdl: calculation.sdl
       };
+      const financeAdjustments = reconcileAdjustmentProposals(
+        parseJson(row.configuration_json, {}).financeAdjustments || [],
+        calculation.complianceExceptions,
+        now
+      );
       await connection.execute(
         `UPDATE payroll SET gross_salary = ?, total_allowances = ?, total_deductions = ?,
            employee_cpf = ?, employer_cpf = ?, mbmf_amount = ?, deduction_breakdown = ?,
@@ -598,7 +641,7 @@ async function recalculateFinancePayrollRun({ runId, userId, userEmail, connecti
           calculation.cpfEmployee, calculation.cpfEmployer, calculation.mbmfAmount,
           JSON.stringify(breakdown), calculation.netSalary,
           calculation.complianceExceptions.length ? "Hold" : "Draft",
-          JSON.stringify({ ...configuration, financeAdjustments: parseJson(row.configuration_json, {}).financeAdjustments || [] }), row.payroll_id]
+          JSON.stringify({ ...configuration, financeAdjustments }), row.payroll_id]
       );
     }
     await connection.execute(
@@ -685,7 +728,7 @@ async function upsertFinancePayrollRun({ run, userId }) {
        SET run_status = ?,
            run_approved_by = CASE WHEN run_approved_at IS NULL AND ? IS NOT NULL THEN ? ELSE run_approved_by END,
            run_approved_at = COALESCE(run_approved_at, ?), payment_reference = ?, configuration_json = ?
-       WHERE payroll_month = ? AND payroll_year = ?`,
+       WHERE payroll_month = ? AND payroll_year = ? AND company_id=?`,
       [
         run.status,
         databaseApprovedAt,
@@ -693,7 +736,7 @@ async function upsertFinancePayrollRun({ run, userId }) {
         databaseApprovedAt,
         run.bankReference || null,
         JSON.stringify(configuration),
-        month, year
+        month, year, currentCompanyId()
       ]
     );
 
@@ -711,8 +754,8 @@ async function upsertFinancePayrollRun({ run, userId }) {
                WHEN payslip_status IN ('Sent', 'sent_to_staff') AND payslip_file_path IS NOT NULL THEN payslip_sent_at
                ELSE NULL
              END
-         WHERE payroll_month = ? AND payroll_year = ? AND staff_employee_id = ?`,
-        [payslipStatus, month, year, employee.staffEmployeeId]
+         WHERE payroll_month = ? AND payroll_year = ? AND staff_employee_id = ? AND company_id=?`,
+        [payslipStatus, month, year, employee.staffEmployeeId, currentCompanyId()]
       );
     }
     await connection.commit();
@@ -876,6 +919,7 @@ module.exports = {
   getPayrollRunComplianceErrors,
   listFinancePayrollRuns,
   recalculateFinancePayrollRun,
+  _test: { adjustmentExceptionCode, reconcileAdjustmentProposals },
   applyFinancePayrollWorkflowAction,
   upsertFinancePayrollRun
 };

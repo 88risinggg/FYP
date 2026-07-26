@@ -5,7 +5,7 @@ const STAGES = [
   ["approval", "Payroll Approval"],
   ["preparation", "Payment Preparation"],
   ["payment", "Payment Release"],
-  ["payslips", "Payslip Delivery"],
+  ["payslips", "Payslip Delivery (HR)"],
   ["statutory", "Statutory & Ledger"],
   ["reconciliation", "Reconciliation & Reports"]
 ];
@@ -17,7 +17,9 @@ function buildFinanceWorkflowState(run) {
     approved: employees.filter((item) => item.financeStatus === "Approved").length,
     held: employees.filter((item) => item.financeStatus === "Hold").length,
     exceptions: employees.reduce((sum, item) => sum + (item.complianceExceptions?.length || 0), 0),
-    payslipsSent: employees.filter((item) => ["Sent", "sent_to_staff"].includes(item.financeStatus)).length
+    payslipsSent: employees.filter((item) => ["Sent", "sent_to_staff"].includes(item.financeStatus)).length,
+    payslipsFailed: Number(run?.payslipDelivery?.failed || 0),
+    payslipsSkipped: Number(run?.payslipDelivery?.skipped || 0)
   };
   const payrollLocked = Boolean(run?.approvedAt || run?.paymentFileGeneratedAt || run?.paymentSubmittedAt || run?.paidAt);
   const workflow = {
@@ -39,7 +41,8 @@ function buildFinanceWorkflowState(run) {
     if (key === processing) status = "processing";
     if (key === failed) status = "failed";
     if (key === "approval" && !workflow.approval && (counts.held || counts.exceptions)) status = "blocked";
-    return { key, label, status };
+    if (key === "payslips" && counts.payslipsFailed && !workflow.payslips) status = "failed";
+    return { key, label, status, owner: key === "payslips" ? "HR" : "Finance" };
   });
   return {
     runId: run?.id,
@@ -53,6 +56,14 @@ function buildFinanceWorkflowState(run) {
       remaining: Math.max(0, employees.length - Number(run?.paymentRecipientsConfigured || 0))
     },
     paymentProgress: run?.paymentBatch || { total: employees.length, processed: 0, succeeded: 0, failed: 0, remaining: employees.length, status: "Not Started" },
+    payslipProgress: {
+      total: employees.length,
+      sent: counts.payslipsSent,
+      skipped: counts.payslipsSkipped,
+      failed: counts.payslipsFailed,
+      pending: Math.max(0, employees.length - counts.payslipsSent - counts.payslipsSkipped),
+      owner: "HR"
+    },
     blockers: [
       ...(run?.rulesChanged ? [{ code: "RULES_CHANGED", message: "Recalculate using the latest Admin payroll rules." }] : []),
       ...(counts.exceptions ? [{ code: "COMPLIANCE_EXCEPTIONS", message: `${counts.exceptions} compliance exception(s) require review.` }] : []),

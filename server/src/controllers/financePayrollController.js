@@ -10,6 +10,7 @@ const { logAuditEvent, getClientIp, getDeviceInfo } = require("../models/auditLo
 const { validateFinancePayrollRun } = require("../services/financePayrollWorkflow");
 const { generateAndSendPayslip } = require("../services/payslipDeliveryService");
 const { launchPayslipBrowser } = require("../services/payslipPdfService");
+const { notifyRoles } = require("../services/payrollNotificationService");
 const { pool } = require("../config/db");
 const { buildFinanceWorkflowState } = require("../services/financePayrollWorkflowState");
 const { submitModernTreasuryEmployeePayment } = require("../services/modernTreasuryPaymentService");
@@ -44,8 +45,8 @@ async function getFinanceActivity(req, res) {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
-    const where = ["(al.activity_type LIKE 'Payroll%' OR al.activity_type LIKE 'Payslip%')"];
-    const params = [];
+    const where = ["al.company_id = ?", "(al.activity_type LIKE 'Payroll%' OR al.activity_type LIKE 'Payslip%')"];
+    const params = [req.user.companyId];
     if (req.query.startDate) { where.push("DATE(al.created_at) >= ?"); params.push(req.query.startDate); }
     if (req.query.endDate) { where.push("DATE(al.created_at) <= ?"); params.push(req.query.endDate); }
     if (req.query.eventType) { where.push("al.activity_type = ?"); params.push(req.query.eventType); }
@@ -67,7 +68,7 @@ async function getFinanceActivity(req, res) {
        WHERE ${whereSql} ORDER BY al.created_at DESC, al.audit_log_id DESC LIMIT ? OFFSET ?`,
       [...params, limit, (page - 1) * limit]
     );
-    const [types] = await pool.query(`SELECT DISTINCT al.activity_type AS value FROM audit_logs al WHERE ${where[0]} ORDER BY al.activity_type`);
+    const [types] = await pool.query(`SELECT DISTINCT al.activity_type AS value FROM audit_logs al WHERE al.company_id=? AND ${where[1]} ORDER BY al.activity_type`, [req.user.companyId]);
     return res.json({ logs: rows, total: Number(count.total), page, limit, eventTypes: types.map((row) => row.value).filter(Boolean) });
   } catch (error) { return res.status(500).json({ message: "Unable to load Finance payroll activity." }); }
 }
@@ -76,9 +77,9 @@ async function getPayslipPeriodSummary(req, res) {
   try {
     const month = Number(req.query.month);
     const year = Number(req.query.year);
-    const params = [];
-    let where = "1=1";
-    if (month && year) { where = "p.payroll_month = ? AND p.payroll_year = ?"; params.push(month, year); }
+    const params = [req.user.companyId];
+    let where = "p.company_id = ?";
+    if (month && year) { where += " AND p.payroll_month = ? AND p.payroll_year = ?"; params.push(month, year); }
     const [rows] = await pool.query(
       `SELECT p.payroll_month AS month, p.payroll_year AS year, COUNT(*) AS total,
        SUM(LOWER(p.payslip_status) = 'draft') AS prepared,
@@ -375,6 +376,9 @@ async function getRunWorkflow(req, res) {
 
 async function runWorkflowAction(req, res) {
   const action = req.workflowAction || req.params.action;
+  if (action === "send-payslips") {
+    return res.status(403).json({ code: "ACTION_OWNED_BY_HR", message: "Payslip delivery is owned by HR. Finance can monitor its progress in the payroll-run tracker." });
+  }
   const actionReference = `${req.params.runId}:${action}:${Date.now()}`;
   try {
     let payload = { ...(req.body || {}), actor: req.user?.email };
@@ -431,6 +435,9 @@ async function runWorkflowAction(req, res) {
       "send-payslips": "payslips-completed", "record-statutory-ledger": "statutory-ledger"
     })[action] || action;
     const run = await applyFinancePayrollWorkflowAction({ runId: req.params.runId, action: modelAction, payload, userId: req.user?.userId });
+    if (action === "confirm-payment") {
+      await notifyRoles("HR", { type: "payslips_ready", title: "Payroll payslips ready for delivery", message: `Finance confirmed payment for ${run.id}. HR can now preview and deliver employee payslips.`, entityType: "payroll_run", entityId: run.id, actionPath: "/dashboard/payroll/hr/payslips" });
+    }
     await logAuditEvent({ userId: req.user?.userId, userName: req.user?.email, activityType: "Payroll Workflow", actionDescription: `Completed ${action} for ${req.params.runId}`, affectedRecord: req.params.runId, status: "Success", ipAddress: getClientIp(req), deviceInfo: getDeviceInfo(req) });
     return res.json(workflowResponse(run, actionReference));
   } catch (error) {

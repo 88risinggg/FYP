@@ -38,6 +38,19 @@ function ActionProgress({ state, onClose }) {
   return <div className="fixed inset-0 z-[1200] grid place-items-center bg-[#251E1F]/45 p-4"><section role="dialog" aria-modal="true" aria-label="Account action progress" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-center gap-3">{state.status === "running" ? <Loader2 className="animate-spin text-[#F38978]"/> : state.status === "completed" ? <CheckCircle2 className="text-emerald-600"/> : <X className="text-red-600"/>}<div><h3 className="font-semibold text-[#251E1F]">{state.title}</h3><p className="text-sm text-[#7b6660]">{state.phase}</p></div></div><div className="mt-5 flex justify-between text-xs font-semibold"><span>{state.status === "running" ? "Processing" : state.status === "completed" ? "Completed" : "Action failed"}</span><span>{state.progress}%</span></div><div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[#f0d2ca]"><div className={`h-full rounded-full transition-all duration-500 motion-reduce:transition-none ${tone}`} style={{ width: `${state.progress}%` }}/></div>{state.detail ? <p className={`mt-4 rounded-xl p-3 text-sm ${state.status === "failed" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{state.detail}</p> : null}{state.status !== "running" ? <div className="mt-5 flex justify-end"><button type="button" onClick={onClose} className="rounded-xl border border-[#f0d2ca] px-4 py-2 text-sm font-semibold">Close</button></div> : null}</section></div>;
 }
 
+function StaffImportPreview({ preview, busy, onCancel, onCommit }) {
+  if (!preview) return null;
+  return <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-[#251E1F]/45 p-4" onMouseDown={() => { if (!busy) onCancel(); }}>
+    <section role="dialog" aria-modal="true" aria-labelledby="import-staff-title" onMouseDown={(event) => event.stopPropagation()} className="app-panel max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <header className="flex items-start justify-between border-b border-[#f0d2ca] p-6"><div><p className="text-xs font-semibold uppercase tracking-wider text-[#F38978]">Excel import preview</p><h3 id="import-staff-title" className="mt-1 text-xl font-semibold text-[#251E1F]">Review employees before import</h3><p className="mt-1 text-sm text-[#7b6660]">Read from {preview.worksheet ? `“${preview.worksheet}”, headings on row ${preview.headerRow}` : "the uploaded workbook"}. Valid rows create inactive Staff accounts for Admin activation.</p></div><button type="button" disabled={Boolean(busy)} onClick={onCancel} aria-label="Close import preview"><X size={20}/></button></header>
+      <div className="grid gap-3 border-b border-[#f0d2ca] bg-[#fff8f5] p-5 sm:grid-cols-3"><div className="rounded-xl bg-white p-4"><span className="text-xs text-[#7b6660]">Rows found</span><strong className="block text-2xl">{preview.total}</strong></div><div className="rounded-xl bg-emerald-50 p-4 text-emerald-700"><span className="text-xs">Ready to import</span><strong className="block text-2xl">{preview.valid}</strong></div><div className="rounded-xl bg-red-50 p-4 text-red-700"><span className="text-xs">Needs correction</span><strong className="block text-2xl">{preview.invalid}</strong></div></div>
+      <div className="max-h-[45vh] overflow-auto"><table className="min-w-full text-left text-sm"><thead className="sticky top-0 bg-white text-xs uppercase text-[#7b6660]"><tr><th className="px-4 py-3">Excel row</th><th className="px-4 py-3">Employee</th><th className="px-4 py-3">Department</th><th className="px-4 py-3">Validation</th></tr></thead><tbody className="divide-y divide-[#f0d2ca]">{preview.rows.map((row) => <tr key={row.rowNumber}><td className="px-4 py-3">{row.rowNumber}</td><td className="px-4 py-3"><strong>{row.name || "Missing name"}</strong><small className="block text-[#7b6660]">{row.email || "Missing email"}</small></td><td className="px-4 py-3">{row.department || "Not provided"}</td><td className="px-4 py-3">{row.valid ? <span className="text-emerald-700">Ready</span> : <span className="text-red-700">{row.error}</span>}</td></tr>)}</tbody></table></div>
+      <div className="border-t border-[#f0d2ca] bg-amber-50 px-6 py-3 text-xs text-amber-800"><strong>Required headings:</strong> Name, Email, Department, Hire Date, Date of Birth, Race, Religion, Base Salary, Bank, and Account Number. Employee Code and Phone are optional.</div>
+      <footer className="flex justify-end gap-3 p-5"><button type="button" disabled={Boolean(busy)} onClick={onCancel} className="rounded-xl border border-[#f0d2ca] px-4 py-2.5 text-sm font-semibold">Cancel</button><button type="button" disabled={!preview.valid || Boolean(busy)} onClick={onCommit} className="primary-button inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold">{busy === "import-commit" ? <Loader2 size={16} className="animate-spin"/> : <FileSpreadsheet size={16}/>}Import {preview.valid} valid record(s)</button></footer>
+    </section>
+  </div>;
+}
+
 function initials(record) {
   return String(record.staff_name || record.name || "User")
     .split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
@@ -81,7 +94,7 @@ function getRoleVisuals(record) {
   return roleVisuals[key] || roleVisuals.unlinked;
 }
 
-function AdminUserDirectory({ data, loading, busy, error, success, temporaryPassword, load, review, resendSetup, deleteAccount, accountAction, actionProgress, closeProgress }) {
+function AdminUserDirectory({ data, loading, busy, error, success, temporaryPassword, load, review, resendSetup, deleteAccount, accountAction, actionProgress, closeProgress, importInputRef, previewImport, exportStaff }) {
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("All Roles");
   const [departmentFilter, setDepartmentFilter] = useState("All Departments");
@@ -138,7 +151,12 @@ function AdminUserDirectory({ data, loading, busy, error, success, temporaryPass
   return <section className="admin-user-management">
     <header className="admin-user-management__header">
       <div><h2>User Management</h2><p>Manage employee account access, permissions and activation without exposing private HR or payroll data.</p></div>
-      <button type="button" onClick={load} className="admin-user-management__secondary"><RefreshCw size={16}/>Refresh</button>
+      <div className="flex flex-wrap justify-end gap-2">
+        <input ref={importInputRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={(event) => previewImport(event.target.files?.[0])}/>
+        <button type="button" disabled={Boolean(busy)} onClick={() => importInputRef.current?.click()} className="admin-user-management__secondary"><Upload size={16}/>Import employees</button>
+        <button type="button" disabled={Boolean(busy)} onClick={exportStaff} className="admin-user-management__secondary"><Download size={16}/>{busy === "export" ? "Exporting..." : "Export Excel"}</button>
+        <button type="button" onClick={load} className="admin-user-management__secondary"><RefreshCw size={16}/>Refresh</button>
+      </div>
     </header>
 
     {error ? <div className="admin-user-management__alert admin-user-management__alert--error">{error}</div> : null}
@@ -355,21 +373,30 @@ export default function PayrollUserManagement({ role, defaultShowHire = false })
     finally { setBusy(""); }
   };
 
-  if (role === "Admin") return <AdminUserDirectory
-    data={data} loading={loading} busy={busy} error={error} success={success}
-    temporaryPassword={temporaryPassword} load={load} review={review} resendSetup={resendSetup} deleteAccount={deleteAccount} accountAction={accountAction} actionProgress={actionProgress} closeProgress={() => setActionProgress((current) => ({ ...current, open: false }))}
-  />;
+  if (role === "Admin") return <>
+    <AdminUserDirectory
+      data={data} loading={loading} busy={busy} error={error} success={success}
+      temporaryPassword={temporaryPassword} load={load} review={review} resendSetup={resendSetup}
+      deleteAccount={deleteAccount} accountAction={accountAction} actionProgress={actionProgress}
+      closeProgress={() => setActionProgress((current) => ({ ...current, open: false }))}
+      importInputRef={importInputRef} previewImport={previewImport} exportStaff={exportStaff}
+    />
+    <StaffImportPreview
+      preview={importPreview} busy={busy} onCommit={commitImport}
+      onCancel={() => { setImportPreview(null); setImportFile(null); }}
+    />
+  </>;
 
   return <section className="space-y-5">
     <header className="flex flex-col gap-4 rounded-2xl border border-[#f0d2ca] bg-gradient-to-r from-white to-[#fff8f5] p-5 sm:flex-row sm:items-center sm:justify-between">
-      <div><h2 className="text-2xl font-semibold text-[#251E1F]">Staff Management</h2>
-        <p className="mt-2 text-sm text-[#7b6660]">Manage staff records, payroll details, PayNivo access, and Admin activation from one directory.</p></div>
+      <div><h2 className="text-2xl font-semibold text-[#251E1F]">{role === "Admin" ? "User & Employee Onboarding" : "Staff Management"}</h2>
+        <p className="mt-2 text-sm text-[#7b6660]">{role === "Admin" ? "Import the initial employee directory, create inactive accounts, and manage tenant-scoped access from one place." : "Manage staff records, payroll details, PayNivo access, and Admin activation from one directory."}</p></div>
       <div className="flex flex-wrap gap-2">
         <input ref={importInputRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={(event) => previewImport(event.target.files?.[0])}/>
         <button type="button" disabled={Boolean(busy)} onClick={() => importInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white px-4 py-2.5 text-sm font-semibold"><Upload size={16}/>Import Excel</button>
         <button type="button" disabled={Boolean(busy)} onClick={exportStaff} className="inline-flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white px-4 py-2.5 text-sm font-semibold"><Download size={16}/>{busy === "export" ? "Exporting..." : "Export Excel"}</button>
         <button type="button" onClick={load} className="inline-flex items-center gap-2 rounded-xl border border-[#f0d2ca] bg-white px-4 py-2.5 text-sm font-semibold"><RefreshCw size={16}/>Refresh</button>
-        {role === "HR" ? <button type="button" onClick={() => setShowHire(true)} className="primary-button inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold"><Plus size={16}/>Hire staff &amp; create user</button> : null}
+        {["Admin", "HR"].includes(role) ? <button type="button" onClick={() => setShowHire(true)} className="primary-button inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold"><Plus size={16}/>{role === "Admin" ? "Add employee & create user" : "Hire staff & create user"}</button> : null}
       </div>
     </header>
     {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
@@ -400,7 +427,7 @@ export default function PayrollUserManagement({ role, defaultShowHire = false })
     </div>
 
     {importPreview ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#251E1F]/45 p-4" onMouseDown={() => { if (!busy) { setImportPreview(null); setImportFile(null); } }}><section role="dialog" aria-modal="true" aria-labelledby="import-staff-title" onMouseDown={(event) => event.stopPropagation()} className="app-panel max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl">
-      <header className="flex items-start justify-between border-b border-[#f0d2ca] p-6"><div><p className="text-xs font-semibold uppercase tracking-wider text-[#F38978]">Excel import preview</p><h3 id="import-staff-title" className="mt-1 text-xl font-semibold text-[#251E1F]">Review staff records before import</h3><p className="mt-1 text-sm text-[#7b6660]">Valid rows create inactive Staff accounts and are submitted to Admin for activation.</p></div><button type="button" disabled={Boolean(busy)} onClick={() => { setImportPreview(null); setImportFile(null); }}><X size={20}/></button></header>
+      <header className="flex items-start justify-between border-b border-[#f0d2ca] p-6"><div><p className="text-xs font-semibold uppercase tracking-wider text-[#F38978]">Excel import preview</p><h3 id="import-staff-title" className="mt-1 text-xl font-semibold text-[#251E1F]">Review staff records before import</h3><p className="mt-1 text-sm text-[#7b6660]">Read from {importPreview.worksheet ? `“${importPreview.worksheet}”, headings on row ${importPreview.headerRow}` : "the uploaded workbook"}. Valid rows create inactive Staff accounts and are submitted to Admin for activation.</p></div><button type="button" disabled={Boolean(busy)} onClick={() => { setImportPreview(null); setImportFile(null); }}><X size={20}/></button></header>
       <div className="grid gap-3 border-b border-[#f0d2ca] bg-[#fff8f5] p-5 sm:grid-cols-3"><div className="rounded-xl bg-white p-4"><span className="text-xs text-[#7b6660]">Rows found</span><strong className="block text-2xl">{importPreview.total}</strong></div><div className="rounded-xl bg-emerald-50 p-4 text-emerald-700"><span className="text-xs">Ready to import</span><strong className="block text-2xl">{importPreview.valid}</strong></div><div className="rounded-xl bg-red-50 p-4 text-red-700"><span className="text-xs">Needs correction</span><strong className="block text-2xl">{importPreview.invalid}</strong></div></div>
       <div className="max-h-[45vh] overflow-auto"><table className="min-w-full text-left text-sm"><thead className="sticky top-0 bg-white text-xs uppercase text-[#7b6660]"><tr><th className="px-4 py-3">Excel row</th><th className="px-4 py-3">Employee</th><th className="px-4 py-3">Department</th><th className="px-4 py-3">Validation</th></tr></thead><tbody className="divide-y divide-[#f0d2ca]">{importPreview.rows.map((row) => <tr key={row.rowNumber}><td className="px-4 py-3">{row.rowNumber}</td><td className="px-4 py-3"><strong>{row.name || "Missing name"}</strong><small className="block text-[#7b6660]">{row.email || "Missing email"}</small></td><td className="px-4 py-3">{row.department || "Not provided"}</td><td className="px-4 py-3">{row.valid ? <span className="text-emerald-700">Ready</span> : <span className="text-red-700">{row.error}</span>}</td></tr>)}</tbody></table></div>
       <div className="border-t border-[#f0d2ca] bg-amber-50 px-6 py-3 text-xs text-amber-800"><strong>Required headings:</strong> Name, Email, Department, Hire Date, Date of Birth, Race, Religion, Base Salary, Bank, and Account Number. Employee Code and Phone are optional.</div>

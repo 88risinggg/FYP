@@ -14,7 +14,10 @@ import {
   LayoutDashboard,
   PlayCircle,
   Upload,
-  Users
+  Users,
+  ShieldCheck,
+  RefreshCw,
+  X
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -30,6 +33,7 @@ import PayrollUserManagement from "../../components/payroll/PayrollUserManagemen
 import PayrollNotificationsView from "../../components/payroll/PayrollNotificationsView.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
 import { buildVanidayPayslipHtml } from "../../utils/vanidayPayslipTemplate.js";
+import { getEffectivePayrollRules } from "../../services/adminPayrollService.js";
 
 const pageTitle = "Automated Payroll System – HR Payroll Upload & Payslip Generation";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
@@ -117,7 +121,8 @@ const payrollSidebarSections = [
     label: "PAYROLL",
     items: [
       { label: "Payroll Upload", icon: Upload, path: "/dashboard/payroll/hr/upload" },
-      { label: "Payroll Runs", icon: PlayCircle, path: "/dashboard/payroll/hr/payroll-runs" }
+      { label: "Payroll Runs", icon: PlayCircle, path: "/dashboard/payroll/hr/payroll-runs" },
+      { label: "Payslip Delivery", icon: Send, path: "/dashboard/payroll/hr/payslips" }
     ]
   },
   {
@@ -142,7 +147,7 @@ const payrollSidebarSections = [
   {
     label: "MONITORING & REPORTS",
     items: [
-      { label: "Payslips", icon: FileText, path: "/dashboard/payroll/hr/payslips" },
+      { label: "Payroll Policies & Sources", icon: ShieldCheck, path: "/dashboard/payroll/hr/payroll-policies" },
       { label: "Reports", icon: BarChart3, path: "/dashboard/payroll/hr/reports" },
       { label: "Notifications", icon: Bell, path: "/dashboard/payroll/hr/notifications" }
     ]
@@ -159,7 +164,8 @@ const routeHeadings = {
   "/dashboard/payroll/hr/public-holidays": "Public Holidays",
   "/dashboard/payroll/hr/loans": "Loan Management",
   "/dashboard/payroll/hr/claims": "Claim Management",
-  "/dashboard/payroll/hr/payslips": "Payslips",
+  "/dashboard/payroll/hr/payslips": "Payslip Delivery",
+  "/dashboard/payroll/hr/payroll-policies": "Payroll Policies & Sources",
   "/dashboard/payroll/hr/reports": "Reports",
   "/dashboard/payroll/hr/notifications": "Notifications"
 };
@@ -1761,6 +1767,59 @@ function PayrollUploadView() {
   );
 }
 
+const HR_SELECTED_RUN_KEY = "hrPayrollSelectedRunId";
+
+function SharedPayrollRunTracker({ workflow, run }) {
+  const stages = workflow?.stages || [];
+  return <nav aria-label="Shared payroll run progress" className="app-panel rounded-2xl p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold text-[#251E1F]">Shared payroll run progress</h3><p className="text-xs text-[#7b6660]">{run?.id || "Select a payroll run"}</p></div><span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Live shared state</span></div><ol className="mt-3 flex min-w-max items-center overflow-x-auto pb-2">{stages.map((stage, index) => <li key={stage.key} className="flex items-center"><div className={`flex w-40 items-center gap-2 rounded-xl border px-3 py-2 transition motion-reduce:transition-none ${stage.status === "completed" ? "border-emerald-200 bg-emerald-50" : stage.status === "failed" || stage.status === "blocked" ? "border-red-200 bg-red-50" : stage.status === "current" || stage.status === "processing" ? "border-[#F38978] bg-[#F38978]/10" : "border-[#f0d2ca] bg-white"}`}><span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${stage.status === "completed" ? "bg-emerald-600 text-white" : stage.status === "failed" || stage.status === "blocked" ? "bg-red-500 text-white" : stage.status === "current" || stage.status === "processing" ? "bg-[#F38978] text-white motion-safe:animate-pulse" : "bg-[#f0d2ca] text-[#7b6660]"}`}>{stage.status === "completed" ? "✓" : stage.status === "failed" || stage.status === "blocked" ? "!" : index + 1}</span><span className="min-w-0"><strong className="block truncate text-xs">{stage.label}</strong><small className="capitalize text-[#7b6660]">{stage.status}{stage.owner ? ` · ${stage.owner}` : ""}</small></span></div>{index < stages.length - 1 ? <span className={`h-1 w-7 ${stage.status === "completed" ? "bg-emerald-500" : "bg-[#f0d2ca]"}`}/> : null}</li>)}</ol></nav>;
+}
+
+function HRPayrollRunWorkflowView({ deliveryMode = false }) {
+  const session = getStoredSession();
+  const [runs, setRuns] = useState([]);
+  const [selectedId, setSelectedId] = useState(() => sessionStorage.getItem(HR_SELECTED_RUN_KEY) || "");
+  const [state, setState] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [preview, setPreview] = useState(null);
+  const headers = { Authorization: `Bearer ${session?.token || ""}` };
+
+  const loadRuns = async () => {
+    const response = await fetch(`${API_BASE_URL}/api/payroll/workflow/runs`, { headers });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.message || "Unable to load payroll runs.");
+    const values = body.runs || [];
+    setRuns(values);
+    const next = values.some((run) => run.id === selectedId) ? selectedId : values[0]?.id || "";
+    if (next !== selectedId) setSelectedId(next);
+    return next;
+  };
+  const loadWorkflow = async (runId) => {
+    if (!runId) return;
+    const response = await fetch(`${API_BASE_URL}/api/payroll/workflow/runs/${encodeURIComponent(runId)}`, { headers });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.message || "Unable to restore payroll workflow.");
+    setState(body);
+  };
+  useEffect(() => { let active = true; (async () => { try { setLoading(true); const id = await loadRuns(); if (active) await loadWorkflow(id); } catch (e) { if (active) setError(e.message); } finally { if (active) setLoading(false); } })(); return () => { active = false; }; }, []);
+  useEffect(() => { if (!selectedId) return undefined; sessionStorage.setItem(HR_SELECTED_RUN_KEY, selectedId); loadWorkflow(selectedId).catch((e) => setError(e.message)); const timer = window.setInterval(() => loadWorkflow(selectedId).catch(() => {}), sending ? 1000 : 4000); return () => window.clearInterval(timer); }, [selectedId, sending]);
+  useEffect(() => () => { if (preview?.url) URL.revokeObjectURL(preview.url); }, [preview?.url]);
+
+  const sendPending = async () => { try { setSending(true); setError(""); const response = await fetch(`${API_BASE_URL}/api/hr/payroll-runs/${encodeURIComponent(selectedId)}/payslips/send`, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: "{}" }); const body = await response.json(); setState(body); if (!response.ok) throw new Error(body.message || "Payslip delivery was not completed."); } catch (e) { setError(e.message); await loadWorkflow(selectedId).catch(() => {}); } finally { setSending(false); } };
+  const previewPayslip = async (employee) => { try { setError(""); const response = await fetch(`${API_BASE_URL}/api/payslips/${employee.payrollId}/pdf`, { headers }); if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.message || "Unable to preview payslip."); } const url = URL.createObjectURL(await response.blob()); setPreview({ url, name: employee.name }); } catch (e) { setError(e.message); } };
+  const run = state?.run || runs.find((item) => item.id === selectedId);
+  const progress = state?.workflow?.payslipProgress || {};
+  if (loading) return <div className="app-panel flex items-center gap-2 rounded-2xl p-6"><Loader2 className="animate-spin" size={18}/>Loading shared payroll workflow…</div>;
+  return <div className="space-y-5"><SharedPayrollRunTracker workflow={state?.workflow} run={run}/><section className="app-panel rounded-2xl p-5"><div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between"><label className="flex-1 text-sm font-semibold">Selected payroll run<select className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>{runs.map((item) => <option key={item.id} value={item.id}>{new Date(item.year, item.month - 1).toLocaleString("en-SG", { month: "long", year: "numeric" })} · {item.id} · {item.status}</option>)}</select></label><button type="button" onClick={() => loadWorkflow(selectedId)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] px-4 py-2.5 text-sm font-semibold"><RefreshCw size={16}/>Refresh</button></div></section>{error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}{deliveryMode ? <><section className="app-panel rounded-2xl p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">HR payslip delivery</h2><p className="mt-1 text-sm text-[#7b6660]">Finance must confirm settlement first. HR previews and delivers each employee payslip from this shared run.</p></div><button type="button" disabled={sending || !run?.paidAt || Boolean(run?.payslipsSentAt)} onClick={sendPending} className="inline-flex items-center gap-2 rounded-xl bg-[#F38978] px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{sending ? <Loader2 className="animate-spin" size={16}/> : <Send size={16}/>} {sending ? "Delivering payslips…" : progress.failed ? "Retry failed payslips" : "Send pending payslips"}</button></div><div className="mt-5 grid gap-3 sm:grid-cols-4">{[["Total", progress.total || run?.employees?.length || 0], ["Sent", progress.sent || 0], ["Failed", progress.failed || 0], ["Pending", progress.pending ?? run?.employees?.length ?? 0]].map(([label,value]) => <div key={label} className="rounded-xl border border-[#f0d2ca] bg-[#fff8f5] p-4"><p className="text-xs uppercase text-[#7b6660]">{label}</p><strong className="mt-1 block text-xl">{value}</strong></div>)}</div>{!run?.paidAt ? <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Waiting for Finance to confirm payment settlement.</p> : null}</section><section className="app-panel overflow-hidden rounded-2xl"><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-[#fff8f5] text-xs uppercase text-[#7b6660]"><tr><th className="px-4 py-3">Employee</th><th>Department</th><th>Net pay</th><th>Status</th><th>Preview</th></tr></thead><tbody>{(run?.employees || []).map((employee) => <tr key={employee.payrollId} className="border-t border-[#f0d2ca]"><td className="px-4 py-3 font-semibold">{employee.name}</td><td>{employee.department || "Not recorded"}</td><td>${Number(employee.netPay || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}</td><td><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${["Sent","sent_to_staff"].includes(employee.financeStatus) ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{["Sent","sent_to_staff"].includes(employee.financeStatus) ? "Delivered" : "Pending"}</span></td><td><button type="button" onClick={() => previewPayslip(employee)} className="rounded-lg border border-[#f0d2ca] px-3 py-1.5 text-xs font-semibold">Preview PDF</button></td></tr>)}</tbody></table></div></section></> : <section className="app-panel overflow-hidden rounded-2xl"><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-[#fff8f5] text-xs uppercase text-[#7b6660]"><tr><th className="px-4 py-3">Run</th><th>Period</th><th>Status</th><th>Employees</th><th>Gross</th><th>Net</th><th>Payment</th></tr></thead><tbody>{runs.map((item) => <tr key={item.id} onClick={() => setSelectedId(item.id)} className={`cursor-pointer border-t border-[#f0d2ca] hover:bg-[#fff8f5] ${selectedId === item.id ? "bg-[#F38978]/10" : ""}`}><td className="px-4 py-3 font-semibold">{item.id}</td><td>{new Date(item.year, item.month - 1).toLocaleString("en-SG", { month: "long", year: "numeric" })}</td><td>{item.status}</td><td>{item.employees?.length || 0}</td><td>${Number(item.totalGrossPay || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}</td><td>${Number(item.totalNetPay || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}</td><td>{item.paymentStatus || "Not started"}</td></tr>)}</tbody></table></div></section>}{preview ? <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-[#251E1F]/55 p-4"><section className="flex h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white"><header className="flex items-center justify-between border-b border-[#f0d2ca] p-4"><h3 className="font-semibold">{preview.name} · Payslip preview</h3><button onClick={() => { URL.revokeObjectURL(preview.url); setPreview(null); }}><X size={20}/></button></header><iframe title="Payslip preview" src={preview.url} className="min-h-0 flex-1"/></section></div> : null}</div>;
+}
+
+function HRPayrollPoliciesView() {
+  const [catalogue, setCatalogue] = useState(null); const [error, setError] = useState("");
+  useEffect(() => { getEffectivePayrollRules().then(setCatalogue).catch((e) => setError(e.message)); }, []);
+  return <div className="space-y-5"><section className="app-panel rounded-2xl p-6"><div className="flex gap-3"><ShieldCheck className="text-[#2D7C83]"/><div><h2 className="text-lg font-semibold">Payroll policies and supporting sources</h2><p className="mt-1 text-sm text-[#7b6660]">Read-only rules published by Payroll Admin. HR uses these references to maintain accurate staff source data and deliver compliant payslips.</p></div></div></section>{error ? <div className="rounded-xl bg-red-50 p-4 text-red-700">{error}</div> : null}<section className="app-panel overflow-hidden rounded-2xl"><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-[#fff8f5] text-xs uppercase text-[#7b6660]"><tr><th className="px-4 py-3">Rule</th><th>Value</th><th>Effective</th><th>Source</th><th>Status</th></tr></thead><tbody>{(catalogue?.rules || []).map((rule) => <tr key={rule.key} className="border-t border-[#f0d2ca]"><td className="px-4 py-3"><strong>{rule.name}</strong><small className="block text-[#7b6660]">{rule.category}</small></td><td>{rule.value}</td><td>{rule.effectiveFrom}</td><td>{rule.referenceUrl ? <a href={rule.referenceUrl} target="_blank" rel="noreferrer" className="font-semibold text-[#2D7C83] underline">{rule.referenceTitle || "Official source"}</a> : "No source linked"}</td><td>{rule.status}</td></tr>)}</tbody></table></div></section></div>;
+}
+
 function PayrollRunsView() {
   const session = getStoredSession();
   const navigate = useNavigate();
@@ -3092,18 +3151,15 @@ export default function HRPayrollPage() {
     }
 
     if (activePath === "/dashboard/payroll/hr/payroll-runs") {
-      return <PayrollRunsView />;
+      return <HRPayrollRunWorkflowView />;
     }
 
     if (activePath === "/dashboard/payroll/hr/payslips") {
-      return (
-        <PayslipsView
-          holdTooltip={holdTooltip}
-          setHoldTooltip={setHoldTooltip}
-          openHoldTooltip={openHoldTooltip}
-          getHoldTooltipData={getHoldTooltipData}
-        />
-      );
+      return <HRPayrollRunWorkflowView deliveryMode />;
+    }
+
+    if (activePath === "/dashboard/payroll/hr/payroll-policies") {
+      return <HRPayrollPoliciesView />;
     }
 
     if (activePath === "/dashboard/payroll/hr/notifications") {

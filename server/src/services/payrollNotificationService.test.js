@@ -36,7 +36,7 @@ test("records email failure without rejecting the completed notification", async
 
   expect(mockExecute).toHaveBeenLastCalledWith(
     expect.stringContaining("delivery_status = 'Failed'"),
-    ["SMTP unavailable", 55]
+    ["SMTP unavailable", 55, 1]
   );
 });
 

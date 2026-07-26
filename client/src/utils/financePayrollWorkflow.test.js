@@ -52,8 +52,9 @@ describe("Finance payroll automatic navigation", () => {
     expect(getFinanceAutoAdvance("save-recipients", { ...run, paymentRecipientsConfigured: 2 })?.path).toContain("payment-release");
   });
 
-  it("stays on payment release until settlement is confirmed", () => {
+  it("keeps Finance on payment release after confirmation because HR owns payslip delivery", () => {
     expect(getFinanceAutoAdvance("submit-payment", {})).toBeNull();
-    expect(getFinanceAutoAdvance("confirm-payment", {})?.path).toContain("payslip-delivery");
+    expect(getFinanceAutoAdvance("confirm-payment", {})).toBeNull();
+    expect(getFinanceAutoAdvance("send-payslips", {})).toBeNull();
   });
 });

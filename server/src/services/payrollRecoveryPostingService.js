@@ -1,4 +1,5 @@
 const money = (value) => Math.round(Number(value || 0) * 100) / 100;
+const { currentCompanyId } = require("./tenantContext");
 const parseJson = (value, fallback = {}) => {
   if (!value) return fallback;
   if (typeof value === "object") return value;
@@ -12,9 +13,10 @@ function sourceRecordId(item = {}) {
 }
 
 async function postPayrollRecoveries({ connection, payrollRunId, userId }) {
+  const companyId = currentCompanyId();
   const [payrollRows] = await connection.execute(
     `SELECT payroll_id, staff_employee_id, deduction_breakdown
-     FROM payroll WHERE payroll_run_id = ? FOR UPDATE`, [payrollRunId]
+     FROM payroll WHERE payroll_run_id = ? AND company_id = ? FOR UPDATE`, [payrollRunId, companyId]
   );
   const postings = [];
   for (const payroll of payrollRows) {
@@ -27,7 +29,7 @@ async function postPayrollRecoveries({ connection, payrollRunId, userId }) {
       if (!claimId || money(item.amount) <= 0) continue;
       const [[claim]] = await connection.execute(
         `SELECT record_id, staff_employee_id, monthly_installment, outstanding_balance
-         FROM claims_and_loans WHERE record_id = ? FOR UPDATE`, [claimId]
+         FROM claims_and_loans WHERE record_id = ? AND company_id = ? FOR UPDATE`, [claimId, companyId]
       );
       if (!claim || Number(claim.staff_employee_id) !== Number(payroll.staff_employee_id)) continue;
       const balanceBefore = money(claim.outstanding_balance);
@@ -36,8 +38,8 @@ async function postPayrollRecoveries({ connection, payrollRunId, userId }) {
       const deferred = money(Math.max(0, scheduled - applied));
       const balanceAfter = money(Math.max(0, balanceBefore - applied));
       await connection.execute(
-        `UPDATE claims_and_loans SET outstanding_balance = ?, total_paid = COALESCE(total_paid,0) + ? WHERE record_id = ?`,
-        [balanceAfter, applied, claimId]
+        `UPDATE claims_and_loans SET outstanding_balance = ?, total_paid = COALESCE(total_paid,0) + ? WHERE record_id = ? AND company_id = ?`,
+        [balanceAfter, applied, claimId, companyId]
       );
       item.sourceRecordId = claimId;
       item.scheduledAmount = scheduled;
@@ -51,7 +53,7 @@ async function postPayrollRecoveries({ connection, payrollRunId, userId }) {
     }
     if (breakdownChanged) {
       breakdown.otherDeductions = deductions;
-      await connection.execute("UPDATE payroll SET deduction_breakdown = ? WHERE payroll_id = ?", [JSON.stringify(breakdown), payroll.payroll_id]);
+      await connection.execute("UPDATE payroll SET deduction_breakdown = ? WHERE payroll_id = ? AND company_id = ?", [JSON.stringify(breakdown), payroll.payroll_id, companyId]);
     }
   }
   return postings;

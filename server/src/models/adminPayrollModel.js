@@ -7,6 +7,7 @@ const {
   upsertStoredPayrollSetting
 } = require("../services/payrollRuleConfigService");
 const ROLE_NAMES = Object.freeze({ 1: "Admin", 2: "Finance", 3: "HR", 4: "Staff" });
+const { currentCompanyId } = require("../services/tenantContext");
 
 function parseJson(value, fallback = {}) {
   if (!value) return fallback;
@@ -28,8 +29,9 @@ function isReportableStatutorySetting(setting = {}) {
 }
 
 async function getAdminPayrollReportData() {
+  const companyId = currentCompanyId();
   const [[[userStats]], [payrollRuns], [roleSummary], [users], [auditLogs]] = await Promise.all([
-    pool.execute("SELECT COUNT(*) AS activeUsers FROM user WHERE status = 1"),
+    pool.execute("SELECT COUNT(*) AS activeUsers FROM user WHERE status = 1 AND company_id=?", [companyId]),
     pool.execute(
       `SELECT
         p.payroll_month, p.payroll_year,
@@ -41,24 +43,26 @@ async function getAdminPayrollReportData() {
         COUNT(p.payroll_id) AS employee_count
        FROM payroll p
        LEFT JOIN payroll_run pr ON pr.payroll_run_id = p.payroll_run_id
+       WHERE p.company_id=?
        GROUP BY p.payroll_month, p.payroll_year
        ORDER BY p.payroll_year DESC, p.payroll_month DESC`
-    ),
+    , [companyId]),
     pool.execute(
       `SELECT COALESCE(NULLIF(TRIM(role_name), ''), 'Unassigned') AS role_name,
               COUNT(*) AS user_count
-       FROM user
+       FROM user WHERE company_id=?
        GROUP BY COALESCE(NULLIF(TRIM(role_name), ''), 'Unassigned')
        ORDER BY role_name`
-    ),
+    , [companyId]),
     pool.execute(
       `SELECT u.user_id, u.name, u.email, u.status,
               COALESCE(NULLIF(TRIM(u.role_name), ''), 'Unassigned') AS role_name,
               s.employee_code, s.department_name
        FROM user u
-       LEFT JOIN staff s ON s.user_user_id = u.user_id
+       LEFT JOIN staff s ON s.user_user_id = u.user_id AND s.company_id=u.company_id
+       WHERE u.company_id=?
        ORDER BY u.name`
-    ),
+    , [companyId]),
     pool.execute(
       `SELECT a.audit_log_id AS log_id, a.action_description AS action,
               COALESCE(a.entity_type, a.activity_type) AS entity_type, a.affected_record AS entity_id,
@@ -66,9 +70,10 @@ async function getAdminPayrollReportData() {
               a.status
        FROM audit_logs a
        LEFT JOIN user u ON u.user_id = a.user_id
+       WHERE a.company_id=?
        ORDER BY a.created_at DESC
        LIMIT 100`
-    )
+    , [companyId])
   ]);
 
   const pendingApprovalCount = payrollRuns.filter(
@@ -101,15 +106,16 @@ async function logAdminAction({ action, entityType, entityId, userId }) {
 }
 
 async function getDashboardStats() {
+  const companyId = currentCompanyId();
   await ensurePayrollConfigurationTable(pool);
   const [[users]] = await pool.execute(
-    "SELECT COUNT(*) AS total FROM user WHERE status = 1"
+    "SELECT COUNT(*) AS total FROM user WHERE status = 1 AND company_id=?", [companyId]
   );
   const [[logs]] = await pool.execute(
-    "SELECT COUNT(*) AS total FROM audit_logs"
+    "SELECT COUNT(*) AS total FROM audit_logs WHERE company_id=?", [companyId]
   );
   const [[layouts]] = await pool.execute(
-    "SELECT COUNT(*) AS total FROM payroll_configuration WHERE configuration_type = 'payslip_layout'"
+    "SELECT COUNT(*) AS total FROM payroll_configuration WHERE configuration_type = 'payslip_layout' AND company_id=?", [companyId]
   );
 
   const effectiveRules = await getEffectivePayrollRules();
@@ -126,8 +132,9 @@ async function listPayslipLayouts() {
   const [rows] = await pool.execute(
     `SELECT configuration_id, configuration_value, created_at, updated_at
      FROM payroll_configuration
-     WHERE configuration_type = 'payslip_layout'
+     WHERE configuration_type = 'payslip_layout' AND company_id=?
      ORDER BY updated_at DESC, configuration_id DESC`
+    ,[currentCompanyId()]
   );
 
   return rows.map((row) => {
@@ -150,7 +157,7 @@ async function listPayslipLayouts() {
 async function createPayslipLayout({ layoutName, filePath, fileType, originalFileName, fileSize, createdBy }) {
   await ensurePayrollConfigurationTable(pool);
   const [[countRow]] = await pool.execute(
-    "SELECT COUNT(*) AS total FROM payroll_configuration WHERE configuration_type = 'payslip_layout'"
+    "SELECT COUNT(*) AS total FROM payroll_configuration WHERE configuration_type = 'payslip_layout' AND company_id=?", [currentCompanyId()]
   );
   const metadata = JSON.stringify({
     layout_name: layoutName,
@@ -163,9 +170,9 @@ async function createPayslipLayout({ layoutName, filePath, fileType, originalFil
   });
   const [result] = await pool.execute(
     `INSERT INTO payroll_configuration
-       (configuration_type, configuration_key, configuration_value, description, updated_by)
-     VALUES ('payslip_layout', ?, ?, ?, ?)`,
-    [`layout_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`, metadata, `Uploaded payslip layout: ${layoutName}`, createdBy || null]
+       (company_id, configuration_type, configuration_key, configuration_value, description, updated_by)
+     VALUES (?, 'payslip_layout', ?, ?, ?, ?)`,
+    [currentCompanyId(), `layout_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`, metadata, `Uploaded payslip layout: ${layoutName}`, createdBy || null]
   );
   await logAdminAction({
     action: `Uploaded payslip layout ${layoutName}`,
@@ -184,8 +191,9 @@ async function setDefaultPayslipLayout(layoutId) {
     const [rows] = await connection.execute(
       `SELECT configuration_id, configuration_value
        FROM payroll_configuration
-       WHERE configuration_type = 'payslip_layout'
+       WHERE configuration_type = 'payslip_layout' AND company_id=?
        FOR UPDATE`
+      ,[currentCompanyId()]
     );
     if (!rows.some((row) => Number(row.configuration_id) === Number(layoutId))) {
       await connection.rollback();
@@ -197,8 +205,8 @@ async function setDefaultPayslipLayout(layoutId) {
       await connection.execute(
         `UPDATE payroll_configuration
          SET configuration_value = ?, updated_at = CURRENT_TIMESTAMP
-         WHERE configuration_id = ?`,
-        [JSON.stringify(metadata), row.configuration_id]
+         WHERE configuration_id = ? AND company_id=?`,
+        [JSON.stringify(metadata), row.configuration_id, currentCompanyId()]
       );
     }
     await connection.commit();
@@ -216,8 +224,9 @@ async function listPayrollSettings() {
 }
 
 async function listMbmfEligibilitySummary() {
+  const companyId = currentCompanyId();
   const [[staffCount]] = await pool.execute(
-    "SELECT COUNT(*) AS total FROM staff"
+    "SELECT COUNT(*) AS total FROM staff WHERE company_id=?", [companyId]
   );
   const applicableReligion = "Muslim";
   const [religionColumns] = await pool.execute(
@@ -240,8 +249,8 @@ async function listMbmfEligibilitySummary() {
       COUNT(*) AS totalStaff,
       SUM(CASE WHEN LOWER(TRIM(COALESCE(religion, ''))) = LOWER(?) THEN 1 ELSE 0 END) AS eligibleMuslimEmployees,
       SUM(CASE WHEN LOWER(TRIM(COALESCE(religion, ''))) <> LOWER(?) THEN 1 ELSE 0 END) AS nonEligibleEmployees
-    FROM staff`,
-    [applicableReligion, applicableReligion]
+    FROM staff WHERE company_id=?`,
+    [applicableReligion, applicableReligion, companyId]
   );
   return {
     hasReligionColumn: true,
@@ -266,6 +275,7 @@ async function upsertPayrollSetting({ settingKey, settingValue, description, eff
 }
 
 async function listPayrollRuns() {
+  const companyId = currentCompanyId();
   const [rows] = await pool.execute(
     `SELECT
       p.payroll_month,
@@ -280,14 +290,16 @@ async function listPayrollRuns() {
     FROM payroll p
     LEFT JOIN payroll_run pr ON pr.payroll_run_id = p.payroll_run_id
     LEFT JOIN user creator ON creator.user_id = p.run_created_by
+    WHERE p.company_id=?
     GROUP BY p.payroll_month, p.payroll_year
     ORDER BY p.payroll_year DESC, p.payroll_month DESC`
-  );
+  , [companyId]);
 
   return rows;
 }
 
 async function listAuditLogs() {
+  const companyId = currentCompanyId();
   const [rows] = await pool.execute(
     `SELECT
       audit_logs.audit_log_id AS log_id,
@@ -298,29 +310,32 @@ async function listAuditLogs() {
       COALESCE(audit_logs.user_name, user.name, 'System') AS user_name
     FROM audit_logs
     LEFT JOIN user ON audit_logs.user_id = user.user_id
+    WHERE audit_logs.company_id=?
     ORDER BY audit_logs.created_at DESC
-    LIMIT 25`
+    LIMIT 25`, [companyId]
   );
 
   return rows;
 }
 
 async function listAdminActivityTrends() {
+  const companyId = currentCompanyId();
   const [rows] = await pool.execute(
     `SELECT
       YEAR(created_at) AS activity_year,
       MONTH(created_at) AS activity_month,
       COUNT(*) AS event_count
     FROM audit_logs
-    WHERE created_at >= DATE_SUB(DATE_FORMAT(CURRENT_DATE, '%Y-%m-01'), INTERVAL 5 MONTH)
+    WHERE company_id=? AND created_at >= DATE_SUB(DATE_FORMAT(CURRENT_DATE, '%Y-%m-01'), INTERVAL 5 MONTH)
     GROUP BY YEAR(created_at), MONTH(created_at)
-    ORDER BY activity_year, activity_month`
+    ORDER BY activity_year, activity_month`, [companyId]
   );
 
   return rows;
 }
 
 async function listAuditActivityInsight({ from, to, granularity }) {
+  const companyId = currentCompanyId();
   const bucketSql = {
     day: "DATE_FORMAT(created_at, '%Y-%m-%d')",
     week: "DATE_FORMAT(DATE_SUB(created_at, INTERVAL WEEKDAY(created_at) DAY), '%Y-%m-%d')",
@@ -329,10 +344,10 @@ async function listAuditActivityInsight({ from, to, granularity }) {
   const [rows] = await pool.execute(
     `SELECT ${bucketSql} AS bucket, COUNT(*) AS event_count
      FROM audit_logs
-     WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)
+     WHERE company_id=? AND created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)
      GROUP BY ${bucketSql}
      ORDER BY bucket`,
-    [from, to]
+    [companyId, from, to]
   );
   return rows;
 }
@@ -419,10 +434,11 @@ async function listRunHealthInsight({ from, to }) {
 }
 
 async function listUsersWithRoles() {
+  const companyId = currentCompanyId();
   const [counts] = await pool.execute(
     `SELECT role_name, COUNT(*) AS user_count
-     FROM user
-     GROUP BY role_name`
+     FROM user WHERE company_id=?
+     GROUP BY role_name`, [companyId]
   );
   const countByRole = Object.fromEntries(counts.map((row) => [row.role_name, Number(row.user_count)]));
   return Object.entries(ROLE_NAMES).map(([roleId, roleName]) => ({
@@ -434,6 +450,7 @@ async function listUsersWithRoles() {
 }
 
 async function listAvailableStaffForUserCreation() {
+  const companyId = currentCompanyId();
   const [rows] = await pool.execute(
     `SELECT
       staff.employee_id,
@@ -443,14 +460,15 @@ async function listAvailableStaffForUserCreation() {
       NULL AS department_id,
       staff.department_name
     FROM staff
-    WHERE staff.user_user_id IS NULL
-    ORDER BY staff.name`
+    WHERE staff.user_user_id IS NULL AND staff.company_id=?
+    ORDER BY staff.name`, [companyId]
   );
 
   return rows;
 }
 
 async function listUsers() {
+  const companyId = currentCompanyId();
   const [rows] = await pool.execute(
     `SELECT
       user.user_id,
@@ -470,14 +488,16 @@ async function listUsers() {
       NULL AS department_id,
       staff.department_name
     FROM user
-    LEFT JOIN staff ON staff.user_user_id = user.user_id
-    ORDER BY user.name`
+    LEFT JOIN staff ON staff.user_user_id = user.user_id AND staff.company_id=user.company_id
+    WHERE user.company_id=?
+    ORDER BY user.name`, [companyId]
   );
 
   return rows;
 }
 
 async function createUserAccount({ email, name, passwordHash, roleId, status, staffEmployeeId, adminUserId }) {
+  const companyId = currentCompanyId();
   const connection = await pool.getConnection();
 
   try {
@@ -507,8 +527,8 @@ async function createUserAccount({ email, name, passwordHash, roleId, status, st
 
     if (staffEmployeeId) {
       const [[selectedStaff]] = await connection.execute(
-        "SELECT employee_id, user_user_id FROM staff WHERE employee_id = ?",
-        [staffEmployeeId]
+        "SELECT employee_id, user_user_id FROM staff WHERE employee_id = ? AND company_id=?",
+        [staffEmployeeId, companyId]
       );
 
       if (!selectedStaff) {
@@ -529,21 +549,21 @@ async function createUserAccount({ email, name, passwordHash, roleId, status, st
     }
 
     const [result] = await connection.execute(
-      `INSERT INTO user (email, name, password, status, role_name)
-      VALUES (?, ?, ?, ?, ?)`,
-      [email, name, passwordHash, status, roleName]
+      `INSERT INTO user (company_id, email, name, password, status, role_name)
+      VALUES (?, ?, ?, ?, ?, ?)`,
+      [companyId, email, name, passwordHash, status, roleName]
     );
     const userId = result.insertId;
 
     if (staff) {
       await connection.execute(
-        "UPDATE staff SET user_user_id = ? WHERE employee_id = ?",
-        [userId, staff.employee_id]
+        "UPDATE staff SET user_user_id = ? WHERE employee_id = ? AND company_id=?",
+        [userId, staff.employee_id, companyId]
       );
     } else {
       await connection.execute(
-        "UPDATE staff SET user_user_id = ? WHERE user_user_id IS NULL AND email = ?",
-        [userId, email]
+        "UPDATE staff SET user_user_id = ? WHERE user_user_id IS NULL AND email = ? AND company_id=?",
+        [userId, email, companyId]
       );
     }
 
@@ -563,6 +583,7 @@ async function createUserAccount({ email, name, passwordHash, roleId, status, st
 }
 
 async function getUserById(userId) {
+  const companyId = currentCompanyId();
   const [rows] = await pool.execute(
     `SELECT
       user.user_id,
@@ -575,21 +596,22 @@ async function getUserById(userId) {
       END AS role_id,
       user.role_name
     FROM user
-    WHERE user.user_id = ?`,
-    [userId]
+    WHERE user.user_id = ? AND user.company_id=?`,
+    [userId, companyId]
   );
 
   return rows[0] || null;
 }
 
 async function updateUserStatus({ userId, status, adminUserId }) {
+  const companyId = currentCompanyId();
   const [result] = await pool.execute(
     `UPDATE user SET status = ?,
        failed_login_attempts = IF(? = 1, 0, failed_login_attempts),
        account_locked_at = IF(? = 1, NULL, account_locked_at),
        account_lock_reason = IF(? = 1, NULL, account_lock_reason)
-     WHERE user_id = ?`,
-    [status, status, status, status, userId]
+     WHERE user_id = ? AND company_id=?`,
+    [status, status, status, status, userId, companyId]
   );
 
   if (result.affectedRows > 0) {
@@ -605,11 +627,12 @@ async function updateUserStatus({ userId, status, adminUserId }) {
 }
 
 async function updateUserRole({ userId, roleId, adminUserId }) {
+  const companyId = currentCompanyId();
   const roleName = ROLE_NAMES[roleId];
   if (!roleName) return false;
   const [result] = await pool.execute(
-    "UPDATE user SET role_name = ? WHERE user_id = ?",
-    [roleName, userId]
+    "UPDATE user SET role_name = ? WHERE user_id = ? AND company_id=?",
+    [roleName, userId, companyId]
   );
 
   if (result.affectedRows > 0) {
@@ -625,9 +648,10 @@ async function updateUserRole({ userId, roleId, adminUserId }) {
 }
 
 async function updateUserPassword({ userId, passwordHash, adminUserId }) {
+  const companyId = currentCompanyId();
   const [result] = await pool.execute(
-    "UPDATE user SET password = ?, must_change_password = 1 WHERE user_id = ?",
-    [passwordHash, userId]
+    "UPDATE user SET password = ?, must_change_password = 1 WHERE user_id = ? AND company_id=?",
+    [passwordHash, userId, companyId]
   );
 
   if (result.affectedRows > 0) {

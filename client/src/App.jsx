@@ -26,6 +26,7 @@ import { startHealthCheck, stopHealthCheck } from "./services/apiClient.js";
 import { applyAppearance, readCachedAppearance } from "./services/appearanceService.js";
 import { fetchAppearance } from "./services/settingsService.js";
 import { getPostAuthDestination, getStoredSession } from "./services/sessionService.js";
+import PlatformCompaniesPage from "./pages/platform/PlatformCompaniesPage.jsx";
 
 function ProtectedRoute({ children }) {
   const session = getStoredSession();
@@ -43,6 +44,13 @@ function ModuleSelectionRoute() {
   const destination = getPostAuthDestination(session.user);
   if (destination !== "/module-selection") return <Navigate to={destination} replace />;
   return <ModuleSelectionPage />;
+}
+
+function PlatformOperatorRoute({ children }) {
+  const session = getStoredSession();
+  if (!session?.token) return <Navigate to="/login" replace />;
+  if (session.user?.role !== "PlatformOperator") return <Navigate to="/module-selection" replace />;
+  return children;
 }
 
 function AdminInvoicingRoute({ children }) {
@@ -205,6 +213,7 @@ export default function App() {
           <ModuleSelectionRoute />
         }
       />
+      <Route path="/platform/companies" element={<PlatformOperatorRoute><PlatformCompaniesPage /></PlatformOperatorRoute>} />
       <Route
         path="/dashboard/invoicing/admin/reminder-summary/:category"
         element={

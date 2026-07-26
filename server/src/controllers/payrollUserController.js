@@ -151,28 +151,51 @@ async function createHire(req, res) {
 }
 
 const importColumns = {
-  name: ["name", "fullname", "staffname", "employeename"], email: ["email", "employeeemail", "staffemail"],
-  employeeCode: ["employeecode", "employeeid", "staffid"], phone: ["phone", "phonenumber", "contact"],
-  departmentName: ["department", "departmentname"], hireDate: ["hiredate", "startdate"],
+  name: ["name", "fullname", "staffname", "employeename", "employee", "legalname"], email: ["email", "employeeemail", "staffemail", "emailaddress", "personalemail", "personalemailaddress", "workemail"],
+  employeeCode: ["employeecode", "employeeid", "staffid", "staffcode", "employeenumber"], phone: ["phone", "phonenumber", "contact", "contactnumber", "mobile", "mobilenumber"],
+  departmentName: ["department", "departmentname", "jobdepartment", "division", "team"], hireDate: ["hiredate", "startdate", "datejoined", "joiningdate", "employmentdate"],
   dateOfBirth: ["dateofbirth", "dob", "birthdate"], race: ["race"], religion: ["religion"],
-  baseSalary: ["basesalary", "salary", "basicsalary"], bank: ["bank", "bankname"],
-  accountNo: ["accountno", "accountnumber", "bankaccount", "bankaccountnumber"]
+  baseSalary: ["basesalary", "salary", "basicsalary", "monthlysalary", "monthlybasicsalary", "grosssalary"], bank: ["bank", "bankname"],
+  accountNo: ["accountno", "accountnumber", "bankaccount", "bankaccountnumber", "bankaccountno"]
 };
-const excelValue = (value) => value instanceof Date ? value.toISOString().slice(0, 10) : value && typeof value === "object" ? (value.text || value.result || "") : (value ?? "");
+const excelValue = (value) => value instanceof Date
+  ? value.toISOString().slice(0, 10)
+  : value && typeof value === "object"
+    ? (value.text || value.result || (Array.isArray(value.richText) ? value.richText.map((item) => item.text || "").join("") : ""))
+    : (value ?? "");
 const excelHeader = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+const knownImportHeaders = new Set(Object.values(importColumns).flat());
+
+function findStaffWorksheet(workbook) {
+  let best = null;
+  workbook.worksheets.forEach((worksheet) => {
+    const scanLimit = Math.min(Math.max(worksheet.actualRowCount || worksheet.rowCount || 0, 1), 40);
+    for (let rowNumber = 1; rowNumber <= scanLimit; rowNumber += 1) {
+      const headers = {};
+      worksheet.getRow(rowNumber).eachCell({ includeEmpty: false }, (cell, column) => {
+        const normalized = excelHeader(excelValue(cell.value));
+        if (normalized) headers[normalized] = column;
+      });
+      const score = Object.keys(headers).filter((header) => knownImportHeaders.has(header)).length;
+      const hasIdentity = importColumns.name.some((alias) => headers[alias]) || importColumns.email.some((alias) => headers[alias]);
+      if (hasIdentity && (!best || score > best.score)) best = { worksheet, headerRow: rowNumber, headers, score };
+    }
+  });
+  return best;
+}
 
 async function importHires(req, res) {
   try {
     if (!req.file?.buffer) return res.status(400).json({ message: "Select an Excel workbook to import." });
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(req.file.buffer);
-    const worksheet = workbook.worksheets[0];
-    if (!worksheet) return res.status(400).json({ message: "The workbook does not contain a worksheet." });
-    const headers = {};
-    worksheet.getRow(1).eachCell((cell, column) => { headers[excelHeader(excelValue(cell.value))] = column; });
+    if (!workbook.worksheets.length) return res.status(400).json({ message: "The workbook does not contain a worksheet." });
+    const detected = findStaffWorksheet(workbook);
+    if (!detected) return res.status(400).json({ message: "Employee column headings could not be found. Include at least Name and Email headings; introductory rows above the headings are supported." });
+    const { worksheet, headerRow, headers } = detected;
     const prepared = [];
     worksheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return;
+      if (rowNumber <= headerRow) return;
       const staff = {};
       Object.entries(importColumns).forEach(([field, aliases]) => {
         const alias = aliases.find((item) => headers[item]);
@@ -182,10 +205,10 @@ async function importHires(req, res) {
       const payload = normalizedPayload({ staff, account: { name: staff.name, email: staff.email, roleName: "Staff" } });
       prepared.push({ rowNumber, payload, error: validate(payload) });
     });
-    if (!prepared.length) return res.status(400).json({ message: "No staff rows were found in the first worksheet." });
+    if (!prepared.length) return res.status(400).json({ message: `No employee records were found below the headings in worksheet "${worksheet.name}".` });
     if (prepared.length > 500) return res.status(400).json({ message: "Import up to 500 staff records at a time." });
     if (String(req.body?.mode || "preview") !== "commit") {
-      return res.json({ mode: "preview", total: prepared.length, valid: prepared.filter((row) => !row.error).length, invalid: prepared.filter((row) => row.error).length, rows: prepared.map((row) => ({ rowNumber: row.rowNumber, name: row.payload.staff.name, email: row.payload.staff.email, department: row.payload.staff.departmentName, valid: !row.error, error: row.error })) });
+      return res.json({ mode: "preview", worksheet: worksheet.name, headerRow, total: prepared.length, valid: prepared.filter((row) => !row.error).length, invalid: prepared.filter((row) => row.error).length, rows: prepared.map((row) => ({ rowNumber: row.rowNumber, name: row.payload.staff.name, email: row.payload.staff.email, department: row.payload.staff.departmentName, valid: !row.error, error: row.error })) });
     }
     const results = [];
     for (const row of prepared) {
