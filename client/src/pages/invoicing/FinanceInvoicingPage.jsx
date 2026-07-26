@@ -87,7 +87,30 @@ const financeSidebarSections = [
         label: "Dashboard",
         icon: LayoutDashboard,
         path: "/dashboard/invoicing/finance",
-        end: true
+        end: true,
+        children: [
+          {
+            label: "Performance",
+            path: "/dashboard/invoicing/finance",
+            end: true
+          },
+          {
+            label: "Compliance",
+            path: "/dashboard/invoicing/finance/compliance"
+          },
+          {
+            label: "Accounting",
+            path: "/dashboard/invoicing/finance/accounting"
+          },
+          {
+            label: "Invoices",
+            path: "/dashboard/invoicing/finance/invoices"
+          },
+          {
+            label: "Fraud Detection",
+            path: "/dashboard/invoicing/finance/fraud"
+          }
+        ]
       }
     ]
   },
@@ -95,34 +118,20 @@ const financeSidebarSections = [
     label: "INVOICING",
     items: [
       {
-        label: "Customers",
-        icon: Building2,
-        path: "/dashboard/invoicing/finance/customers"
-      },
-      {
-        label: "Invoices",
-        icon: ReceiptText,
-        path: "/dashboard/invoicing/finance/invoices"
-      },
-      {
-        label: "Subscriptions",
-        icon: CalendarClock,
-        path: "/dashboard/invoicing/finance/subscriptions"
-      },
-      {
-        label: "Payments",
-        icon: CreditCard,
-        path: "/dashboard/invoicing/finance/payments"
-      },
-      {
-        label: "Bulk Upload",
-        icon: Upload,
-        path: "/dashboard/invoicing/finance/vaniday-import"
-      },
-      {
-        label: "Fraud Detection",
-        icon: ShieldAlert,
-        path: "/dashboard/invoicing/finance/fraud"
+        label: "Invoice Settings",
+        icon: Settings2,
+        path: "/dashboard/invoicing/finance/invoice-settings",
+        children: [
+          {
+            label: "Settings",
+            path: "/dashboard/invoicing/finance/invoice-settings",
+            end: true
+          },
+          {
+            label: "Subscriptions",
+            path: "/dashboard/invoicing/finance/subscriptions"
+          }
+        ]
       },
       {
         label: "Reminders",
@@ -130,13 +139,27 @@ const financeSidebarSections = [
         path: "/dashboard/invoicing/finance/reminders"
       },
       {
-        label: "Invoice Settings",
-        icon: Settings2,
-        path: "/dashboard/invoicing/finance/invoice-settings"
+        label: "Collections",
+        icon: CreditCard,
+        path: "/dashboard/invoicing/finance/customers",
+        children: [
+          {
+            label: "Customers",
+            path: "/dashboard/invoicing/finance/customers",
+            end: true
+          },
+          {
+            label: "Payments",
+            path: "/dashboard/invoicing/finance/payments"
+          },
+          {
+            label: "Bulk Upload",
+            path: "/dashboard/invoicing/finance/vaniday-import"
+          }
+        ]
       }
     ]
   },
-
   {
     label: "REPORTS",
     items: [
@@ -1797,20 +1820,6 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
         <AdminInvoiceConfigPanel settings={invoiceSettings} reminderRules={reminderRules} />
       ) : null}
 
-      {/* Fraud Compliance Checklist */}
-      <InvoiceCompliancePanel
-        invoices={invoices}
-        fraudSummary={fraudSummary}
-      />
-
-      {/* Automated Exception Review */}
-      <InvoiceExceptionPanel invoices={invoices} fraudSummary={fraudSummary} />
-
-      {/* Accounting Impact */}
-      <InvoiceAccountingPanel invoices={invoices} totals={totals} statusCounts={statusCounts} />
-
-      {/* Audit Trail */}
-      <InvoiceAuditTrailPanel entries={auditEntries} />
     </section>
   );
 }
@@ -2330,6 +2339,124 @@ function InvoiceAuditTrailPanel({ entries }) {
         )}
       </div>
     </div>
+  );
+}
+
+function ComplianceDashboardView({ invoices, isLoading, error }) {
+  const [fraudSummary, setFraudSummary] = useState(null);
+
+  useEffect(() => {
+    async function loadFraudData() {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+      const token = localStorage.getItem("authToken");
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/fraud/dashboard`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.summary) setFraudSummary(data.summary);
+        }
+      } catch { /* ignored */ }
+    }
+    if (!isLoading) loadFraudData();
+  }, [isLoading]);
+
+  if (isLoading) {
+    return <LoadingPanel label="Loading compliance data..." />;
+  }
+
+  return (
+    <section>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#F38978]/80">
+            Compliance & Risk
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold text-[#251E1F]">Compliance Dashboard</h2>
+        </div>
+      </div>
+
+      {error ? <div className="mt-4"><ErrorBanner message={error} /></div> : null}
+
+      <InvoiceCompliancePanel invoices={invoices} fraudSummary={fraudSummary} />
+      <InvoiceExceptionPanel invoices={invoices} fraudSummary={fraudSummary} />
+    </section>
+  );
+}
+
+function AccountingDashboardView({ invoices, isLoading, error }) {
+  const [invoiceSettings, setInvoiceSettings] = useState(null);
+  const [reminderRules, setReminderRules] = useState([]);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  const statusCounts = useMemo(() => {
+    const counts = { Draft: 0, Scheduled: 0, Sent: 0, Viewed: 0, Paid: 0, Overdue: 0 };
+    invoices.forEach((inv) => {
+      if (counts[inv.status] !== undefined) counts[inv.status]++;
+    });
+    return counts;
+  }, [invoices]);
+
+  const totals = useMemo(() => {
+    const totalRevenue = invoices.reduce((s, i) => s + Number(i.total_amount || 0), 0);
+    const paidRevenue = invoices.filter((i) => i.status === "Paid").reduce((s, i) => s + Number(i.total_amount || 0), 0);
+    const overdueAmount = invoices.filter((i) => i.status === "Overdue").reduce((s, i) => s + getInvoiceAmountDue(i), 0);
+    const pendingAmount = invoices.filter((i) => i.status === "Sent" || i.status === "Scheduled").reduce((s, i) => s + Number(i.total_amount || 0), 0);
+    return { totalRevenue, paidRevenue, overdueAmount, pendingAmount };
+  }, [invoices]);
+
+  useEffect(() => {
+    async function loadSettingsData() {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+      const token = localStorage.getItem("authToken");
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      async function safeFetch(path) {
+        try {
+          const res = await fetch(`${API_BASE}${path}`, { headers });
+          if (!res.ok) return null;
+          return await res.json();
+        } catch { return null; }
+      }
+
+      const [settingsData, remindersData] = await Promise.all([
+        safeFetch("/api/invoices/settings"),
+        safeFetch("/api/admin/invoicing/reminder-settings")
+      ]);
+
+      if (settingsData?.settings) setInvoiceSettings(settingsData.settings);
+      if (remindersData) setReminderRules(remindersData.settings || remindersData || []);
+      setSettingsLoaded(true);
+    }
+    if (!isLoading) loadSettingsData();
+  }, [isLoading]);
+
+  if (isLoading) {
+    return <LoadingPanel label="Loading accounting data..." />;
+  }
+
+  return (
+    <section>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#F38978]/80">
+            Finance & Ledger
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold text-[#251E1F]">Accounting Impact</h2>
+        </div>
+      </div>
+
+      {error ? <div className="mt-4"><ErrorBanner message={error} /></div> : null}
+
+      {settingsLoaded && invoiceSettings ? (
+        <AdminInvoiceConfigPanel settings={invoiceSettings} reminderRules={reminderRules} />
+      ) : null}
+
+      <InvoiceAccountingPanel invoices={invoices} totals={totals} statusCounts={statusCounts} />
+    </section>
   );
 }
 
@@ -3924,6 +4051,14 @@ export default function FinanceInvoicingPage() {
       return "fraud";
     }
 
+    if (location.pathname.endsWith("/compliance")) {
+      return "compliance";
+    }
+
+    if (location.pathname.endsWith("/accounting")) {
+      return "accounting";
+    }
+
     if (location.pathname.endsWith("/reminders")) {
       return "reminders";
     }
@@ -4053,6 +4188,26 @@ export default function FinanceInvoicingPage() {
 
     if (activeView === "fraud") {
       return <FraudDetectionView />;
+    }
+
+    if (activeView === "compliance") {
+      return (
+        <ComplianceDashboardView
+          invoices={displayInvoices}
+          isLoading={isLoading}
+          error={error}
+        />
+      );
+    }
+
+    if (activeView === "accounting") {
+      return (
+        <AccountingDashboardView
+          invoices={displayInvoices}
+          isLoading={isLoading}
+          error={error}
+        />
+      );
     }
 
     if (activeView === "reminders") {
