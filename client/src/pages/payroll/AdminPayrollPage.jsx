@@ -5578,6 +5578,10 @@ function ComplianceRulesView({
   const [changeReason, setChangeReason] = useState("");
   const [referenceTitle, setReferenceTitle] = useState("");
   const [referenceUrl, setReferenceUrl] = useState("");
+  const [effectiveTiming, setEffectiveTiming] = useState("immediate");
+  const [scheduledEffectiveDate, setScheduledEffectiveDate] = useState(
+    new Date().toLocaleDateString("en-CA"),
+  );
   const [draftError, setDraftError] = useState("");
   const settingsByKey = useMemo(() => buildSettingsByKey(settings), [settings]);
   const stageSetting = async (settingKey, payload) => {
@@ -5604,11 +5608,20 @@ function ComplianceRulesView({
   const publishDraft = async () => {
     if (!changeReason.trim())
       return setDraftError("Enter a reason for this rule publication.");
+    if (
+      effectiveTiming === "scheduled" &&
+      !/^\d{4}-\d{2}-\d{2}$/.test(scheduledEffectiveDate)
+    )
+      return setDraftError("Select a valid effective date.");
     try {
       setPublishing(true);
       setDraftError("");
       const enriched = draftList.map((item) => ({
         ...item,
+        effectiveFrom:
+          effectiveTiming === "immediate"
+            ? new Date().toLocaleDateString("en-CA")
+            : scheduledEffectiveDate,
         referenceTitle: item.referenceTitle || referenceTitle,
         referenceUrl: item.referenceUrl || referenceUrl,
       }));
@@ -5619,6 +5632,8 @@ function ComplianceRulesView({
       setChangeReason("");
       setReferenceTitle("");
       setReferenceUrl("");
+      setEffectiveTiming("immediate");
+      setScheduledEffectiveDate(new Date().toLocaleDateString("en-CA"));
     } catch (error) {
       setDraftError(error.message);
     } finally {
@@ -5897,6 +5912,51 @@ function ComplianceRulesView({
                 className="mt-1 min-h-20 w-full rounded-xl border border-[#f0d2ca] px-3 py-2"
               />
             </label>
+            <fieldset className="mt-3 rounded-xl border border-[#f0d2ca] p-4">
+              <legend className="px-1 text-sm font-semibold">
+                When should this change take effect?
+              </legend>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#f0d2ca] p-3">
+                  <input
+                    type="radio"
+                    name="rule-effective-timing"
+                    value="immediate"
+                    checked={effectiveTiming === "immediate"}
+                    onChange={() => setEffectiveTiming("immediate")}
+                    className="mt-1 accent-[#F38978]"
+                  />
+                  <span>
+                    <strong className="block text-sm">Effective immediately</strong>
+                    <span className="text-xs font-normal text-[#7b6660]">
+                      Apply to new payroll runs from today.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#f0d2ca] p-3">
+                  <input
+                    type="radio"
+                    name="rule-effective-timing"
+                    value="scheduled"
+                    checked={effectiveTiming === "scheduled"}
+                    onChange={() => setEffectiveTiming("scheduled")}
+                    className="mt-1 accent-[#F38978]"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <strong className="block text-sm">Use an effective date</strong>
+                    <input
+                      type="date"
+                      value={scheduledEffectiveDate}
+                      disabled={effectiveTiming !== "scheduled"}
+                      onChange={(event) =>
+                        setScheduledEffectiveDate(event.target.value)
+                      }
+                      className="mt-2 w-full rounded-lg border border-[#f0d2ca] px-3 py-2 text-sm disabled:bg-[#f8f3f1] disabled:text-[#9b8a85]"
+                    />
+                  </span>
+                </label>
+              </div>
+            </fieldset>
             {draftError ? (
               <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">
                 {draftError}
