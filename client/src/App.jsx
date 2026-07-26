@@ -18,6 +18,8 @@ import AdminRecentStatusChangesPage from "./pages/invoicing/AdminRecentStatusCha
 import AdminInvoicingRecordPage from "./pages/invoicing/AdminInvoicingRecordPage.jsx";
 import AdminInvoiceAuditTrailPage from "./pages/invoicing/AdminInvoiceAuditTrailPage.jsx";
 import FinanceInvoicingPage from "./pages/invoicing/FinanceInvoicingPage.jsx";
+import SettingsPage from "./pages/settings/SettingsPage.jsx";
+import RoleSettingsPage from "./pages/settings/RoleSettingsPage.jsx";
 import AdminPayrollPage from "./pages/payroll/AdminPayrollPage.jsx";
 import FinancePayrollPage from "./pages/payroll/FinancePayrollPage.jsx";
 import HRPayrollPage from "./pages/payroll/HRPayrollPage.jsx";
@@ -76,6 +78,28 @@ function FinanceInvoicingRoute({ children }) {
   }
 
   return children;
+}
+
+function SettingsRoute() {
+  const session = getStoredSession();
+
+  if (!session?.token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (session.user?.role === "Admin") {
+    return <SettingsPage />;
+  }
+
+  if (session.user?.role === "HR") {
+    return <RoleSettingsPage role="HR" />;
+  }
+
+  if (session.user?.role === "Staff") {
+    return <RoleSettingsPage role="Staff" />;
+  }
+
+  return <Navigate to="/dashboard/invoicing/finance/settings" replace />;
 }
 
 function AdminPayrollRoute({ children }) {
@@ -343,11 +367,7 @@ export default function App() {
       />
       <Route
         path="/dashboard/settings"
-        element={
-          <ProtectedRoute>
-            <Navigate to="/dashboard/invoicing/finance/settings" replace />
-          </ProtectedRoute>
-        }
+        element={<SettingsRoute />}
       />
     </Routes>
   );
