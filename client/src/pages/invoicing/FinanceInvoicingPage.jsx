@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
@@ -3773,7 +3773,7 @@ function ReportsView() {
             {/* Income Statement - Vaniday Model */}
             <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-5">
               <h3 className="text-sm font-bold uppercase tracking-wide text-[#F38978]">Income Statement</h3>
-              <p className="mt-1 text-xs text-[#7b6660]">Gross Revenue = Inflow âˆ’ Salon Payouts</p>
+              <p className="mt-1 text-xs text-[#7b6660]">Gross Revenue = Inflow - Salon Payouts</p>
               <div className="mt-4 space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-[#7b6660]">Total Inflow</span>
@@ -3781,7 +3781,7 @@ function ReportsView() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-[#7b6660]">Salon Payouts</span>
-                  <span className="font-bold text-amber-700">âˆ’{formatCurrency(fs.incomeStatement.salonPayouts)}</span>
+                  <span className="font-bold text-amber-700">-{formatCurrency(fs.incomeStatement.salonPayouts)}</span>
                 </div>
                 <div className="border-t border-[#f0d2ca] pt-3 flex justify-between text-sm">
                   <span className="font-bold text-[#251E1F]">Gross Revenue (Commission)</span>
@@ -3813,7 +3813,7 @@ function ReportsView() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-[#7b6660]">Salon Payouts Out</span>
-                  <span className="font-bold text-amber-700">âˆ’{formatCurrency(fs.cashFlow.salonPayouts)}</span>
+                  <span className="font-bold text-amber-700">-{formatCurrency(fs.cashFlow.salonPayouts)}</span>
                 </div>
                 <div className="border-t border-[#f0d2ca] pt-3 flex justify-between text-sm">
                   <span className="font-bold text-[#251E1F]">Net Platform Cash</span>
