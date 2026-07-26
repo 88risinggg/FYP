@@ -253,6 +253,9 @@ export default function PayrollUserManagement({ role, defaultShowHire = false })
               body: JSON.stringify({
                 name: hire.name, email: hire.email, employee_code: hire.employeeCode,
                 phone: hire.phone, department_name: hire.departmentName, hire_date: hire.hireDate,
+                date_of_birth: hire.dateOfBirth || null,
+                race: hire.race || null,
+                religion: hire.religion || null,
                 base_salary: hire.baseSalary, bank: hire.bank, account_no: hire.accountNo
               })
             })

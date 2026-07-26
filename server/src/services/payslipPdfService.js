@@ -20,7 +20,18 @@ function getExecutablePath() {
     return process.env.PUPPETEER_EXECUTABLE_PATH;
   }
   if (process.platform === "win32") {
-    return "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+    // Check user-level install first (most common on dev machines), then system-wide
+    const candidates = [
+      `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+      `${process.env.LOCALAPPDATA}\\Microsoft\\Edge\\Application\\msedge.exe`,
+      "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+    ];
+    for (const p of candidates) {
+      if (p && fs.existsSync(p)) return p;
+    }
+    return candidates[1]; // fall back to default system path
   }
   if (process.platform === "darwin") {
     return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";

@@ -13,6 +13,7 @@ const {
 } = require("../services/statutoryPayrollEngine");
 const { getActivePayrollRules } = require("../services/payrollRuleConfigService");
 const { postPayrollRecoveries } = require("../services/payrollRecoveryPostingService");
+const { getUnpaidLeaveDaysForMonth, calculateUnpaidLeaveDeduction } = require("../controllers/leaveController");
 
 const WORKFLOW_FIELDS = [
   "reviewedAt",
@@ -82,7 +83,7 @@ function pickWorkflow(run) {
   return Object.fromEntries(WORKFLOW_FIELDS.filter((field) => run[field] !== undefined).map((field) => [field, run[field]]));
 }
 
-function buildEmployeeFromPayroll(row, paymentRecipient = {}) {
+async function buildEmployeeFromPayroll(row, paymentRecipient = {}) {
   const breakdown = parseJson(row.deduction_breakdown, {});
   const selfHelpGroups = Array.isArray(breakdown.selfHelpGroups) ? breakdown.selfHelpGroups : [];
   const otherDeductions = Array.isArray(breakdown.otherDeductions) ? breakdown.otherDeductions : [];
@@ -102,7 +103,13 @@ function buildEmployeeFromPayroll(row, paymentRecipient = {}) {
     department: row.department_name || "",
     workLocation: "Singapore",
     workingDays: 26,
-    noPayLeave: 0,
+    noPayLeave: await (async () => {
+      try {
+        return await getUnpaidLeaveDaysForMonth(row.employee_id, row.payroll_month, row.payroll_year);
+      } catch {
+        return 0;
+      }
+    })(),
     cpfAgeGroup: breakdown.cpfTier || "Manual review",
     cpfWageBase: toMoney(breakdown.cpfWageBase),
     storedGrossPay: grossSalary,
@@ -110,6 +117,14 @@ function buildEmployeeFromPayroll(row, paymentRecipient = {}) {
     storedNetPay: toMoney(row.net_salary),
     grossPay: basicSalary,
     previousGrossPay: basicSalary,
+    unpaidLeaveDeduction: await (async () => {
+      try {
+        const unpaidDays = await getUnpaidLeaveDaysForMonth(row.employee_id, row.payroll_month, row.payroll_year);
+        return unpaidDays > 0 ? calculateUnpaidLeaveDeduction(Number(row.base_salary || 0), 26, unpaidDays) : 0;
+      } catch {
+        return 0;
+      }
+    })(),
     religion: row.religion || "",
     race: row.race || "",
     allowances: totalAllowances,
@@ -171,7 +186,7 @@ async function getPayrollRows(connection, month, year) {
   return rows;
 }
 
-function mapRun(rows, activeRulesHash = null) {
+async function mapRun(rows, activeRulesHash = null) {
   if (!rows.length) return null;
   const first = rows[0];
   const stored = parseJson(first.header_configuration_json || first.configuration_json, {});
@@ -205,7 +220,7 @@ function mapRun(rows, activeRulesHash = null) {
     paymentAttemptedAt: first.payment_attempted_at || null,
     releaseFailureReason: first.release_failure_reason || null,
     updatedAt: first.header_updated_at || first.header_created_at || null,
-    employees: rows.map((row) => buildEmployeeFromPayroll(row, paymentRecipients[String(row.employee_id)] || {})),
+    employees: await Promise.all(rows.map((row) => buildEmployeeFromPayroll(row, paymentRecipients[String(row.employee_id)] || {}))),
     ...workflow
   };
 }
@@ -220,7 +235,7 @@ async function listFinancePayrollRuns() {
   const result = [];
   for (const period of periods) {
     const rows = await getPayrollRows(pool, period.payroll_month, period.payroll_year);
-    const run = mapRun(rows, activeRulesHash);
+    const run = await mapRun(rows, activeRulesHash);
     if (run) result.push(run);
   }
   return result;
@@ -483,7 +498,7 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
 
     await connection.commit();
     const rows = await getPayrollRows(pool, month, year);
-    return { run: mapRun(rows) };
+    return { run: await mapRun(rows) };
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -592,7 +607,7 @@ async function recalculateFinancePayrollRun({ runId, userId, userEmail, connecti
        WHERE payroll_run_id = ?`,
       [configurationResult.insertId, JSON.stringify(configuration), first.payroll_run_id]
     );
-    const mapped = mapRun(await getPayrollRows(connection, month, year), getRulesHash(activeRules));
+    const mapped = await mapRun(await getPayrollRows(connection, month, year), getRulesHash(activeRules));
     if (adjustmentReview) {
       mapped.timeline = [{ action: "Approved payroll adjustments applied and run recalculated", at: now, owner: userEmail || "Finance" }, ...(mapped.timeline || [])];
     }
@@ -709,7 +724,7 @@ async function upsertFinancePayrollRun({ run, userId }) {
   }
 
   const savedRows = await getPayrollRows(pool, month, year);
-  return mapRun(savedRows);
+  return await mapRun(savedRows);
 }
 
 async function applyFinancePayrollWorkflowAction({ runId, action, payload = {}, userId }) {
@@ -731,7 +746,7 @@ async function applyFinancePayrollWorkflowAction({ runId, action, payload = {}, 
     await connection.beginTransaction();
     const rows = await getPayrollRows(connection, month, year);
     if (!rows.length) throw Object.assign(new Error("Payroll run not found."), { code: "PAYROLL_RUN_NOT_FOUND" });
-    const current = mapRun(rows, getRulesHash(await getActivePayrollRules()));
+    const current = await mapRun(rows, getRulesHash(await getActivePayrollRules()));
     if (payload.expectedUpdatedAt && current.updatedAt && new Date(payload.expectedUpdatedAt).getTime() !== new Date(current.updatedAt).getTime()) {
       throw Object.assign(new Error("This payroll run changed in another session. Refresh it before continuing."), { code: "STALE_RUN" });
     }
@@ -848,7 +863,7 @@ async function applyFinancePayrollWorkflowAction({ runId, action, payload = {}, 
       [status, databaseApprovedAt, paymentReference, rows[0].payroll_run_id]
     );
     await connection.commit();
-    return mapRun(await getPayrollRows(pool, month, year), getRulesHash(await getActivePayrollRules()));
+    return await mapRun(await getPayrollRows(pool, month, year), getRulesHash(await getActivePayrollRules()));
   } catch (error) {
     await connection.rollback();
     throw error;

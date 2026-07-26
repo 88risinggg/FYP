@@ -393,8 +393,9 @@ function HRDashboardView() {
     .map(s => {
       const dob = new Date(s.date_of_birth);
       const today = new Date();
+      today.setHours(0, 0, 0, 0);
       const birthday = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
-      const daysUntil = Math.ceil((birthday - today) / (1000 * 60 * 60 * 24));
+      const daysUntil = Math.round((birthday - today) / (1000 * 60 * 60 * 24));
       return { ...s, daysUntil };
     })
     .sort((a, b) => a.daysUntil - b.daysUntil);
@@ -599,11 +600,14 @@ function HRDashboardView() {
                   </p>
                 </div>
                 <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
-                  s.daysUntil <= 0 ? "bg-red-500/20 text-red-700" :
-                  s.daysUntil <= 7 ? "bg-yellow-500/20 text-yellow-700" :
-                  "bg-emerald-500/20 text-emerald-700"
+                  s.daysUntil === 0 ? "bg-red-500/20 text-red-700" :
+                  s.daysUntil < 0   ? "bg-gray-400/20 text-gray-500" :
+                  s.daysUntil <= 7  ? "bg-yellow-500/20 text-yellow-700" :
+                                      "bg-emerald-500/20 text-emerald-700"
                 }`}>
-                  {s.daysUntil <= 0 ? "Today! 🎉" : `in ${s.daysUntil}d`}
+                  {s.daysUntil === 0 ? "Today! 🎉" :
+                   s.daysUntil < 0  ? `${Math.abs(s.daysUntil)}d ago` :
+                   `in ${s.daysUntil}d`}
                 </span>
               </div>
             ))
@@ -921,6 +925,9 @@ function StaffRecordsView({ onStartHire }) {
       department_id: staff.department_id || "",
       base_salary: staff.base_salary || "",
       status: statusStr,
+      date_of_birth: staff.date_of_birth ? new Date(staff.date_of_birth).toISOString().slice(0, 10) : "",
+      race: staff.race || "",
+      religion: staff.religion || "",
       staffRequestConfirmed: false
     });
     setIsEditModalOpen(true);
@@ -973,6 +980,11 @@ function StaffRecordsView({ onStartHire }) {
       } else if (editingStaff.phone) {
         payload.phone = editingStaff.phone;
       }
+
+      // date_of_birth, race, religion — HR-managed fields, always include if present
+      if (editFormData.date_of_birth !== "") payload.date_of_birth = editFormData.date_of_birth || null;
+      if (editFormData.race     !== "")  payload.race     = editFormData.race     || null;
+      if (editFormData.religion !== "")  payload.religion = editFormData.religion || null;
 
       const response = await fetch(`${API_BASE_URL}/api/hr/staff/${getStaffActionId(editingStaff)}`, {
         method: "PUT",
@@ -1350,6 +1362,38 @@ function StaffRecordsView({ onStartHire }) {
                   value={editFormData.base_salary || ""}
                   onChange={(e) => setEditFormData({ ...editFormData, base_salary: e.target.value })}
                   className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F] placeholder-white/30"
+                />
+              </div>
+              <div>
+                <label htmlFor="staff-edit-dob" className="block text-sm font-medium text-[#7b6660]">Date of Birth</label>
+                <input
+                  id="staff-edit-dob"
+                  type="date"
+                  value={editFormData.date_of_birth || ""}
+                  onChange={(e) => setEditFormData({ ...editFormData, date_of_birth: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F]"
+                />
+              </div>
+              <div>
+                <label htmlFor="staff-edit-race" className="block text-sm font-medium text-[#7b6660]">Race</label>
+                <input
+                  id="staff-edit-race"
+                  type="text"
+                  value={editFormData.race || ""}
+                  onChange={(e) => setEditFormData({ ...editFormData, race: e.target.value })}
+                  placeholder="e.g. Chinese, Malay, Indian, Others"
+                  className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F] placeholder-[#251E1F]/30"
+                />
+              </div>
+              <div>
+                <label htmlFor="staff-edit-religion" className="block text-sm font-medium text-[#7b6660]">Religion</label>
+                <input
+                  id="staff-edit-religion"
+                  type="text"
+                  value={editFormData.religion || ""}
+                  onChange={(e) => setEditFormData({ ...editFormData, religion: e.target.value })}
+                  placeholder="e.g. Buddhism, Islam, Christianity, Hinduism"
+                  className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F] placeholder-[#251E1F]/30"
                 />
               </div>
               <div>
@@ -2179,7 +2223,7 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
 
   const performBulkSendToStaff = async () => {
     const approvedIds = payslips
-      .filter(p => ['admin_approved', 'finance_approved'].includes((p.status || '').toLowerCase()))
+      .filter(p => (p.status || '').toLowerCase() === 'finance_approved')
       .map(p => p.payslip_id);
     if (approvedIds.length === 0) {
       setError('No approved payslips to send to staff');
@@ -2621,10 +2665,10 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
             <button
               type="button"
               onClick={performBulkSendToStaff}
-              disabled={actionInProgress === 'bulk-staff' || payslips.filter(p => ['admin_approved', 'finance_approved'].includes((p.status || '').toLowerCase())).length === 0}
+              disabled={actionInProgress === 'bulk-staff' || payslips.filter(p => (p.status || '').toLowerCase() === 'finance_approved').length === 0}
               className="rounded-lg bg-emerald-500/20 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-500/30 disabled:opacity-30 transition"
             >
-              {actionInProgress === 'bulk-staff' ? 'Sending...' : `📨 Send to Staff (${payslips.filter(p => ['admin_approved', 'finance_approved'].includes((p.status || '').toLowerCase())).length})`}
+              {actionInProgress === 'bulk-staff' ? 'Sending...' : `📨 Send to Staff (${payslips.filter(p => (p.status || '').toLowerCase() === 'finance_approved').length})`}
             </button>
             <button
               type="button"
@@ -2700,7 +2744,7 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
                           <span className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap ${getStatusColor(payslip.status)}`}>
                             {getStatusLabel(payslip.status)}
                           </span>
-                          {String(payslip.status || "").toLowerCase() === "hold" && getHoldReasons(payslip).length > 0 ? (
+                          {String(payslip.status || "").toLowerCase() === "hold" ? (
                             <button
                               type="button"
                               onMouseEnter={(event) => openHoldTooltip(event, payslip)}
@@ -2713,7 +2757,7 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
                               }}
                               className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#D97706]/25 bg-[#D97706]/10 text-[10px] font-bold leading-none text-[#9A6412] outline-none transition hover:bg-[#D97706]/20 focus:bg-[#D97706]/20"
                               aria-label="View hold reason"
-                              title={buildHoldTooltipText(getHoldReasons(payslip)[0])}
+                              title={buildHoldTooltipText(getHoldReasons(payslip)[0] || "This payslip has been placed on hold pending review.")}
                             >
                               ?
                             </button>

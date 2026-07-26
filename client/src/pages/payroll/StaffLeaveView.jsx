@@ -316,7 +316,7 @@ export default function StaffLeaveView() {
                     type="file"
                     onChange={(e) => setAttachment(e.target.files[0] || null)}
                     className="hidden"
-                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    accept=".pdf,.jpg,.jpeg,.png"
                   />
                 </label>
                 {attachment && (
@@ -336,6 +336,7 @@ export default function StaffLeaveView() {
           <button
             type="submit"
             disabled={submitting}
+            onClick={(e) => { if (submitting) e.preventDefault(); }}
             className="inline-flex items-center gap-2 rounded-lg bg-[#F38978] px-6 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
             {submitting ? (
@@ -393,6 +394,9 @@ export default function StaffLeaveView() {
                         >
                           {cancellingId === app.id ? "Cancelling..." : "Cancel"}
                         </button>
+                      )}
+                      {app.status === "approved" && (
+                        <span className="text-xs text-[#7b6660]/50 italic">Contact HR to cancel</span>
                       )}
                     </td>
                   </tr>

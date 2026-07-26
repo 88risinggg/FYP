@@ -43,8 +43,8 @@ export function getPendingApplications() {
   return apiRequest("/api/leave/applications/pending");
 }
 
-export function getAllApplications() {
-  return apiRequest("/api/leave/applications/all");
+export function getAllApplications({ page = 1, pageSize = 50 } = {}) {
+  return apiRequest(`/api/leave/applications/all?page=${page}&pageSize=${pageSize}`);
 }
 
 export function updateLeaveStatus(applicationId, { status, hr_comment }) {

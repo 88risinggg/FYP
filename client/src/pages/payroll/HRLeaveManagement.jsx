@@ -41,6 +41,9 @@ export default function HRLeaveManagement() {
   const [activeTab, setActiveTab] = useState("pending");
   const [pendingApps, setPendingApps] = useState([]);
   const [allApps, setAllApps] = useState([]);
+  const [allAppsTotal, setAllAppsTotal] = useState(0);
+  const [allAppsPage, setAllAppsPage] = useState(1);
+  const PAGE_SIZE = 50;
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
@@ -79,11 +82,13 @@ export default function HRLeaveManagement() {
     try {
       const [pendingData, allData, typesData] = await Promise.all([
         getPendingApplications(),
-        getAllApplications(),
+        getAllApplications({ page: allAppsPage, pageSize: PAGE_SIZE }),
         getLeaveTypes()
       ]);
       setPendingApps(Array.isArray(pendingData) ? pendingData : []);
-      setAllApps(Array.isArray(allData) ? allData : []);
+      const appsArray = Array.isArray(allData) ? allData : (allData?.applications ?? []);
+      setAllApps(appsArray);
+      setAllAppsTotal(allData?.total ?? appsArray.length);
       setLeaveTypes(Array.isArray(typesData) ? typesData : []);
     } catch (err) {
       console.error("Failed to load leave data:", err);
@@ -457,6 +462,7 @@ export default function HRLeaveManagement() {
               <p className="mt-3 text-sm text-[#7b6660]">No applications match the current filters.</p>
             </div>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -497,6 +503,32 @@ export default function HRLeaveManagement() {
                 </tbody>
               </table>
             </div>
+            {allAppsTotal > PAGE_SIZE && (
+              <div className="flex items-center justify-between mt-4">
+                <p className="text-xs text-[#7b6660]">
+                  Page {allAppsPage} of {Math.ceil(allAppsTotal / PAGE_SIZE)}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={allAppsPage === 1}
+                    onClick={() => setAllAppsPage(p => p - 1)}
+                    className="rounded-lg border border-[#f0d2ca] px-3 py-1.5 text-xs text-[#7b6660] hover:bg-white/80 disabled:opacity-40 transition"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    disabled={allAppsPage >= Math.ceil(allAppsTotal / PAGE_SIZE)}
+                    onClick={() => setAllAppsPage(p => p + 1)}
+                    className="rounded-lg border border-[#f0d2ca] px-3 py-1.5 text-xs text-[#7b6660] hover:bg-white/80 disabled:opacity-40 transition"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </div>
       )}

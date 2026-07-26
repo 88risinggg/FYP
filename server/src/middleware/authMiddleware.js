@@ -54,7 +54,7 @@ async function authenticateToken(req, res, next) {
     try {
       const [staffRows] = await pool.execute(
         "SELECT employee_id FROM staff WHERE user_user_id = ? LIMIT 1",
-        [user.userId]
+        [user.user_id]
       );
       if (staffRows.length > 0) {
         req.user.staffId = staffRows[0].employee_id;
