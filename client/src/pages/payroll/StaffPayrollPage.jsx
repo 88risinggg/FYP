@@ -19,7 +19,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { apiRequest } from "../../services/apiClient.js";
 import { getStoredSession, clearSession } from "../../services/sessionService.js";
-import { buildVanidayPayslipHtml } from "../../utils/vanidayPayslipTemplate.js";
+import { fetchConfiguredPayslipPdf, printConfiguredPayslip } from "../../utils/payslipPdf.js";
 import StaffProfile from "./StaffProfile.jsx";
 import StaffLeaveView from "./StaffLeaveView.jsx";
 import StaffLoanPage from "./StaffLoanPage.jsx";
@@ -204,18 +204,7 @@ export default function StaffPayrollPage() {
     const id = payslip.payslip_id || payslip.payroll_id;
     if (!id) return;
     try {
-      const session = getStoredSession();
-      const token = session?.token;
-      const url = `${import.meta.env.VITE_API_BASE_URL || ""}/api/payslips/${id}/pdf`;
-      const res = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        console.error("PDF download failed:", body.message || res.status);
-        return;
-      }
-      const blob = await res.blob();
+      const blob = await fetchConfiguredPayslipPdf(payslip);
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = objectUrl;
@@ -229,14 +218,12 @@ export default function StaffPayrollPage() {
     }
   }
 
-  function printStaffPayslip(payslip) {
-    const html = buildVanidayPayslipHtml(payslip);
-    const w = window.open('', '_blank');
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    w.print();
-    w.close();
+  async function printStaffPayslip(payslip) {
+    try {
+      await printConfiguredPayslip(payslip);
+    } catch (error) {
+      console.error("Payslip print error:", error);
+    }
   }
 
   return (

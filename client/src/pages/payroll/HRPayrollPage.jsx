@@ -32,7 +32,7 @@ import ClaimManagementPage from "./ClaimManagementPage.jsx";
 import PayrollUserManagement from "../../components/payroll/PayrollUserManagement.jsx";
 import PayrollNotificationsView from "../../components/payroll/PayrollNotificationsView.jsx";
 import { getCompanyScopedKey, getStoredSession } from "../../services/sessionService.js";
-import { buildVanidayPayslipHtml } from "../../utils/vanidayPayslipTemplate.js";
+import { printConfiguredPayslip } from "../../utils/payslipPdf.js";
 import { getEffectivePayrollRules } from "../../services/adminPayrollService.js";
 
 const pageTitle = "Automated Payroll System – HR Payroll Upload & Payslip Generation";
@@ -93,15 +93,12 @@ function getDeptName(deptId) {
   return names[deptId] || "—";
 }
 
-function printPayslip(payslip) {
-  const printContent = buildVanidayPayslipHtml(payslip);
-
-  const printWindow = window.open('', '_blank');
-  printWindow.document.write(printContent);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
-  printWindow.close();
+async function printPayslip(payslip) {
+  try {
+    await printConfiguredPayslip(payslip);
+  } catch (error) {
+    console.error("Payslip print error:", error);
+  }
 }
 
 const payrollSidebarSections = [
