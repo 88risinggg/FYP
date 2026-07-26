@@ -30,11 +30,11 @@ function buildReminderValues(invoice, override = {}) {
   return {
     client_name: invoice.clientName || "Client",
     invoice_number: invoice.invoiceNumber || "Invoice",
-    amount_due: invoice.amountDue ?? "",
+    amount_due: invoice.amountDue == null ? "" : `SGD ${Number(invoice.amountDue).toFixed(2)}`,
     due_date: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString("en-SG") : "",
     overdue_days: invoice.overdueDays ?? "",
     company_name: process.env.COMPANY_NAME || "PayNivo",
-    payment_link: process.env.PAYMENT_BASE_URL || "#",
+    payment_link: invoice.paymentLink || process.env.PAYMENT_BASE_URL || "#",
     ...override
   };
 }

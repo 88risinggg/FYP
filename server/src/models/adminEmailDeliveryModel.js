@@ -1,5 +1,6 @@
 const { pool } = require("../config/db");
 const { todayUtcBounds } = require("./adminReminderMonitorModel");
+const { currentCompanyId } = require("../services/tenantContext");
 
 const SUCCESS = new Set(["sent", "success", "successful", "delivered", "accepted"]);
 const FAILED = new Set(["failed", "rejected", "bounced", "error"]);
@@ -71,7 +72,7 @@ function mapAuditRow(row) {
   };
 }
 
-async function loadAuditDeliveries() {
+async function loadAuditDeliveries(companyId) {
   const [rows] = await pool.query(
     `SELECT al.audit_log_id AS id, al.activity_type AS activityType,
        al.action_description AS actionDescription, al.status AS auditStatus,
@@ -84,7 +85,8 @@ async function loadAuditDeliveries() {
      FROM audit_logs al
      LEFT JOIN invoice i ON i.invoice_id = COALESCE(al.invoice_id, CAST(al.affected_record AS UNSIGNED))
      LEFT JOIN customer c ON c.customer_id = i.customer_id
-     WHERE LOWER(COALESCE(al.module, '')) = 'invoice'
+     WHERE al.company_id = ?
+       AND LOWER(COALESCE(al.module, '')) = 'invoice'
        AND (
          LOWER(COALESCE(al.activity_type, '')) IN ('invoice_reminder', 'email_delivery')
          OR LOWER(COALESCE(al.action_description, '')) IN (
@@ -96,12 +98,13 @@ async function loadAuditDeliveries() {
          )
        )
      ORDER BY al.created_at DESC, al.audit_log_id DESC
-     LIMIT 5000`
+     LIMIT 5000`,
+    [companyId]
   );
   return rows.map(mapAuditRow).filter(Boolean);
 }
 
-async function loadLegacyReminderDeliveries() {
+async function loadLegacyReminderDeliveries(companyId) {
   try {
     const [rows] = await pool.query(
       `SELECT rl.reminder_log_id AS id, rl.invoice_id AS invoiceId,
@@ -113,9 +116,11 @@ async function loadLegacyReminderDeliveries() {
        FROM reminder_logs rl
        LEFT JOIN invoice i ON i.invoice_id = rl.invoice_id
        LEFT JOIN customer c ON c.customer_id = i.customer_id
-       WHERE LOWER(COALESCE(rl.delivery_channel, 'email')) = 'email'
+       WHERE rl.company_id = ?
+         AND LOWER(COALESCE(rl.delivery_channel, 'email')) = 'email'
        ORDER BY rl.sent_at DESC, rl.reminder_log_id DESC
-       LIMIT 5000`
+       LIMIT 5000`,
+      [companyId]
     );
     return rows.map((row) => mapAuditRow({
       ...row,
@@ -131,15 +136,18 @@ async function loadLegacyReminderDeliveries() {
   }
 }
 
-async function loadPendingScheduledInvoices() {
+async function loadPendingScheduledInvoices(companyId) {
   const [rows] = await pool.query(
     `SELECT i.invoice_id AS invoiceId, i.invoiceId AS invoiceNumber,
        i.status AS invoiceStatus, i.scheduled_at AS scheduledAt,
        i.created_at AS createdAt, c.name AS customerName, c.email AS recipientEmail
      FROM invoice i
      LEFT JOIN customer c ON c.customer_id = i.customer_id
-     WHERE LOWER(i.status) = 'scheduled' AND i.scheduled_at IS NOT NULL
-     ORDER BY i.scheduled_at ASC, i.invoice_id ASC`
+     WHERE i.company_id = ?
+       AND c.company_id = ?
+       AND LOWER(i.status) = 'scheduled' AND i.scheduled_at IS NOT NULL
+     ORDER BY i.scheduled_at ASC, i.invoice_id ASC`,
+    [companyId, companyId]
   );
   return rows.map((row) => ({
     id: `scheduled-invoice-${row.invoiceId}`,
@@ -225,8 +233,11 @@ function deduplicateAndAddRetries(records) {
 }
 
 async function getAdminEmailDeliveryData(options = {}) {
+  const companyId = currentCompanyId();
   const [audit, legacy, pending] = await Promise.all([
-    loadAuditDeliveries(), loadLegacyReminderDeliveries(), loadPendingScheduledInvoices()
+    loadAuditDeliveries(companyId),
+    loadLegacyReminderDeliveries(companyId),
+    loadPendingScheduledInvoices(companyId)
   ]);
   const byId = new Map([...audit, ...legacy, ...pending].map((record) => [record.id, record]));
   const records = deduplicateAndAddRetries(Array.from(byId.values()))

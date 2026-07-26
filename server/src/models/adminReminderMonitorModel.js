@@ -1,4 +1,5 @@
 const { pool } = require("../config/db");
+const { currentCompanyId } = require("../services/tenantContext");
 const {
   APPLICATION_TIMEZONE,
   daysOverdue,
@@ -110,6 +111,7 @@ function ruleIntervals(rule) {
 }
 
 async function getAdminReminderMonitorData() {
+  const companyId = currentCompanyId();
   const bounds = todayUtcBounds();
   const [todayLogs] = await pool.query(
     `SELECT
@@ -137,10 +139,11 @@ async function getAdminReminderMonitorData() {
            ELSE 0 END), 0), 0) AS confirmedPaid
        FROM payment GROUP BY invoice_invoice_id
      ) payments ON payments.invoice_invoice_id = i.invoice_id
-     WHERE LOWER(al.activity_type) = 'invoice_reminder'
+     WHERE al.company_id = ?
+       AND LOWER(al.activity_type) = 'invoice_reminder'
        AND al.created_at >= ? AND al.created_at < ?
      ORDER BY al.created_at DESC, al.audit_log_id DESC`,
-    [bounds.start, bounds.end]
+    [companyId, bounds.start, bounds.end]
   );
 
   let reminderTableLogs = [];
@@ -161,16 +164,20 @@ async function getAdminReminderMonitorData() {
          SELECT invoice_invoice_id, SUM(CASE WHEN LOWER(status) IN ('paid', 'completed', 'success', 'successful', 'verified') THEN amount ELSE 0 END) AS confirmedPaid
          FROM payment GROUP BY invoice_invoice_id
        ) payments ON payments.invoice_invoice_id = i.invoice_id
-       WHERE rl.sent_at >= ? AND rl.sent_at < ?
+       WHERE rl.company_id = ?
+         AND rl.sent_at >= ? AND rl.sent_at < ?
        ORDER BY rl.sent_at DESC, rl.reminder_log_id DESC`,
-      [bounds.start, bounds.end]
+      [companyId, bounds.start, bounds.end]
     );
     [reminderTableHistory] = await pool.query(
       `SELECT invoice_id AS invoiceId, CONCAT('reminder:', reminder_type) AS actionDescription,
          SUM(LOWER(delivery_status) = 'failed') AS failedCount,
          SUM(LOWER(delivery_status) IN ('sent', 'success', 'successful', 'delivered')) AS reminderCount,
          MAX(CASE WHEN LOWER(delivery_status) IN ('sent', 'success', 'successful', 'delivered') THEN sent_at END) AS lastReminderSent
-       FROM reminder_logs GROUP BY invoice_id, reminder_type`
+       FROM reminder_logs
+       WHERE company_id = ?
+       GROUP BY invoice_id, reminder_type`,
+      [companyId]
     );
   } catch (error) {
     if (error?.code !== "ER_NO_SUCH_TABLE" && error?.code !== "ER_BAD_FIELD_ERROR") throw error;
@@ -182,8 +189,10 @@ async function getAdminReminderMonitorData() {
        SUM(LOWER(status) IN ('sent', 'success', 'successful', 'delivered')) AS reminderCount,
        MAX(CASE WHEN LOWER(status) IN ('sent', 'success', 'successful', 'delivered') THEN created_at END) AS lastReminderSent
      FROM audit_logs
-     WHERE LOWER(activity_type) = 'invoice_reminder'
-     GROUP BY affected_record, action_description`
+     WHERE company_id = ?
+       AND LOWER(activity_type) = 'invoice_reminder'
+     GROUP BY affected_record, action_description`,
+    [companyId]
   );
 
   const retryCounts = new Map();
@@ -224,7 +233,10 @@ async function getAdminReminderMonitorData() {
          timezone, first_reminder_days AS firstReminderDays,
          second_reminder_days AS secondReminderDays, final_reminder_days AS finalReminderDays
        FROM reminder_settings
-       WHERE is_enabled = 1 AND LOWER(delivery_channel) = 'email'`
+       WHERE company_id = ?
+         AND is_enabled = 1
+         AND LOWER(delivery_channel) = 'email'`,
+      [companyId]
     );
     ruleTableAvailable = true;
   } catch (error) {
@@ -246,8 +258,11 @@ async function getAdminReminderMonitorData() {
            ELSE 0 END), 0), 0) AS confirmedPaid
        FROM payment GROUP BY invoice_invoice_id
      ) payments ON payments.invoice_invoice_id = i.invoice_id
-     WHERE i.due_date IS NOT NULL
-       AND LOWER(i.status) IN ('sent', 'viewed', 'overdue', 'unpaid', 'partially_paid', 'pending review')`
+     WHERE i.company_id = ?
+       AND c.company_id = ?
+       AND i.due_date IS NOT NULL
+       AND LOWER(i.status) IN ('sent', 'viewed', 'overdue', 'unpaid', 'partially_paid', 'pending review')`,
+    [companyId, companyId]
   );
 
   const pending = invoiceRows.flatMap((invoice) => {

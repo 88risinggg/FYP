@@ -5,7 +5,7 @@
  * Finance users can view, filter, search, complete, and dismiss reminders.
  */
 
-const { getCompanyId } = require("../utils/companyScope");
+const { getCompanyId, requireCompanyId } = require("../utils/companyScope");
 const {
   findAllFinanceReminders,
   getFinanceReminderSummary,
@@ -70,12 +70,13 @@ async function completeReminderHandler(req, res) {
   try {
     const reminderId = Number(req.params.id);
     const userId = req.user?.userId || null;
+    const companyId = requireCompanyId(req);
 
     if (!reminderId) {
       return res.status(400).json({ message: "Invalid reminder ID." });
     }
 
-    const success = await completeFinanceReminder(reminderId, userId);
+    const success = await completeFinanceReminder(reminderId, userId, companyId);
     if (!success) {
       return res.status(404).json({ message: "Reminder not found or already resolved." });
     }
@@ -92,12 +93,13 @@ async function dismissReminderHandler(req, res) {
   try {
     const reminderId = Number(req.params.id);
     const userId = req.user?.userId || null;
+    const companyId = requireCompanyId(req);
 
     if (!reminderId) {
       return res.status(400).json({ message: "Invalid reminder ID." });
     }
 
-    const success = await dismissFinanceReminder(reminderId, userId);
+    const success = await dismissFinanceReminder(reminderId, userId, companyId);
     if (!success) {
       return res.status(404).json({ message: "Reminder not found or already resolved." });
     }

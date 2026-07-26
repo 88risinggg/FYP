@@ -196,6 +196,11 @@ async function createFinanceReminder(data) {
   const conditions = ["reminder_type = ?", "status = 'Active'"];
   const dupeParams = [data.reminderType];
 
+  if (data.companyId) {
+    conditions.push("company_id = ?");
+    dupeParams.push(data.companyId);
+  }
+
   if (data.invoiceId) {
     conditions.push("invoice_id = ?");
     dupeParams.push(data.invoiceId);
@@ -245,12 +250,12 @@ async function createFinanceReminder(data) {
 /**
  * Mark a reminder as completed.
  */
-async function completeFinanceReminder(reminderId, userId) {
+async function completeFinanceReminder(reminderId, userId, companyId) {
   const [result] = await pool.query(
     `UPDATE finance_reminders
      SET status = 'Completed', resolved_at = NOW(), resolved_by = ?
-     WHERE reminder_id = ? AND status = 'Active'`,
-    [userId || null, reminderId]
+     WHERE reminder_id = ? AND company_id = ? AND status = 'Active'`,
+    [userId || null, reminderId, companyId]
   );
   return result.affectedRows > 0;
 }
@@ -258,12 +263,12 @@ async function completeFinanceReminder(reminderId, userId) {
 /**
  * Dismiss a reminder.
  */
-async function dismissFinanceReminder(reminderId, userId) {
+async function dismissFinanceReminder(reminderId, userId, companyId) {
   const [result] = await pool.query(
     `UPDATE finance_reminders
      SET status = 'Dismissed', resolved_at = NOW(), resolved_by = ?
-     WHERE reminder_id = ? AND status = 'Active'`,
-    [userId || null, reminderId]
+     WHERE reminder_id = ? AND company_id = ? AND status = 'Active'`,
+    [userId || null, reminderId, companyId]
   );
   return result.affectedRows > 0;
 }

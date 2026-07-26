@@ -41,7 +41,7 @@ router.get("/settings", async (req, res) => {
 
     try {
       const { listReminderSettings } = require("../models/reminderModel");
-      const reminders = await listReminderSettings();
+      const reminders = await listReminderSettings(companyId);
       reminderRules = reminders || [];
     } catch { /* Reminder table may not exist */ }
 

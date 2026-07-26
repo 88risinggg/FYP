@@ -1,6 +1,5 @@
 const {
   createReminderSetting,
-  deleteReminderSetting,
   findReminderSettingById,
   getReminderSummary,
   listReminderLogs,
@@ -10,6 +9,8 @@ const {
 } = require("../models/reminderModel");
 const { getClientIp, logAuditEvent } = require("../models/auditLogModel");
 const { sendTestReminderEmail } = require("../services/emailService");
+const { createNotification } = require("../services/invoiceNotificationService");
+const { requireCompanyId } = require("../utils/companyScope");
 
 const requiredPlaceholders = ["{{client_name}}", "{{invoice_number}}", "{{amount_due}}", "{{due_date}}"];
 
@@ -28,18 +29,18 @@ function normalizeReminderSetting(body) {
     enabled: toBoolean(body.enabled, true),
     frequency: String(body.frequency || "").trim(),
     reminderTime: String(body.reminderTime || "").trim(),
-    timezone: String(body.timezone || "").trim(),
-    deliveryChannel: String(body.deliveryChannel || "").trim(),
-    whatsappEnabled: toBoolean(body.whatsappEnabled, false),
+    timezone: "Asia/Singapore",
+    deliveryChannel: "Email",
+    whatsappEnabled: false,
     firstReminderDays: Number(body.firstReminderDays ?? intervals.firstReminderDays),
     secondReminderDays: Number(body.secondReminderDays ?? intervals.secondReminderDays),
     finalReminderDays: body.finalReminderDays || intervals.finalReminderDays
       ? Number(body.finalReminderDays ?? intervals.finalReminderDays)
       : null,
-    unpaidOnly: toBoolean(body.unpaidOnly, true),
-    stopWhenPaid: toBoolean(body.stopWhenPaid, true),
-    excludeCancelled: toBoolean(body.excludeCancelled, true),
-    includePdf: toBoolean(body.includePdf, true),
+    unpaidOnly: true,
+    stopWhenPaid: true,
+    excludeCancelled: true,
+    includePdf: false,
     templateName: String(body.templateName || "").trim(),
     emailSubject: String(body.emailSubject || "").trim(),
     emailBody: String(body.emailBody || "").trim()
@@ -50,6 +51,9 @@ function validateReminderSetting(setting) {
   const errors = [];
 
   if (!setting.frequency) errors.push("Reminder frequency is required.");
+  if (!["Daily", "Weekdays"].includes(setting.frequency)) {
+    errors.push("Reminder frequency must be Daily or Weekdays.");
+  }
   if (!setting.reminderTime) errors.push("Reminder time is required.");
   if (!setting.timezone) errors.push("Time zone is required.");
   if (!setting.deliveryChannel) errors.push("Delivery channel is required.");
@@ -84,10 +88,11 @@ function handleReminderError(error, res, fallbackMessage) {
 
 async function getReminderSettings(req, res) {
   try {
+    const companyId = requireCompanyId(req);
     const [settings, logs, summary] = await Promise.all([
-      listReminderSettings(),
-      listReminderLogs(25),
-      getReminderSummary()
+      listReminderSettings(companyId),
+      listReminderLogs(companyId, 25),
+      getReminderSummary(companyId)
     ]);
 
     res.json({ settings, logs, summary });
@@ -98,6 +103,13 @@ async function getReminderSettings(req, res) {
 
 async function postReminderSetting(req, res) {
   try {
+    const companyId = requireCompanyId(req);
+    const existing = await listReminderSettings(companyId);
+    if (existing.length > 0) {
+      return res.status(409).json({
+        message: "This company already has a reminder policy. Update the existing policy instead."
+      });
+    }
     const setting = normalizeReminderSetting(req.body);
     const errors = validateReminderSetting(setting);
 
@@ -105,7 +117,7 @@ async function postReminderSetting(req, res) {
       return res.status(400).json({ message: errors[0], errors });
     }
 
-    const created = await createReminderSetting(setting);
+    const created = await createReminderSetting(setting, companyId, req.user?.userId);
     await logAuditEvent({
       userId: req.user?.userId,
       userName: req.user?.email || "Admin",
@@ -115,6 +127,11 @@ async function postReminderSetting(req, res) {
       status: "Success",
       ipAddress: getClientIp(req)
     });
+    await createNotification({
+      type: "reminder_policy_updated",
+      title: "Invoice Reminder Policy Created",
+      message: `Admin created the invoice reminder policy (${created.firstReminderDays}, ${created.secondReminderDays}, ${created.finalReminderDays} days overdue).`
+    });
     res.status(201).json({ setting: created });
   } catch (error) {
     handleReminderError(error, res, "Unable to save reminder setting.");
@@ -123,7 +140,8 @@ async function postReminderSetting(req, res) {
 
 async function putReminderSetting(req, res) {
   try {
-    const current = await findReminderSettingById(req.params.id);
+    const companyId = requireCompanyId(req);
+    const current = await findReminderSettingById(req.params.id, companyId);
     if (!current) {
       return res.status(404).json({ message: "Reminder rule not found." });
     }
@@ -135,7 +153,12 @@ async function putReminderSetting(req, res) {
       return res.status(400).json({ message: errors[0], errors });
     }
 
-    const updated = await updateReminderSetting(req.params.id, setting);
+    const updated = await updateReminderSetting(
+      req.params.id,
+      setting,
+      companyId,
+      req.user?.userId
+    );
     await logAuditEvent({
       userId: req.user?.userId,
       userName: req.user?.email || "Admin",
@@ -145,6 +168,11 @@ async function putReminderSetting(req, res) {
       status: "Success",
       ipAddress: getClientIp(req)
     });
+    await createNotification({
+      type: "reminder_policy_updated",
+      title: "Invoice Reminder Policy Updated",
+      message: `Admin updated automatic invoice reminders to ${updated.firstReminderDays}, ${updated.secondReminderDays}, and ${updated.finalReminderDays} days overdue.`
+    });
     res.json({ setting: updated });
   } catch (error) {
     handleReminderError(error, res, "Unable to update reminder setting.");
@@ -153,13 +181,19 @@ async function putReminderSetting(req, res) {
 
 async function patchReminderStatus(req, res) {
   try {
+    const companyId = requireCompanyId(req);
     const enabled = toBoolean(req.body.enabled, false);
-    const current = await findReminderSettingById(req.params.id);
+    const current = await findReminderSettingById(req.params.id, companyId);
     if (!current) {
       return res.status(404).json({ message: "Reminder rule not found." });
     }
 
-    const updated = await updateReminderStatus(req.params.id, enabled);
+    const updated = await updateReminderStatus(
+      req.params.id,
+      enabled,
+      companyId,
+      req.user?.userId
+    );
     await logAuditEvent({
       userId: req.user?.userId,
       userName: req.user?.email || "Admin",
@@ -169,38 +203,21 @@ async function patchReminderStatus(req, res) {
       status: "Success",
       ipAddress: getClientIp(req)
     });
+    await createNotification({
+      type: "reminder_policy_updated",
+      title: `Invoice Reminders ${enabled ? "Enabled" : "Disabled"}`,
+      message: `Admin ${enabled ? "enabled" : "disabled"} automatic customer invoice reminders.`
+    });
     res.json({ setting: updated });
   } catch (error) {
     handleReminderError(error, res, "Unable to update reminder status.");
   }
 }
 
-async function deleteReminder(req, res) {
-  try {
-    const deleted = await deleteReminderSetting(req.params.id);
-    if (!deleted) {
-      return res.status(404).json({ message: "Reminder rule not found." });
-    }
-
-    await logAuditEvent({
-      userId: req.user?.userId,
-      userName: req.user?.email || "Admin",
-      activityType: "Reminder Settings",
-      actionDescription: `Deleted reminder rule ${req.params.id}`,
-      affectedRecord: String(req.params.id),
-      status: "Warning",
-      ipAddress: getClientIp(req)
-    });
-
-    res.json({ message: "Reminder rule deleted." });
-  } catch (error) {
-    handleReminderError(error, res, "Unable to delete reminder setting.");
-  }
-}
-
 async function getReminderLogs(req, res) {
   try {
-    const logs = await listReminderLogs(100);
+    const companyId = requireCompanyId(req);
+    const logs = await listReminderLogs(companyId, 100);
     res.json({ logs });
   } catch (error) {
     handleReminderError(error, res, "Unable to load reminder logs.");
@@ -238,7 +255,6 @@ async function postTestReminder(req, res) {
 }
 
 module.exports = {
-  deleteReminder,
   getReminderLogs,
   getReminderSettings,
   patchReminderStatus,

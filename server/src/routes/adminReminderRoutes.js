@@ -1,7 +1,6 @@
 const express = require("express");
 
 const {
-  deleteReminder,
   getReminderLogs,
   getReminderSettings,
   patchReminderStatus,
@@ -65,7 +64,6 @@ router.get("/reminder-settings", getReminderSettings);
 router.post("/reminder-settings", postReminderSetting);
 router.put("/reminder-settings/:id", putReminderSetting);
 router.patch("/reminder-settings/:id/status", patchReminderStatus);
-router.delete("/reminder-settings/:id", deleteReminder);
 router.get("/reminder-logs", getReminderLogs);
 router.post("/reminders/test", postTestReminder);
 

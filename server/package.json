@@ -15,6 +15,7 @@
     "db:claim-payroll-inclusion": "node scripts/run-claim-payroll-inclusion-migration.js",
     "db:finance-payroll-schedule": "node scripts/run-finance-payroll-schedule-migration.js",
     "db:finance-reminders": "node scripts/migrate-finance-reminders.js",
+    "db:invoice-reminder-policy": "node scripts/migrate-invoice-reminder-policy.js",
     "db:whatsapp-notifications": "node scripts/migrate-whatsapp-notifications.js",
     "db:whatsapp-templates": "node scripts/migrate-whatsapp-templates.js",
     "seed:demo": "node scripts/generate-demo-data.js",

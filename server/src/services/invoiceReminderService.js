@@ -335,6 +335,8 @@ async function processAutomaticReminders() {
  * @returns {Object} Result with success flag and message.
  */
 async function sendManualReminder(invoiceId, userId) {
+  const { currentCompanyId } = require("./tenantContext");
+  const companyId = currentCompanyId();
   const [rows] = await pool.query(`
     SELECT
       i.invoice_id,
@@ -348,8 +350,11 @@ async function sendManualReminder(invoiceId, userId) {
       c.email AS customer_email
     FROM invoice i
     INNER JOIN customer c ON c.customer_id = i.customer_id
-    WHERE i.invoice_id = ? LIMIT 1
-  `, [invoiceId]);
+    WHERE i.invoice_id = ?
+      AND i.company_id = ?
+      AND c.company_id = ?
+    LIMIT 1
+  `, [invoiceId, companyId, companyId]);
 
   if (rows.length === 0) {
     return { success: false, message: "Invoice not found." };
@@ -357,8 +362,8 @@ async function sendManualReminder(invoiceId, userId) {
 
   const invoice = rows[0];
 
-  if (invoice.status === "Paid") {
-    return { success: false, message: "Cannot send reminder for paid invoice." };
+  if (["Paid", "Cancelled", "Void", "Refunded"].includes(invoice.status)) {
+    return { success: false, message: `Cannot send a reminder for a ${String(invoice.status).toLowerCase()} invoice.` };
   }
 
   if (!invoice.customer_email) {
@@ -372,8 +377,51 @@ async function sendManualReminder(invoiceId, userId) {
     } catch { /* non-critical */ }
   }
 
-  const reminderType = "manual";
-  const success = await sendReminderForInvoice(invoice, reminderType);
+  const reminderType = "Manual Reminder";
+  let success = false;
+  const { listReminderSettings, createReminderLog } = require("../models/reminderModel");
+  const policies = await listReminderSettings(companyId);
+  const policy = policies.find((item) => item.enabled);
+
+  if (policy) {
+    const { sendReminderEmail } = require("./emailService");
+    const templateInvoice = {
+      clientName: invoice.customer_name,
+      invoiceNumber: invoice.invoiceId,
+      amountDue: invoice.total_amount,
+      dueDate: invoice.due_date,
+      overdueDays: Math.max(0, Math.floor((Date.now() - new Date(invoice.due_date).getTime()) / 86400000)),
+      paymentLink: invoice.payment_url
+    };
+    try {
+      await sendReminderEmail({ rule: policy, invoice: templateInvoice });
+      await createReminderLog({
+        companyId,
+        reminderSettingId: policy.id,
+        invoiceId: invoice.invoice_id,
+        invoiceNumber: invoice.invoiceId,
+        clientEmail: invoice.customer_email,
+        reminderType,
+        deliveryChannel: "Email",
+        deliveryStatus: "Sent"
+      });
+      success = true;
+    } catch (error) {
+      await createReminderLog({
+        companyId,
+        reminderSettingId: policy.id,
+        invoiceId: invoice.invoice_id,
+        invoiceNumber: invoice.invoiceId,
+        clientEmail: invoice.customer_email,
+        reminderType,
+        deliveryChannel: "Email",
+        deliveryStatus: "Failed",
+        errorMessage: error.message
+      });
+    }
+  } else {
+    success = await sendReminderForInvoice(invoice, "manual");
+  }
 
   if (success) {
     createNotification({

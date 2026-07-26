@@ -4,8 +4,11 @@ const {
   listReminderSettings
 } = require("../models/reminderModel");
 const { sendReminderEmail } = require("./emailService");
+const { notifyReminderSent } = require("./invoiceNotificationService");
+const { runWithTenant } = require("./tenantContext");
 
 let schedulerStarted = false;
+let schedulerRunning = false;
 
 // Run every 60 seconds
 const SCHEDULER_INTERVAL_MS = 60 * 1000;
@@ -82,6 +85,7 @@ async function processReminderRule(rule) {
       try {
         await sendReminderEmail({ rule, invoice });
         await createReminderLog({
+          companyId: rule.companyId,
           reminderSettingId: rule.id,
           invoiceId: invoice.invoiceId,
           invoiceNumber: invoice.invoiceNumber,
@@ -90,8 +94,10 @@ async function processReminderRule(rule) {
           deliveryChannel: "Email",
           deliveryStatus: "Sent"
         });
+        await notifyReminderSent(invoice.invoiceNumber, invoice.clientName, interval.type);
       } catch (error) {
         await createReminderLog({
+          companyId: rule.companyId,
           reminderSettingId: rule.id,
           invoiceId: invoice.invoiceId,
           invoiceNumber: invoice.invoiceNumber,
@@ -122,15 +128,19 @@ async function startReminderScheduler() {
 
   schedulerStarted = true;
   setInterval(async () => {
+    if (schedulerRunning) return;
+    schedulerRunning = true;
     try {
       const rules = await listReminderSettings();
       for (const rule of rules) {
-        await processReminderRule(rule);
+        await runWithTenant(rule.companyId, () => processReminderRule(rule));
       }
     } catch (error) {
       if (process.env.NODE_ENV !== "test") {
         console.error("Reminder scheduler skipped:", error.message);
       }
+    } finally {
+      schedulerRunning = false;
     }
   }, SCHEDULER_INTERVAL_MS);
 

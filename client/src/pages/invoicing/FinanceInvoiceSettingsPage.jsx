@@ -143,7 +143,10 @@ export default function FinanceInvoiceSettingsPage() {
   const general = s.general || {};
   const branding = s.branding || {};
   const seqRules = s.sequenceRules || {};
-  const updatedAt = s.updated_at || s.updatedAt;
+  const reminderPolicy = reminderRules[0] || null;
+  const updatedAt = activeTab === "reminders"
+    ? reminderPolicy?.updatedAt || reminderPolicy?.updated_at
+    : s.updated_at || s.updatedAt;
 
   return (
     <section
@@ -413,7 +416,7 @@ export default function FinanceInvoiceSettingsPage() {
               <div className="rounded-xl border border-[#f0d2ca] bg-white/95 p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">Active Rules</p>
+                    <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">Policy Status</p>
                     <p className="mt-2 text-2xl font-bold text-[#251E1F]">{reminderRules.filter((r) => r.enabled || r.is_enabled).length}</p>
                   </div>
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#F38978]/12 text-[#F38978]">
@@ -424,8 +427,8 @@ export default function FinanceInvoiceSettingsPage() {
               <div className="rounded-xl border border-[#f0d2ca] bg-white/95 p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">Total Rules</p>
-                    <p className="mt-2 text-2xl font-bold text-[#251E1F]">{reminderRules.length}</p>
+                    <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">Company Policy</p>
+                    <p className="mt-2 text-lg font-bold text-[#251E1F]">{reminderRules.length ? "Configured" : "Not configured"}</p>
                   </div>
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#F38978]/12 text-[#F38978]">
                     <Settings2 size={20} />
@@ -446,8 +449,8 @@ export default function FinanceInvoiceSettingsPage() {
               <div className="rounded-xl border border-[#f0d2ca] bg-white/95 p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">Disabled Rules</p>
-                    <p className="mt-2 text-2xl font-bold text-[#251E1F]">{reminderRules.filter((r) => !(r.enabled || r.is_enabled)).length}</p>
+                    <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">Managed By</p>
+                    <p className="mt-2 text-lg font-bold text-[#251E1F]">Admin</p>
                   </div>
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#F38978]/12 text-[#F38978]">
                     <AlertTriangle size={20} />
@@ -457,7 +460,7 @@ export default function FinanceInvoiceSettingsPage() {
             </div>
 
             {/* Reminder Rules Table */}
-            <SettingsCard title="Reminder Schedule Rules" icon={Bell}>
+            <SettingsCard title="Company Reminder Policy" icon={Bell}>
               {reminderRules.length === 0 ? (
                 <p className="py-6 text-center text-sm font-semibold text-[#7b6660]">No reminder rules configured.</p>
               ) : (
@@ -537,10 +540,10 @@ export default function FinanceInvoiceSettingsPage() {
             {reminderRules.length > 0 && (
               <SettingsCard title="Reminder Options" icon={Settings2}>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <ReadOnlyField label="Send to unpaid invoices only" value={reminderRules[0]?.unpaidOnly || reminderRules[0]?.unpaid_only ? "Yes" : "No"} />
-                  <ReadOnlyField label="Stop when invoice paid" value={reminderRules[0]?.stopWhenPaid || reminderRules[0]?.stop_when_paid ? "Yes" : "No"} />
-                  <ReadOnlyField label="Exclude cancelled invoices" value={reminderRules[0]?.excludeCancelled || reminderRules[0]?.exclude_cancelled ? "Yes" : "No"} />
-                  <ReadOnlyField label="Include PDF attachment" value={reminderRules[0]?.includePdf || reminderRules[0]?.include_pdf ? "Yes" : "No"} />
+                  <ReadOnlyField label="Outstanding invoices only" value="Always enforced" />
+                  <ReadOnlyField label="Stop after payment" value="Always enforced" />
+                  <ReadOnlyField label="Exclude cancelled / void / refunded" value="Always enforced" />
+                  <ReadOnlyField label="Missing customer email" value="Skipped and reported" />
                 </div>
               </SettingsCard>
             )}

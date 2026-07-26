@@ -37,13 +37,6 @@ export function updateReminderStatus(id, enabled) {
   });
 }
 
-export function deleteReminderSetting(id) {
-  return apiRequest(`/api/admin/invoicing/reminder-settings/${id}`, {
-    method: "DELETE",
-    headers: authHeaders()
-  });
-}
-
 export function fetchReminderLogs() {
   return apiRequest("/api/admin/invoicing/reminder-logs", {
     headers: authHeaders()
@@ -57,4 +50,3 @@ export function sendTestReminder(payload) {
     body: JSON.stringify(payload)
   });
 }
-
