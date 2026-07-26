@@ -103,7 +103,7 @@ function buildReminderEmailHtml(invoice, reminderType) {
   const html = `
     <div style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
       <div style="text-align: center; margin-bottom: 24px;">
-        <h1 style="color: #F38978; margin: 0;">Vaniday</h1>
+        <h1 style="color: #F38978; margin: 0;">PayNivo</h1>
       </div>
       <div style="border-left: 4px solid ${urgencyColor}; padding: 16px 20px; background: #f9fafb; border-radius: 0 8px 8px 0; margin-bottom: 24px;">
         <h2 style="margin: 0 0 8px; color: #1a1a2e; font-size: 18px;">${heading}</h2>
@@ -121,10 +121,10 @@ function buildReminderEmailHtml(invoice, reminderType) {
       ${qrSection}
       <p style="color: #666; font-size: 13px; line-height: 1.6; margin-top: 24px;">
         If you have already made this payment, please disregard this reminder.
-        For any queries, please contact us at ${process.env.SMTP_FROM || "finance@vaniday.com"}.
+        For any queries, please contact us at ${process.env.SMTP_FROM || "support@paynivo.com"}.
       </p>
       <p style="color: #999; font-size: 11px; text-align: center; margin-top: 32px; border-top: 1px solid #eee; padding-top: 16px;">
-        This is an automated reminder from Vaniday Invoicing System.
+        This is an automated reminder from PayNivo.
       </p>
     </div>
   `;

@@ -6,7 +6,8 @@ export const DEFAULT_APPEARANCE = {
   language: "en"
 };
 
-const STORAGE_KEY = "vanidayAppearance";
+const STORAGE_KEY = "paynivoAppearance";
+const LEGACY_STORAGE_KEY = "vanidayAppearance";
 const VALID_THEMES = new Set(["light", "dark", "system"]);
 const VALID_FONT_SIZES = new Set(["small", "medium", "large"]);
 const VALID_ACCENTS = new Set(["#F38978", "#E87562", "#C55245", "#FDD9CD", "#2D7C83", "#7B6660"]);
@@ -28,7 +29,8 @@ export function normalizeAppearance(value = {}) {
 
 export function readCachedAppearance() {
   try {
-    return normalizeAppearance(JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"));
+    const cached = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY) || "{}";
+    return normalizeAppearance(JSON.parse(cached));
   } catch {
     return { ...DEFAULT_APPEARANCE };
   }
@@ -54,6 +56,6 @@ export function applyAppearance(value, { persist = true } = {}) {
     }
   }
 
-  window.dispatchEvent(new CustomEvent("vaniday:appearance-change", { detail: settings }));
+  window.dispatchEvent(new CustomEvent("paynivo:appearance-change", { detail: settings }));
   return settings;
 }

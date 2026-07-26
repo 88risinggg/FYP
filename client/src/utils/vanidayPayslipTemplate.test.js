@@ -29,9 +29,9 @@ describe("Vaniday payslip template", () => {
     expect(normalized.netPay).toBe(2803.1);
   });
 
-  it("renders the Vaniday sample-inspired layout and escapes employee data", () => {
+  it("renders the PayNivo payslip layout and escapes employee data", () => {
     const html = buildVanidayPayslipHtml({ ...payslip, employee_name: "<Sample Employee>" });
-    expect(html).toContain("Vaniday Singapore Pte. Ltd.");
+    expect(html).toContain("PayNivo Pte. Ltd.");
     expect(html).toContain("Total earnings:");
     expect(html).toContain("Employer CPF contribution");
     expect(html).toContain("Skills Development Levy (SDL)");

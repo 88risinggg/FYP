@@ -25,7 +25,7 @@ import {
 } from "../services/authService.js";
 import { startHealthCheck } from "../services/apiClient.js";
 import { getPostAuthDestination, saveSession } from "../services/sessionService.js";
-import VanidayLogo from "../components/branding/VanidayLogo.jsx";
+import PayNivoLogo from "../components/branding/PayNivoLogo.jsx";
 import { privacyPolicySections, termsOfServiceSections } from "../data/legalContent.js";
 
 const features = [
@@ -217,7 +217,7 @@ export default function LoginPage() {
         <header className="login-header relative z-20 border-b border-[#f0d2ca] bg-white/80 backdrop-blur-xl">
           <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
             <a href="#top" className="flex min-w-0 items-center" aria-label="PayNivo home">
-              <VanidayLogo />
+              <PayNivoLogo />
             </a>
 
             <nav className="hidden items-center gap-7 text-sm font-medium text-[#6f5b55] lg:flex">
@@ -552,7 +552,7 @@ export default function LoginPage() {
               </button>
 
               <div className="pr-8">
-                <VanidayLogo compact />
+                <PayNivoLogo compact />
                 <h2 className="mt-6 text-2xl font-semibold tracking-normal text-[#251E1F]">
                   Login to System
                 </h2>

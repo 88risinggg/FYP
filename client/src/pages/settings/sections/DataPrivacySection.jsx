@@ -61,7 +61,7 @@ export default function DataPrivacySection() {
     setActionLoading("download");
     try {
       const data = await exportPersonalData();
-      downloadTextFile(JSON.stringify(data, null, 2), `vaniday-personal-data-${new Date().toISOString().slice(0, 10)}.json`, "application/json");
+      downloadTextFile(JSON.stringify(data, null, 2), `paynivo-personal-data-${new Date().toISOString().slice(0, 10)}.json`, "application/json");
       showToast("Personal data downloaded");
     } catch (error) { showToast(error.message, "error"); }
     finally { setActionLoading(null); }
@@ -71,7 +71,7 @@ export default function DataPrivacySection() {
     setActionLoading("export");
     try {
       const profile = await fetchProfile();
-      downloadTextFile(JSON.stringify(profile, null, 2), "vaniday-profile.json", "application/json");
+      downloadTextFile(JSON.stringify(profile, null, 2), "paynivo-profile.json", "application/json");
       showToast("Profile exported");
     } catch (error) { showToast(error.message, "error"); }
     finally { setActionLoading(null); }

@@ -26,9 +26,9 @@ const PREVIEW_INVOICE = {
   amount_paid: 53.85,
   notes: "",
   items: [
-    { description: "$99 The Deluxe Experience|$64.35 Salon's Share @65%|$34.65 Vaniday's Share @35%|Appointment:2023-04-17 12:00 pm|Ref 000536437", quantity: 1, unit_price: 34.65, amount: 34.65 },
-    { description: "$38 Beard Trim|$24.7 Salon's Share @65%|$13.3 Vaniday's Share @35%|Appointment:2023-04-19 04:15 pm|Ref 000536448", quantity: 1, unit_price: 13.30, amount: 13.30 },
-    { description: "$59 Deluxe Haircut|$53.1 Salon's Share @90%|$5.9 Vaniday's Share @10%|Appointment:2023-04-21 05:45 pm|Ref 000536463", quantity: 1, unit_price: 5.90, amount: 5.90 }
+    { description: "$99 The Deluxe Experience|$64.35 Salon's Share @65%|$34.65 Platform Share @35%|Appointment:2023-04-17 12:00 pm|Ref 000536437", quantity: 1, unit_price: 34.65, amount: 34.65 },
+    { description: "$38 Beard Trim|$24.7 Salon's Share @65%|$13.3 Platform Share @35%|Appointment:2023-04-19 04:15 pm|Ref 000536448", quantity: 1, unit_price: 13.30, amount: 13.30 },
+    { description: "$59 Deluxe Haircut|$53.1 Salon's Share @90%|$5.9 Platform Share @10%|Appointment:2023-04-21 05:45 pm|Ref 000536463", quantity: 1, unit_price: 5.90, amount: 5.90 }
   ]
 };
 

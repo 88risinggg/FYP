@@ -33,7 +33,7 @@ function buildReminderValues(invoice, override = {}) {
     amount_due: invoice.amountDue ?? "",
     due_date: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString("en-SG") : "",
     overdue_days: invoice.overdueDays ?? "",
-    company_name: process.env.COMPANY_NAME || "Vaniday",
+    company_name: process.env.COMPANY_NAME || "PayNivo",
     payment_link: process.env.PAYMENT_BASE_URL || "#",
     ...override
   };

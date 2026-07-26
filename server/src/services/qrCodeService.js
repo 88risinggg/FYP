@@ -70,7 +70,7 @@ function buildPayNowQRString(options) {
     proxyValue,
     amount,
     referenceNumber = "",
-    merchantName = process.env.COMPANY_NAME || "Vaniday",
+    merchantName = process.env.COMPANY_NAME || "PayNivo",
     editable = false,
     expiryDate = ""
   } = options;

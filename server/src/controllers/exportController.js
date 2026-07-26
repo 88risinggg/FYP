@@ -31,7 +31,7 @@ async function exportInvoicesExcel(req, res) {
     `);
 
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = "Vaniday Invoicing System";
+    workbook.creator = "PayNivo";
     workbook.created = new Date();
 
     const sheet = workbook.addWorksheet("Invoices");
@@ -127,7 +127,7 @@ async function exportReportExcel(req, res) {
     `);
 
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = "Vaniday Invoicing System";
+    workbook.creator = "PayNivo";
 
     // Summary sheet
     const summarySheet = workbook.addWorksheet("Summary");

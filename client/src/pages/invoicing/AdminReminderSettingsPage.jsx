@@ -80,7 +80,7 @@ function renderPreview(text, form) {
     .replaceAll("{{amount_due}}", "$1,280.00")
     .replaceAll("{{due_date}}", "15 May 2026")
     .replaceAll("{{overdue_days}}", String(form.firstReminderDays || 1))
-    .replaceAll("{{company_name}}", "Vaniday")
+    .replaceAll("{{company_name}}", "PayNivo")
     .replaceAll("{{payment_link}}", "https://pay.example.com/INV-2026-001");
 }
 

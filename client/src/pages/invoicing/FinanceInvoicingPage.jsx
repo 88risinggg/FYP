@@ -3446,7 +3446,7 @@ function ReportsView() {
 
           // â”€â”€â”€ Cover Page â”€â”€â”€
           addCoverPage(doc, {
-            title: "Vaniday Report",
+            title: "PayNivo Report",
             subtitle: "Financial Performance & Invoice Analytics",
             generatedBy: "Finance Team",
             date: timestamp
@@ -3661,7 +3661,7 @@ function ReportsView() {
 
           return doc;
         },
-        `Vaniday_Financial_Report_${new Date().toISOString().slice(0, 10)}.pdf`,
+        `PayNivo_Financial_Report_${new Date().toISOString().slice(0, 10)}.pdf`,
         {
           onError: (msg) => {
             setError(msg);

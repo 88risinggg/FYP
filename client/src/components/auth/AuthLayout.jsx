@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import VanidayLogo from "../branding/VanidayLogo.jsx";
+import PayNivoLogo from "../branding/PayNivoLogo.jsx";
 
 export default function AuthLayout({ title, description, children }) {
   return (
@@ -10,7 +10,7 @@ export default function AuthLayout({ title, description, children }) {
           className="inline-flex rounded-lg focus:outline-none focus:ring-4 focus:ring-[#F38978]/20"
           aria-label="Return to home"
         >
-          <VanidayLogo compact />
+          <PayNivoLogo compact />
         </Link>
         <section className="mt-8 rounded-lg border border-[#f0d2ca] bg-white p-6 shadow-xl shadow-[#6f5b55]/10 sm:p-8">
           <h1 className="text-2xl font-semibold tracking-normal">{title}</h1>

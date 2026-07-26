@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import VanidayLogo from "../components/branding/VanidayLogo.jsx";
+import PayNivoLogo from "../components/branding/PayNivoLogo.jsx";
 import { clearSession, getStoredSession } from "../services/sessionService.js";
 
 const moduleDetails = {
@@ -98,7 +98,7 @@ export default function ModuleSelectionPage() {
       <div className="relative z-10 mx-auto flex min-h-[calc(100vh-3rem)] max-w-6xl flex-col">
         <header className="flex items-center justify-between gap-4">
           <div className="rounded-xl border border-[#ead3cc] bg-white/80 px-4 py-3 shadow-lg shadow-[#251E1F]/10 backdrop-blur">
-            <VanidayLogo />
+            <PayNivoLogo />
           </div>
 
           <button

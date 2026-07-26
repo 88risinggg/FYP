@@ -137,7 +137,7 @@ function HeroSection({ invoice, settings }) {
 
       {/* Right: Company card */}
       <div style={{ padding: "5mm 5.5mm", background: primary, color: "white", minWidth: 0 }}>
-        <strong style={{ display: "block", marginBottom: "1.2mm", fontSize: "7.5pt" }}>{settings.companyName || "Vaniday"}</strong>
+        <strong style={{ display: "block", marginBottom: "1.2mm", fontSize: "7.5pt" }}>{settings.companyName || "PayNivo"}</strong>
         {settings.companyRegistrationNumber && <p style={{ margin: "0.55mm 0", fontSize: "6.8pt" }}>Reg. No. {settings.companyRegistrationNumber}</p>}
         {settings.uenNumber && <p style={{ margin: "0.55mm 0", fontSize: "6.8pt" }}>UEN: {settings.uenNumber}</p>}
         {settings.gstRegistrationNumber && <p style={{ margin: "0.55mm 0", fontSize: "6.8pt" }}>GST Reg: {settings.gstRegistrationNumber}</p>}
@@ -525,4 +525,3 @@ export default function InvoiceTemplate({ invoice, settings, options = {} }) {
 
 // Export utilities for reuse // v020646
 export { formatDate, formatMoney };
-

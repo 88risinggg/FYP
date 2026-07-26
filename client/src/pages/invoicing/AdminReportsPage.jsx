@@ -341,7 +341,7 @@ export default function AdminReportsPage() {
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <MetricCard label="Total Inflow" value={formatCurrency(summary.total_revenue)} detail={`${summary.invoice_count || 0} invoices`} icon={ReceiptText} />
-            <MetricCard label="Gross Revenue" value={formatCurrency(summary.gross_revenue)} detail="Vaniday commission" icon={TrendingUp} tone="text-emerald-700" />
+            <MetricCard label="Gross Revenue" value={formatCurrency(summary.gross_revenue)} detail="Platform commission" icon={TrendingUp} tone="text-emerald-700" />
             <MetricCard label="Salon Payouts" value={formatCurrency(summary.total_salon_payout)} detail="Partner share" icon={Landmark} tone="text-amber-700" />
             <MetricCard label="Outstanding" value={formatCurrency(summary.outstanding_revenue)} detail={`${formatPercent(collectionRate)} collected`} icon={BarChart3} tone="text-rose-700" />
             <MetricCard label="Avg Commission" value={formatPercent(summary.avg_commission_rate)} detail={`${statement?.ratios?.totalCustomers || 0} customers`} icon={PieChart} tone="text-[#2D7C83]" />

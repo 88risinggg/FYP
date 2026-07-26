@@ -1,7 +1,7 @@
 import payNivoLogo from "../../assets/paynivo-logo.png";
 import payNivoLogoWhite from "../../assets/paynivo-logo-report-white.png";
 
-export default function VanidayLogo({ className = "", compact = false, inverse = false }) {
+export default function PayNivoLogo({ className = "", compact = false, inverse = false }) {
   const secondaryColor = inverse ? "text-white/65" : "text-[#7b6660]";
 
   return (

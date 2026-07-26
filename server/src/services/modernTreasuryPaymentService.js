@@ -282,7 +282,7 @@ async function submitModernTreasuryPayrollBatch({ payrollRunId, payrollPeriod, e
     simulationAccount: canSubmitLiveSandbox
       ? null
       : {
-        accountName: "Vaniday SGD Payroll Simulation Account",
+        accountName: "PayNivo SGD Payroll Simulation Account",
         balanceBefore: simulatedBalanceBefore,
         balanceAfter: simulatedBalanceAfter,
         currency: config.paymentCurrency

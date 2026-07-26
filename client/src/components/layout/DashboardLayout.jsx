@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 import Sidebar from "./Sidebar.jsx";
-import VanidayLogo from "../branding/VanidayLogo.jsx";
+import PayNivoLogo from "../branding/PayNivoLogo.jsx";
 import payNivoLogo from "../../assets/paynivo-logo.png";
 import { clearSession, getStoredSession, leaveSupportSession } from "../../services/sessionService.js";
 import { apiRequest } from "../../services/apiClient.js";
@@ -499,13 +499,13 @@ export default function DashboardLayout({
               title="Go to dashboard"
               className="shrink-0 rounded-md outline-none transition-opacity hover:opacity-75 focus-visible:ring-2 focus-visible:ring-[#F38978]/45"
             >
-              <VanidayLogo
+              <PayNivoLogo
                 compact
                 className="border-r border-[#f0d2ca] pr-4"
               />
             </Link>
           ) : (
-            <VanidayLogo
+            <PayNivoLogo
               compact
               className="shrink-0 border-r border-[#f0d2ca] pr-4"
             />
