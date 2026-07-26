@@ -310,7 +310,7 @@ async function listAuditLogs() {
       COALESCE(audit_logs.user_name, user.name, 'System') AS user_name
     FROM audit_logs
     LEFT JOIN user ON audit_logs.user_id = user.user_id
-    WHERE audit_logs.company_id=?
+    WHERE audit_logs.company_id=? AND audit_logs.module = 'Payroll'
     ORDER BY audit_logs.created_at DESC
     LIMIT 25`, [companyId]
   );

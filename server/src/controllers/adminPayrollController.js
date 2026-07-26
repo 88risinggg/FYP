@@ -218,7 +218,7 @@ function normalizeFileType(fileType) {
 
 async function getAdminPayrollDashboard(req, res) {
   try {
-    const [stats, layouts, settings, payrollRuns, auditLogs, auditTrends, roleSummary, users, mbmfEligibility, availableStaff] = await Promise.all([
+    const [stats, layouts, settings, payrollRuns, auditLogs, auditTrends, roleSummary, users, mbmfEligibility, availableStaff, rulePublication] = await Promise.all([
       getDashboardStats(),
       listPayslipLayouts(),
       listPayrollSettings(),
@@ -228,7 +228,8 @@ async function getAdminPayrollDashboard(req, res) {
       listUsersWithRoles(),
       listUsers(),
       listMbmfEligibilitySummary(),
-      listAvailableStaffForUserCreation()
+      listAvailableStaffForUserCreation(),
+      getPublishedRuleState()
     ]);
 
     res.json({
@@ -241,7 +242,8 @@ async function getAdminPayrollDashboard(req, res) {
       roleSummary,
       users,
       mbmfEligibility,
-      availableStaff
+      availableStaff,
+      rulePublication
     });
   } catch (error) {
     res.status(500).json({

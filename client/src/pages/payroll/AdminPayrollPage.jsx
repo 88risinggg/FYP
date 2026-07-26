@@ -961,7 +961,9 @@ function getDashboardUpdateSegments(data = {}) {
     {
       label: "Effective Rule Groups",
       records: `${source.stats?.payrollRules || 0} group(s)`,
-      updatedAt: getLatestTimestamp(source.settings),
+      updatedAt:
+        source.rulePublication?.publishedAt ||
+        getLatestTimestamp(source.settings),
     },
     {
       label: "Users & Roles",
@@ -983,7 +985,11 @@ function getDashboardUpdateSegments(data = {}) {
       records: `${source.auditLogs?.length || 0} event(s)`,
       updatedAt: getLatestTimestamp(source.auditLogs),
     },
-  ];
+  ].sort((a, b) => {
+    if (!a.updatedAt) return 1;
+    if (!b.updatedAt) return -1;
+    return new Date(b.updatedAt) - new Date(a.updatedAt);
+  });
 }
 
 function getOverallUpdatedAt(data = {}) {
@@ -7746,11 +7752,11 @@ export default function AdminPayrollPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  const loadDashboard = async () => {
+  const loadDashboard = async ({ silent = false } = {}) => {
     try {
       setErrorMessage("");
       setSuccessMessage("");
-      setIsLoading(true);
+      if (!silent) setIsLoading(true);
       const data = location.pathname.endsWith("/reports")
         ? await getAdminPayrollReports()
         : await getAdminPayrollDashboard();
@@ -7764,6 +7770,13 @@ export default function AdminPayrollPage() {
 
   useEffect(() => {
     loadDashboard();
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (location.pathname.endsWith("/reports")) return undefined;
+    const refreshDashboard = () => loadDashboard({ silent: true });
+    window.addEventListener("focus", refreshDashboard);
+    return () => window.removeEventListener("focus", refreshDashboard);
   }, [location.pathname]);
 
   const handleImportLayout = async (file) => {
@@ -7913,6 +7926,7 @@ export default function AdminPayrollPage() {
       settings: result.settings || current?.settings,
       auditLogs: result.auditLogs || current?.auditLogs,
       mbmfEligibility: result.mbmfEligibility || current?.mbmfEligibility,
+      rulePublication: result.publication || current?.rulePublication,
       stats: { ...(current?.stats || {}), ...(result.stats || {}) },
     }));
     setErrorMessage("");
