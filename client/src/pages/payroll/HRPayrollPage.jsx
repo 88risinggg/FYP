@@ -108,8 +108,7 @@ const payrollSidebarSections = [
   {
     label: "MAIN",
     items: [
-      { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard/payroll/hr", end: true },
-      { label: "My Payroll", icon: FileText, path: "/dashboard/payroll/staff/payslips" }
+      { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard/payroll/hr", end: true }
     ]
   },
   {

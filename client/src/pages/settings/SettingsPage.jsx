@@ -1,13 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Activity,
   AlertTriangle,
   Bell,
-  Building2,
-  FileText,
   Globe,
-  Key,
-  Link2,
+  LayoutGrid,
   Lock,
   Monitor,
   Palette,
@@ -15,26 +11,17 @@ import {
   Save,
   X,
   User,
-  Users,
-  Wallet
 } from "lucide-react";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { getStoredSession } from "../../services/sessionService.js";
 import { SETTINGS_SAVE_RESULT_EVENT } from "../../services/settingsEvents.js";
 
 import ProfileSection from "./sections/ProfileSection.jsx";
 import SecuritySection from "./sections/SecuritySection.jsx";
-import ConnectedAccountsSection from "./sections/ConnectedAccountsSection.jsx";
 import NotificationsSection from "./sections/NotificationsSection.jsx";
-import InvoiceSettingsSection from "./sections/InvoiceSettingsSection.jsx";
-import PayrollSettingsSection from "./sections/PayrollSettingsSection.jsx";
-import CompanySettingsSection from "./sections/CompanySettingsSection.jsx";
-import RolesPermissionsSection from "./sections/RolesPermissionsSection.jsx";
 import SessionsSection from "./sections/SessionsSection.jsx";
-import AuditLogsSection from "./sections/AuditLogsSection.jsx";
-import ApiIntegrationsSection from "./sections/ApiIntegrationsSection.jsx";
 import AppearanceSection from "./sections/AppearanceSection.jsx";
 import LanguageSection from "./sections/LanguageSection.jsx";
 import DataPrivacySection from "./sections/DataPrivacySection.jsx";
@@ -43,15 +30,8 @@ import DangerZoneSection from "./sections/DangerZoneSection.jsx";
 const settingsMenu = [
   { id: "profile", label: "Profile", icon: User },
   { id: "security", label: "Account Security", icon: Shield },
-  { id: "connected", label: "Connected Accounts", icon: Link2 },
   { id: "notifications", label: "Notifications", icon: Bell },
-  { id: "invoice", label: "Invoice Settings", icon: FileText },
-  { id: "payroll", label: "Payroll Settings", icon: Wallet },
-  { id: "company", label: "Company Settings", icon: Building2 },
-  { id: "roles", label: "Roles & Permissions", icon: Users },
   { id: "sessions", label: "Login Sessions", icon: Monitor },
-  { id: "audit", label: "Audit Logs", icon: Activity },
-  { id: "api", label: "API & Integrations", icon: Key },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "language", label: "Language", icon: Globe },
   { id: "privacy", label: "Data & Privacy", icon: Lock },
@@ -59,7 +39,7 @@ const settingsMenu = [
 ];
 
 const floatingSaveSections = new Set([
-  "profile", "security", "notifications", "invoice", "payroll", "company", "api", "appearance", "language", "privacy"
+  "profile", "security", "notifications", "appearance", "language", "privacy"
 ]);
 
 export function resolveSettingsHomePath(from = "", user = {}) {
@@ -167,24 +147,10 @@ export default function SettingsPage() {
         return <ProfileSection />;
       case "security":
         return <SecuritySection />;
-      case "connected":
-        return <ConnectedAccountsSection />;
       case "notifications":
         return <NotificationsSection />;
-      case "invoice":
-        return <InvoiceSettingsSection />;
-      case "payroll":
-        return <PayrollSettingsSection />;
-      case "company":
-        return <CompanySettingsSection />;
-      case "roles":
-        return <RolesPermissionsSection />;
       case "sessions":
         return <SessionsSection />;
-      case "audit":
-        return <AuditLogsSection />;
-      case "api":
-        return <ApiIntegrationsSection />;
       case "appearance":
         return <AppearanceSection />;
       case "language":
@@ -211,6 +177,9 @@ export default function SettingsPage() {
         {/* Settings Sidebar */}
         <nav className="w-full shrink-0 lg:w-64">
           <div className="app-panel rounded-2xl p-3">
+            <Link to="/module-selection" className="mb-2 flex items-center gap-3 rounded-xl border border-[#ead3cc] px-3 py-2.5 text-sm font-semibold text-[#5a3f39] transition hover:bg-[#FDD9CD]/35 hover:text-[#E8573D]">
+              <LayoutGrid size={17} /> Modules
+            </Link>
             <div className="space-y-0.5">
               {visibleSettings.map((item) => {
                 const Icon = item.icon;
@@ -253,7 +222,7 @@ export default function SettingsPage() {
               setHasUnsavedChanges(true);
             }
           }}
-          className="min-w-0 flex-1"
+          className="min-w-0 flex-1 [&_[data-settings-save]]:hidden"
         >
           <div key={`${activeSection}-${sectionVersion}`}>{renderSection()}</div>
         </div>

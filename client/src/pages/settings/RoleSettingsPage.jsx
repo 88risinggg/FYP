@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Bell, Globe, Lock, Palette, Save, Shield, User, X } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { AlertTriangle, Bell, Globe, LayoutGrid, Lock, Palette, Save, Shield, User, X } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import { getStoredSession } from "../../services/sessionService.js";
@@ -15,15 +15,20 @@ import DangerZoneSection from "./sections/DangerZoneSection.jsx";
 import RoleNotificationsSection from "./RoleNotificationsSection.jsx";
 
 const roleConfig = {
+  Finance: {
+    title: "Finance Settings",
+    fallbackPath: "/module-selection",
+    allowedPrefixes: ["/dashboard/invoicing/finance", "/dashboard/payroll/finance"]
+  },
   HR: {
     title: "HR Settings",
     fallbackPath: "/dashboard/payroll/hr",
-    allowedPrefix: "/dashboard/payroll/hr"
+    allowedPrefixes: ["/dashboard/payroll/hr"]
   },
   Staff: {
     title: "Staff Settings",
     fallbackPath: "/dashboard/payroll/staff",
-    allowedPrefix: "/dashboard/payroll/staff"
+    allowedPrefixes: ["/dashboard/payroll/staff"]
   }
 };
 
@@ -41,7 +46,7 @@ const floatingSaveSections = new Set(["profile", "security", "notifications", "a
 
 function resolveRoleSettingsHomePath(from = "", role = "Staff") {
   const config = roleConfig[role] || roleConfig.Staff;
-  return String(from).startsWith(config.allowedPrefix) ? from : config.fallbackPath;
+  return config.allowedPrefixes.some((prefix) => String(from).startsWith(prefix)) ? from : config.fallbackPath;
 }
 
 export default function RoleSettingsPage({ role = "Staff" }) {
@@ -139,6 +144,9 @@ export default function RoleSettingsPage({ role = "Staff" }) {
       <section className="flex flex-col gap-6 pb-24 lg:flex-row">
         <nav className="w-full shrink-0 lg:w-64">
           <div className="app-panel rounded-2xl p-3">
+            <Link to="/module-selection" className="mb-2 flex items-center gap-3 rounded-xl border border-[#ead3cc] px-3 py-2.5 text-sm font-semibold text-[#5a3f39] transition hover:bg-[#FDD9CD]/35 hover:text-[#E8573D]">
+              <LayoutGrid size={17} /> Modules
+            </Link>
             <div className="space-y-0.5">
               {settingsMenu.map((item) => {
                 const Icon = item.icon;
@@ -168,19 +176,19 @@ export default function RoleSettingsPage({ role = "Staff" }) {
           </div>
         </nav>
 
-        <div className="min-w-0 flex-1" ref={settingsContentRef}>
+        <div className="min-w-0 flex-1 [&_[data-settings-save]]:hidden" ref={settingsContentRef}>
           {renderSection()}
         </div>
       </section>
 
       {floatingSaveSections.has(activeSection) && (
         <div className={`fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-2xl border border-[#f0d2ca] bg-white/95 px-5 py-3 shadow-2xl shadow-[#f2b5a9]/30 backdrop-blur-xl transition-all duration-300 ${
-          floatingSaveReady || hasUnsavedChanges ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0"
+          hasUnsavedChanges ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0"
         }`}>
           <button
             type="button"
             onClick={handleFloatingSave}
-            disabled={saving}
+            disabled={!floatingSaveReady || saving}
             className="inline-flex items-center gap-2 rounded-xl bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#F38978]/30 transition hover:bg-[#e87562] disabled:opacity-60"
           >
             <Save size={15} />

@@ -102,6 +102,11 @@ describe("DashboardLayout sidebar module navigation", () => {
     expect(screen.getByTestId("sidebar").dataset.moduleSelectorLink).toBe("true");
   });
 
+  it("shows module navigation for HR users who can switch to employee self-service", () => {
+    renderLayout({ user: { role: "HR", allowedModules: ["payroll"] } });
+    expect(screen.getByTestId("sidebar").dataset.moduleSelectorLink).toBe("true");
+  });
+
   it("leaves module navigation hidden for a single-module role", () => {
     renderLayout({ user: { role: "Staff", allowedModules: ["payroll"] } });
     expect(screen.getByTestId("sidebar").dataset.moduleSelectorLink).toBe("false");

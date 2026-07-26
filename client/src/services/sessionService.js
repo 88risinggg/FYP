@@ -24,7 +24,7 @@ export function saveSession(token, user, rememberMe) {
 
 export function getPostAuthDestination(user) {
   if (user?.role === "PlatformOperator") return "/platform/companies";
-  if (user?.role === "HR") return "/dashboard/payroll/hr";
+  if (user?.role === "HR") return "/module-selection";
   if (user?.role === "Staff") return "/dashboard/payroll/staff";
   return "/module-selection";
 }

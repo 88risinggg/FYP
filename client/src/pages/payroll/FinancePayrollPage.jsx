@@ -119,11 +119,6 @@ const payrollSidebarSections = [
           { label: "Finance Summary", path: "/dashboard/payroll/finance/payroll-summaries" }
         ]
       },
-      {
-        label: "My Payroll",
-        icon: FileText,
-        path: "/dashboard/payroll/staff/payslips"
-      },
     ]
   },
   {

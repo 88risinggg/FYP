@@ -107,7 +107,11 @@ function SettingsRoute() {
     return <RoleSettingsPage role="Staff" />;
   }
 
-  return <Navigate to="/dashboard/invoicing/finance/settings" replace />;
+  if (session.user?.role === "Finance") {
+    return <RoleSettingsPage role="Finance" />;
+  }
+
+  return <Navigate to="/module-selection" replace />;
 }
 
 function AdminPayrollRoute({ children }) {

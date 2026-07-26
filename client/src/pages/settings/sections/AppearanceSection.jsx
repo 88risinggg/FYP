@@ -20,9 +20,9 @@ const accentColors = [
 ];
 
 const fontSizes = [
-  { value: "small", label: "Small" },
-  { value: "medium", label: "Medium" },
-  { value: "large", label: "Large" }
+  { value: "small", label: "Small", detail: "90%" },
+  { value: "medium", label: "Standard", detail: "100%" },
+  { value: "large", label: "Large", detail: "112%" }
 ];
 
 export default function AppearanceSection() {
@@ -125,10 +125,11 @@ export default function AppearanceSection() {
             </div>
           </div>
 
-          {/* Font Size */}
+          {/* Display Size */}
           <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Font Size</p>
-            <div className="flex gap-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Display Size</p>
+            <p className="mb-3 mt-1 text-xs text-[#7b6660]">Resize text, controls, cards and page spacing across PayNivo.</p>
+            <div className="flex flex-wrap gap-3">
               {fontSizes.map((f) => (
                 <button key={f.value} type="button" data-settings-control onClick={() => updateDraft({ ...settings, font_size: f.value })}
                   className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition ${
@@ -136,7 +137,7 @@ export default function AppearanceSection() {
                     ? "border-[#F38978]/50 bg-[#F38978]/10 text-[#251E1F]"
                       : "border-[#ead3cc] bg-[#fff3ee]/70 text-[#7b6660] hover:bg-[#FDD9CD]/45"
                   }`}>
-                  {f.label}
+                  <span>{f.label}</span><span className="ml-2 text-[0.68rem] opacity-65">{f.detail}</span>
                 </button>
               ))}
             </div>

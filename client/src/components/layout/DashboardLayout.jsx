@@ -133,9 +133,13 @@ export default function DashboardLayout({
   const displayRole = profileRole || roleProfile?.role || user?.role || "User";
   const displayEmail = user?.email || "No email available";
   const avatarUrl = user?.avatarUrl || user?.avatar_url || user?.profilePhoto || "";
-  const showModuleSelectorLink = Array.isArray(user?.allowedModules)
-    ? user.allowedModules.length > 1
-    : ["Admin", "Finance"].includes(user?.role);
+  const effectiveRole = user?.role || storedUser?.role;
+  const assignedModules = Array.isArray(user?.allowedModules)
+    ? user.allowedModules
+    : (Array.isArray(storedUser?.allowedModules) ? storedUser.allowedModules : []);
+  const hasEmployeeSelfService = ["Admin", "Finance", "HR"].includes(effectiveRole)
+    && (assignedModules.includes("payroll") || assignedModules.length === 0);
+  const showModuleSelectorLink = assignedModules.length > 1 || hasEmployeeSelfService;
   const displayInitials = displayName
     .split(/\s+/)
     .filter(Boolean)

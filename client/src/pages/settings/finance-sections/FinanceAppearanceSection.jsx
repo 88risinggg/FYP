@@ -10,9 +10,10 @@ const themes = [
   { id: "system", label: "System", icon: Monitor }
 ];
 
-const sidebarModes = [
-  { value: "expanded", label: "Expanded" },
-  { value: "collapsed", label: "Collapsed" }
+const displaySizes = [
+  { value: "small", label: "Small", detail: "90%" },
+  { value: "medium", label: "Standard", detail: "100%" },
+  { value: "large", label: "Large", detail: "112%" }
 ];
 
 export default function FinanceAppearanceSection({ onDirty }) {
@@ -95,19 +96,20 @@ export default function FinanceAppearanceSection({ onDirty }) {
             </div>
           </div>
 
-          {/* Sidebar */}
+          {/* Display Size */}
           <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Sidebar</p>
-            <div className="flex gap-3">
-              {sidebarModes.map((mode) => (
-                <button key={mode.value} type="button" data-settings-control
-                  onClick={() => updateDraft({ ...settings, sidebar_mode: mode.value })}
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Display Size</p>
+            <p className="mb-3 mt-1 text-xs text-[#7b6660]">Resize text, controls, cards and page spacing across PayNivo.</p>
+            <div className="flex flex-wrap gap-3">
+              {displaySizes.map((size) => (
+                <button key={size.value} type="button" data-settings-control
+                  onClick={() => updateDraft({ ...settings, font_size: size.value })}
                   className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition ${
-                    settings.sidebar_mode === mode.value
+                    settings.font_size === size.value
                       ? "border-[#F38978]/50 bg-[#F38978]/10 text-[#251E1F]"
                       : "border-[#F0D2CA] bg-[#fff3ee]/70 text-[#7b6660] hover:bg-[#FDD9CD]/45"
                   }`}>
-                  {mode.label}
+                  <span>{size.label}</span><span className="ml-2 text-[0.68rem] opacity-65">{size.detail}</span>
                 </button>
               ))}
             </div>

@@ -6,7 +6,7 @@ describe("session routing", () => {
   beforeEach(() => localStorage.clear());
 
   it.each([
-    ["HR", "/dashboard/payroll/hr"],
+    ["HR", "/module-selection"],
     ["Staff", "/dashboard/payroll/staff"],
     ["Admin", "/module-selection"],
     ["Finance", "/module-selection"]

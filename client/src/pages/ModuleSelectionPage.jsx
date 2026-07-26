@@ -35,6 +35,17 @@ const moduleDetails = {
     iconClass: "bg-gradient-to-br from-[#F38978] to-[#F38978] text-[#251E1F] shadow-[#F38978]/25",
     accentClass: "from-[#F38978] via-[#F38978] to-[#F38978]",
     buttonClass: "bg-gradient-to-r from-[#F38978] to-[#F38978] text-[#251E1F] hover:brightness-110"
+  },
+  myPayroll: {
+    title: "Employee Self-Service",
+    action: "Open My Payroll",
+    badge: "Personal employee access",
+    description: "View your own payslips, payroll information, requests, loans, leave, and notifications.",
+    icon: Users,
+    shellClass: "border-[#2D7C83]/30 bg-white/95 shadow-[#2D7C83]/10",
+    iconClass: "bg-gradient-to-br from-[#2D7C83] to-[#24666c] text-white shadow-[#2D7C83]/25",
+    accentClass: "from-[#2D7C83] via-[#3b969e] to-[#2D7C83]",
+    buttonClass: "bg-gradient-to-r from-[#2D7C83] to-[#24666c] text-white hover:brightness-110"
   }
 };
 
@@ -44,6 +55,9 @@ export default function ModuleSelectionPage() {
   const session = getStoredSession();
   const user = session?.user;
   const allowedModules = user?.allowedModules || [];
+  const selectableModules = allowedModules.includes("payroll") && ["Admin", "Finance", "HR"].includes(user?.role)
+    ? [...allowedModules, "myPayroll"]
+    : allowedModules;
 
   function handleLogout() {
     clearSession();
@@ -51,6 +65,11 @@ export default function ModuleSelectionPage() {
   }
 
   function handleModuleSelection(moduleKey) {
+    if (moduleKey === "myPayroll") {
+      navigate("/dashboard/payroll/staff");
+      return;
+    }
+
     if (moduleKey === "invoicing" && user?.role === "Admin") {
       navigate("/dashboard/invoicing/admin");
       return;
@@ -135,8 +154,8 @@ export default function ModuleSelectionPage() {
             </div>
           </motion.div>
 
-          <section className="mt-12 grid gap-6 lg:grid-cols-2">
-            {allowedModules.map((moduleKey, index) => {
+          <section className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {selectableModules.map((moduleKey, index) => {
               const module = moduleDetails[moduleKey];
               const Icon = module.icon;
 

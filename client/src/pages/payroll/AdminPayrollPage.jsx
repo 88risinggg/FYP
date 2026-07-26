@@ -161,11 +161,6 @@ const payrollSidebarSections = [
         path: "/dashboard/payroll/admin",
         end: true,
       },
-      {
-        label: "My Payroll",
-        icon: FileText,
-        path: "/dashboard/payroll/staff/payslips",
-      },
     ],
   },
   {
