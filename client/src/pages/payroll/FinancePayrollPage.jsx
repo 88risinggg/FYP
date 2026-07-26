@@ -63,7 +63,7 @@ import {
 import {
   setupModernTreasuryRecipients
 } from "../../services/payrollPaymentService.js";
-import { getStoredSession } from "../../services/sessionService.js";
+import { getCompanyScopedKey, getStoredSession } from "../../services/sessionService.js";
 import {
   createDefaultFinancePayrollConfig,
   getShgBandAmount,
@@ -4047,6 +4047,7 @@ function FinancePayrollContent({
 
 export default function FinancePayrollPage() {
   const session = getStoredSession();
+  const financeSelectedRunKey = getCompanyScopedKey(FINANCE_SELECTED_RUN_KEY, session?.user?.companyId);
   const location = useLocation();
   const navigate = useNavigate();
   const heading = routeHeadings[location.pathname] || "Dashboard";
@@ -4095,7 +4096,7 @@ export default function FinancePayrollPage() {
         const dbRuns = Array.isArray(data.runs) ? data.runs : [];
 
         setPayrollRuns(normalizeFinancePayrollRuns(dbRuns));
-        const storedRunId = sessionStorage.getItem(FINANCE_SELECTED_RUN_KEY);
+        const storedRunId = sessionStorage.getItem(financeSelectedRunKey);
         setSelectedRunId(dbRuns.some((run) => run.id === storedRunId) ? storedRunId : dbRuns[0]?.id || "");
         setFinanceDbLoaded(true);
       } catch (error) {
@@ -4108,8 +4109,8 @@ export default function FinancePayrollPage() {
 
   useEffect(() => {
     setPaymentError("");
-    if (selectedRunId) sessionStorage.setItem(FINANCE_SELECTED_RUN_KEY, selectedRunId);
-  }, [selectedRunId]);
+    if (selectedRunId) sessionStorage.setItem(financeSelectedRunKey, selectedRunId);
+  }, [selectedRunId, financeSelectedRunKey]);
 
   useEffect(() => {
     if (!selectedRunId || !financeDbLoaded) return;

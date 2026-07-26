@@ -139,7 +139,7 @@ router.put("/payslips/bulk-send-to-finance", authenticateToken, allowRoles("HR")
 
     let targetIds = [];
     if (allDrafts) {
-      const [rows] = await pool.query("SELECT payroll_id AS payslip_id FROM payroll WHERE payslip_status = 'Draft'");
+      const [rows] = await pool.query("SELECT payroll_id AS payslip_id FROM payroll WHERE LOWER(payslip_status) = 'draft'");
       targetIds = rows.map(r => r.payslip_id);
     } else {
       if (!Array.isArray(payslip_ids) || payslip_ids.length === 0) {
@@ -153,7 +153,7 @@ router.put("/payslips/bulk-send-to-finance", authenticateToken, allowRoles("HR")
     }
 
     const [result] = await pool.query(
-      "UPDATE payroll SET payslip_status = 'finance_pending' WHERE payroll_id IN (?) AND payslip_status = 'Draft'",
+      "UPDATE payroll SET payslip_status = 'finance_pending' WHERE payroll_id IN (?) AND LOWER(payslip_status) = 'draft'",
       [targetIds]
     );
 
@@ -161,12 +161,18 @@ router.put("/payslips/bulk-send-to-finance", authenticateToken, allowRoles("HR")
     const skipped = targetIds.length - updated_count;
 
     addAudit(req.user.email, `Bulk sent ${updated_count} payslips to Finance`, "Payroll");
-    if (updated_count > 0) await notifyRoles("Finance", {
-      type: "payslip_finance_review", title: "Payslips awaiting Finance approval",
-      message: `${updated_count} payslip(s) require Finance review.`, actorUserId: req.user.userId,
-      entityType: "payslip_batch", entityId: targetIds.slice(0, updated_count).join(","),
-      actionPath: "/dashboard/payroll/finance/payslips-approval"
-    }, { excludeUserId: req.user.userId });
+    if (updated_count > 0) {
+      try {
+        await notifyRoles("Finance", {
+          type: "payslip_finance_review", title: "Payslips awaiting Finance approval",
+          message: `${updated_count} payslip(s) require Finance review.`, actorUserId: req.user.userId,
+          entityType: "payslip_batch", entityId: targetIds.slice(0, updated_count).join(","),
+          actionPath: "/dashboard/payroll/finance/payslips-approval"
+        }, { excludeUserId: req.user.userId });
+      } catch (notificationErr) {
+        console.error("Bulk send finance notification failed:", notificationErr);
+      }
+    }
 
     res.json({
       message: "Bulk send completed",

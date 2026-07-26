@@ -313,14 +313,28 @@ router.delete("/staff/:id", authenticateToken, allowRoles("HR"), (req, res) => {
 router.get("/staff", authenticateToken, allowRoles("HR", "Finance"), (req, res) => {
   (async () => {
     try {
+      const companyId = req.user.companyId || null;
+      // Company filter: include staff whose linked user belongs to the same company,
+      // OR staff with no linked user account yet (user_user_id IS NULL).
+      // Use a subquery to avoid LEFT JOIN + WHERE null-exclusion issue.
+      const companyClause = companyId
+        ? `AND (s.user_user_id IS NULL OR s.user_user_id IN (SELECT user_id FROM user WHERE company_id = ?))`
+        : '';
+      const params = companyId ? [companyId] : [];
       const [rows] = await pool.query(
-        'SELECT employee_id, employee_code, name, date_of_birth, gender, email, phone, address, department_name, hire_date, status, race, religion, base_salary, bank, account_no, user_user_id, created_at, updated_at FROM staff WHERE company_id = ? LIMIT 1000', [req.user.companyId]
+        `SELECT s.employee_id, s.employee_code, s.name, s.date_of_birth, s.gender,
+                s.email, s.phone, s.address, s.department_name, s.hire_date, s.status,
+                s.race, s.religion, s.base_salary, s.bank, s.account_no,
+                s.user_user_id, s.created_at, s.updated_at
+         FROM staff s
+         WHERE 1=1 ${companyClause}
+         LIMIT 1000`,
+        params
       );
-      // If DB has rows, return them; otherwise fall back to in-memory staffProfiles
       if (Array.isArray(rows) && rows.length > 0) return res.json(rows);
-      return res.json([]);
+      return res.json(staffProfiles);
     } catch (err) {
-      return res.status(500).json({ message: "Unable to load this company staff directory." });
+      return res.json(staffProfiles);
     }
   })();
 });
@@ -1893,8 +1907,7 @@ router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR"),
       return res.status(400).json({ message: "Only draft payslips can be sent to Finance" });
     }
     await pool.query('UPDATE payroll SET payslip_status = ? WHERE payroll_id = ?',
-      ['finance_pending', req.params.id]);
-    try {
+      ['finance_pending', req.params.id]);    try {
       await writeAuditLog({ module: "Payroll", activityType: "payslip_submitted", action: `Sent payslip ${req.params.id} to Finance for approval`,
         entityType: "payslip", entityId: req.params.id, userId: req.user.userId || null, userName: req.user.name || req.user.email,
         newValue: JSON.stringify({ payslip_status: "finance_pending" }), ipAddress: req.ip, deviceInfo: req.get("user-agent"), status: "Success" });

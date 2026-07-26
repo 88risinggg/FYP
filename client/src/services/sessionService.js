@@ -1,6 +1,10 @@
 const TOKEN_KEY = "authToken";
 const USER_KEY = "authUser";
 
+export function getCompanyScopedKey(baseKey, companyId) {
+  return companyId ? `${baseKey}:${companyId}` : baseKey;
+}
+
 export function saveSession(token, user, rememberMe) {
   const moduleDefaults = {
     Admin: ["invoicing", "payroll"],

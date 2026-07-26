@@ -31,7 +31,7 @@ import HRReportsPage from "./HRReportsPage.jsx";
 import ClaimManagementPage from "./ClaimManagementPage.jsx";
 import PayrollUserManagement from "../../components/payroll/PayrollUserManagement.jsx";
 import PayrollNotificationsView from "../../components/payroll/PayrollNotificationsView.jsx";
-import { getStoredSession } from "../../services/sessionService.js";
+import { getCompanyScopedKey, getStoredSession } from "../../services/sessionService.js";
 import { buildVanidayPayslipHtml } from "../../utils/vanidayPayslipTemplate.js";
 import { getEffectivePayrollRules } from "../../services/adminPayrollService.js";
 
@@ -1630,6 +1630,22 @@ function PayrollUploadView() {
         </div>
       </div>
 
+      {/* Info banner — import is optional */}
+      <div className="rounded-xl border border-[#2D7C83]/30 bg-[#2D7C83]/10 p-4 text-sm text-[#2D7C83]">
+        <p className="mt-1 text-xs opacity-80">
+          If your staff are already in <strong>Staff Records</strong>, you don't need to import anything.<br /><br />
+          Employees already in the database will show as duplicates here. This is expected and correct.<br /><br />
+          This page only performs validation.<br />
+          Go to <strong>Payslips → Generate Payslips from Database</strong> to run payroll using existing staff records directly.</p>
+          <button
+          type="button"
+          onClick={() => navigate("/dashboard/payroll/hr/payslips")}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#2D7C83] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#2D7C83]/80"
+        >
+          Go to Generate Payslips →
+        </button>
+      </div>
+
       <form onSubmit={handleValidate} className="app-panel rounded-2xl p-6">
         <label htmlFor="hr-sample-upload" className="block text-sm font-medium text-[#251E1F]">Choose file to preview</label>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -1710,6 +1726,13 @@ function PayrollUploadView() {
               <span className="rounded-full bg-red-500/20 px-3 py-1 text-red-700">{validationResult.summary?.errors ?? 0} Errors</span>
               <span className="text-[#7b6660]">Total: {validationResult.summary?.total ?? 0}</span>
             </div>
+            {validationResult.summary?.valid === 0 && validationResult.summary?.errors === 0 && (validationResult.summary?.duplicates ?? 0) > 0 ? (
+              <div className="mt-3 rounded-lg border border-[#2D7C83]/30 bg-[#2D7C83]/10 px-4 py-3 text-xs text-[#2D7C83]">
+                <strong>All employees already exist in Staff Records.</strong> No new records to import — this is expected.
+                You can proceed directly to <strong>Payslips → ⚡ Generate Payslips from Database</strong> to run payroll.
+                <button type="button" onClick={() => navigate("/dashboard/payroll/hr/payslips")} className="ml-2 underline font-semibold">Go now →</button>
+              </div>
+            ) : null}
           </div>
           <div className="rounded-2xl border border-[#f0d2ca] bg-[#fff3ee]/90 p-6">
             <div className="flex items-center justify-between mb-4">
@@ -1777,14 +1800,28 @@ function SharedPayrollRunTracker({ workflow, run }) {
 
 function HRPayrollRunWorkflowView({ deliveryMode = false }) {
   const session = getStoredSession();
+  const hrSelectedRunKey = getCompanyScopedKey(HR_SELECTED_RUN_KEY, session?.user?.companyId);
+  const navigate = useNavigate();
   const [runs, setRuns] = useState([]);
-  const [selectedId, setSelectedId] = useState(() => sessionStorage.getItem(HR_SELECTED_RUN_KEY) || "");
+  const [selectedId, setSelectedId] = useState(() => sessionStorage.getItem(hrSelectedRunKey) || "");
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const [error, setError] = useState("");
   const [preview, setPreview] = useState(null);
+  const [toasts, setToasts] = useState([]);
+  const [payrollMonth, setPayrollMonth] = useState(new Date().toLocaleString("en-US", { month: "long" }));
+  const [payrollYear, setPayrollYear] = useState(new Date().getFullYear());
   const headers = { Authorization: `Bearer ${session?.token || ""}` };
+
+  const removeToast = (id) => setToasts((t) => t.filter(x => x.id !== id));
+  const addToast = (type, message) => {
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    setToasts((t) => [...t, { id, type, message }]);
+    setTimeout(() => setToasts((t) => t.filter(x => x.id !== id)), type === 'success' ? 5000 : 6000);
+  };
 
   const loadRuns = async () => {
     const response = await fetch(`${API_BASE_URL}/api/payroll/workflow/runs`, { headers });
@@ -1804,15 +1841,115 @@ function HRPayrollRunWorkflowView({ deliveryMode = false }) {
     setState(body);
   };
   useEffect(() => { let active = true; (async () => { try { setLoading(true); const id = await loadRuns(); if (active) await loadWorkflow(id); } catch (e) { if (active) setError(e.message); } finally { if (active) setLoading(false); } })(); return () => { active = false; }; }, []);
-  useEffect(() => { if (!selectedId) return undefined; sessionStorage.setItem(HR_SELECTED_RUN_KEY, selectedId); loadWorkflow(selectedId).catch((e) => setError(e.message)); const timer = window.setInterval(() => loadWorkflow(selectedId).catch(() => {}), sending ? 1000 : 4000); return () => window.clearInterval(timer); }, [selectedId, sending]);
+  useEffect(() => { if (!selectedId) return undefined; sessionStorage.setItem(hrSelectedRunKey, selectedId); loadWorkflow(selectedId).catch((e) => setError(e.message)); const timer = window.setInterval(() => loadWorkflow(selectedId).catch(() => {}), sending ? 1000 : 4000); return () => window.clearInterval(timer); }, [selectedId, sending, hrSelectedRunKey]);
   useEffect(() => () => { if (preview?.url) URL.revokeObjectURL(preview.url); }, [preview?.url]);
+
+  const quickGenerate = async () => {
+    try {
+      setGenerating(true);
+      setError("");
+      const response = await fetch(`${API_BASE_URL}/api/hr/payslips/quick-generate`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ period_month: payrollMonth, period_year: payrollYear })
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || "Failed to generate payroll run.");
+      await loadRuns();
+      setSelectedId(String(body.payroll_run_id || selectedId));
+      await loadWorkflow(String(body.payroll_run_id || selectedId));
+    } catch (e) {
+      setError(e.message || "Failed to generate payroll run.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const sendRunToFinance = async () => {
+    const draftIds = (run?.employees || [])
+      .filter((employee) => String(employee.financeStatus || employee.status || "").toLowerCase() === "draft")
+      .map((employee) => employee.payrollId);
+    if (draftIds.length === 0) {
+      setSuccessMessage("✅ All payslips are already with Finance. No action needed.");
+      addToast("success", "All payslips are already with Finance. No action needed.");
+      setTimeout(() => setSuccessMessage(""), 5000);
+      return;
+    }
+    try {
+      setSending(true);
+      setError("");
+      const response = await fetch(`${API_BASE_URL}/api/payroll/payslips/bulk-send-to-finance`, {
+        method: "PUT",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ payslip_ids: draftIds })
+      });
+      const body = await response.json().catch(() => ({}));
+      if (response.status === 401 || response.status === 403) return handleUnauthorized();
+      if (!response.ok) throw new Error(body.message || "Bulk send failed");
+      setState((prev) => ({ ...prev, workflow: body.workflow || prev?.workflow, run: body.run || prev?.run }));
+      setSuccessMessage(`✅ ${draftIds.length} payslip(s) sent to Finance.`);
+      addToast("success", `${draftIds.length} payslip(s) sent to Finance.`);
+      setTimeout(() => setSuccessMessage(""), 5000);
+      setError("");
+    } catch (e) {
+      setError(e.message || "Bulk send failed");
+      addToast("error", e.message || "Bulk send failed");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const sendRunToStaff = async () => {
+    const approvedIds = (run?.employees || [])
+      .filter((employee) => String(employee.financeStatus || employee.status || "").toLowerCase() === "finance_approved")
+      .map((employee) => employee.payrollId);
+    if (approvedIds.length === 0) {
+      setError("No approved payslips to send to staff");
+      return;
+    }
+    try {
+      setSending(true);
+      setError("");
+      let sentCount = 0;
+      for (const id of approvedIds) {
+        const res = await fetch(`${API_BASE_URL}/api/hr/payslips/${id}/send-to-staff`, {
+          method: "PUT",
+          headers
+        });
+        if (res.status === 401 || res.status === 403) return handleUnauthorized();
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.message || "Failed to send to staff");
+        sentCount += 1;
+      }
+      setError("");
+      setSuccessMessage(`✅ ${sentCount} payslip(s) sent to staff.`);
+      addToast("success", `${sentCount} payslip(s) sent to staff.`);
+      setTimeout(() => setSuccessMessage(""), 4000);
+      await loadWorkflow(selectedId);
+    } catch (e) {
+      setError(e.message || "Failed to send to staff");
+      addToast("error", e.message || "Failed to send to staff");
+    } finally {
+      setSending(false);
+    }
+  };
 
   const sendPending = async () => { try { setSending(true); setError(""); const response = await fetch(`${API_BASE_URL}/api/hr/payroll-runs/${encodeURIComponent(selectedId)}/payslips/send`, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: "{}" }); const body = await response.json(); setState(body); if (!response.ok) throw new Error(body.message || "Payslip delivery was not completed."); } catch (e) { setError(e.message); await loadWorkflow(selectedId).catch(() => {}); } finally { setSending(false); } };
   const previewPayslip = async (employee) => { try { setError(""); const response = await fetch(`${API_BASE_URL}/api/payslips/${employee.payrollId}/pdf`, { headers }); if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.message || "Unable to preview payslip."); } const url = URL.createObjectURL(await response.blob()); setPreview({ url, name: employee.name }); } catch (e) { setError(e.message); } };
   const run = state?.run || runs.find((item) => item.id === selectedId);
   const progress = state?.workflow?.payslipProgress || {};
   if (loading) return <div className="app-panel flex items-center gap-2 rounded-2xl p-6"><Loader2 className="animate-spin" size={18}/>Loading shared payroll workflow…</div>;
-  return <div className="space-y-5"><SharedPayrollRunTracker workflow={state?.workflow} run={run}/><section className="app-panel rounded-2xl p-5"><div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between"><label className="flex-1 text-sm font-semibold">Selected payroll run<select className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>{runs.map((item) => <option key={item.id} value={item.id}>{new Date(item.year, item.month - 1).toLocaleString("en-SG", { month: "long", year: "numeric" })} · {item.id} · {item.status}</option>)}</select></label><button type="button" onClick={() => loadWorkflow(selectedId)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] px-4 py-2.5 text-sm font-semibold"><RefreshCw size={16}/>Refresh</button></div></section>{error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}{deliveryMode ? <><section className="app-panel rounded-2xl p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">HR payslip delivery</h2><p className="mt-1 text-sm text-[#7b6660]">Finance must confirm settlement first. HR previews and delivers each employee payslip from this shared run.</p></div><button type="button" disabled={sending || !run?.paidAt || Boolean(run?.payslipsSentAt)} onClick={sendPending} className="inline-flex items-center gap-2 rounded-xl bg-[#F38978] px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{sending ? <Loader2 className="animate-spin" size={16}/> : <Send size={16}/>} {sending ? "Delivering payslips…" : progress.failed ? "Retry failed payslips" : "Send pending payslips"}</button></div><div className="mt-5 grid gap-3 sm:grid-cols-4">{[["Total", progress.total || run?.employees?.length || 0], ["Sent", progress.sent || 0], ["Failed", progress.failed || 0], ["Pending", progress.pending ?? run?.employees?.length ?? 0]].map(([label,value]) => <div key={label} className="rounded-xl border border-[#f0d2ca] bg-[#fff8f5] p-4"><p className="text-xs uppercase text-[#7b6660]">{label}</p><strong className="mt-1 block text-xl">{value}</strong></div>)}</div>{!run?.paidAt ? <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Waiting for Finance to confirm payment settlement.</p> : null}</section><section className="app-panel overflow-hidden rounded-2xl"><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-[#fff8f5] text-xs uppercase text-[#7b6660]"><tr><th className="px-4 py-3">Employee</th><th>Department</th><th>Net pay</th><th>Status</th><th>Preview</th></tr></thead><tbody>{(run?.employees || []).map((employee) => <tr key={employee.payrollId} className="border-t border-[#f0d2ca]"><td className="px-4 py-3 font-semibold">{employee.name}</td><td>{employee.department || "Not recorded"}</td><td>${Number(employee.netPay || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}</td><td><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${["Sent","sent_to_staff"].includes(employee.financeStatus) ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{["Sent","sent_to_staff"].includes(employee.financeStatus) ? "Delivered" : "Pending"}</span></td><td><button type="button" onClick={() => previewPayslip(employee)} className="rounded-lg border border-[#f0d2ca] px-3 py-1.5 text-xs font-semibold">Preview PDF</button></td></tr>)}</tbody></table></div></section></> : <section className="app-panel overflow-hidden rounded-2xl"><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-[#fff8f5] text-xs uppercase text-[#7b6660]"><tr><th className="px-4 py-3">Run</th><th>Period</th><th>Status</th><th>Employees</th><th>Gross</th><th>Net</th><th>Payment</th></tr></thead><tbody>{runs.map((item) => <tr key={item.id} onClick={() => setSelectedId(item.id)} className={`cursor-pointer border-t border-[#f0d2ca] hover:bg-[#fff8f5] ${selectedId === item.id ? "bg-[#F38978]/10" : ""}`}><td className="px-4 py-3 font-semibold">{item.id}</td><td>{new Date(item.year, item.month - 1).toLocaleString("en-SG", { month: "long", year: "numeric" })}</td><td>{item.status}</td><td>{item.employees?.length || 0}</td><td>${Number(item.totalGrossPay || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}</td><td>${Number(item.totalNetPay || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}</td><td>{item.paymentStatus || "Not started"}</td></tr>)}</tbody></table></div></section>}{preview ? <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-[#251E1F]/55 p-4"><section className="flex h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white"><header className="flex items-center justify-between border-b border-[#f0d2ca] p-4"><h3 className="font-semibold">{preview.name} · Payslip preview</h3><button onClick={() => { URL.revokeObjectURL(preview.url); setPreview(null); }}><X size={20}/></button></header><iframe title="Payslip preview" src={preview.url} className="min-h-0 flex-1"/></section></div> : null}</div>;
+  return <div className="space-y-5">
+    {/* Toasts */}
+    <div className="fixed top-4 right-4 z-50 space-y-2 min-w-[280px]">
+      {toasts.map(t => (
+        <div key={t.id} className={`rounded-xl px-4 py-3 shadow-xl border flex items-start gap-3 ${t.type === 'success' ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-red-600 text-white border-red-700'}`}>
+          <span className="text-lg leading-none mt-0.5">{t.type === 'success' ? '✅' : '❌'}</span>
+          <div className="flex-1 text-sm font-medium">{t.message}</div>
+          <button onClick={() => removeToast(t.id)} className="text-white/70 hover:text-white text-xs shrink-0">✕</button>
+        </div>
+      ))}
+    </div><SharedPayrollRunTracker workflow={state?.workflow} run={run}/><section className="app-panel rounded-2xl p-5"><div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between"><label className="flex-1 text-sm font-semibold">Selected payroll run<select className="mt-2 w-full rounded-xl border border-[#f0d2ca] bg-white px-3 py-2.5" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>{runs.map((item) => <option key={item.id} value={item.id}>{new Date(item.year, item.month - 1).toLocaleString("en-SG", { month: "long", year: "numeric" })} · {item.id} · {item.status}</option>)}</select></label><button type="button" onClick={() => loadWorkflow(selectedId)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#f0d2ca] px-4 py-2.5 text-sm font-semibold"><RefreshCw size={16}/>Refresh</button></div></section>{error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}{successMessage ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{successMessage}</div> : null}{deliveryMode ? <><section className="app-panel rounded-2xl p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">HR payslip delivery</h2><p className="mt-1 text-sm text-[#7b6660]">Finance must confirm settlement first. HR previews and delivers each employee payslip from this shared run.</p></div><button type="button" disabled={sending || !run?.paidAt || Boolean(run?.payslipsSentAt)} onClick={sendPending} className="inline-flex items-center gap-2 rounded-xl bg-[#F38978] px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{sending ? <Loader2 className="animate-spin" size={16}/> : <Send size={16}/>} {sending ? "Delivering payslips…" : progress.failed ? "Retry failed payslips" : "Send pending payslips"}</button></div><div className="mt-5 grid gap-3 sm:grid-cols-4">{[["Total", progress.total || run?.employees?.length || 0], ["Sent", progress.sent || 0], ["Failed", progress.failed || 0], ["Pending", progress.pending ?? run?.employees?.length ?? 0]].map(([label,value]) => <div key={label} className="rounded-xl border border-[#f0d2ca] bg-[#fff8f5] p-4"><p className="text-xs uppercase text-[#7b6660]">{label}</p><strong className="mt-1 block text-xl">{value}</strong></div>)}</div><div className="mt-4 flex flex-wrap items-end gap-3"><div><label className="block text-xs font-semibold uppercase tracking-wider text-[#7b6660]">Payroll Month</label><select value={payrollMonth} onChange={(e) => setPayrollMonth(e.target.value)} className="mt-1 rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F]">{["January","February","March","April","May","June","July","August","September","October","November","December"].map((m) => <option key={m} value={m}>{m}</option>)}</select></div><div><label className="block text-xs font-semibold uppercase tracking-wider text-[#7b6660]">Payroll Year</label><input type="number" value={payrollYear} onChange={(e) => setPayrollYear(Number(e.target.value))} className="mt-1 w-28 rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm text-[#251E1F]" /></div><div className="flex flex-wrap gap-2"><button type="button" onClick={quickGenerate} disabled={generating} className="rounded-lg bg-[#F38978] px-4 py-2 text-sm font-semibold text-white hover:bg-[#e87562] disabled:opacity-50">{generating ? "Generating..." : "⚡ Quick Generate"}</button><button type="button" onClick={sendRunToFinance} disabled={sending} className="rounded-lg bg-[#F38978]/20 px-4 py-2 text-sm font-medium text-[#F38978] hover:bg-[#F38978]/30 disabled:opacity-50">{sending ? "Sending..." : "Bulk Send to Finance"}</button><button type="button" onClick={sendRunToStaff} disabled={sending} className="rounded-lg bg-emerald-500/20 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-500/30 disabled:opacity-50">{sending ? "Sending..." : "Bulk Send to Staff"}</button></div></div>{!run?.paidAt ? <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Waiting for Finance to confirm payment settlement.</p> : null}</section><section className="app-panel overflow-hidden rounded-2xl"><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-[#fff8f5] text-xs uppercase text-[#7b6660]"><tr><th className="px-4 py-3">Employee</th><th>Department</th><th>Net pay</th><th>Status</th><th>Preview</th></tr></thead><tbody>{(run?.employees || []).map((employee) => <tr key={employee.payrollId} className="border-t border-[#f0d2ca]"><td className="px-4 py-3 font-semibold">{employee.name}</td><td>{employee.department || "Not recorded"}</td><td>${Number(employee.netPay || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}</td><td><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${["Sent","sent_to_staff"].includes(employee.financeStatus) ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{["Sent","sent_to_staff"].includes(employee.financeStatus) ? "Delivered" : "Pending"}</span></td><td><button type="button" onClick={() => previewPayslip(employee)} className="rounded-lg border border-[#f0d2ca] px-3 py-1.5 text-xs font-semibold">Preview PDF</button></td></tr>)}</tbody></table></div></section></> : <section className="app-panel overflow-hidden rounded-2xl"><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-[#fff8f5] text-xs uppercase text-[#7b6660]"><tr><th className="px-4 py-3">Run</th><th>Period</th><th>Status</th><th>Employees</th><th>Gross</th><th>Net</th><th>Payment</th></tr></thead><tbody>{runs.map((item) => <tr key={item.id} onClick={() => setSelectedId(item.id)} className={`cursor-pointer border-t border-[#f0d2ca] hover:bg-[#fff8f5] ${selectedId === item.id ? "bg-[#F38978]/10" : ""}`}><td className="px-4 py-3 font-semibold">{item.id}</td><td>{new Date(item.year, item.month - 1).toLocaleString("en-SG", { month: "long", year: "numeric" })}</td><td>{item.status}</td><td>{item.employees?.length || 0}</td><td>${Number(item.totalGrossPay || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}</td><td>${Number(item.totalNetPay || 0).toLocaleString("en-SG", { minimumFractionDigits: 2 })}</td><td>{item.paymentStatus || "Not started"}</td></tr>)}</tbody></table></div></section>}{preview ? <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-[#251E1F]/55 p-4"><section className="flex h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white"><header className="flex items-center justify-between border-b border-[#f0d2ca] p-4"><h3 className="font-semibold">{preview.name} · Payslip preview</h3><button onClick={() => { URL.revokeObjectURL(preview.url); setPreview(null); }}><X size={20}/></button></header><iframe title="Payslip preview" src={preview.url} className="min-h-0 flex-1"/></section></div> : null}</div>;
 }
 
 function HRPayrollPoliciesView() {
@@ -2165,6 +2302,7 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
   const [filterYear, setFilterYear] = useState(new Date().getFullYear());
   const [actionInProgress, setActionInProgress] = useState(null);
   const rowRefs = useRef(new Map());
+  const generateSectionRef = useRef(null);
   const [previewPayslip, setPreviewPayslip] = useState(null);
   const [expandedCpf, setExpandedCpf] = useState(null);
 
@@ -2175,6 +2313,28 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
   };
 
   const getRowKey = (payslip) => payslip.payslip_id || payslip.employee_id || payslip.staff_name || "";
+
+  const handleQuickGenerate = async () => {
+    try {
+      setGenerating(true);
+      setError("");
+      setSuccessMessage("");
+      const response = await fetch(`${API_BASE_URL}/api/hr/payslips/quick-generate`, {
+        method: "POST",
+        headers: { ...getAuthHeaders(session?.token), "Content-Type": "application/json" },
+        body: JSON.stringify({ period_month: payrollMonth, period_year: payrollYear })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Failed to generate payslips");
+      setSuccessMessage(`Generated ${result.generated_count} payslips from database. ${result.skipped_count} skipped. Net total: $${result.summary.total_net}`);
+      await fetchPayslips();
+      setTimeout(() => setSuccessMessage(""), 6000);
+    } catch (err) {
+      setError(err.message || "Quick generate failed");
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const fetchPayslips = async () => {
     try {
@@ -2225,6 +2385,14 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
     setSelectedIds(allSelected ? new Set() : new Set(draftIds));
   };
 
+  const removeToast = (id) => setToasts((t) => t.filter(x => x.id !== id));
+
+  const addToast = (type, message) => {
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    setToasts((t) => [...t, { id, type, message }]);
+    setTimeout(() => setToasts((t) => t.filter(x => x.id !== id)), type === 'success' ? 5000 : 6000);
+  };
+
   const openConfirmBulkSend = (opts) => {
     // opts: { payslip_ids: [...]} or { allDrafts: true }
     const draftIds = new Set(payslips.filter((p) => (p.status || '').toLowerCase() === "draft").map((p) => p.payslip_id));
@@ -2232,6 +2400,19 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
       ? { allDrafts: true }
       : { payslip_ids: (opts.payslip_ids || []).filter((id) => draftIds.has(id)) };
     const count = opts.allDrafts ? draftIds.size : payload.payslip_ids.length;
+
+    if (count === 0 && opts.allDrafts) {
+      // No drafts — check if any are already finance_pending (already sent)
+      const pendingCount = payslips.filter(p => (p.status || '').toLowerCase() === 'finance_pending').length;
+      if (pendingCount > 0) {
+        addToast('success', `✅ All ${pendingCount} payslip(s) are already with Finance for approval.`);
+        setSuccessMessage(`✅ All ${pendingCount} payslip(s) are already with Finance for approval.`);
+        setTimeout(() => setSuccessMessage(''), 5000);
+        return;
+      }
+      setError('No draft payslips to send. Generate payroll first.');
+      return;
+    }
     if (count === 0) {
       setError('No draft payslips selected');
       return;
@@ -2267,12 +2448,19 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
       const body = await response.json();
       const sent = body.updated_count ?? 0;
       const skipped = (body.skipped && body.skipped.length) ? body.skipped.length : 0;
-      setSuccessMessage(`${sent} sent to Finance. ${skipped} skipped.`);
-      addToast('success', `${sent} sent to Finance. ${skipped} skipped.`);
+
+      if (sent === 0) {
+        // All payslips already sent — this is not a failure
+        addToast('success', '✅ All payslips are already with Finance. No action needed.');
+        setSuccessMessage("✅ All payslips are already with Finance. No action needed.");
+      } else {
+        addToast('success', `✅ ${sent} payslip(s) sent to Finance successfully.${skipped ? ` ${skipped} skipped.` : ''}`);
+        setSuccessMessage(`✅ ${sent} payslip(s) sent to Finance.${skipped ? ` ${skipped} skipped.` : ''}`);
+      }
       setConfirmModalOpen(false);
       setConfirmPayload(null);
       await fetchPayslips();
-      setTimeout(() => setSuccessMessage(''), 4000);
+      setTimeout(() => setSuccessMessage(''), 5000);
     } catch (err) {
       setError(err.name === 'TypeError' ? "Network error: Server unreachable" : err.message || 'Bulk send failed');
       addToast('error', err.message || 'Bulk send failed');
@@ -2282,6 +2470,7 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
   };
 
   const performBulkSendToStaff = async () => {
+    if (actionInProgress === 'bulk-staff') return;
     const approvedIds = payslips
       .filter(p => (p.status || '').toLowerCase() === 'finance_approved')
       .map(p => p.payslip_id);
@@ -2293,16 +2482,21 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
     try {
       setActionInProgress('bulk-staff');
       setError("");
-      let sentCount = 0;
       for (const id of approvedIds) {
         const res = await fetch(`${API_BASE_URL}/api/hr/payslips/${id}/send-to-staff`, {
           method: 'PUT',
           headers: { ...getAuthHeaders(session?.token) }
         });
-        if (res.ok) sentCount++;
+        if (res.status === 401 || res.status === 403) {
+          return handleUnauthorized();
+        }
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.message || 'Failed to send to staff');
+        }
       }
-      setSuccessMessage(`${sentCount} payslip(s) sent to staff.`);
-      addToast('success', `${sentCount} payslip(s) sent to staff.`);
+      setSuccessMessage(`${approvedIds.length} payslip(s) sent to staff.`);
+      addToast('success', `${approvedIds.length} payslip(s) sent to staff.`);
       await fetchPayslips();
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err) {
@@ -2519,14 +2713,6 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
     }
   };
 
-  const removeToast = (id) => setToasts((t) => t.filter(x => x.id !== id));
-
-  const addToast = (type, message) => {
-    const id = Date.now() + Math.floor(Math.random() * 1000);
-    setToasts((t) => [...t, { id, type, message }]);
-    setTimeout(() => setToasts((t) => t.filter(x => x.id !== id)), 4000);
-  };
-
   useEffect(() => {
     fetchPayslips();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2570,18 +2756,31 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
   return (
     <div className="space-y-5">
       {/* Toasts container */}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
+      <div className="fixed top-4 right-4 z-50 space-y-2 min-w-[280px]">
         {toasts.map(t => (
-          <div key={t.id} className={`max-w-sm rounded-lg px-4 py-2 shadow-lg ${t.type === 'success' ? 'bg-emerald-500/90 text-[#251E1F]' : 'bg-red-600/90 text-[#251E1F]'}`}>
-            <div className="flex items-center justify-between gap-4">
-              <div className="text-sm">{t.message}</div>
-              <button onClick={() => removeToast(t.id)} className="text-[#251E1F]/80 text-xs">Dismiss</button>
-            </div>
+          <div key={t.id} className={`rounded-xl px-4 py-3 shadow-xl border flex items-start gap-3 ${
+            t.type === 'success'
+              ? 'bg-emerald-500 text-white border-emerald-600'
+              : 'bg-red-600 text-white border-red-700'
+          }`}>
+            <span className="text-lg leading-none mt-0.5">{t.type === 'success' ? '✅' : '❌'}</span>
+            <div className="flex-1 text-sm font-medium">{t.message}</div>
+            <button onClick={() => removeToast(t.id)} className="text-white/70 hover:text-white text-xs shrink-0">✕</button>
           </div>
         ))}
       </div>
-      <div className="app-panel rounded-2xl p-6">
-        <h3 className="text-lg font-semibold text-[#251E1F]">Generate Payslips</h3>
+      <div ref={generateSectionRef} className="app-panel rounded-2xl p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-lg font-semibold text-[#251E1F]">Generate Payslips</h3>
+          <button
+            type="button"
+            onClick={handleQuickGenerate}
+            disabled={generating}
+            className="rounded-lg border border-[#f0d2ca] bg-white/80 px-4 py-2 text-sm font-medium text-[#251E1F] hover:bg-[#FDD9CD]/45 transition"
+          >
+            {generating ? "Generating..." : "Go to Generate Payslips →"}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -2625,27 +2824,7 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
         <button
           type="button"
           disabled={generating}
-          onClick={async () => {
-            try {
-              setGenerating(true);
-              setError("");
-              setSuccessMessage("");
-              const response = await fetch(`${API_BASE_URL}/api/hr/payslips/quick-generate`, {
-                method: "POST",
-                headers: { ...getAuthHeaders(session?.token), "Content-Type": "application/json" },
-                body: JSON.stringify({ period_month: payrollMonth, period_year: payrollYear })
-              });
-              const result = await response.json();
-              if (!response.ok) throw new Error(result.message || "Failed to generate payslips");
-              setSuccessMessage(`Generated ${result.generated_count} payslips from database. ${result.skipped_count} skipped. Net total: $${result.summary.total_net}`);
-              await fetchPayslips();
-              setTimeout(() => setSuccessMessage(""), 6000);
-            } catch (err) {
-              setError(err.message || "Quick generate failed");
-            } finally {
-              setGenerating(false);
-            }
-          }}
+          onClick={handleQuickGenerate}
           className="w-full rounded-lg bg-[#F38978] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#e87562] disabled:opacity-50"
         >
           {generating ? (
@@ -2698,6 +2877,32 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
             {getSearchCountLabel(filteredPayslips.length, payslips.length, searchTerm.trim())}
           </div>
         </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleQuickGenerate}
+            disabled={generating}
+            className="rounded-lg bg-[#F38978] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e87562] disabled:opacity-50"
+          >
+            {generating ? "Generating..." : "⚡ Quick Generate"}
+          </button>
+          <button
+            type="button"
+            onClick={() => openConfirmBulkSend({ allDrafts: true })}
+            disabled={actionInProgress === 'bulk'}
+            className="rounded-lg bg-[#F38978]/20 px-4 py-2 text-sm font-medium text-[#F38978] hover:bg-[#F38978]/30 disabled:opacity-30 transition"
+          >
+            {actionInProgress === 'bulk' ? 'Sending...' : 'Bulk Send to Finance'}
+          </button>
+          <button
+            type="button"
+            onClick={performBulkSendToStaff}
+            disabled={actionInProgress === 'bulk-staff' || payslips.filter(p => (p.status || '').toLowerCase() === 'finance_approved').length === 0}
+            className="rounded-lg bg-emerald-500/20 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-500/30 disabled:opacity-30 transition"
+          >
+            {actionInProgress === 'bulk-staff' ? 'Sending...' : 'Bulk Send to Staff'}
+          </button>
+        </div>
       </div>
 
       <div className="app-panel rounded-2xl overflow-hidden">
@@ -2717,10 +2922,17 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
             <button
               type="button"
               onClick={() => openConfirmBulkSend({ allDrafts: true })}
-              disabled={actionInProgress === 'bulk' || payslips.filter(p => (p.status || '').toLowerCase() === 'draft').length === 0}
+              disabled={actionInProgress === 'bulk'}
               className="rounded-lg bg-[#F38978]/20 px-4 py-2 text-sm font-medium text-[#F38978] hover:bg-[#F38978]/30 disabled:opacity-30 transition"
             >
-              {actionInProgress === 'bulk' ? 'Sending...' : `📤 Send to Finance (${payslips.filter(p => (p.status || '').toLowerCase() === 'draft').length})`}
+              {(() => {
+                if (actionInProgress === 'bulk') return 'Sending...';
+                const draftCount = payslips.filter(p => (p.status || '').toLowerCase() === 'draft').length;
+                const pendingCount = payslips.filter(p => (p.status || '').toLowerCase() === 'finance_pending').length;
+                if (draftCount > 0) return `📤 Send to Finance (${draftCount})`;
+                if (pendingCount > 0) return `✅ With Finance (${pendingCount})`;
+                return '📤 Send to Finance';
+              })()}
             </button>
             <button
               type="button"
@@ -3215,3 +3427,4 @@ export default function HRPayrollPage() {
     </DashboardLayout>
   );
 }
+
