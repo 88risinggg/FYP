@@ -25,6 +25,25 @@ const { runWithTenant } = require("../services/tenantContext");
 
 const LOGIN_FAILURE_LIMIT = 5;
 
+const OTP_EXEMPT_EMAILS = new Set([
+  "kingtoh@vaniday.com",
+  "amanda.lim@vaniday.com",
+  "daniel.tan@vaniday.com",
+  "chloe.wong@vaniday.com",
+  "admin@paynivo.com",
+  "finance@paynivo.com",
+  "hr@paynivo.com",
+  "staff@paynivo.com",
+  "operator@paynivo.com"
+]);
+
+function requiresLoginOtp(user) {
+  const email = String(user?.email || "").trim().toLowerCase();
+  return Number(user?.two_fa_enabled) === 1
+    && user?.two_fa_method === "Email OTP"
+    && !OTP_EXEMPT_EMAILS.has(email);
+}
+
 function lockedResponse(res) {
   return res.status(423).json({
     code: "ACCOUNT_LOCKED",
@@ -238,7 +257,7 @@ async function login(req, res) {
       return res.json({ requiresPasswordChange: true, setupToken, email: user.email });
     }
 
-    if (Number(user.two_fa_enabled) === 1 && user.two_fa_method === "Email OTP") {
+    if (requiresLoginOtp(user)) {
       const challenge = await challengeService.createChallenge({
         email: user.email,
         purpose: "login",

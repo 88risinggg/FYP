@@ -76,6 +76,44 @@ test("password login issues a JWT without requiring OTP", async () => {
   expect(jwt.sign).toHaveBeenCalledTimes(1);
 });
 
+test("listed Vaniday and PayNivo accounts bypass enabled email OTP", async () => {
+  authModel.findUserByEmail.mockResolvedValue({
+    ...activeUser,
+    email: "DANIEL.TAN@VANIDAY.COM",
+    two_fa_enabled: 1,
+    two_fa_method: "Email OTP"
+  });
+  const req = { body: { email: "daniel.tan@vaniday.com", password: "Password@123" } };
+  const res = response();
+
+  await controller.login(req, res);
+
+  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ token: "signed-jwt" }));
+  expect(challengeService.createChallenge).not.toHaveBeenCalled();
+  expect(sendAuthOtpEmail).not.toHaveBeenCalled();
+});
+
+test("other accounts still require enabled email OTP", async () => {
+  authModel.findUserByEmail.mockResolvedValue({
+    ...activeUser,
+    email: "other.finance@vaniday.com",
+    two_fa_enabled: 1,
+    two_fa_method: "Email OTP"
+  });
+  const req = { body: { email: "other.finance@vaniday.com", password: "Password@123" } };
+  const res = response();
+
+  await controller.login(req, res);
+
+  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+    requiresTwoFactor: true,
+    challengeId: "login-challenge"
+  }));
+  expect(challengeService.createChallenge).toHaveBeenCalledTimes(1);
+  expect(sendAuthOtpEmail).toHaveBeenCalledTimes(1);
+  expect(jwt.sign).not.toHaveBeenCalled();
+});
+
 test("invalid password does not issue a JWT", async () => {
   bcrypt.compare.mockResolvedValue(false);
   const req = { body: { email: activeUser.email, password: "wrong-password" } };
