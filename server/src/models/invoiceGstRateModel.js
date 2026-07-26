@@ -78,13 +78,18 @@ async function ensureGstRatesTable(connection = pool) {
   }
 }
 
-async function listGstRates(companyId = null) {
+async function listGstRates(companyId = null, options = {}) {
   await ensureGstRatesTable();
+  const latestFirst = options.order === "latest";
+  const safeLimit = options.limit
+    ? Math.max(1, Math.min(Number.parseInt(options.limit, 10) || 5, 100))
+    : null;
   const [rows] = await pool.query(
     `SELECT * FROM invoice_gst_rates
      WHERE is_active = 1
        AND ${companyId ? "(company_id = ? OR company_id IS NULL)" : "company_id IS NULL"}
-     ORDER BY effective_from ASC, gst_rate_id ASC`,
+     ORDER BY effective_from ${latestFirst ? "DESC" : "ASC"}, gst_rate_id ${latestFirst ? "DESC" : "ASC"}
+     ${safeLimit ? `LIMIT ${safeLimit}` : ""}`,
     companyId ? [companyId] : []
   );
   return rows.map(mapRow);

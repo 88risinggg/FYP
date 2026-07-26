@@ -951,7 +951,7 @@ async function getRecentPaymentUpdates(context, paymentContext, missingTables, o
   const page = Math.max(1, Number.parseInt(options.page, 10) || 1);
   const pageSize = options.paginated
     ? Math.max(5, Math.min(100, Number.parseInt(options.pageSize, 10) || 20))
-    : 10;
+    : 5;
   const offset = options.paginated ? (page - 1) * pageSize : 0;
   const params = [];
   const filters = [];

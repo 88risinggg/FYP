@@ -12,6 +12,7 @@ const {
   getInvoiceSettingsOptions,
   invoiceStatusWorkflow,
   listNumberingActivity,
+  listNumberingActivityPage,
   saveInvoiceSettings,
   updateInvoiceLogo
 } = require("../models/invoiceSettingsModel");
@@ -36,14 +37,13 @@ async function buildPayload(settings, isConfigured, companyId = null) {
     options: await getInvoiceSettingsOptions(companyId),
     configurationStatus: calculateConfigurationStatus(effectiveSettings),
     invoiceStatusWorkflow,
-    numberingActivity: await listNumberingActivity(),
+    numberingActivity: await listNumberingActivity(5, companyId),
     isConfigured: Boolean(isConfigured)
   };
 }
 
 function normalizeSettings(body) {
   const general = body.general || {};
-  const exportSettings = body.export || {};
   const branding = body.branding || {};
   const sequenceRules = body.sequenceRules || {};
 
@@ -83,7 +83,7 @@ function normalizeSettings(body) {
       ...defaultSettings.general,
       ...general,
       defaultCurrency: String(general.defaultCurrency || "").trim().toUpperCase(),
-      defaultLanguage: String(general.defaultLanguage || "").trim(),
+      defaultLanguage: "en",
       defaultTax: String(general.defaultTax || "").trim(),
       priceDisplay: String(general.priceDisplay || "").trim(),
       paymentTerms,
@@ -93,12 +93,10 @@ function normalizeSettings(body) {
       whatsappNotificationsEnabled: true
     },
     export: {
-      ...defaultSettings.export,
-      ...exportSettings,
-      pdfExportEnabled: Boolean(exportSettings.pdfExportEnabled),
-      excelExportEnabled: Boolean(exportSettings.excelExportEnabled),
+      pdfExportEnabled: true,
+      excelExportEnabled: true,
       pdfPaperSize: "A4",
-      excelFormat: String(exportSettings.excelFormat || "").trim()
+      excelFormat: "xlsx"
     },
     branding: {
       ...defaultSettings.branding,
@@ -114,12 +112,8 @@ function normalizeSettings(body) {
       allowManualOverride: Boolean(
         sequenceRules.allowManualOverride ?? defaultSettings.sequenceRules.allowManualOverride
       ),
-      lockNumberingAfterSent: Boolean(
-        sequenceRules.lockNumberingAfterSent ?? defaultSettings.sequenceRules.lockNumberingAfterSent
-      ),
-      preventDuplicateNumbers: Boolean(
-        sequenceRules.preventDuplicateNumbers ?? defaultSettings.sequenceRules.preventDuplicateNumbers
-      )
+      lockNumberingAfterSent: true,
+      preventDuplicateNumbers: true
     }
   };
 }
@@ -138,7 +132,6 @@ function isRecognizedPaymentTerm(value) {
 function validateSettings(settings, options) {
   const errors = [];
   const general = settings.general;
-  const exportSettings = settings.export;
   const branding = settings.branding;
 
   if (!hasOption(options.currencies, general.defaultCurrency)) {
@@ -166,12 +159,6 @@ function validateSettings(settings, options) {
   if (!hasOption(options.lateFeeTypes, general.lateFeeType)) {
     errors.push("Late fee type is invalid.");
   }
-  if (!hasOption(options.pdfPaperSizes, exportSettings.pdfPaperSize)) {
-    errors.push("PDF paper size is required.");
-  }
-  if (!hasOption(options.excelFormats, exportSettings.excelFormat)) {
-    errors.push("Excel format is required.");
-  }
   if (!settings.invoicePrefix) {
     errors.push("Invoice prefix is required.");
   }
@@ -183,6 +170,13 @@ function validateSettings(settings, options) {
   }
   if (!hasOption(options.invoiceFormats, settings.invoiceFormat)) {
     errors.push("Invoice format is invalid.");
+  }
+  if (
+    settings.sequenceRules.yearlyReset &&
+    !settings.invoiceFormat.includes("{YYYY}") &&
+    !settings.invoiceFormat.includes("{YY}")
+  ) {
+    errors.push("Yearly reset requires the invoice format to include a year.");
   }
   if (!Number.isInteger(Number(settings.nextInvoiceNumber)) || Number(settings.nextInvoiceNumber) < 1) {
     errors.push("Next invoice number must be 1 or higher.");
@@ -243,7 +237,6 @@ function buildNumberingActivityRecords(previousSettings, nextSettings, savedSett
         oldValue: displayValue(oldValue),
         newValue: displayValue(newValue),
         changedBy,
-        notes: "Saved from Invoice Settings > Numbering"
       };
     })
     .filter(Boolean);
@@ -270,19 +263,26 @@ async function putSettings(req, res) {
     const companyId = getCompanyId(req);
     const settings = normalizeSettings(req.body);
     const options = await getInvoiceSettingsOptions(companyId);
+    const previousSettings = await getInvoiceSettings(companyId);
+
+    // The next sequence can only be changed when Admin explicitly enables
+    // manual override. Otherwise keep the latest server value to avoid a stale
+    // settings screen rewinding a sequence that Finance has already advanced.
+    if (!settings.sequenceRules.allowManualOverride) {
+      settings.nextInvoiceNumber = previousSettings.nextInvoiceNumber;
+    }
     const errors = validateSettings(settings, options);
 
     if (errors.length > 0) {
       return res.status(400).json({ message: errors[0], errors });
     }
 
-    const previousSettings = await getInvoiceSettings(companyId);
     const saved = await saveInvoiceSettings(settings, companyId);
     const changedBy = req.user?.email || "Admin";
     const numberingActivity = buildNumberingActivityRecords(previousSettings, settings, saved, changedBy);
 
     if (numberingActivity.length > 0) {
-      await addNumberingActivity(numberingActivity);
+      await addNumberingActivity(numberingActivity, companyId);
     }
 
     await logAuditEvent({
@@ -411,14 +411,31 @@ async function postInvoicePreview(req, res) {
 async function getGstRates(req, res) {
   try {
     const companyId = getCompanyId(req);
+    const listOptions = {
+      limit: req.query.limit,
+      order: req.query.order
+    };
     const [rates, currentRate, nextRate] = await Promise.all([
-      listGstRates(companyId),
+      listGstRates(companyId, listOptions),
       getEffectiveGstRate(companyId),
       getNextScheduledGstRate(companyId)
     ]);
     res.json({ rates, currentRate, nextRate });
   } catch (error) {
     handleSettingsError(error, res, "Unable to load GST rates.");
+  }
+}
+
+async function getNumberingActivity(req, res) {
+  try {
+    const companyId = getCompanyId(req);
+    const result = await listNumberingActivityPage({
+      page: req.query.page,
+      pageSize: req.query.pageSize
+    }, companyId);
+    res.json(result);
+  } catch (error) {
+    handleSettingsError(error, res, "Unable to load numbering settings history.");
   }
 }
 
@@ -446,6 +463,7 @@ async function postGstRate(req, res) {
 module.exports = {
   getSettings,
   getGstRates,
+  getNumberingActivity,
   postInvoiceLogo,
   postInvoicePreview,
   postGstRate,

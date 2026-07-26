@@ -22,6 +22,7 @@ const {
 } = require("../controllers/adminDashboardController");
 const {
   getGstRates,
+  getNumberingActivity,
   getSettings,
   postGstRate,
   postInvoiceLogo,
@@ -51,6 +52,7 @@ router.get("/dashboard/validation-summary/uploads", getValidationUploadHistory);
 router.get("/dashboard/validation-errors", getValidationErrors);
 router.get("/invoice-settings", getSettings);
 router.put("/invoice-settings", putSettings);
+router.get("/invoice-settings/numbering-activity", getNumberingActivity);
 router.get("/invoice-settings/gst-rates", getGstRates);
 router.post("/invoice-settings/gst-rates", postGstRate);
 router.post("/invoice-settings/logo", postInvoiceLogo);
