@@ -734,31 +734,9 @@ async function sendInvoice(req, res) {
     const { notifyInvoiceSent } = require("../services/invoiceNotificationService");
     notifyInvoiceSent(invoice.invoiceId, invoice.customer_name, req.user?.userId).catch(() => {});
 
-    // WhatsApp notification: Invoice Created (non-blocking)
-    (async () => {
-      try {
-        const whatsappModel = require("../models/whatsappNotificationModel");
-        const settings = await whatsappModel.getSettings();
-        if (settings?.whatsapp_enabled && settings?.send_invoice_created) {
-          const customer = await whatsappModel.getCustomerWithWhatsApp(invoice.customer_id);
-          if (customer?.whatsapp_number) {
-            const { sendInvoiceCreated } = require("../services/whatsappService");
-            await sendInvoiceCreated({
-              customerName: invoice.customer_name,
-              phone: customer.whatsapp_number,
-              invoiceNumber: invoice.invoiceId,
-              amount: invoice.total_amount,
-              dueDate: invoice.due_date,
-              paymentLink: paymentUrl || null,
-              customerId: invoice.customer_id,
-              invoiceId: invoiceId
-            });
-          }
-        }
-      } catch (whatsappErr) {
-        console.error("[WHATSAPP] Invoice created notification failed:", whatsappErr.message);
-      }
-    })();
+    // WhatsApp notification: Invoice Sent (non-blocking)
+    const { onInvoiceSent } = require("../services/whatsappAutoTrigger");
+    onInvoiceSent({ invoice_id: invoiceId, invoiceId: invoice.invoiceId, total_amount: invoice.total_amount, due_date: invoice.due_date, customer_id: invoice.customer_id, payment_url: paymentUrl }).catch(() => {});
 
     res.json({
       message: "Invoice sent.",

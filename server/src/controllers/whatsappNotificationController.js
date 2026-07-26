@@ -17,6 +17,7 @@
 
 const notificationModel = require("../models/whatsappNotificationModel");
 const whatsappService = require("../services/whatsappService");
+const templateModel = require("../models/whatsappTemplateModel");
 const { pool } = require("../config/db");
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
@@ -362,6 +363,279 @@ async function getCustomerWhatsApp(req, res) {
   }
 }
 
+// ─── Connection Test ──────────────────────────────────────────────────────────
+
+/**
+ * POST /api/whatsapp-notifications/test-connection
+ * Tests the Twilio API connection without sending a message.
+ */
+async function testConnection(req, res) {
+  try {
+    const result = await whatsappService.testConnection();
+    if (result.success) {
+      res.json({ message: "Connection successful.", accountName: result.accountName, status: result.status });
+    } else {
+      res.status(422).json({ message: "Connection failed.", error: result.error });
+    }
+  } catch (error) {
+    console.error("[WHATSAPP] Test connection error:", error.message);
+    res.status(500).json({ message: "Failed to test connection.", detail: error.message });
+  }
+}
+
+// ─── Send Invoice via WhatsApp ────────────────────────────────────────────────
+
+/**
+ * POST /api/whatsapp-notifications/send-invoice/:invoiceId
+ * Sends the invoice to the customer via WhatsApp with optional PDF attachment.
+ */
+async function sendInvoiceWhatsApp(req, res) {
+  try {
+    const invoiceId = Number(req.params.invoiceId);
+    const { send_pdf = false } = req.body;
+
+    if (!invoiceId) {
+      return res.status(400).json({ message: "Invoice ID is required." });
+    }
+
+    // Check settings
+    const settings = await notificationModel.getSettings();
+    if (!settings || !settings.whatsapp_enabled) {
+      return res.status(400).json({ message: "WhatsApp notifications are disabled." });
+    }
+
+    // Get invoice + customer
+    const [invoiceRows] = await pool.query(
+      `SELECT i.invoice_id, i.invoiceId, i.total_amount, i.due_date, i.status, i.payment_url, i.customer_id
+       FROM invoice i WHERE i.invoice_id = ? LIMIT 1`,
+      [invoiceId]
+    );
+    if (invoiceRows.length === 0) {
+      return res.status(404).json({ message: "Invoice not found." });
+    }
+    const invoice = invoiceRows[0];
+
+    const customer = await notificationModel.getCustomerWithWhatsApp(invoice.customer_id);
+    if (!customer) {
+      return res.status(404).json({ message: "Customer not found." });
+    }
+    if (!customer.whatsapp_number) {
+      return res.status(400).json({ message: "Customer does not have a WhatsApp number." });
+    }
+
+    const shouldSendPdf = send_pdf || Boolean(settings.send_pdf_attachments);
+
+    const result = await whatsappService.sendInvoiceCreated({
+      customerName: customer.name,
+      phone: customer.whatsapp_number,
+      invoiceNumber: invoice.invoiceId,
+      amount: invoice.total_amount,
+      dueDate: invoice.due_date,
+      paymentLink: invoice.payment_url || null,
+      customerId: customer.customer_id,
+      invoiceId: invoice.invoice_id,
+      sendPdf: shouldSendPdf
+    });
+
+    if (result.success) {
+      res.json({ message: "Invoice sent via WhatsApp.", logId: result.logId, messageId: result.messageId });
+    } else {
+      res.status(422).json({ message: "Failed to send invoice via WhatsApp.", error: result.error, logId: result.logId });
+    }
+  } catch (error) {
+    console.error("[WHATSAPP] Send invoice error:", error.message);
+    res.status(500).json({ message: "Failed to send invoice via WhatsApp.", detail: error.message });
+  }
+}
+
+
+// ─── Communication History ────────────────────────────────────────────────────
+
+/**
+ * GET /api/whatsapp-notifications/history/:invoiceId
+ * Returns WhatsApp communication history for a specific invoice.
+ */
+async function getInvoiceCommunicationHistory(req, res) {
+  try {
+    const invoiceId = Number(req.params.invoiceId);
+    if (!invoiceId) {
+      return res.status(400).json({ message: "Invoice ID is required." });
+    }
+
+    const logs = await notificationModel.getLogsByInvoiceId(invoiceId);
+    res.json({ logs });
+  } catch (error) {
+    console.error("[WHATSAPP] Communication history error:", error.message);
+    res.status(500).json({ message: "Failed to fetch communication history." });
+  }
+}
+
+// ─── Twilio Webhook ───────────────────────────────────────────────────────────
+
+/**
+ * POST /api/whatsapp-notifications/webhook/status
+ * Twilio delivery status callback endpoint.
+ * No authentication required (validated by Twilio signature).
+ */
+async function webhookStatusCallback(req, res) {
+  try {
+    const result = await whatsappService.handleStatusCallback(req.body);
+    if (result.updated) {
+      console.log(`[WEBHOOK] Status updated: ${result.messageSid} -> ${result.status}`);
+    }
+    // Twilio expects 200 response
+    res.status(200).send("<Response></Response>");
+  } catch (error) {
+    console.error("[WEBHOOK] Status callback error:", error.message);
+    res.status(200).send("<Response></Response>"); // Always 200 to prevent retries
+  }
+}
+
+// ─── Template Endpoints ───────────────────────────────────────────────────────
+
+/**
+ * GET /api/whatsapp-notifications/templates
+ */
+async function getTemplates(req, res) {
+  try {
+    const { template_type, is_active } = req.query;
+    const filters = {};
+    if (template_type) filters.template_type = template_type;
+    if (is_active !== undefined) filters.is_active = is_active === "true";
+
+    const templates = await templateModel.getAll(filters);
+    const placeholders = templateModel.getPlaceholders();
+    const types = templateModel.getTemplateTypes();
+
+    res.json({ templates, placeholders, types });
+  } catch (error) {
+    console.error("[WHATSAPP] Get templates error:", error.message);
+    res.status(500).json({ message: "Failed to fetch templates." });
+  }
+}
+
+/**
+ * GET /api/whatsapp-notifications/templates/:id
+ */
+async function getTemplateById(req, res) {
+  try {
+    const template = await templateModel.getById(Number(req.params.id));
+    if (!template) {
+      return res.status(404).json({ message: "Template not found." });
+    }
+    res.json(template);
+  } catch (error) {
+    console.error("[WHATSAPP] Get template error:", error.message);
+    res.status(500).json({ message: "Failed to fetch template." });
+  }
+}
+
+/**
+ * POST /api/whatsapp-notifications/templates
+ */
+async function createTemplate(req, res) {
+  try {
+    const { template_name, template_type, message_body, is_default, is_active } = req.body;
+
+    if (!template_name || !template_type || !message_body) {
+      return res.status(400).json({ message: "template_name, template_type, and message_body are required." });
+    }
+
+    const validTypes = templateModel.getTemplateTypes();
+    if (!validTypes.includes(template_type)) {
+      return res.status(400).json({ message: `Invalid template_type. Must be one of: ${validTypes.join(", ")}` });
+    }
+
+    const template = await templateModel.create({
+      template_name,
+      template_type,
+      message_body,
+      is_default: is_default || false,
+      is_active: is_active !== false,
+      created_by: req.user?.userId || null
+    });
+
+    res.status(201).json({ message: "Template created.", template });
+  } catch (error) {
+    console.error("[WHATSAPP] Create template error:", error.message);
+    res.status(500).json({ message: "Failed to create template." });
+  }
+}
+
+/**
+ * PUT /api/whatsapp-notifications/templates/:id
+ */
+async function updateTemplate(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const { template_name, template_type, message_body, is_default, is_active } = req.body;
+
+    const updates = {};
+    if (template_name !== undefined) updates.template_name = template_name;
+    if (template_type !== undefined) updates.template_type = template_type;
+    if (message_body !== undefined) updates.message_body = message_body;
+    if (is_default !== undefined) updates.is_default = is_default;
+    if (is_active !== undefined) updates.is_active = is_active;
+
+    const template = await templateModel.update(id, updates);
+    if (!template) {
+      return res.status(404).json({ message: "Template not found." });
+    }
+
+    res.json({ message: "Template updated.", template });
+  } catch (error) {
+    console.error("[WHATSAPP] Update template error:", error.message);
+    res.status(500).json({ message: "Failed to update template." });
+  }
+}
+
+/**
+ * DELETE /api/whatsapp-notifications/templates/:id
+ */
+async function deleteTemplate(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const removed = await templateModel.remove(id);
+    if (!removed) {
+      return res.status(400).json({ message: "Cannot delete default template or template not found." });
+    }
+    res.json({ message: "Template deleted." });
+  } catch (error) {
+    console.error("[WHATSAPP] Delete template error:", error.message);
+    res.status(500).json({ message: "Failed to delete template." });
+  }
+}
+
+/**
+ * PUT /api/whatsapp-notifications/templates/:id/default
+ */
+async function setDefaultTemplate(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const template = await templateModel.setDefault(id);
+    if (!template) {
+      return res.status(404).json({ message: "Template not found." });
+    }
+    res.json({ message: "Template set as default.", template });
+  } catch (error) {
+    console.error("[WHATSAPP] Set default template error:", error.message);
+    res.status(500).json({ message: "Failed to set default template." });
+  }
+}
+
+/**
+ * GET /api/whatsapp-notifications/templates/placeholders
+ */
+async function getTemplatePlaceholders(req, res) {
+  try {
+    const placeholders = templateModel.getPlaceholders();
+    const types = templateModel.getTemplateTypes();
+    res.json({ placeholders, types });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch placeholders." });
+  }
+}
+
 module.exports = {
   getSettings,
   updateSettings,
@@ -371,5 +645,18 @@ module.exports = {
   getDashboard,
   updateCustomerWhatsApp,
   verifyCustomerWhatsApp,
-  getCustomerWhatsApp
+  getCustomerWhatsApp,
+  // New endpoints
+  testConnection,
+  sendInvoiceWhatsApp,
+  getInvoiceCommunicationHistory,
+  webhookStatusCallback,
+  // Template endpoints
+  getTemplates,
+  getTemplateById,
+  createTemplate,
+  updateTemplate,
+  deleteTemplate,
+  setDefaultTemplate,
+  getTemplatePlaceholders
 };

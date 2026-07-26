@@ -162,10 +162,22 @@ async function runScheduledNotifications() {
 
     // 2. Overdue Notices
     if (settings.send_overdue_notice) {
+      // Standard overdue notices for all overdue invoices
       results.overdue = await processOverdueNotices();
 
       if (results.overdue.sent > 0 || results.overdue.failed > 0) {
         console.log(`[SCHEDULER] Overdue: ${results.overdue.sent} sent, ${results.overdue.failed} failed`);
+      }
+    }
+
+    // 2b. Overdue reminders at specific intervals (1, 3, 7 days after due)
+    if (settings.send_payment_reminder) {
+      const overdueDays = settings.overdue_reminder_days || [1, 3, 7];
+      for (const days of overdueDays) {
+        // Use negative days to indicate "days after due date"
+        const dayResult = await processReminders(-days);
+        results.reminders.sent += dayResult.sent;
+        results.reminders.failed += dayResult.failed;
       }
     }
 

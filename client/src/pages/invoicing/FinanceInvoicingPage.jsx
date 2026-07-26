@@ -19,6 +19,7 @@ import {
   Loader2,
   Lock,
   Mail,
+  MessageCircle,
   Plus,
   ReceiptText,
   Search,
@@ -76,6 +77,9 @@ import SubscriptionsView from "../../components/invoicing/SubscriptionsView.jsx"
 import FinanceRemindersView from "../../components/invoicing/FinanceRemindersView.jsx";
 import FinanceSettingsView from "./FinanceSettingsView.jsx";
 import FinanceInvoiceSettingsPage from "./FinanceInvoiceSettingsPage.jsx";
+import WhatsAppSettingsPage from "./WhatsAppSettingsPage.jsx";
+import SendWhatsAppButton from "../../components/invoicing/SendWhatsAppButton.jsx";
+import WhatsAppCommunicationHistory from "../../components/invoicing/WhatsAppCommunicationHistory.jsx";
 
 const financeSidebarSections = [
   {
@@ -131,6 +135,11 @@ const financeSidebarSections = [
         label: "Invoice Settings",
         icon: Settings2,
         path: "/dashboard/invoicing/finance/invoice-settings"
+      },
+      {
+        label: "WhatsApp",
+        icon: MessageCircle,
+        path: "/dashboard/invoicing/finance/whatsapp"
       }
     ]
   },
@@ -825,6 +834,18 @@ function InvoiceDetailsModal({ invoice, onClose }) {
           </h3>
           <InvoiceTimeline invoice={invoice} />
         </div>
+
+        {/* WhatsApp Section */}
+        <div className="mx-5 mb-5 rounded-xl border border-[#f0d2ca] bg-white p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-[#F38978] flex items-center gap-2">
+              <MessageCircle size={13} />
+              WhatsApp
+            </h3>
+            <SendWhatsAppButton invoiceId={invoice.invoice_id} size="small" />
+          </div>
+          <WhatsAppCommunicationHistory invoiceId={invoice.invoice_id} />
+        </div>
       </div>
     </div>
   );
@@ -1370,6 +1391,7 @@ function InvoiceTable({
                     <Download size={14} />
                     Download PDF
                   </button>
+                  <SendWhatsAppButton invoiceId={invoice.invoice_id} size="small" />
                   {invoice.status === "Draft" ? (
                     <button
                       type="button"
@@ -3914,6 +3936,10 @@ export default function FinanceInvoicingPage() {
       return "invoice-settings";
     }
 
+    if (location.pathname.endsWith("/whatsapp")) {
+      return "whatsapp";
+    }
+
     if (location.pathname.endsWith("/reports")) {
       return "reports";
     }
@@ -4043,6 +4069,10 @@ export default function FinanceInvoicingPage() {
 
     if (activeView === "invoice-settings") {
       return <FinanceInvoiceSettingsPage />;
+    }
+
+    if (activeView === "whatsapp") {
+      return <WhatsAppSettingsPage />;
     }
 
     if (activeView === "reports") {

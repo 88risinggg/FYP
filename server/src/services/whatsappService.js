@@ -1,321 +1,283 @@
 /**
  * WhatsApp Notification Service
  *
- * Sends WhatsApp messages via Meta WhatsApp Business API (Cloud API).
- * Falls back to console logging if Meta credentials are not configured.
+ * Sends WhatsApp messages via the official Twilio SDK.
+ * Falls back to console logging if credentials are not configured.
  *
- * Provides high-level notification functions for:
- *   - Invoice Created
- *   - Payment Received
- *   - Payment Reminder (upcoming due)
- *   - Overdue Notice
- *   - Subscription Invoice
- *
- * Each function validates the phone number, formats the message,
- * sends via the API, and logs the result.
+ * Features:
+ *   - Official Twilio SDK integration
+ *   - PDF attachment support via media URLs
+ *   - Message template rendering with placeholders
+ *   - Retry with exponential backoff (max 3 attempts)
+ *   - Subscription lifecycle notifications
+ *   - Payment link embedding
+ *   - Delivery status tracking via webhooks
  *
  * Required environment variables:
- * - META_WHATSAPP_TOKEN (Permanent access token)
- * - META_WHATSAPP_PHONE_ID (Phone number ID from Meta Business)
+ *   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM
+ *   TWILIO_STATUS_CALLBACK_URL (optional)
+ *   APP_BASE_URL (for generating PDF URLs)
  */
 
-const https = require("https");
+const twilio = require("twilio");
 const notificationModel = require("../models/whatsappNotificationModel");
 
-const META_API_VERSION = "v18.0";
+// ─── Twilio Client Initialization ─────────────────────────────────────────────
+
+let twilioClient = null;
+
+function getTwilioClient() {
+  if (twilioClient) return twilioClient;
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  if (sid && token) {
+    twilioClient = twilio(sid, token);
+  }
+  return twilioClient;
+}
 
 // ─── Phone Number Validation ──────────────────────────────────────────────────
 
 /**
- * Validate and normalize an international phone number.
- * Accepts formats: +65XXXXXXXX, 65XXXXXXXX, +1XXXXXXXXXX, etc.
- * Must be at least 8 digits after country code.
- *
- * @param {string} phone - Raw phone number string.
+ * Validate and normalize phone number to E.164 format.
+ * @param {string} phone - Raw phone number.
  * @returns {{ valid: boolean, number: string|null, error: string|null }}
  */
 function validatePhoneNumber(phone) {
   if (!phone || typeof phone !== "string") {
     return { valid: false, number: null, error: "Missing phone number" };
   }
-
-  // Remove spaces, dashes, parentheses
   const cleaned = phone.replace(/[\s\-()]/g, "");
-
-  // Must start with + or digits, must be 8-15 digits total
   const digits = cleaned.replace(/^\+/, "");
-
   if (!/^\d{8,15}$/.test(digits)) {
     return { valid: false, number: null, error: "Invalid phone number format. Must be 8-15 digits with country code." };
   }
-
   return { valid: true, number: digits, error: null };
 }
 
-// ─── Core API Call ────────────────────────────────────────────────────────────
+// ─── Provider Detection ───────────────────────────────────────────────────────
 
 /**
- * Determine which WhatsApp provider is configured.
- * Priority: Twilio > Meta > Console (demo mode).
- *
- * @returns {"twilio"|"meta"|"console"}
+ * Determine active WhatsApp provider.
+ * @returns {"twilio"|"console"}
  */
 function getActiveProvider() {
   if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_WHATSAPP_FROM) {
     return "twilio";
   }
-  if (process.env.META_WHATSAPP_TOKEN && process.env.META_WHATSAPP_PHONE_ID) {
-    return "meta";
-  }
   return "console";
 }
 
+// ─── Core Send Functions ──────────────────────────────────────────────────────
+
 /**
- * Send a WhatsApp message via Twilio.
- *
+ * Send a WhatsApp message via Twilio SDK.
  * @param {string} to - Phone number (digits only, with country code).
  * @param {string} message - Message body text.
+ * @param {Object} [options] - Additional options.
+ * @param {string[]} [options.mediaUrls] - Array of media URLs (e.g., PDF links).
+ * @param {string} [options.statusCallback] - Status callback URL.
  * @returns {Promise<Object>}
  */
-function sendTwilioWhatsApp(to, message) {
-  return new Promise((resolve, reject) => {
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const from = process.env.TWILIO_WHATSAPP_FROM; // e.g. "whatsapp:+14155238886"
+async function sendTwilioWhatsApp(to, message, options = {}) {
+  const client = getTwilioClient();
+  if (!client) {
+    throw new Error("Twilio client not initialized. Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.");
+  }
 
-    // Format destination: Twilio expects "whatsapp:+<number>"
-    const formattedTo = `whatsapp:+${to.replace(/^\+/, "")}`;
+  const from = process.env.TWILIO_WHATSAPP_FROM;
+  const formattedTo = `whatsapp:+${to.replace(/^\+/, "")}`;
+  const rawCallback = options.statusCallback || process.env.TWILIO_STATUS_CALLBACK_URL || "";
+  const statusCallback = rawCallback.startsWith("https://") ? rawCallback : null;
 
-    const postData = new URLSearchParams({
-      To: formattedTo,
-      From: from,
-      Body: message
-    }).toString();
+  const messageParams = {
+    to: formattedTo,
+    from,
+    body: message
+  };
 
-    const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+  if (options.mediaUrls && options.mediaUrls.length > 0) {
+    messageParams.mediaUrl = options.mediaUrls;
+  }
 
-    const options = {
-      hostname: "api.twilio.com",
-      path: `/2010-04-01/Accounts/${accountSid}/Messages.json`,
-      method: "POST",
-      headers: {
-        "Authorization": `Basic ${auth}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Content-Length": Buffer.byteLength(postData)
-      },
-      timeout: 30000
-    };
+  if (statusCallback) {
+    messageParams.statusCallback = statusCallback;
+  }
 
-    const req = https.request(options, (res) => {
-      let data = "";
-      res.on("data", (chunk) => { data += chunk; });
-      res.on("end", () => {
-        try {
-          const parsed = JSON.parse(data);
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            console.log(`[WHATSAPP/TWILIO] Sent to ${to} | SID: ${parsed.sid || "unknown"}`);
-            resolve({
-              provider: "twilio",
-              messageId: parsed.sid || null,
-              to,
-              sentAt: new Date().toISOString()
-            });
-          } else {
-            const errMsg = parsed.message || parsed.more_info || `HTTP ${res.statusCode}`;
-            reject(new Error(`Twilio WhatsApp API error: ${errMsg}`));
-          }
-        } catch (err) {
-          reject(new Error(`Failed to parse Twilio API response: ${err.message}`));
-        }
-      });
-    });
+  const result = await client.messages.create(messageParams);
 
-    req.on("timeout", () => {
-      req.destroy();
-      reject(new Error("Twilio WhatsApp API request timed out (30s)"));
-    });
-
-    req.on("error", (err) => {
-      reject(new Error(`Twilio WhatsApp request failed: ${err.message}`));
-    });
-
-    req.write(postData);
-    req.end();
-  });
-}
-
-/**
- * Send a message via Meta WhatsApp Cloud API.
- *
- * @param {string} to - Phone number (digits only, with country code).
- * @param {string} message - Message body text.
- * @returns {Promise<Object>} API response or console log confirmation.
- */
-function sendMetaWhatsApp(to, message) {
-  return new Promise((resolve, reject) => {
-    const token = process.env.META_WHATSAPP_TOKEN;
-    const phoneId = process.env.META_WHATSAPP_PHONE_ID;
-
-    const formattedTo = to.replace(/^\+/, "");
-
-    const payload = JSON.stringify({
-      messaging_product: "whatsapp",
-      to: formattedTo,
-      type: "text",
-      text: { body: message }
-    });
-
-    const options = {
-      hostname: "graph.facebook.com",
-      path: `/${META_API_VERSION}/${phoneId}/messages`,
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(payload)
-      },
-      timeout: 30000
-    };
-
-    const req = https.request(options, (res) => {
-      let data = "";
-      res.on("data", (chunk) => { data += chunk; });
-      res.on("end", () => {
-        try {
-          const parsed = JSON.parse(data);
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            console.log(`[WHATSAPP/META] Sent to ${to} | ID: ${parsed.messages?.[0]?.id || "unknown"}`);
-            resolve({
-              provider: "meta",
-              messageId: parsed.messages?.[0]?.id || null,
-              to,
-              sentAt: new Date().toISOString()
-            });
-          } else {
-            const errMsg = parsed.error?.message || `HTTP ${res.statusCode}`;
-            reject(new Error(`Meta WhatsApp API error: ${errMsg}`));
-          }
-        } catch (err) {
-          reject(new Error(`Failed to parse Meta API response: ${err.message}`));
-        }
-      });
-    });
-
-    req.on("timeout", () => {
-      req.destroy();
-      reject(new Error("Meta WhatsApp API request timed out (30s)"));
-    });
-
-    req.on("error", (err) => {
-      reject(new Error(`Meta WhatsApp request failed: ${err.message}`));
-    });
-
-    req.write(payload);
-    req.end();
-  });
+  console.log(`[WHATSAPP/TWILIO] Sent to ${to} | SID: ${result.sid}`);
+  return {
+    provider: "twilio",
+    messageId: result.sid,
+    to,
+    status: result.status,
+    sentAt: new Date().toISOString()
+  };
 }
 
 /**
  * Send a WhatsApp message using the active provider.
- * Automatically selects Twilio, Meta, or console demo mode.
- *
  * @param {string} to - Phone number (digits only, with country code).
  * @param {string} message - Message body text.
+ * @param {Object} [options] - Additional options (mediaUrls, statusCallback).
  * @returns {Promise<Object>}
  */
-function sendWhatsAppMessage(to, message) {
+async function sendWhatsAppMessage(to, message, options = {}) {
   const provider = getActiveProvider();
 
   if (provider === "twilio") {
-    return sendTwilioWhatsApp(to, message);
-  }
-
-  if (provider === "meta") {
-    return sendMetaWhatsApp(to, message);
+    return sendTwilioWhatsApp(to, message, options);
   }
 
   // Console / demo mode
-  console.log(`[WHATSAPP] (Demo) → ${to}: ${message}`);
-  return Promise.resolve({
+  console.log(`[WHATSAPP] (Demo) -> ${to}: ${message}`);
+  if (options.mediaUrls) {
+    console.log(`[WHATSAPP] (Demo) Attachments: ${options.mediaUrls.join(", ")}`);
+  }
+  return {
     provider: "console",
     to,
     message,
     messageId: `demo_${Date.now()}`,
+    status: "sent",
     sentAt: new Date().toISOString(),
-    note: "No WhatsApp provider configured (Twilio/Meta). Message logged to console."
+    note: "No WhatsApp provider configured. Message logged to console."
+  };
+}
+
+// ─── Retry with Exponential Backoff ───────────────────────────────────────────
+
+/**
+ * Send message with retry logic.
+ * @param {string} to
+ * @param {string} message
+ * @param {Object} [options]
+ * @param {number} [maxRetries=3]
+ * @returns {Promise<Object>}
+ */
+async function sendWithRetry(to, message, options = {}, maxRetries = 3) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await sendWhatsAppMessage(to, message, options);
+      return { ...result, attempts: attempt };
+    } catch (err) {
+      lastError = err;
+      console.error(`[WHATSAPP] Attempt ${attempt}/${maxRetries} failed: ${err.message}`);
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
+// ─── Message Template Rendering ───────────────────────────────────────────────
+
+/**
+ * Render a message template by replacing placeholders.
+ * Supports: {{CustomerName}}, {{InvoiceNumber}}, {{Amount}}, {{DueDate}},
+ * {{InvoiceDate}}, {{PaymentLink}}, {{CompanyName}}, {{BillingPeriod}},
+ * {{PaymentDate}}, {{SubscriptionName}}
+ *
+ * @param {string} template - Template string with {{placeholders}}.
+ * @param {Object} data - Key-value pairs for replacement.
+ * @returns {string}
+ */
+function renderTemplate(template, data = {}) {
+  if (!template) return "";
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    if (data[key] !== undefined && data[key] !== null) {
+      return String(data[key]);
+    }
+    return match; // Leave unreplaced placeholders as-is
   });
 }
 
-// ─── Message Formatting Helpers ───────────────────────────────────────────────
+// ─── Formatting Helpers ───────────────────────────────────────────────────────
 
-/**
- * Format a currency amount.
- * @param {number|string} amount
- * @returns {string}
- */
 function formatAmount(amount) {
   return `$${Number(amount).toFixed(2)}`;
 }
 
-/**
- * Format a date string for display.
- * @param {string|Date} date
- * @returns {string}
- */
 function formatDate(date) {
   if (!date) return "N/A";
   const d = new Date(date);
   return d.toLocaleDateString("en-SG", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-// ─── Notification Send + Log Helper ──────────────────────────────────────────
+// ─── PDF URL Generation ───────────────────────────────────────────────────────
 
 /**
- * Internal helper: validate, send, and log a WhatsApp notification.
- * Handles all error cases gracefully without crashing.
- *
+ * Generate a public URL for an invoice PDF.
+ * @param {number} invoiceId - Internal invoice ID.
+ * @returns {string}
+ */
+function getInvoicePdfUrl(invoiceId) {
+  const baseUrl = process.env.APP_BASE_URL || "http://localhost:5002";
+  return `${baseUrl}/api/invoices/${invoiceId}/pdf/public`;
+}
+
+/**
+ * Generate a public URL for a receipt PDF.
+ * @param {number} invoiceId - Internal invoice ID.
+ * @returns {string}
+ */
+function getReceiptPdfUrl(invoiceId) {
+  const baseUrl = process.env.APP_BASE_URL || "http://localhost:5002";
+  return `${baseUrl}/api/invoices/${invoiceId}/receipt/public`;
+}
+
+// ─── Send and Log Helper ──────────────────────────────────────────────────────
+
+/**
+ * Validate, send, and log a WhatsApp notification.
  * @param {Object} params
- * @param {string} params.phone - Customer phone number.
- * @param {string} params.message - Formatted message.
- * @param {string} params.notificationType - Enum value for log.
+ * @param {string} params.phone
+ * @param {string} params.message
+ * @param {string} params.notificationType
  * @param {number|null} params.customerId
  * @param {number|null} params.invoiceId
+ * @param {string[]} [params.mediaUrls]
+ * @param {boolean} [params.useRetry=false]
  * @returns {Object} { success, logId, messageId, error }
  */
-async function sendAndLog({ phone, message, notificationType, customerId = null, invoiceId = null }) {
-  // Validate phone number
+async function sendAndLog({ phone, message, notificationType, customerId = null, invoiceId = null, mediaUrls = [], useRetry = false }) {
   const phoneValidation = validatePhoneNumber(phone);
   if (!phoneValidation.valid) {
-    // Log the failure
     const logId = await notificationModel.createLog({
       customer_id: customerId,
       invoice_id: invoiceId,
       notification_type: notificationType,
       message,
       status: "failed",
-      provider: "meta",
+      provider: "twilio",
       phone_number: phone || null,
       error_message: phoneValidation.error
     });
     return { success: false, logId, messageId: null, error: phoneValidation.error };
   }
 
-  // Create pending log entry
   const logId = await notificationModel.createLog({
     customer_id: customerId,
     invoice_id: invoiceId,
     notification_type: notificationType,
     message,
-    status: "pending",
-    provider: "meta",
+    status: "queued",
+    provider: "twilio",
     phone_number: phoneValidation.number
   });
 
   try {
-    // Send the message
-    const result = await sendWhatsAppMessage(phoneValidation.number, message);
+    const options = {};
+    if (mediaUrls.length > 0) options.mediaUrls = mediaUrls;
 
-    // Update log as sent
+    const result = useRetry
+      ? await sendWithRetry(phoneValidation.number, message, options)
+      : await sendWhatsAppMessage(phoneValidation.number, message, options);
+
     await notificationModel.updateLog(logId, {
       status: "sent",
       message_id: result.messageId || null,
@@ -325,12 +287,10 @@ async function sendAndLog({ phone, message, notificationType, customerId = null,
 
     return { success: true, logId, messageId: result.messageId, error: null };
   } catch (err) {
-    // Update log as failed
     await notificationModel.updateLog(logId, {
       status: "failed",
       error_message: err.message
     });
-
     console.error(`[WHATSAPP] Send failed for ${phone}:`, err.message);
     return { success: false, logId, messageId: null, error: err.message };
   }
@@ -340,154 +300,228 @@ async function sendAndLog({ phone, message, notificationType, customerId = null,
 
 /**
  * Send Invoice Created notification.
- *
- * @param {Object} params
- * @param {string} params.customerName
- * @param {string} params.phone - Customer WhatsApp number.
- * @param {string} params.invoiceNumber - e.g. "INV-0001"
- * @param {number|string} params.amount
- * @param {string|Date} params.dueDate
- * @param {string} [params.paymentLink]
- * @param {number} params.customerId
- * @param {number} params.invoiceId
- * @returns {Object}
  */
-async function sendInvoiceCreated({ customerName, phone, invoiceNumber, amount, dueDate, paymentLink, customerId, invoiceId }) {
+async function sendInvoiceCreated({ customerName, phone, invoiceNumber, amount, dueDate, paymentLink, customerId, invoiceId, sendPdf = false }) {
+  const companyName = process.env.COMPANY_NAME || "PayNivo";
   const message =
     `Hello ${customerName},\n\n` +
     `Your invoice *${invoiceNumber}* has been generated.\n\n` +
-    `Amount:\n${formatAmount(amount)}\n\n` +
-    `Due Date:\n${formatDate(dueDate)}\n\n` +
-    (paymentLink ? `You may pay using:\n${paymentLink}\n\n` : "") +
-    `Thank you.`;
+    `Amount: ${formatAmount(amount)}\n` +
+    `Due Date: ${formatDate(dueDate)}\n\n` +
+    (paymentLink ? `Pay securely: ${paymentLink}\n\n` : "") +
+    `Thank you.\n— ${companyName}`;
+
+  const mediaUrls = sendPdf ? [getInvoicePdfUrl(invoiceId)] : [];
 
   return sendAndLog({
-    phone,
-    message,
+    phone, message,
     notificationType: "invoice_created",
-    customerId,
-    invoiceId
+    customerId, invoiceId, mediaUrls, useRetry: true
   });
 }
 
 /**
- * Send Subscription Invoice notification.
- *
- * @param {Object} params
- * @param {string} params.customerName
- * @param {string} params.phone
- * @param {string} params.invoiceNumber
- * @param {string} params.billingPeriod
- * @param {number|string} params.amount
- * @param {string|Date} params.dueDate
- * @param {number} params.customerId
- * @param {number} params.invoiceId
- * @returns {Object}
+ * Send Invoice Sent notification (after email delivery).
  */
-async function sendSubscriptionInvoice({ customerName, phone, invoiceNumber, billingPeriod, amount, dueDate, customerId, invoiceId }) {
+async function sendInvoiceSent({ customerName, phone, invoiceNumber, amount, dueDate, paymentLink, customerId, invoiceId, sendPdf = false }) {
+  const companyName = process.env.COMPANY_NAME || "PayNivo";
   const message =
     `Hello ${customerName},\n\n` +
-    `Your scheduled invoice *${invoiceNumber}* has been generated.\n\n` +
-    `Billing Period:\n${billingPeriod}\n\n` +
-    `Amount:\n${formatAmount(amount)}\n\n` +
-    `Due:\n${formatDate(dueDate)}`;
+    `Invoice *${invoiceNumber}* has been sent to you.\n\n` +
+    `Amount: ${formatAmount(amount)}\n` +
+    `Due Date: ${formatDate(dueDate)}\n\n` +
+    (paymentLink ? `Pay securely: ${paymentLink}\n\n` : "") +
+    `Please check your email for the full details.\n— ${companyName}`;
+
+  const mediaUrls = sendPdf ? [getInvoicePdfUrl(invoiceId)] : [];
 
   return sendAndLog({
-    phone,
-    message,
-    notificationType: "subscription_invoice",
-    customerId,
-    invoiceId
+    phone, message,
+    notificationType: "invoice_sent",
+    customerId, invoiceId, mediaUrls, useRetry: true
   });
 }
 
 /**
- * Send Payment Received notification.
- *
- * @param {Object} params
- * @param {string} params.phone
- * @param {string} params.invoiceNumber
- * @param {number|string} params.amount
- * @param {number} params.customerId
- * @param {number} params.invoiceId
- * @returns {Object}
+ * Send Payment Reminder notification.
  */
-async function sendPaymentReceived({ phone, invoiceNumber, amount, customerId, invoiceId }) {
+async function sendPaymentReminder({ phone, invoiceNumber, amount, dueDate, customerId, invoiceId, paymentLink }) {
+  const companyName = process.env.COMPANY_NAME || "PayNivo";
   const message =
-    `Payment received successfully.\n\n` +
-    `Invoice:\n${invoiceNumber}\n\n` +
-    `Amount:\n${formatAmount(amount)}\n\n` +
-    `Status:\nPaid\n\n` +
-    `Thank you for your payment.`;
+    `Payment Reminder\n\n` +
+    `Invoice: ${invoiceNumber}\n` +
+    `Amount: ${formatAmount(amount)}\n` +
+    `Due: ${formatDate(dueDate)}\n\n` +
+    (paymentLink ? `Pay now: ${paymentLink}\n\n` : "") +
+    `Please complete payment before the due date.\n— ${companyName}`;
 
   return sendAndLog({
-    phone,
-    message,
-    notificationType: "payment_received",
-    customerId,
-    invoiceId
-  });
-}
-
-/**
- * Send Payment Reminder (upcoming due) notification.
- *
- * @param {Object} params
- * @param {string} params.phone
- * @param {string} params.invoiceNumber
- * @param {number|string} params.amount
- * @param {string|Date} params.dueDate
- * @param {number} params.customerId
- * @param {number} params.invoiceId
- * @returns {Object}
- */
-async function sendPaymentReminder({ phone, invoiceNumber, amount, dueDate, customerId, invoiceId }) {
-  const message =
-    `Reminder\n\n` +
-    `Invoice:\n${invoiceNumber}\n\n` +
-    `Amount:\n${formatAmount(amount)}\n\n` +
-    `Due:\n${formatDate(dueDate)}\n\n` +
-    `Please complete payment before the due date.`;
-
-  return sendAndLog({
-    phone,
-    message,
+    phone, message,
     notificationType: "payment_reminder",
-    customerId,
-    invoiceId
+    customerId, invoiceId, useRetry: true
   });
 }
 
 /**
  * Send Overdue Notice notification.
- *
- * @param {Object} params
- * @param {string} params.phone
- * @param {string} params.invoiceNumber
- * @param {number|string} params.amount
- * @param {number} params.customerId
- * @param {number} params.invoiceId
- * @returns {Object}
  */
-async function sendOverdueNotice({ phone, invoiceNumber, amount, customerId, invoiceId }) {
+async function sendOverdueNotice({ phone, invoiceNumber, amount, customerId, invoiceId, paymentLink }) {
+  const companyName = process.env.COMPANY_NAME || "PayNivo";
   const message =
-    `Your invoice ${invoiceNumber} is overdue.\n\n` +
-    `Amount:\n${formatAmount(amount)}\n\n` +
-    `Please complete payment as soon as possible.`;
+    `OVERDUE NOTICE\n\n` +
+    `Invoice ${invoiceNumber} is overdue.\n\n` +
+    `Amount Due: ${formatAmount(amount)}\n\n` +
+    (paymentLink ? `Pay immediately: ${paymentLink}\n\n` : "") +
+    `Please complete payment as soon as possible to avoid further action.\n— ${companyName}`;
 
   return sendAndLog({
-    phone,
-    message,
+    phone, message,
     notificationType: "overdue_notice",
-    customerId,
-    invoiceId
+    customerId, invoiceId, useRetry: true
   });
 }
 
 /**
- * Send a test notification (for settings page testing).
- *
- * @param {string} phone - Phone number to test.
+ * Send Payment Received notification.
+ */
+async function sendPaymentReceived({ phone, invoiceNumber, amount, paymentDate, customerId, invoiceId, sendReceipt = false }) {
+  const companyName = process.env.COMPANY_NAME || "PayNivo";
+  const message =
+    `Payment Confirmation\n\n` +
+    `Invoice: ${invoiceNumber}\n` +
+    `Amount Paid: ${formatAmount(amount)}\n` +
+    `Payment Date: ${formatDate(paymentDate || new Date())}\n` +
+    `Status: Paid\n\n` +
+    `Thank you for your payment.\n— ${companyName}`;
+
+  const mediaUrls = sendReceipt ? [getReceiptPdfUrl(invoiceId)] : [];
+
+  return sendAndLog({
+    phone, message,
+    notificationType: "payment_received",
+    customerId, invoiceId, mediaUrls, useRetry: true
+  });
+}
+
+// ─── Subscription Notifications ───────────────────────────────────────────────
+
+/**
+ * Send Subscription Started notification.
+ */
+async function sendSubscriptionStarted({ customerName, phone, subscriptionName, amount, nextBillingDate, customerId, invoiceId }) {
+  const companyName = process.env.COMPANY_NAME || "PayNivo";
+  const message =
+    `Hello ${customerName},\n\n` +
+    `Your subscription *${subscriptionName}* is now active.\n\n` +
+    `Amount: ${formatAmount(amount)}/billing cycle\n` +
+    `Next Billing: ${formatDate(nextBillingDate)}\n\n` +
+    `Thank you for subscribing.\n— ${companyName}`;
+
+  return sendAndLog({
+    phone, message,
+    notificationType: "subscription_started",
+    customerId, invoiceId, useRetry: true
+  });
+}
+
+/**
+ * Send Subscription Renewed notification.
+ */
+async function sendSubscriptionRenewed({ customerName, phone, subscriptionName, amount, nextBillingDate, invoiceNumber, customerId, invoiceId }) {
+  const companyName = process.env.COMPANY_NAME || "PayNivo";
+  const message =
+    `Hello ${customerName},\n\n` +
+    `Your subscription *${subscriptionName}* has been renewed.\n\n` +
+    `Invoice: ${invoiceNumber}\n` +
+    `Amount: ${formatAmount(amount)}\n` +
+    `Next Billing: ${formatDate(nextBillingDate)}\n\n` +
+    `— ${companyName}`;
+
+  return sendAndLog({
+    phone, message,
+    notificationType: "subscription_renewed",
+    customerId, invoiceId, useRetry: true
+  });
+}
+
+/**
+ * Send Subscription Expiring notification.
+ */
+async function sendSubscriptionExpiring({ customerName, phone, subscriptionName, expiryDate, customerId }) {
+  const companyName = process.env.COMPANY_NAME || "PayNivo";
+  const message =
+    `Hello ${customerName},\n\n` +
+    `Your subscription *${subscriptionName}* will expire on ${formatDate(expiryDate)}.\n\n` +
+    `Please renew to continue your service.\n— ${companyName}`;
+
+  return sendAndLog({
+    phone, message,
+    notificationType: "subscription_expiring",
+    customerId, invoiceId: null, useRetry: true
+  });
+}
+
+/**
+ * Send Subscription Payment Failed notification.
+ */
+async function sendSubscriptionPaymentFailed({ customerName, phone, subscriptionName, amount, customerId }) {
+  const companyName = process.env.COMPANY_NAME || "PayNivo";
+  const message =
+    `Hello ${customerName},\n\n` +
+    `Payment of ${formatAmount(amount)} for subscription *${subscriptionName}* has failed.\n\n` +
+    `Please update your payment method to avoid service interruption.\n— ${companyName}`;
+
+  return sendAndLog({
+    phone, message,
+    notificationType: "subscription_payment_failed",
+    customerId, invoiceId: null, useRetry: true
+  });
+}
+
+/**
+ * Send Subscription Cancelled notification.
+ */
+async function sendSubscriptionCancelled({ customerName, phone, subscriptionName, customerId }) {
+  const companyName = process.env.COMPANY_NAME || "PayNivo";
+  const message =
+    `Hello ${customerName},\n\n` +
+    `Your subscription *${subscriptionName}* has been cancelled.\n\n` +
+    `If this was a mistake, please contact our support team.\n— ${companyName}`;
+
+  return sendAndLog({
+    phone, message,
+    notificationType: "subscription_cancelled",
+    customerId, invoiceId: null, useRetry: true
+  });
+}
+
+/**
+ * Send Subscription Invoice notification.
+ */
+async function sendSubscriptionInvoice({ customerName, phone, invoiceNumber, billingPeriod, amount, dueDate, customerId, invoiceId, sendPdf = false }) {
+  const companyName = process.env.COMPANY_NAME || "PayNivo";
+  const message =
+    `Hello ${customerName},\n\n` +
+    `Your subscription invoice *${invoiceNumber}* has been generated.\n\n` +
+    `Billing Period: ${billingPeriod}\n` +
+    `Amount: ${formatAmount(amount)}\n` +
+    `Due: ${formatDate(dueDate)}\n\n` +
+    `— ${companyName}`;
+
+  const mediaUrls = sendPdf ? [getInvoicePdfUrl(invoiceId)] : [];
+
+  return sendAndLog({
+    phone, message,
+    notificationType: "subscription_invoice",
+    customerId, invoiceId, mediaUrls, useRetry: true
+  });
+}
+
+// ─── Utility Functions ────────────────────────────────────────────────────────
+
+/**
+ * Send a test notification (for settings page).
+ * @param {string} phone
  * @returns {Object}
  */
 async function sendTestNotification(phone) {
@@ -507,8 +541,24 @@ async function sendTestNotification(phone) {
 }
 
 /**
+ * Test the Twilio connection by verifying credentials.
+ * @returns {Object} { success, accountName, error }
+ */
+async function testConnection() {
+  try {
+    const client = getTwilioClient();
+    if (!client) {
+      return { success: false, error: "Twilio credentials not configured." };
+    }
+    const account = await client.api.accounts(process.env.TWILIO_ACCOUNT_SID).fetch();
+    return { success: true, accountName: account.friendlyName, status: account.status };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
  * Retry a failed notification log entry.
- *
  * @param {Object} log - The notification log row.
  * @returns {Object} { success, error }
  */
@@ -536,23 +586,75 @@ async function retryNotification(log) {
   }
 }
 
+/**
+ * Handle Twilio delivery status webhook update.
+ * Maps Twilio statuses to internal statuses.
+ * @param {Object} webhookData - Twilio webhook payload.
+ * @returns {Object} { updated, messageSid, status }
+ */
+async function handleStatusCallback(webhookData) {
+  const { MessageSid, MessageStatus, ErrorCode, ErrorMessage } = webhookData;
+
+  if (!MessageSid || !MessageStatus) {
+    return { updated: false, error: "Missing MessageSid or MessageStatus" };
+  }
+
+  // Map Twilio status to internal status
+  const statusMap = {
+    queued: "queued",
+    sent: "sent",
+    delivered: "delivered",
+    read: "read",
+    failed: "failed",
+    undelivered: "undelivered"
+  };
+
+  const internalStatus = statusMap[MessageStatus] || MessageStatus;
+  const errorMsg = ErrorCode ? `${ErrorCode}: ${ErrorMessage || "Unknown error"}` : null;
+
+  // Find log by message_id (Twilio SID)
+  const updated = await notificationModel.updateLogByMessageId(MessageSid, {
+    status: internalStatus,
+    error_message: errorMsg
+  });
+
+  return { updated: Boolean(updated), messageSid: MessageSid, status: internalStatus };
+}
+
+// ─── Exports ──────────────────────────────────────────────────────────────────
+
 module.exports = {
   // Core
   validatePhoneNumber,
   getActiveProvider,
   sendWhatsAppMessage,
   sendTwilioWhatsApp,
-  sendMetaWhatsApp,
+  sendWithRetry,
   sendAndLog,
-  // High-level notification functions
+  // Template
+  renderTemplate,
+  // High-level notifications
   sendInvoiceCreated,
-  sendSubscriptionInvoice,
-  sendPaymentReceived,
+  sendInvoiceSent,
   sendPaymentReminder,
   sendOverdueNotice,
+  sendPaymentReceived,
+  // Subscription notifications
+  sendSubscriptionStarted,
+  sendSubscriptionRenewed,
+  sendSubscriptionExpiring,
+  sendSubscriptionPaymentFailed,
+  sendSubscriptionCancelled,
+  sendSubscriptionInvoice,
   // Utilities
   sendTestNotification,
+  testConnection,
   retryNotification,
+  handleStatusCallback,
+  // Helpers
   formatAmount,
-  formatDate
+  formatDate,
+  getInvoicePdfUrl,
+  getReceiptPdfUrl,
+  getTwilioClient
 };

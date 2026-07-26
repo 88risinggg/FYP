@@ -16,6 +16,7 @@
     "db:finance-payroll-schedule": "node scripts/run-finance-payroll-schedule-migration.js",
     "db:finance-reminders": "node scripts/migrate-finance-reminders.js",
     "db:whatsapp-notifications": "node scripts/migrate-whatsapp-notifications.js",
+    "db:whatsapp-templates": "node scripts/migrate-whatsapp-templates.js",
     "seed:demo": "node scripts/generate-demo-data.js",
     "seed:templates": "node scripts/generate-sample-templates.js",
     "db:account-lockout": "node scripts/run-account-lockout-migration.js",
@@ -41,7 +42,8 @@
     "nodemailer": "^8.0.9",
     "puppeteer-core": "^25.2.1",
     "qrcode": "1.5.4",
-    "stripe": "^22.3.0"
+    "stripe": "^22.3.0",
+    "twilio": "^5.4.0"
   },
   "devDependencies": {
     "fast-check": "^4.8.0",

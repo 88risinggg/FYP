@@ -104,7 +104,7 @@ async function createLog(log) {
     notification_type,
     message,
     status = "pending",
-    provider = "meta",
+    provider = "twilio",
     phone_number = null,
     message_id = null,
     sent_at = null,
@@ -433,6 +433,116 @@ async function getOverdueInvoices() {
   return rows;
 }
 
+// ─── Webhook / Delivery Status Functions ──────────────────────────────────────
+
+/**
+ * Update a notification log by Twilio message SID.
+ * Used by the status callback webhook.
+ * @param {string} messageSid - The Twilio message SID.
+ * @param {Object} update - { status, error_message }
+ * @returns {boolean} Whether a log was found and updated.
+ */
+async function updateLogByMessageId(messageSid, update) {
+  if (!messageSid) return false;
+
+  const fields = [];
+  const params = [];
+
+  if (update.status !== undefined) {
+    fields.push("status = ?");
+    params.push(update.status);
+    // Also update delivery_status column
+    fields.push("delivery_status = ?");
+    params.push(update.status);
+  }
+  if (update.error_message !== undefined) {
+    fields.push("error_message = ?");
+    params.push(update.error_message);
+  }
+  // Track delivered_at and read_at timestamps
+  if (update.status === "delivered") {
+    fields.push("delivered_at = NOW()");
+  }
+  if (update.status === "read") {
+    fields.push("read_at = NOW()");
+  }
+
+  if (fields.length === 0) return false;
+
+  params.push(messageSid);
+  const [result] = await pool.query(
+    `UPDATE whatsapp_notification_logs SET ${fields.join(", ")} WHERE message_id = ?`,
+    params
+  );
+  return result.affectedRows > 0;
+}
+
+/**
+ * Get communication history logs for a specific invoice.
+ * @param {number} invoiceId
+ * @returns {Array}
+ */
+async function getLogsByInvoiceId(invoiceId) {
+  const [rows] = await pool.query(
+    `SELECT
+       wl.id,
+       wl.notification_type,
+       wl.message,
+       wl.status,
+       wl.delivery_status,
+       wl.provider,
+       wl.phone_number,
+       wl.message_id,
+       wl.sent_at,
+       wl.delivered_at,
+       wl.read_at,
+       wl.error_message,
+       wl.retry_count,
+       wl.created_at,
+       c.name AS customer_name
+     FROM whatsapp_notification_logs wl
+     LEFT JOIN customer c ON c.customer_id = wl.customer_id
+     WHERE wl.invoice_id = ?
+     ORDER BY wl.created_at DESC`,
+    [invoiceId]
+  );
+  return rows;
+}
+
+/**
+ * Get communication history logs for a specific customer.
+ * @param {number} customerId
+ * @param {number} [limit=50]
+ * @returns {Array}
+ */
+async function getLogsByCustomerId(customerId, limit = 50) {
+  const [rows] = await pool.query(
+    `SELECT
+       wl.id,
+       wl.invoice_id,
+       wl.notification_type,
+       wl.message,
+       wl.status,
+       wl.delivery_status,
+       wl.phone_number,
+       wl.message_id,
+       wl.sent_at,
+       wl.delivered_at,
+       wl.read_at,
+       wl.error_message,
+       wl.retry_count,
+       wl.created_at,
+       i.invoiceId AS invoice_number
+     FROM whatsapp_notification_logs wl
+     LEFT JOIN invoice i ON i.invoice_id = wl.invoice_id
+     WHERE wl.customer_id = ?
+     ORDER BY wl.created_at DESC
+     LIMIT ?`,
+    [customerId, limit]
+  );
+  return rows;
+}
+
 module.exports = {
   // Settings
   getSettings,
@@ -440,7 +550,10 @@ module.exports = {
   // Logs
   createLog,
   updateLog,
+  updateLogByMessageId,
   getLogs,
+  getLogsByInvoiceId,
+  getLogsByCustomerId,
   getDashboardStats,
   getRecentLogs,
   hasNotificationSentToday,

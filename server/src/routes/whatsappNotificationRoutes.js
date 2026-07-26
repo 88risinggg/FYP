@@ -1,19 +1,31 @@
 /**
  * WhatsApp Notification Routes
  *
- * All routes require authentication. Finance and Admin roles can manage
- * WhatsApp notification settings, send notifications, and view logs.
+ * All routes require authentication except the webhook endpoint.
+ * Finance and Admin roles can manage WhatsApp notification settings,
+ * send notifications, manage templates, and view logs.
  *
  * Endpoints:
- *   GET    /api/whatsapp-notifications/settings
- *   PUT    /api/whatsapp-notifications/settings
- *   POST   /api/whatsapp-notifications/send
- *   GET    /api/whatsapp-notifications/logs
- *   POST   /api/whatsapp-notifications/test
- *   GET    /api/whatsapp-notifications/dashboard
- *   GET    /api/whatsapp-notifications/customers/:id/whatsapp
- *   PUT    /api/whatsapp-notifications/customers/:id/whatsapp
- *   POST   /api/whatsapp-notifications/customers/:id/verify-whatsapp
+ *   GET    /settings
+ *   PUT    /settings
+ *   POST   /send
+ *   POST   /send-invoice/:invoiceId
+ *   GET    /logs
+ *   POST   /test
+ *   POST   /test-connection
+ *   GET    /dashboard
+ *   GET    /history/:invoiceId
+ *   POST   /webhook/status          (no auth - Twilio callback)
+ *   GET    /templates
+ *   GET    /templates/placeholders
+ *   GET    /templates/:id
+ *   POST   /templates
+ *   PUT    /templates/:id
+ *   PUT    /templates/:id/default
+ *   DELETE /templates/:id
+ *   GET    /customers/:id/whatsapp
+ *   PUT    /customers/:id/whatsapp
+ *   POST   /customers/:id/verify-whatsapp
  */
 
 const express = require("express");
@@ -27,29 +39,55 @@ const {
   getDashboard,
   updateCustomerWhatsApp,
   verifyCustomerWhatsApp,
-  getCustomerWhatsApp
+  getCustomerWhatsApp,
+  testConnection,
+  sendInvoiceWhatsApp,
+  getInvoiceCommunicationHistory,
+  webhookStatusCallback,
+  getTemplates,
+  getTemplateById,
+  createTemplate,
+  updateTemplate,
+  deleteTemplate,
+  setDefaultTemplate,
+  getTemplatePlaceholders
 } = require("../controllers/whatsappNotificationController");
 
 const router = express.Router();
 
-// All routes require authentication
+// ─── Webhook (no authentication - Twilio sends callbacks here) ────────────────
+router.post("/webhook/status", webhookStatusCallback);
+
+// ─── All other routes require authentication ──────────────────────────────────
 router.use(authenticateToken);
 
 // Settings
 router.get("/settings", getSettings);
-router.put("/settings", requireRole("Admin"), updateSettings);
+router.put("/settings", requireRole("Admin", "Finance"), updateSettings);
 
 // Manual send
 router.post("/send", requireRole("Admin", "Finance"), sendNotification);
+router.post("/send-invoice/:invoiceId", requireRole("Admin", "Finance"), sendInvoiceWhatsApp);
 
 // Test
 router.post("/test", requireRole("Admin", "Finance"), sendTest);
+router.post("/test-connection", requireRole("Admin", "Finance"), testConnection);
 
-// Logs
+// Logs & History
 router.get("/logs", getLogs);
+router.get("/history/:invoiceId", getInvoiceCommunicationHistory);
 
 // Dashboard
 router.get("/dashboard", getDashboard);
+
+// Templates
+router.get("/templates/placeholders", getTemplatePlaceholders);
+router.get("/templates", getTemplates);
+router.get("/templates/:id", getTemplateById);
+router.post("/templates", requireRole("Admin", "Finance"), createTemplate);
+router.put("/templates/:id", requireRole("Admin", "Finance"), updateTemplate);
+router.put("/templates/:id/default", requireRole("Admin", "Finance"), setDefaultTemplate);
+router.delete("/templates/:id", requireRole("Admin", "Finance"), deleteTemplate);
 
 // Customer WhatsApp management
 router.get("/customers/:id/whatsapp", getCustomerWhatsApp);
