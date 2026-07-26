@@ -3,7 +3,7 @@ import {
   Loader2, Mail, Pencil, Plus, RefreshCw, Search, ShieldCheck, Trash2, Upload, UserCheck, Users, UserX, WalletCards, X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPayrollHire, deleteManagedPayrollUser, exportStaffWorkbook, getPayrollUsers, importPayrollHires, resendAccountSetup, reviewActivationRequest, updateActivationRequest } from "../../services/payrollUserService.js";
+import { createPayrollHire, deleteManagedPayrollUser, deleteUserAccountByHR, exportStaffWorkbook, getPayrollUsers, importPayrollHires, resendAccountSetup, reviewActivationRequest, updateActivationRequest } from "../../services/payrollUserService.js";
 import { resetUserPassword, updateUserRole, updateUserStatus } from "../../services/adminPayrollService.js";
 import { apiRequest } from "../../services/apiClient.js";
 import { downloadBlob } from "../../services/apiClient.js";
@@ -208,6 +208,9 @@ export default function PayrollUserManagement({ role, defaultShowHire = false })
   const [importFile, setImportFile] = useState(null);
   const [importPreview, setImportPreview] = useState(null);
   const [actionProgress, setActionProgress] = useState({ open: false, status: "idle", progress: 0, title: "", phase: "", detail: "" });
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { userId, name } when open
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState("");
   const importInputRef = useRef(null);
 
   const load = async () => {
@@ -286,6 +289,37 @@ export default function PayrollUserManagement({ role, defaultShowHire = false })
   };
 
   const closeEditor = () => { setShowHire(false); setEditing(null); setHire(emptyHire); };
+
+  const handleHRDeleteAccount = async () => {
+    if (!deleteConfirm || !deletePassword.trim()) return;
+    setBusy("hr-delete");
+    setDeleteError("");
+    try {
+      let result;
+      if (deleteConfirm.userId) {
+        // Has a linked user account — delete account + staff record via HR endpoint
+        result = await deleteUserAccountByHR(deleteConfirm.userId, deletePassword);
+      } else {
+        // Staff record only (no user account yet) — verify password then delete staff record
+        const verifyRes = await apiRequest("/api/hr/users/verify-password", {
+          method: "POST",
+          body: JSON.stringify({ password: deletePassword })
+        });
+        if (!verifyRes.valid) throw new Error("Incorrect password. Deletion cancelled.");
+        await apiRequest(`/api/hr/staff/${deleteConfirm.employeeId}`, { method: "DELETE" });
+        result = { message: `Staff record for ${deleteConfirm.name} has been permanently removed.` };
+      }
+      setSuccess(result.message || "Record permanently removed.");
+      setDeleteConfirm(null);
+      setDeletePassword("");
+      closeEditor();
+      await load();
+    } catch (err) {
+      setDeleteError(err.message || "Failed to delete. Check your password and try again.");
+    } finally {
+      setBusy("");
+    }
+  };
 
   const previewImport = async (file) => {
     if (!file) return;
@@ -426,8 +460,71 @@ export default function PayrollUserManagement({ role, defaultShowHire = false })
         ["name","Full name","text",true],["email","Employee email","email",true],["employeeCode","Employee code","text",false],["phone","Phone","text",false],["departmentName","Department","text",true],["hireDate","Hire date","date",true],["dateOfBirth","Date of birth","date",true],["race","Race","text",true],["religion","Religion","text",true],["baseSalary","Base salary","number",true],["bank","Bank","text",true],["accountNo","Bank account number","text",true]
       ].map(([key,label,type,required])=><label key={key} className="text-sm font-medium text-[#7b6660]">{label}<input type={type} required={required} min={type==="number"?0:undefined} value={hire[key]} onChange={(event)=>setHire(current=>({...current,[key]:event.target.value}))} className="mt-1 w-full rounded-xl border border-[#f0d2ca] px-3 py-2.5 text-[#251E1F] outline-none focus:border-[#F38978]"/></label>)}
         {editing?.type !== "staff" ? <label className="text-sm font-medium text-[#7b6660]">PayNivo account role<div className="mt-1 rounded-xl border border-[#f0d2ca] bg-[#fff8f5] px-3 py-2.5 font-semibold text-[#251E1F]">Staff</div><span className="mt-1 block text-xs font-normal text-[#7b6660]">Admin can change the role after account approval.</span></label> : null}
-      </div><div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><strong>What happens next?</strong><p className="mt-1">The staff record and inactive user account are created together. Admin must approve activation before the employee receives the email setup link.</p></div><div className="mt-6 flex justify-end gap-3"><button type="button" onClick={closeEditor} className="rounded-xl border border-[#f0d2ca] px-4 py-2.5 font-semibold">Cancel</button><button disabled={busy==="hire"} className="primary-button inline-flex items-center gap-2 px-4 py-2.5 font-semibold">{busy==="hire"?<Loader2 className="animate-spin" size={16}/>:<CheckCircle2 size={16}/>} {editing?.type === "staff" ? "Save staff details" : editing?.type === "request" ? "Save and resubmit" : "Create user and submit to Admin"}</button></div>
+      </div><div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><strong>What happens next?</strong><p className="mt-1">The staff record and inactive user account are created together. Admin must approve activation before the employee receives the email setup link.</p></div>
+      {["staff", "request"].includes(editing?.type) ? (
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
+          <p className="text-sm font-semibold text-red-700">Remove staff from system</p>
+          <p className="mt-1 text-xs text-red-600">Permanently removes the PayNivo account and the HR staff record. Use this when a staff member has left the organisation.</p>
+          <button
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={() => {
+              const record = data.users.find(u => u.employee_id === editing.employeeId);
+              setDeleteConfirm({
+                userId: record?.user_id || null,
+                employeeId: editing.employeeId,
+                name: record?.staff_name || record?.name || hire.name
+              });
+              setDeletePassword("");
+              setDeleteError("");
+            }}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            <Trash2 size={14}/>Delete linked account
+          </button>
+        </div>
+      ) : null}
+      <div className="mt-6 flex justify-end gap-3"><button type="button" onClick={closeEditor} className="rounded-xl border border-[#f0d2ca] px-4 py-2.5 font-semibold">Cancel</button><button disabled={busy==="hire"} className="primary-button inline-flex items-center gap-2 px-4 py-2.5 font-semibold">{busy==="hire"?<Loader2 className="animate-spin" size={16}/>:<CheckCircle2 size={16}/>} {editing?.type === "staff" ? "Save staff details" : editing?.type === "request" ? "Save and resubmit" : "Create user and submit to Admin"}</button></div>
     </form></div> : null}
+
+    {deleteConfirm ? <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#251E1F]/60 p-4"><div className="app-panel w-full max-w-sm rounded-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="hr-delete-title">
+      <div className="flex items-center gap-3 mb-4">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-red-100"><Trash2 size={18} className="text-red-600"/></span>
+        <div><h3 id="hr-delete-title" className="font-semibold text-[#251E1F]">Delete account</h3><p className="text-xs text-[#7b6660]">{deleteConfirm.name}</p></div>
+      </div>
+      <p className="text-sm text-[#7b6660] mb-4">This permanently removes the PayNivo login account <strong>and</strong> the HR staff record. This action cannot be undone.</p>
+      <label className="block text-sm font-medium text-[#7b6660] mb-1">Enter <strong>your</strong> HR password to confirm:
+        <input
+          type="password"
+          autoFocus
+          value={deletePassword}
+          onChange={e => { setDeletePassword(e.target.value); setDeleteError(""); }}
+          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleHRDeleteAccount(); } }}
+          placeholder="Your password"
+          className="mt-1 w-full rounded-xl border border-[#f0d2ca] px-3 py-2.5 text-sm text-[#251E1F] outline-none focus:border-red-400"
+        />
+      </label>
+      {deleteError ? <p className="mt-2 text-xs text-red-700">{deleteError}</p> : null}
+      <div className="mt-5 flex gap-3">
+        <button
+          type="button"
+          disabled={busy === "hr-delete" || !deletePassword.trim()}
+          onClick={handleHRDeleteAccount}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+        >
+          {busy === "hr-delete" ? <Loader2 size={15} className="animate-spin"/> : <Trash2 size={15}/>}
+          {busy === "hr-delete" ? "Deleting..." : "Confirm delete"}
+        </button>
+        <button
+          type="button"
+          disabled={busy === "hr-delete"}
+          onClick={() => { setDeleteConfirm(null); setDeletePassword(""); setDeleteError(""); }}
+          className="flex-1 rounded-xl border border-[#f0d2ca] px-4 py-2.5 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
+        >
+          Cancel
+        </button>
+      </div>
+    </div></div> : null}
   </section>;
 }
 
