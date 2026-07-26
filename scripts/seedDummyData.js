@@ -48,46 +48,46 @@ const users = [
   }
 ];
 
-// Vaniday Salon & Beauty Customer Data
+// Dummy Customers Data
 const customers = [
   {
-    name: "Luxe Hair Studio",
-    email: "bookings@luxehairstudio.sg",
-    address: "391B Orchard Road, #03-12, Ngee Ann City, Singapore 238874",
-    phone: "+65 6735 8821",
-    industry: "Hair Salon"
+    name: "Acme Learning Centre",
+    email: "accounts@acmelearning.sg",
+    address: "12 North Bridge Road, Singapore 179094",
+    phone: "+65 6325 1234",
+    industry: "Education"
   },
   {
-    name: "The Nail Artistry",
-    email: "hello@thenailartistry.sg",
-    address: "68 Orchard Road, #04-58, Plaza Singapura, Singapore 238839",
-    phone: "+65 6336 7742",
-    industry: "Nail Salon"
+    name: "BrightPath Tuition",
+    email: "finance@brightpath.sg",
+    address: "8 Tampines Central 1, Singapore 529543",
+    phone: "+65 6785 5678",
+    industry: "Education"
   },
   {
-    name: "Serenity Spa & Wellness",
-    email: "reservations@serenityspa.sg",
-    address: "2 Bayfront Avenue, #B1-05, Marina Bay Sands, Singapore 018972",
-    phone: "+65 6688 5123",
-    industry: "Spa & Wellness"
+    name: "Nova Skills Academy",
+    email: "billing@novaskills.sg",
+    address: "3 Fusionopolis Way, Singapore 138633",
+    phone: "+65 6418 9876",
+    industry: "Training"
   },
   {
-    name: "Glow Aesthetics Clinic",
-    email: "appointments@glowaesthetics.sg",
-    address: "1 Raffles Place, #05-19, One Raffles Place, Singapore 048616",
-    phone: "+65 6438 9901",
-    industry: "Aesthetics"
+    name: "Summit Corporate Training",
+    email: "payables@summittraining.sg",
+    address: "50 Raffles Place, Singapore 048623",
+    phone: "+65 6220 4321",
+    industry: "Corporate Training"
   },
   {
-    name: "Brow & Lash Bar",
-    email: "info@browlashbar.sg",
-    address: "313 Orchard Road, #02-28, 313@Somerset, Singapore 238895",
-    phone: "+65 6733 4456",
-    industry: "Beauty Services"
+    name: "Urban Tech Institute",
+    email: "admin@urbantech.edu.sg",
+    address: "21 Bukit Batok Street 22, Singapore 659589",
+    phone: "+65 6563 2109",
+    industry: "Technology"
   }
 ];
 
-// Vaniday Invoice Data
+// Dummy Invoice Data
 const invoices = [
   {
     customer_index: 0,
@@ -95,8 +95,8 @@ const invoices = [
     due_date: "2026-05-15",
     status: "Sent",
     items: [
-      { description: "Balayage hair coloring", quantity: 3, unit_price: 185.00 },
-      { description: "Olaplex hair treatment", quantity: 3, unit_price: 65.00 }
+      { description: "Math enrichment session", quantity: 8, unit_price: 45.5 },
+      { description: "Learning materials", quantity: 12, unit_price: 8.9 }
     ],
     payment_status: "Pending"
   },
@@ -106,8 +106,8 @@ const invoices = [
     due_date: "2026-05-17",
     status: "Viewed",
     items: [
-      { description: "Gel manicure session", quantity: 12, unit_price: 48.00 },
-      { description: "Nail art add-on", quantity: 8, unit_price: 25.00 }
+      { description: "Science workshop", quantity: 10, unit_price: 38.75 },
+      { description: "Assessment pack", quantity: 10, unit_price: 6.5 }
     ],
     payment_status: "Pending"
   },
@@ -117,8 +117,8 @@ const invoices = [
     due_date: "2026-05-19",
     status: "Paid",
     items: [
-      { description: "Full body massage (90 min)", quantity: 5, unit_price: 158.00 },
-      { description: "Aromatherapy upgrade", quantity: 5, unit_price: 30.00 }
+      { description: "Excel automation training", quantity: 12, unit_price: 52 },
+      { description: "Trainer travel allowance", quantity: 1, unit_price: 35 }
     ],
     payment_status: "Completed"
   },
@@ -128,8 +128,8 @@ const invoices = [
     due_date: "2026-05-04",
     status: "Overdue",
     items: [
-      { description: "Hydrafacial treatment", quantity: 4, unit_price: 280.00 },
-      { description: "LED light therapy add-on", quantity: 4, unit_price: 85.00 }
+      { description: "Leadership bootcamp", quantity: 15, unit_price: 64 },
+      { description: "Course handbook", quantity: 15, unit_price: 7.25 }
     ],
     payment_status: "Overdue"
   },
@@ -139,8 +139,8 @@ const invoices = [
     due_date: "2026-05-22",
     status: "Draft",
     items: [
-      { description: "Eyebrow embroidery", quantity: 2, unit_price: 388.00 },
-      { description: "Lash lift & tint", quantity: 4, unit_price: 78.00 }
+      { description: "Coding lab support", quantity: 6, unit_price: 72.5 },
+      { description: "USB learning kit", quantity: 6, unit_price: 12.4 }
     ],
     payment_status: "Draft"
   },
@@ -149,7 +149,7 @@ const invoices = [
     issue_date: "2026-05-10",
     due_date: "2026-05-24",
     status: "Paid",
-    items: [{ description: "Keratin smoothing treatment", quantity: 6, unit_price: 220.00 }],
+    items: [{ description: "Holiday programme", quantity: 20, unit_price: 49.9 }],
     payment_status: "Completed"
   }
 ];

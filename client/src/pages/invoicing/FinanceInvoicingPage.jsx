@@ -77,9 +77,7 @@ import SubscriptionsView from "../../components/invoicing/SubscriptionsView.jsx"
 import FinanceRemindersView from "../../components/invoicing/FinanceRemindersView.jsx";
 import FinanceSettingsView from "./FinanceSettingsView.jsx";
 import FinanceInvoiceSettingsPage from "./FinanceInvoiceSettingsPage.jsx";
-import WhatsAppSettingsPage from "./WhatsAppSettingsPage.jsx";
-import SendWhatsAppButton from "../../components/invoicing/SendWhatsAppButton.jsx";
-import WhatsAppCommunicationHistory from "../../components/invoicing/WhatsAppCommunicationHistory.jsx";
+import { SendWhatsAppButton, WhatsAppInvoiceActions, WhatsAppHistory } from "../../components/invoicing/WhatsAppActions.jsx";
 
 const financeSidebarSections = [
   {
@@ -135,11 +133,6 @@ const financeSidebarSections = [
         label: "Invoice Settings",
         icon: Settings2,
         path: "/dashboard/invoicing/finance/invoice-settings"
-      },
-      {
-        label: "WhatsApp",
-        icon: MessageCircle,
-        path: "/dashboard/invoicing/finance/whatsapp"
       }
     ]
   },
@@ -844,7 +837,10 @@ function InvoiceDetailsModal({ invoice, onClose }) {
             </h3>
             <SendWhatsAppButton invoiceId={invoice.invoice_id} size="small" />
           </div>
-          <WhatsAppCommunicationHistory invoiceId={invoice.invoice_id} />
+          <WhatsAppInvoiceActions invoiceId={invoice.invoice_id} invoiceStatus={invoice.status} />
+          <div className="mt-3">
+            <WhatsAppHistory invoiceId={invoice.invoice_id} />
+          </div>
         </div>
       </div>
     </div>
@@ -3936,10 +3932,6 @@ export default function FinanceInvoicingPage() {
       return "invoice-settings";
     }
 
-    if (location.pathname.endsWith("/whatsapp")) {
-      return "whatsapp";
-    }
-
     if (location.pathname.endsWith("/reports")) {
       return "reports";
     }
@@ -4069,10 +4061,6 @@ export default function FinanceInvoicingPage() {
 
     if (activeView === "invoice-settings") {
       return <FinanceInvoiceSettingsPage />;
-    }
-
-    if (activeView === "whatsapp") {
-      return <WhatsAppSettingsPage />;
     }
 
     if (activeView === "reports") {

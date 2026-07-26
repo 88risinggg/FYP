@@ -114,28 +114,10 @@ async function recordManualPayment(req, res) {
     );
     await connection.commit();
 
-    // WhatsApp notification: Payment Received (non-blocking)
+    // WhatsApp auto-trigger: Payment Received (non-blocking)
     if (settlement.status === "Paid") {
       const { onPaymentReceived } = require("../services/whatsappAutoTrigger");
-      (async () => {
-        try {
-          const [invRows] = await pool.query(
-            "SELECT i.invoice_id, i.invoiceId, i.total_amount, i.customer_id FROM invoice i WHERE i.invoice_id = ?",
-            [invoiceId]
-          );
-          if (invRows[0]) {
-            await onPaymentReceived({
-              invoice_id: invRows[0].invoice_id,
-              invoiceId: invRows[0].invoiceId,
-              amount: amount,
-              payment_date: new Date(),
-              customer_id: invRows[0].customer_id
-            });
-          }
-        } catch (err) {
-          console.error("[WHATSAPP] Payment received trigger failed:", err.message);
-        }
-      })();
+      onPaymentReceived({ invoice_id: invoiceId, invoiceId: req.body.invoiceId || "", amount, customer_id: req.body.customer_id || null }).catch(() => {});
     }
 
     res.status(201).json({
@@ -320,27 +302,9 @@ async function confirmStripePayment(req, res) {
         notifyPaymentSuccess(invoiceId, null, payAmount).catch(() => {});
       } catch { /* non-blocking */ }
 
-      // WhatsApp notification: Payment Received (non-blocking)
+      // WhatsApp auto-trigger: Payment Received (non-blocking)
       const { onPaymentReceived } = require("../services/whatsappAutoTrigger");
-      (async () => {
-        try {
-          const [custRows] = await pool.query(
-            "SELECT customer_id FROM invoice WHERE invoice_id = ? LIMIT 1",
-            [invoice.invoice_id]
-          );
-          if (custRows[0]) {
-            await onPaymentReceived({
-              invoice_id: invoice.invoice_id,
-              invoiceId: invoiceId,
-              amount: payAmount,
-              payment_date: new Date(),
-              customer_id: custRows[0].customer_id
-            });
-          }
-        } catch (err) {
-          console.error("[WHATSAPP] Payment received trigger failed:", err.message);
-        }
-      })();
+      onPaymentReceived({ invoice_id: invoice.invoice_id, invoiceId, amount: payAmount, customer_id: null }).catch(() => {});
 
       res.json({ status: "Paid", message: "Invoice marked as paid.", amount: payAmount });
     } catch (dbErr) {
@@ -404,7 +368,7 @@ async function stripeWebhook(req, res) {
         // Notify Finance about Stripe payment (non-blocking)
         try {
           const [invInfo] = await pool.query(
-            `SELECT i.invoiceId, c.name AS customer_name FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id WHERE i.invoice_id = ?`,
+            `SELECT i.invoiceId, i.customer_id, c.name AS customer_name FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id WHERE i.invoice_id = ?`,
             [invoiceId]
           );
           if (invInfo.length > 0) {
@@ -413,34 +377,9 @@ async function stripeWebhook(req, res) {
           }
         } catch { /* non-blocking */ }
 
-        // WhatsApp notification: Payment Received via webhook (non-blocking)
-        (async () => {
-          try {
-            const whatsappModel = require("../models/whatsappNotificationModel");
-            const settings = await whatsappModel.getSettings();
-            if (settings?.whatsapp_enabled && settings?.send_payment_received) {
-              const [custRows] = await pool.query(
-                `SELECT c.customer_id, c.whatsapp_number, i.invoiceId AS invoice_number
-                 FROM customer c INNER JOIN invoice i ON i.customer_id = c.customer_id
-                 WHERE i.invoice_id = ? LIMIT 1`,
-                [invoiceId]
-              );
-              const cust = custRows[0];
-              if (cust?.whatsapp_number) {
-                const { sendPaymentReceived } = require("../services/whatsappService");
-                await sendPaymentReceived({
-                  phone: cust.whatsapp_number,
-                  invoiceNumber: cust.invoice_number,
-                  amount: payAmount,
-                  customerId: cust.customer_id,
-                  invoiceId: invoiceId
-                });
-              }
-            }
-          } catch (whatsappErr) {
-            console.error("[WHATSAPP] Webhook payment notification failed:", whatsappErr.message);
-          }
-        })();
+        // WhatsApp auto-trigger: Payment Received via webhook (non-blocking)
+        const { onPaymentReceived } = require("../services/whatsappAutoTrigger");
+        onPaymentReceived({ invoice_id: invoiceId, invoiceId: invInfo?.[0]?.invoiceId || "", amount: payAmount, customer_id: invInfo?.[0]?.customer_id || null }).catch(() => {});
       } catch (dbErr) { await connection.rollback(); throw dbErr; }
       finally { connection.release(); }
     }

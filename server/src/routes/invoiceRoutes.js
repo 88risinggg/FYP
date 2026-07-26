@@ -12,7 +12,7 @@ const { exportInvoicesExcel } = require("../controllers/exportController");
 const { authenticateToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/rolesMiddleware");
 const { generateInvoicePDF } = require("../services/pdfService");
-const { sendWhatsAppReminder } = require("../services/whatsappService");
+const whatsappService = require("../services/whatsappService");
 const { sendManualReminder } = require("../services/invoiceReminderService");
 const { pool } = require("../config/db");
 const { getCompanyId } = require("../utils/companyScope");
@@ -281,7 +281,8 @@ router.post("/:id/whatsapp", async (req, res) => {
     const invoiceId = Number(req.params.id);
     const companyId = getCompanyId(req);
     const [rows] = await pool.query(
-      `SELECT i.invoiceId, i.total_amount, i.due_date, c.name AS customer_name, c.email AS customer_email
+      `SELECT i.invoice_id, i.invoiceId, i.total_amount, i.due_date, i.payment_url, i.customer_id,
+              c.name AS customer_name, c.email AS customer_email, c.whatsapp_number
        FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id
        WHERE i.invoice_id = ? ${companyId ? "AND i.company_id = ?" : ""} LIMIT 1`,
       companyId ? [invoiceId, companyId] : [invoiceId]
@@ -292,17 +293,28 @@ router.post("/:id/whatsapp", async (req, res) => {
     }
 
     const invoice = rows[0];
-    const phone = req.body.phone || "+6500000000"; // Customer phone from request or default
+    const phone = req.body.phone || invoice.whatsapp_number;
+    if (!phone) {
+      return res.status(400).json({ message: "Customer does not have a WhatsApp number. Provide phone in request body." });
+    }
 
-    const result = await sendWhatsAppReminder({
-      to: phone,
-      invoiceId: invoice.invoiceId,
+    const result = await whatsappService.sendInvoice({
+      customerId: invoice.customer_id,
       customerName: invoice.customer_name,
+      phone,
+      invoiceId: invoice.invoice_id,
+      invoiceNumber: invoice.invoiceId,
       amount: invoice.total_amount,
-      dueDate: invoice.due_date
+      dueDate: invoice.due_date,
+      paymentLink: invoice.payment_url || null,
+      sentBy: req.user?.userId
     });
 
-    res.json({ message: "WhatsApp notification sent.", result });
+    if (result.success) {
+      res.json({ message: "WhatsApp notification sent.", result });
+    } else {
+      res.status(422).json({ message: "Failed to send WhatsApp.", error: result.error });
+    }
   } catch (error) {
     res.status(500).json({ message: "Failed to send WhatsApp.", detail: error.message });
   }

@@ -52,6 +52,67 @@ router.get("/invoice/:invoiceId", viewInvoice);
 router.post("/invoice/:invoiceId/submit-payment", proofUpload.single("proof"), submitManualPayment);
 
 /**
+ * GET /api/public/invoice/:invoiceId/pdf
+ * Public PDF download for an invoice (used by Twilio WhatsApp media attachments).
+ * No authentication required — uses the invoice number as the identifier.
+ */
+router.get("/invoice/:invoiceId/pdf", async (req, res) => {
+  const { invoiceId } = req.params;
+
+  try {
+    const [rows] = await pool.query(`
+      SELECT i.invoice_id, i.invoiceId, i.status, i.total_amount,
+             i.issue_date, i.due_date, i.payment_url, i.qr_code_url,
+             c.name AS customer_name, c.email AS customer_email, c.address AS customer_address
+      FROM invoice i
+      INNER JOIN customer c ON c.customer_id = i.customer_id
+      WHERE i.invoiceId = ? LIMIT 1
+    `, [invoiceId]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Invoice not found." });
+    }
+
+    const invoice = rows[0];
+
+    // Load line items
+    let items = [];
+    try {
+      const [itemRows] = await pool.query(
+        "SELECT description, quantity, unit_price, amount FROM invoice_item WHERE invoice_invoice_id = ?",
+        [invoice.invoice_id]
+      );
+      items = itemRows;
+    } catch { /* table may not exist */ }
+    if (items.length === 0) {
+      try {
+        const [jsonRows] = await pool.query(
+          "SELECT items_json FROM invoice WHERE invoice_id = ? AND items_json IS NOT NULL",
+          [invoice.invoice_id]
+        );
+        if (jsonRows.length > 0 && jsonRows[0].items_json) {
+          const parsed = typeof jsonRows[0].items_json === "string"
+            ? JSON.parse(jsonRows[0].items_json)
+            : jsonRows[0].items_json;
+          items = Array.isArray(parsed) ? parsed : [];
+        }
+      } catch { /* no items */ }
+    }
+    invoice.items = items;
+
+    const { generateInvoicePDF } = require("../services/pdfService");
+    const pdfBuffer = await generateInvoicePDF(invoice, { paymentUrl: invoice.payment_url });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${invoice.invoiceId}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error("[PUBLIC PDF]", error.message);
+    res.status(500).json({ message: "Unable to generate PDF.", detail: error.message });
+  }
+});
+
+/**
  * GET /api/public/invoice/:invoiceId/receipt
  * Customer downloads payment receipt (only available for Paid invoices).
  */

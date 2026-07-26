@@ -734,7 +734,7 @@ async function sendInvoice(req, res) {
     const { notifyInvoiceSent } = require("../services/invoiceNotificationService");
     notifyInvoiceSent(invoice.invoiceId, invoice.customer_name, req.user?.userId).catch(() => {});
 
-    // WhatsApp notification: Invoice Sent (non-blocking)
+    // WhatsApp auto-trigger: Invoice Sent (non-blocking)
     const { onInvoiceSent } = require("../services/whatsappAutoTrigger");
     onInvoiceSent({ invoice_id: invoiceId, invoiceId: invoice.invoiceId, total_amount: invoice.total_amount, due_date: invoice.due_date, customer_id: invoice.customer_id, payment_url: paymentUrl }).catch(() => {});
 
