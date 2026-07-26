@@ -58,8 +58,8 @@ async function run() {
 
     // Step 2: Add columns from security_settings
     console.log("2. Adding security_settings columns to user table...");
-    await addColumn(pool, "user", "two_fa_enabled", "TINYINT(1) DEFAULT 0");
-    await addColumn(pool, "user", "two_fa_method", "VARCHAR(30) NULL");
+    await addColumn(pool, "user", "two_fa_enabled", "TINYINT(1) NOT NULL DEFAULT 1");
+    await addColumn(pool, "user", "two_fa_method", "VARCHAR(30) NULL DEFAULT 'Email OTP'");
     await addColumn(pool, "user", "recovery_codes", "TEXT NULL");
     console.log("   Done.");
 

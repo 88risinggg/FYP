@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const { pool } = require("../config/db");
 const { findUserById } = require("../models/authModel");
 const { validateSupportContext } = require("./tenantMiddleware");
+const settingsModel = require("../models/settingsModel");
 
 /**
  * JWT authentication middleware.
@@ -52,6 +53,15 @@ async function authenticateToken(req, res, next) {
       companyId: user.company_id || payload.companyId || null
       ,supportGrantId: payload.supportGrantId || null
     };
+
+    // Tokens issued after session tracking was introduced are revocable.
+    // Legacy tokens without a sessionId remain valid until their normal expiry.
+    if (payload.sessionId && user.company_id) {
+      const activeSession = await settingsModel.loginSessionExists(user.user_id, payload.sessionId, user.company_id);
+      if (!activeSession) {
+        return res.status(401).json({ code: "SESSION_TERMINATED", message: "This login session has been terminated." });
+      }
+    }
 
     // Resolve staffId (employee_id) for Staff users from the staff table
     try {

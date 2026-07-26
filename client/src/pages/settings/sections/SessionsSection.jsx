@@ -39,8 +39,9 @@ export default function SessionsSection() {
     try {
       await logoutAllSessions();
       setSessions([]);
-      showToast("All sessions terminated");
-      setConfirmLogoutAll(false);
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("authUser");
+      window.location.assign("/login");
     } catch (err) { showToast(err.message, "error"); }
     finally { setActionLoading(null); }
   }

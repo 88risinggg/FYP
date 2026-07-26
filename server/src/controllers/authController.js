@@ -7,6 +7,7 @@
 
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const { randomUUID } = require("crypto");
 
 const {
   completeFirstLogin: saveFirstLoginPassword,
@@ -19,6 +20,8 @@ const challengeService = require("../services/authChallengeService");
 const { sendAuthOtpEmail } = require("../services/emailService");
 const { notifyRoles } = require("../services/payrollNotificationService");
 const { writeAuditLog, MODULE } = require("../services/auditService");
+const settingsModel = require("../models/settingsModel");
+const { runWithTenant } = require("../services/tenantContext");
 
 const LOGIN_FAILURE_LIMIT = 5;
 
@@ -63,22 +66,23 @@ function isActiveStatus(status) {
   return status === 1 || status === true;
 }
 
-function normalToken(user) {
+function normalToken(user, sessionId = null) {
   return jwt.sign(
     {
       userId: user.user_id,
       email: user.email,
       role: user.role_name,
-      companyId: user.company_id || null
+      companyId: user.company_id || null,
+      ...(sessionId ? { sessionId } : {})
     },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || "1d" }
   );
 }
 
-function authPayload(user) {
+function authPayload(user, sessionId = null) {
   return {
-    token: normalToken(user),
+    token: normalToken(user, sessionId),
     user: {
       userId: user.user_id,
       email: user.email,
@@ -97,6 +101,34 @@ function authPayload(user) {
       allowedModules: getAllowedModules(user.role_name)
     }
   };
+}
+
+function describeClient(req) {
+  const agent = String(req.get("user-agent") || "");
+  const browser = /Edg\//i.test(agent) ? "Microsoft Edge" : /Chrome\//i.test(agent) ? "Chrome" : /Firefox\//i.test(agent) ? "Firefox" : /Safari\//i.test(agent) ? "Safari" : "Unknown browser";
+  const os = /Windows/i.test(agent) ? "Windows" : /Android/i.test(agent) ? "Android" : /iPhone|iPad/i.test(agent) ? "iOS" : /Mac OS/i.test(agent) ? "macOS" : /Linux/i.test(agent) ? "Linux" : "Unknown OS";
+  const device = /Mobile|Android|iPhone|iPad/i.test(agent) ? "Mobile device" : "Desktop device";
+  return { browser, os, device };
+}
+
+async function authenticatedPayload(user, req) {
+  const sessionId = randomUUID();
+  if (user.company_id) {
+    try {
+      await runWithTenant(user.company_id, () => settingsModel.createLoginSession(user.user_id, {
+        session_id: sessionId,
+        ...describeClient(req),
+        ip_address: req.ip || null,
+        location: "Singapore",
+        is_current: true
+      }));
+    } catch (error) {
+      // Session history must never make a valid account unable to sign in.
+      console.error("Unable to record login session:", error.message);
+      return authPayload(user);
+    }
+  }
+  return authPayload(user, sessionId);
 }
 
 function buildUserResponse(user) {
@@ -206,7 +238,22 @@ async function login(req, res) {
       return res.json({ requiresPasswordChange: true, setupToken, email: user.email });
     }
 
-    return res.json(authPayload(user));
+    if (Number(user.two_fa_enabled) === 1 && user.two_fa_method === "Email OTP") {
+      const challenge = await challengeService.createChallenge({
+        email: user.email,
+        purpose: "login",
+        userId: user.user_id
+      });
+      await sendAuthOtpEmail({ to: user.email, otp: challenge.otp, purpose: "login" });
+      return res.json({
+        requiresTwoFactor: true,
+        challengeId: challenge.challengeId,
+        expiresAt: challenge.expiresAt,
+        maskedEmail: user.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2")
+      });
+    }
+
+    return res.json(await authenticatedPayload(user, req));
   } catch (error) {
     res.status(500).json({
       message: "Login failed. Please try again later."
@@ -249,7 +296,7 @@ async function completeFirstLogin(req, res) {
         privacyAcceptedAt: new Date().toISOString()
       })
     });
-    return res.json(authPayload(user));
+    return res.json(await authenticatedPayload(user, req));
   } catch (error) {
     if (error.name === "TokenExpiredError" || error.name === "JsonWebTokenError") {
       return res.status(401).json({ message: "Password setup link has expired. Sign in again with the temporary password." });
@@ -270,7 +317,7 @@ async function verifyLoginOtp(req, res) {
     if (!user || !isActiveStatus(user.status) || user.account_locked_at) {
       return res.status(401).json({ message: "This account is no longer available." });
     }
-    return res.json(authPayload(user));
+    return res.json(await authenticatedPayload(user, req));
   } catch (error) {
     return res.status(500).json({ message: "Login verification failed. Please try again later." });
   }

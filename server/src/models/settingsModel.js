@@ -49,20 +49,27 @@ function ensurePrivacyTables() {
 // ─── Profile ────────────────────────────────────────────────────────────────
 
 async function getProfile(userId) {
+  const companyId = currentCompanyId();
   const [rows] = await pool.query(
-    `SELECT user_id, name, email, status, created_at, role_name,
-            display_name, mobile, job_title, department,
-            preferred_language, timezone, date_format, currency,
-            profile_picture, profile_employee_id AS employee_id,
-            profile_company_name AS company_name
-     FROM user
-     WHERE user_id = ?`,
-    [userId]
+    `SELECT u.user_id, u.name, u.email, u.status, u.created_at, u.role_name,
+            u.display_name, COALESCE(u.mobile, s.phone) AS mobile,
+            u.job_title, COALESCE(s.department_name, u.department) AS department,
+            u.preferred_language, u.timezone, u.date_format,
+            COALESCE(u.currency, c.currency) AS currency, u.profile_picture,
+            COALESCE(s.employee_code, CAST(s.employee_id AS CHAR), u.profile_employee_id) AS employee_id,
+            COALESCE(c.display_name, c.legal_name, c.company_name, u.profile_company_name) AS company_name
+     FROM user u
+     LEFT JOIN staff s ON s.user_user_id = u.user_id AND s.company_id = u.company_id
+     INNER JOIN companies c ON c.company_id = u.company_id
+     WHERE u.user_id = ? AND u.company_id = ?
+     LIMIT 1`,
+    [userId, companyId]
   );
   return rows[0] || null;
 }
 
 async function upsertProfile(userId, data) {
+  const companyId = currentCompanyId();
   const fields = [];
   const values = [];
 
@@ -91,9 +98,9 @@ async function upsertProfile(userId, data) {
   }
 
   if (fields.length > 0) {
-    values.push(userId);
+    values.push(userId, companyId);
     await pool.query(
-      `UPDATE user SET ${fields.join(", ")} WHERE user_id = ?`,
+      `UPDATE user SET ${fields.join(", ")} WHERE user_id = ? AND company_id = ?`,
       values
     );
   }
@@ -119,18 +126,25 @@ async function updatePassword(userId, hashedPassword) {
 // ─── Two-Factor Authentication ──────────────────────────────────────────────
 
 async function get2FASettings(userId) {
+  const companyId = currentCompanyId();
   const [rows] = await pool.query(
-    "SELECT two_fa_enabled, two_fa_method, recovery_codes FROM user WHERE user_id = ?",
-    [userId]
+    "SELECT two_fa_enabled, two_fa_method FROM user WHERE user_id = ? AND company_id = ?",
+    [userId, companyId]
   );
   return rows[0] || null;
 }
 
 async function upsert2FASettings(userId, data) {
+  const companyId = currentCompanyId();
   await pool.query(
-    `UPDATE user SET two_fa_enabled = ?, two_fa_method = ?, recovery_codes = ? WHERE user_id = ?`,
-    [data.two_fa_enabled ? 1 : 0, data.two_fa_method || null, data.recovery_codes || null, userId]
+    `UPDATE user SET two_fa_enabled = ?, two_fa_method = ? WHERE user_id = ? AND company_id = ?`,
+    [data.two_fa_enabled ? 1 : 0, data.two_fa_enabled ? "Email OTP" : null, userId, companyId]
   );
+}
+
+async function saveRecoveryCodes(userId, codes) {
+  const companyId = currentCompanyId();
+  await pool.query("UPDATE user SET recovery_codes = ? WHERE user_id = ? AND company_id = ?", [JSON.stringify(codes), userId, companyId]);
 }
 
 // ─── Connected Accounts (stored as JSON on user table) ──────────────────────
@@ -316,9 +330,10 @@ async function upsertCompanySettings(userId, data) {
 // ─── Login Sessions (stored as JSON on user table) ──────────────────────────
 
 async function getLoginSessions(userId) {
+  const companyId = currentCompanyId();
   const [rows] = await pool.query(
-    "SELECT login_sessions_json FROM user WHERE user_id = ?",
-    [userId]
+    "SELECT login_sessions_json FROM user WHERE user_id = ? AND company_id = ?",
+    [userId, companyId]
   );
   if (!rows[0] || !rows[0].login_sessions_json) return [];
   let sessions = rows[0].login_sessions_json;
@@ -329,9 +344,10 @@ async function getLoginSessions(userId) {
 }
 
 async function createLoginSession(userId, data) {
+  const companyId = currentCompanyId();
   const sessions = await getLoginSessions(userId);
   const newSession = {
-    session_id: Date.now(),
+    session_id: data.session_id || String(Date.now()),
     device: data.device,
     browser: data.browser,
     os: data.os,
@@ -343,23 +359,40 @@ async function createLoginSession(userId, data) {
   sessions.unshift(newSession);
   // Keep last 20 sessions max
   const trimmed = sessions.slice(0, 20);
-  await pool.query("UPDATE user SET login_sessions_json = ? WHERE user_id = ?", [JSON.stringify(trimmed), userId]);
+  await pool.query("UPDATE user SET login_sessions_json = ? WHERE user_id = ? AND company_id = ?", [JSON.stringify(trimmed), userId, companyId]);
+  return newSession;
 }
 
 async function deleteSession(sessionId, userId) {
+  const companyId = currentCompanyId();
   const sessions = await getLoginSessions(userId);
   const filtered = sessions.filter((s) => String(s.session_id) !== String(sessionId));
-  await pool.query("UPDATE user SET login_sessions_json = ? WHERE user_id = ?", [JSON.stringify(filtered), userId]);
+  await pool.query("UPDATE user SET login_sessions_json = ? WHERE user_id = ? AND company_id = ?", [JSON.stringify(filtered), userId, companyId]);
 }
 
 async function deleteOtherSessions(userId, currentSessionId) {
+  const companyId = currentCompanyId();
   const sessions = await getLoginSessions(userId);
   const filtered = sessions.filter((s) => String(s.session_id) === String(currentSessionId));
-  await pool.query("UPDATE user SET login_sessions_json = ? WHERE user_id = ?", [JSON.stringify(filtered), userId]);
+  await pool.query("UPDATE user SET login_sessions_json = ? WHERE user_id = ? AND company_id = ?", [JSON.stringify(filtered), userId, companyId]);
 }
 
 async function deleteAllSessions(userId) {
-  await pool.query("UPDATE user SET login_sessions_json = '[]' WHERE user_id = ?", [userId]);
+  const companyId = currentCompanyId();
+  await pool.query("UPDATE user SET login_sessions_json = '[]' WHERE user_id = ? AND company_id = ?", [userId, companyId]);
+}
+
+async function loginSessionExists(userId, sessionId, companyId) {
+  if (!sessionId || !companyId) return false;
+  const [rows] = await pool.query(
+    "SELECT login_sessions_json FROM user WHERE user_id = ? AND company_id = ?",
+    [userId, companyId]
+  );
+  let sessions = rows[0]?.login_sessions_json;
+  if (typeof sessions === "string") {
+    try { sessions = JSON.parse(sessions); } catch { return false; }
+  }
+  return Array.isArray(sessions) && sessions.some((session) => String(session.session_id) === String(sessionId));
 }
 
 // ─── Audit Logs (Settings-specific) ─────────────────────────────────────────
@@ -744,6 +777,7 @@ module.exports = {
   updatePassword,
   get2FASettings,
   upsert2FASettings,
+  saveRecoveryCodes,
   getConnectedAccounts,
   upsertConnectedAccount,
   disconnectAccount,
@@ -763,6 +797,7 @@ module.exports = {
   upsertEmailSettings,
   getLoginSessions,
   createLoginSession,
+  loginSessionExists,
   deleteSession,
   deleteOtherSessions,
   deleteAllSessions,

@@ -48,6 +48,8 @@ async function findUserByEmail(email) {
       ${userColumn(columns, "account_locked_at", "NULL")} AS account_locked_at,
       ${userColumn(columns, "account_lock_reason", "NULL")} AS account_lock_reason,
       ${userColumn(columns, "company_id", "NULL")} AS company_id
+      ,${userColumn(columns, "two_fa_enabled", "0")} AS two_fa_enabled
+      ,${userColumn(columns, "two_fa_method", "NULL")} AS two_fa_method
       ,company.workspace_id, company.display_name AS company_name, company.legal_name AS company_legal_name, company.logo_path AS company_logo,
       company.brand_color AS company_brand_color, company.timezone AS company_timezone, company.currency AS company_currency
     FROM user LEFT JOIN companies company ON company.company_id=user.company_id
@@ -73,6 +75,8 @@ async function findUserById(userId) {
       ${userColumn(columns, "failed_login_attempts", "0")} AS failed_login_attempts,
       ${userColumn(columns, "account_locked_at", "NULL")} AS account_locked_at,
       ${userColumn(columns, "account_lock_reason", "NULL")} AS account_lock_reason
+      ,${userColumn(columns, "two_fa_enabled", "0")} AS two_fa_enabled
+      ,${userColumn(columns, "two_fa_method", "NULL")} AS two_fa_method
       ,company.workspace_id, company.display_name AS company_name, company.legal_name AS company_legal_name, company.logo_path AS company_logo,
       company.brand_color AS company_brand_color, company.timezone AS company_timezone, company.currency AS company_currency
      FROM user LEFT JOIN companies company ON company.company_id=user.company_id WHERE user.user_id = ? LIMIT 1`,

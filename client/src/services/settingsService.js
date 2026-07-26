@@ -39,6 +39,7 @@ export function update2FA(data) {
   });
 }
 
+
 export function generateRecoveryCodes() {
   return apiRequest("/api/settings/2fa/recovery-codes", {
     method: "POST"

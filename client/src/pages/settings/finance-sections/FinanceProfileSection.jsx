@@ -23,7 +23,8 @@ export default function FinanceProfileSection({ onDirty }) {
   const [readOnly, setReadOnly] = useState({
     employee_id: "",
     role_name: "",
-    company_name: ""
+    company_name: "",
+    account_email: ""
   });
 
   useEffect(() => { loadProfile(); }, []);
@@ -45,9 +46,10 @@ export default function FinanceProfileSection({ onDirty }) {
         profile_picture: data.profile_picture || ""
       });
       setReadOnly({
-        employee_id: data.employee_id || "N/A",
+        employee_id: data.employee_id || "Not linked to staff",
         role_name: data.role_name || "N/A",
-        company_name: data.company_name || "N/A"
+        company_name: data.company_name || "Company record unavailable",
+        account_email: data.email || "N/A"
       });
     } catch (err) {
       showToast(err.message, "error");
@@ -145,7 +147,6 @@ export default function FinanceProfileSection({ onDirty }) {
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Full Name" name="name" value={form.name} onChange={handleChange} required />
             <Field label="Display Name" name="display_name" value={form.display_name} onChange={handleChange} />
-            <Field label="Email Address" name="email" value={form.email} onChange={handleChange} type="email" />
             <Field label="Mobile Number" name="mobile" value={form.mobile} onChange={handleChange} />
             <Field label="Job Title" name="job_title" value={form.job_title} onChange={handleChange} />
             <Field label="Department" name="department" value={form.department} onChange={handleChange} />
@@ -178,10 +179,11 @@ export default function FinanceProfileSection({ onDirty }) {
           {/* Read-only Fields */}
           <div className="rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 p-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#F38978]/70">Read-only Information</p>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <ReadOnlyField label="Employee ID" value={readOnly.employee_id} />
               <ReadOnlyField label="User Role" value={readOnly.role_name} />
               <ReadOnlyField label="Company Name" value={readOnly.company_name} />
+              <ReadOnlyField label="Account Email" value={readOnly.account_email} />
             </div>
           </div>
 

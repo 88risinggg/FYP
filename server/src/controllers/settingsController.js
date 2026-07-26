@@ -80,7 +80,7 @@ async function changePassword(req, res) {
 async function get2FA(req, res) {
   try {
     const settings = await settingsModel.get2FASettings(req.user.userId);
-    res.json(settings || { two_fa_enabled: false, two_fa_method: null });
+    res.json(settings || { two_fa_enabled: true, two_fa_method: "Email OTP" });
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch 2FA settings" });
   }
@@ -88,9 +88,10 @@ async function get2FA(req, res) {
 
 async function update2FA(req, res) {
   try {
-    await settingsModel.upsert2FASettings(req.user.userId, req.body);
+    const enabled = req.body.two_fa_enabled === true;
+    await settingsModel.upsert2FASettings(req.user.userId, { two_fa_enabled: enabled });
     await settingsModel.createSettingsAuditLog(req.user.userId, {
-      action: req.body.two_fa_enabled ? "2FA enabled" : "2FA disabled",
+      action: enabled ? "Email OTP 2FA enabled" : "Email OTP 2FA disabled",
       module: "security",
       ip_address: req.ip
     });
@@ -105,10 +106,7 @@ async function generateRecoveryCodes(req, res) {
     const codes = Array.from({ length: 8 }, () =>
       crypto.randomBytes(4).toString("hex").toUpperCase()
     );
-    await settingsModel.upsert2FASettings(req.user.userId, {
-      ...req.body,
-      recovery_codes: JSON.stringify(codes)
-    });
+    await settingsModel.saveRecoveryCodes(req.user.userId, codes);
     res.json({ codes });
   } catch (error) {
     res.status(500).json({ message: "Failed to generate recovery codes" });
@@ -263,7 +261,10 @@ async function updateCompanySettings(req, res) {
 async function getSessions(req, res) {
   try {
     const sessions = await settingsModel.getLoginSessions(req.user.userId);
-    res.json(sessions);
+    res.json(sessions.map((session) => ({
+      ...session,
+      is_current: String(session.session_id) === String(req.user.sessionId || "")
+    })));
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch sessions" });
   }
@@ -272,7 +273,15 @@ async function getSessions(req, res) {
 async function deleteSession(req, res) {
   try {
     const { id } = req.params;
+    if (String(id) === String(req.user.sessionId || "")) {
+      return res.status(400).json({ code: "CURRENT_SESSION", message: "Use Logout All Devices to end your current session." });
+    }
     await settingsModel.deleteSession(id, req.user.userId);
+    await settingsModel.createSettingsAuditLog(req.user.userId, {
+      action: "Terminated a login session",
+      module: "sessions",
+      ip_address: req.ip
+    });
     res.json({ message: "Session terminated" });
   } catch (error) {
     res.status(500).json({ message: "Failed to terminate session" });

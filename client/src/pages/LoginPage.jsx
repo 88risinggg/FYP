@@ -21,7 +21,9 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 
 import {
   completeFirstLogin,
-  login
+  login,
+  resendLoginOtp,
+  verifyLoginOtp
 } from "../services/authService.js";
 import { startHealthCheck } from "../services/apiClient.js";
 import { getPostAuthDestination, saveSession } from "../services/sessionService.js";
@@ -98,6 +100,8 @@ export default function LoginPage() {
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [termsRead, setTermsRead] = useState(false);
   const [privacyRead, setPrivacyRead] = useState(false);
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState(null);
+  const [twoFactorCode, setTwoFactorCode] = useState("");
 
   useEffect(() => {
     const linkToken = searchParams.get("setup_token");
@@ -138,6 +142,11 @@ export default function LoginPage() {
         setIsLoginOpen(false);
         return;
       }
+      if (data.requiresTwoFactor) {
+        setTwoFactorChallenge(data);
+        setTwoFactorCode("");
+        return;
+      }
       if (data.token && data.user) {
         saveSession(data.token, data.user, rememberMe);
         startHealthCheck();
@@ -150,6 +159,30 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  async function handleTwoFactor(event) {
+    event.preventDefault();
+    setError("");
+    setIsLoading(true);
+    try {
+      const data = await verifyLoginOtp(twoFactorChallenge.challengeId, twoFactorCode);
+      saveSession(data.token, data.user, rememberMe);
+      startHealthCheck();
+      navigate(getPostAuthDestination(data.user), { replace: true });
+    } catch (requestError) {
+      setError(requestError.message || "The verification code is invalid.");
+    } finally { setIsLoading(false); }
+  }
+
+  async function handleResendTwoFactor() {
+    setError("");
+    setIsLoading(true);
+    try {
+      await resendLoginOtp(twoFactorChallenge.challengeId);
+    } catch (requestError) {
+      setError(requestError.message || "Unable to resend the code.");
+    } finally { setIsLoading(false); }
   }
 
   async function handleFirstLogin(event) {
@@ -668,6 +701,31 @@ export default function LoginPage() {
                 Role-based access is applied after successful login.
               </div>
             </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {twoFactorChallenge && (
+          <motion.div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#251E1F]/70 p-4 backdrop-blur-md"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.form onSubmit={handleTwoFactor} className="w-full max-w-md rounded-2xl border border-[#f0d2ca] bg-white p-7 shadow-2xl"
+              initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F38978]/15 text-[#F38978]"><ShieldCheck size={22} /></div>
+              <h2 className="mt-5 text-2xl font-semibold text-[#251E1F]">Verify your login</h2>
+              <p className="mt-2 text-sm text-[#7b6660]">Enter the six-digit code sent to {twoFactorChallenge.maskedEmail || "your registered email"}.</p>
+              <input autoFocus inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required
+                value={twoFactorCode} onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, ""))}
+                className="mt-6 w-full rounded-xl border border-[#f0d2ca] px-4 py-3 text-center font-mono text-2xl tracking-[0.45em] outline-none focus:border-[#F38978]" />
+              {error && <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+              <button type="submit" disabled={isLoading || twoFactorCode.length !== 6} className="mt-5 w-full rounded-xl bg-[#F38978] px-4 py-3 text-sm font-semibold disabled:opacity-50">
+                {isLoading ? "Verifying..." : "Verify and continue"}
+              </button>
+              <div className="mt-4 flex justify-between text-sm">
+                <button type="button" disabled={isLoading} onClick={handleResendTwoFactor} className="font-medium text-[#F38978]">Resend code</button>
+                <button type="button" disabled={isLoading} onClick={() => { setTwoFactorChallenge(null); setError(""); }} className="text-[#7b6660]">Back to login</button>
+              </div>
+            </motion.form>
           </motion.div>
         )}
       </AnimatePresence>

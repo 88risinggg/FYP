@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Check, Download, Eye, EyeOff, Key, Loader2, Shield, Smartphone, X } from "lucide-react";
-import { changePassword, fetch2FA, update2FA, generateRecoveryCodes } from "../../../services/settingsService.js";
+import { Check, Eye, EyeOff, Key, Loader2, Mail, Shield, X } from "lucide-react";
+import { changePassword, fetch2FA, update2FA } from "../../../services/settingsService.js";
 import { reportSettingsSaveResult } from "../../../services/settingsEvents.js";
 
 export default function SecuritySection() {
@@ -10,8 +10,6 @@ export default function SecuritySection() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [twoFa, setTwoFa] = useState({ two_fa_enabled: false, two_fa_method: null });
-  const [recoveryCodes, setRecoveryCodes] = useState(null);
-  const [loadingCodes, setLoadingCodes] = useState(false);
 
   useEffect(() => {
     load2FA();
@@ -74,9 +72,9 @@ export default function SecuritySection() {
     }
   }
 
-  async function handleToggle2FA(method) {
+  async function handleToggle2FA() {
     try {
-      const newState = { two_fa_enabled: !twoFa.two_fa_enabled, two_fa_method: method };
+      const newState = { two_fa_enabled: !twoFa.two_fa_enabled, two_fa_method: !twoFa.two_fa_enabled ? "Email OTP" : null };
       await update2FA(newState);
       setTwoFa(newState);
       showToast(newState.two_fa_enabled ? "2FA enabled" : "2FA disabled");
@@ -85,29 +83,6 @@ export default function SecuritySection() {
     }
   }
 
-  async function handleGenerateCodes() {
-    setLoadingCodes(true);
-    try {
-      const data = await generateRecoveryCodes();
-      setRecoveryCodes(data.codes);
-    } catch (err) {
-      showToast(err.message, "error");
-    } finally {
-      setLoadingCodes(false);
-    }
-  }
-
-  function downloadCodes() {
-    if (!recoveryCodes) return;
-    const text = recoveryCodes.join("\n");
-    const blob = new Blob([text], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "recovery-codes.txt";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
 
   const strength = getPasswordStrength(form.newPassword);
 
@@ -162,47 +137,20 @@ export default function SecuritySection() {
         <p className="mt-1 text-sm text-[#7b6660]">Add an extra layer of security to your account.</p>
 
         <div className="mt-5 space-y-3">
-          {["Google Authenticator", "Microsoft Authenticator", "Email OTP", "SMS OTP"].map((method) => (
-            <div key={method} className="flex items-center justify-between rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 p-4">
+            <div className="flex items-center justify-between rounded-xl border border-[#ead3cc] bg-[#fff3ee]/70 p-4">
               <div className="flex items-center gap-3">
-                <Smartphone size={18} className="text-[#7b6660]" />
-                <span className="text-sm font-medium text-[#251E1F]">{method}</span>
+                <Mail size={18} className="text-[#7b6660]" />
+                <div><p className="text-sm font-medium text-[#251E1F]">Email verification code</p><p className="text-xs text-[#7b6660]">A one-time code is sent to your registered account email after password verification.</p></div>
               </div>
-              <button type="button" onClick={() => handleToggle2FA(method)}
+              <button type="button" onClick={handleToggle2FA}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                  twoFa.two_fa_enabled && twoFa.two_fa_method === method
+                  twoFa.two_fa_enabled
                     ? "bg-emerald-500/15 text-emerald-700"
                     : "bg-white text-[#7b6660] hover:bg-[#FDD9CD]/50 hover:text-[#251E1F]"
                 }`}>
-                {twoFa.two_fa_enabled && twoFa.two_fa_method === method ? "Enabled" : "Enable"}
+                {twoFa.two_fa_enabled ? "Disable" : "Enable"}
               </button>
             </div>
-          ))}
-        </div>
-
-        {/* Recovery Codes */}
-        <div className="mt-5 border-t border-[#ead3cc] pt-5">
-          <h3 className="text-sm font-semibold text-[#251E1F]">Recovery Codes</h3>
-          <p className="mt-1 text-xs text-[#7b6660]">Generate backup codes in case you lose access to your authenticator.</p>
-          <div className="mt-3 flex gap-3">
-            <button type="button" onClick={handleGenerateCodes} disabled={loadingCodes}
-              className="rounded-xl border border-[#ead3cc] bg-white px-4 py-2 text-xs font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/50 disabled:opacity-50">
-              {loadingCodes ? "Generating..." : "Generate Recovery Codes"}
-            </button>
-            {recoveryCodes && (
-              <button type="button" onClick={downloadCodes}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[#ead3cc] bg-white px-4 py-2 text-xs font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/50">
-                <Download size={13} /> Download
-              </button>
-            )}
-          </div>
-          {recoveryCodes && (
-            <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg border border-[#ead3cc] bg-[#fff3ee]/70 p-3 sm:grid-cols-4">
-              {recoveryCodes.map((code) => (
-                <span key={code} className="rounded bg-white px-2 py-1 text-center font-mono text-xs text-[#F38978]">{code}</span>
-              ))}
-            </div>
-          )}
         </div>
       </div>
     </div>
