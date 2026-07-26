@@ -32,7 +32,9 @@ function canUseModernTreasuryApi(employee, config) {
     config.originatingAccountId &&
     config.paymentCurrency === "USD" &&
     employee.modernTreasuryCounterpartyId &&
-    employee.modernTreasuryReceivingAccountId
+    employee.modernTreasuryReceivingAccountId &&
+    !String(employee.modernTreasuryCounterpartyId).startsWith("sim_") &&
+    !String(employee.modernTreasuryReceivingAccountId).startsWith("sim_")
   );
 }
 
@@ -86,11 +88,9 @@ async function modernTreasuryRequest(path, { method = "GET", body, idempotencyKe
 }
 
 function getSandboxAchDetails(employee, index) {
-  const numericEmployeeId = String(employee.employeeId || index + 1).replace(/\D/g, "");
-  const accountSuffix = String(Number(numericEmployeeId || index + 1)).padStart(4, "0");
-
   return {
-    accountNumber: `12345${accountSuffix}`,
+    // Modern Treasury's documented Sandbox value for a successful ACH flow.
+    accountNumber: "123456789",
     routingNumber: "121141822"
   };
 }
@@ -107,7 +107,7 @@ async function createModernTreasuryRecipient(employee, index) {
       external_id: `fyp-payroll-${employee.employeeId}`,
       metadata: {
         source: "fyp_payroll_demo",
-        employee_id: employee.employeeId
+        employee_id: String(employee.employeeId)
       },
       accounts: [
         {
@@ -153,7 +153,9 @@ async function setupModernTreasuryRecipients({ employees, forceNew = false }) {
   const failures = [];
 
   for (const [index, employee] of employees.entries()) {
-    if (!forceNew && employee.modernTreasuryCounterpartyId && employee.modernTreasuryReceivingAccountId) {
+    const simulated = String(employee.modernTreasuryCounterpartyId || "").startsWith("sim_")
+      || String(employee.modernTreasuryReceivingAccountId || "").startsWith("sim_");
+    if (!forceNew && !simulated && employee.modernTreasuryCounterpartyId && employee.modernTreasuryReceivingAccountId) {
       mappings.push({
         employeeId: employee.employeeId,
         employeeName: employee.employeeName,
@@ -173,6 +175,7 @@ async function setupModernTreasuryRecipients({ employees, forceNew = false }) {
 
   return {
     provider: "Modern Treasury Sandbox",
+    mode: "api",
     recipientCount: mappings.length,
     reusedCount: mappings.filter((item) => item.reused).length,
     failedCount: failures.length,
@@ -209,12 +212,12 @@ async function createPaymentOrder({ employee, payrollRunId, payrollPeriod, batch
       receiving_account_id: employee.modernTreasuryReceivingAccountId,
       description: `Payroll ${payrollPeriod} - ${employee.employeeName}`,
       metadata: {
-        payroll_run_id: payrollRunId,
-        payroll_period: payrollPeriod,
-        employee_id: employee.employeeId,
-        payroll_batch_reference: batchReference,
-        payroll_display_currency: employee.currency || "SGD",
-        idempotency_key: idempotencyKey
+        payroll_run_id: String(payrollRunId),
+        payroll_period: String(payrollPeriod),
+        employee_id: String(employee.employeeId),
+        payroll_batch_reference: String(batchReference),
+        payroll_display_currency: String(employee.currency || "SGD"),
+        idempotency_key: String(idempotencyKey)
       }
     }
   });
