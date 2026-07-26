@@ -130,7 +130,7 @@ app.use("/api/finance", authenticateToken, requireTenant, financeDashboardRoutes
 
 // In production, Discloud exposes a single web process. Serve the Vite build
 // from Express so the frontend and API share the same HTTPS origin.
-const clientDistPath = path.resolve(__dirname, "../../client/dist");
+const clientDistPath = path.resolve(__dirname, "../../dist");
 if (fs.existsSync(clientDistPath)) {
   app.use(express.static(clientDistPath));
   app.get("*", (req, res, next) => {

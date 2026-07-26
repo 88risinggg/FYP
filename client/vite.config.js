@@ -19,7 +19,9 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: "dist",
+    // Discloud preserves the project-root dist directory between its build
+    // and runtime stages. Express serves this output in production.
+    outDir: "../dist",
     emptyOutDir: true
   }
 });
