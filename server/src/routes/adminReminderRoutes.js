@@ -30,6 +30,10 @@ const {
   putSettings
 } = require("../controllers/invoiceSettingsController");
 const { getTemplatePreview } = require("../controllers/invoicePreviewController");
+const {
+  getAdminSubscriptionSettings,
+  putAdminSubscriptionSettings
+} = require("../controllers/subscriptionSettingsController");
 const { authenticateToken, requireRole } = require("../middleware/authMiddleware");
 
 const router = express.Router();
@@ -53,6 +57,8 @@ router.post("/invoice-settings/logo", postInvoiceLogo);
 router.post("/invoice-settings/preview", postInvoicePreview);
 router.post("/invoice-settings/template-preview", getTemplatePreview);
 router.post("/invoice-settings/test-email", postTestInvoiceEmail);
+router.get("/subscription-settings", getAdminSubscriptionSettings);
+router.put("/subscription-settings", putAdminSubscriptionSettings);
 router.get("/reminder-settings", getReminderSettings);
 router.post("/reminder-settings", postReminderSetting);
 router.put("/reminder-settings/:id", putReminderSetting);

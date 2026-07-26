@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
+  Circle,
   Clock3,
   FileSpreadsheet,
   FileText,
@@ -14,8 +15,7 @@ import {
   RotateCcw,
   Save,
   Send,
-  Settings2,
-  XCircle
+  Settings2
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -35,11 +35,6 @@ const tabs = [
   { label: "Payments", slug: "payments" }
 ];
 
-const invoiceSettingsStatusSections = tabs.map((tab) => ({
-  key: tab.slug,
-  label: tab.label
-}));
-
 const emptyOptions = {
   currencies: [],
   languages: [],
@@ -52,6 +47,140 @@ const emptyOptions = {
   separatorStyles: [],
   invoiceFormats: []
 };
+
+const invoiceSectionRootFields = {
+  general: [
+    "companyName",
+    "companyRegistrationNumber",
+    "financeEmail",
+    "companyAddress",
+    "registeredOfficeAddress"
+  ],
+  numbering: [
+    "invoicePrefix",
+    "invoiceYear",
+    "separatorStyle",
+    "invoiceFormat",
+    "nextInvoiceNumber"
+  ],
+  email: [
+    "senderName",
+    "replyToEmail",
+    "supportEmail",
+    "emailSubjectTemplate",
+    "emailBodyTemplate",
+    "attachPdfInvoice"
+  ],
+  payments: [
+    "bankAccountHolderName",
+    "bankName",
+    "bankAccountNumber",
+    "bicSwift",
+    "paynowIdentifier",
+    "paymentReferenceInstruction",
+    "payoutStatement",
+    "computerGeneratedStatement"
+  ]
+};
+
+function settingsValuesMatch(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function invoiceSectionSnapshot(settings, section) {
+  const snapshot = {};
+  for (const field of invoiceSectionRootFields[section] || []) {
+    snapshot[field] = settings?.[field];
+  }
+  if (section === "general") {
+    snapshot.general = settings?.general;
+    snapshot.export = settings?.export;
+  }
+  if (section === "numbering") {
+    snapshot.sequenceRules = settings?.sequenceRules;
+  }
+  return snapshot;
+}
+
+function hasText(value) {
+  return Boolean(String(value || "").trim());
+}
+
+function validEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
+function validateInvoiceSection(section, form) {
+  if (section === "general") {
+    const required = [
+      form.general.defaultCurrency,
+      form.general.defaultLanguage,
+      form.general.defaultTax,
+      form.general.priceDisplay,
+      form.general.paymentTerms,
+      form.export.pdfPaperSize,
+      form.export.excelFormat
+    ];
+    const valid = required.every(hasText)
+      && paymentTermsHasDueLength(form.general.paymentTerms)
+      && form.general.lateFeeValue !== ""
+      && Number(form.general.lateFeeValue) >= 0;
+    return {
+      valid,
+      configured: valid,
+      note: valid ? "Invoice defaults and exports are ready." : "Complete the required defaults and export fields."
+    };
+  }
+
+  if (section === "numbering") {
+    const valid = hasText(form.invoicePrefix)
+      && /^\d{4}$/.test(String(form.invoiceYear || ""))
+      && hasText(form.separatorStyle)
+      && hasText(form.invoiceFormat)
+      && Number.isInteger(Number(form.nextInvoiceNumber))
+      && Number(form.nextInvoiceNumber) >= 1;
+    return {
+      valid,
+      configured: valid,
+      note: valid ? "Invoice numbering rules are ready." : "Complete the prefix, year, format and next number."
+    };
+  }
+
+  if (section === "email") {
+    const hasAny = hasText(form.senderName) || hasText(form.replyToEmail) || hasText(form.supportEmail);
+    if (!hasAny) return { valid: true, configured: false, note: "Configure invoice delivery when needed." };
+    const valid = hasText(form.senderName)
+      && validEmail(form.replyToEmail)
+      && hasText(form.emailSubjectTemplate)
+      && hasText(form.emailBodyTemplate);
+    return {
+      valid,
+      configured: valid,
+      note: valid ? "Invoice email delivery is ready." : "Complete sender, reply-to, subject and email body."
+    };
+  }
+
+  const hasBankDetails = hasText(form.bankName) || hasText(form.bankAccountNumber);
+  const hasPayNow = hasText(form.paynowIdentifier);
+  const validBankDetails = !hasBankDetails || (hasText(form.bankName) && hasText(form.bankAccountNumber));
+  const configured = (hasBankDetails && validBankDetails) || hasPayNow;
+  return {
+    valid: validBankDetails,
+    configured,
+    note: configured
+      ? "Customer payment instructions are ready."
+      : validBankDetails
+        ? "Add bank or PayNow details when needed."
+        : "Complete both bank name and account number."
+  };
+}
+
+function invoiceStatusMeta(status) {
+  if (status === "complete") return { label: "Complete", icon: CheckCircle2, color: "text-emerald-600", badge: "bg-emerald-100 text-emerald-700" };
+  if (status === "unsaved") return { label: "Unsaved changes", icon: AlertTriangle, color: "text-amber-600", badge: "bg-amber-100 text-amber-800" };
+  if (status === "needs-attention") return { label: "Needs attention", icon: AlertTriangle, color: "text-rose-600", badge: "bg-rose-100 text-rose-700" };
+  return { label: "Not started", icon: Circle, color: "text-slate-400", badge: "bg-slate-100 text-slate-600" };
+}
 
 const defaultForm = {
   invoicePrefix: "",
@@ -751,63 +880,59 @@ function SettingsCard({ title, icon: Icon, children }) {
   );
 }
 
-function StatusIcon({ status }) {
-  if (status === "completed") return <CheckCircle2 size={15} className="text-[#F38978]" />;
-  if (status === "warning") return <AlertTriangle size={15} className="text-[#FFB65C]" />;
-  return <XCircle size={15} className="text-[#F38978]" />;
-}
-
-function ConfigurationStatusPanel({ status }) {
-  const categories = status?.categories || {};
-  const sectionStatuses = invoiceSettingsStatusSections.map((section) => ({
-    ...section,
-    status: categories[section.key] || "incomplete"
-  }));
-  const completedCount = sectionStatuses.filter((section) => section.status === "completed").length;
-  const percentage = Math.round((completedCount / sectionStatuses.length) * 100);
-  const circumference = 2 * Math.PI * 42;
-  const offset = circumference - (percentage / 100) * circumference;
+function ConfigurationStatusPanel({ sections, currentTab, routePrefix, savedAt }) {
+  const completedCount = sections.filter((section) => section.status === "complete").length;
+  const percentage = Math.round((completedCount / sections.length) * 100);
 
   return (
     <SettingsCard title="Configuration Status" icon={Settings2}>
-      <div className="grid gap-5 sm:grid-cols-[160px_minmax(0,1fr)] xl:grid-cols-1 2xl:grid-cols-[160px_minmax(0,1fr)]">
-        <div className="relative mx-auto h-36 w-36">
-          <svg viewBox="0 0 108 108" className="h-full w-full">
-            <circle cx="54" cy="54" r="42" fill="none" stroke="#f7e2db" strokeWidth="12" />
-            <circle
-              cx="54"
-              cy="54"
-              r="42"
-              fill="none"
-              stroke="#F38978"
-              strokeLinecap="round"
-              strokeWidth="12"
-              strokeDasharray={circumference}
-              strokeDashoffset={offset}
-              transform="rotate(-90 54 54)"
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-            <span className="text-2xl font-bold text-[#251E1F]">{percentage}%</span>
-            <span className="text-xs font-semibold text-[#7b6660]">Configured</span>
-          </div>
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="text-2xl font-bold text-[#251E1F]">{completedCount} of {sections.length}</p>
+          <p className="text-xs font-semibold text-[#7b6660]">steps completed</p>
         </div>
-        <div className="space-y-2">
-          {sectionStatuses.map((section) => (
-            <div key={section.key} className="space-y-1.5">
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="font-semibold text-[#251E1F]">{section.label}</span>
-                <StatusIcon status={section.status} />
+        <span className="text-sm font-bold text-[#F38978]">{percentage}%</span>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#f7e2db]">
+        <div className="h-full rounded-full bg-[#F38978] transition-all" style={{ width: `${percentage}%` }} />
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {sections.map((section) => {
+          const meta = invoiceStatusMeta(section.status);
+          const StatusIcon = meta.icon;
+          const isCurrent = currentTab === section.slug;
+          return (
+            <Link
+              key={section.slug}
+              to={`${routePrefix}/${section.slug}`}
+              className={`block rounded-xl border p-3 transition ${
+                isCurrent
+                  ? "border-[#F38978] bg-[#fff3ee]"
+                  : "border-[#f0d2ca] bg-white hover:border-[#e8b8ac]"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <StatusIcon size={18} className={`mt-0.5 shrink-0 ${meta.color}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-bold text-[#251E1F]">{section.label}</p>
+                    {isCurrent ? <span className="rounded-full bg-[#FDD9CD] px-2 py-0.5 text-[10px] font-bold uppercase text-[#E8573D]">Current</span> : null}
+                  </div>
+                  <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${meta.badge}`}>
+                    {meta.label}
+                  </span>
+                  <p className="mt-2 text-xs leading-5 text-[#7b6660]">{section.note}</p>
+                </div>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-[#f7e2db]">
-                <div
-                  className="h-full rounded-full bg-[#F38978] transition-all"
-                  style={{ width: section.status === "completed" ? "100%" : "0%" }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="mt-5 border-t border-[#f0d2ca] pt-4">
+        <p className="text-xs font-bold text-[#7b6660]">Last saved</p>
+        <p className="mt-1 text-sm font-bold text-[#251E1F]">{formatDateTime(savedAt)}</p>
       </div>
     </SettingsCard>
   );
@@ -1039,49 +1164,46 @@ function EmailSettingsTab({ form, onChange }) {
   );
 }
 
-function TabPlaceholder({ label }) {
-  return (
-    <section className="rounded-xl border border-dashed border-[#f0c9bf] bg-white/90 p-8 text-center text-sm font-semibold text-[#7b6660]">
-      {label} settings are routed and ready for the next tab implementation.
-    </section>
-  );
-}
-
-function ActionPanel({ saving, onCancel }) {
+function ActionPanel({ saving, dirty, invalid, canSave, onDiscard }) {
   return (
     <div className="rounded-xl border border-[#f0d2ca] bg-white/95 p-4 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
-      <button type="submit" disabled={saving} className={buttonClasses.primary}>
+      <button type="submit" disabled={saving || !canSave || invalid} className={buttonClasses.primary}>
         {saving ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}
-        {saving ? "Saving..." : "Save & Publish Settings"}
+        {saving ? "Saving..." : "Save Settings"}
       </button>
-      <button type="button" onClick={onCancel} disabled={saving} className={buttonClasses.secondary}>
-        <RotateCcw size={16} />
-        Cancel
-      </button>
+      {dirty ? (
+        <button type="button" onClick={onDiscard} disabled={saving} className={buttonClasses.secondary}>
+          <RotateCcw size={16} />
+          Discard Changes
+        </button>
+      ) : null}
     </div>
   );
 }
 
-function SettingsTabLayout({ children, configurationStatus, saving, onCancel, asideExtra = null }) {
+function SettingsTabLayout({
+  children,
+  sectionStates,
+  currentTab,
+  routePrefix,
+  savedAt,
+  saving,
+  dirty,
+  invalid,
+  canSave,
+  onDiscard,
+  asideExtra = null
+}) {
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div className="space-y-5">
         {children}
       </div>
       <aside className="space-y-5">
-        <ConfigurationStatusPanel status={configurationStatus} />
+        <ConfigurationStatusPanel sections={sectionStates} currentTab={currentTab} routePrefix={routePrefix} savedAt={savedAt} />
+        <ActionPanel saving={saving} dirty={dirty} invalid={invalid} canSave={canSave} onDiscard={onDiscard} />
         {asideExtra}
-        <ActionPanel saving={saving} onCancel={onCancel} />
       </aside>
-    </div>
-  );
-}
-
-function LastSavedPanel({ value }) {
-  return (
-    <div className="rounded-xl border border-[#f0d2ca] bg-white/95 p-4 shadow-[0_10px_28px_rgba(37,30,31,0.06)]">
-      <p className="mb-3 text-xs font-bold text-[#7b6660]">Last saved</p>
-      <p className="text-sm font-bold text-[#251E1F]">{formatDateTime(value)}</p>
     </div>
   );
 }
@@ -1091,7 +1213,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
   const [form, setForm] = useState(defaultForm);
   const [savedForm, setSavedForm] = useState(defaultForm);
   const [options, setOptions] = useState(emptyOptions);
-  const [configurationStatus, setConfigurationStatus] = useState(null);
   const [numberingActivity, setNumberingActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1099,10 +1220,38 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
   const [errors, setErrors] = useState([]);
 
   const currentTab = tabs.some((tab) => tab.slug === activeTab) ? activeTab : "general";
-  const currentTabConfig = tabs.find((tab) => tab.slug === currentTab) || tabs[0];
   const routePrefix = location.pathname.startsWith("/admin")
     ? "/admin/invoice-settings"
     : "/dashboard/invoicing/admin/invoice-settings";
+  const sectionStates = tabs.map((tab) => {
+    const validation = validateInvoiceSection(tab.slug, form);
+    const dirty = !settingsValuesMatch(
+      invoiceSectionSnapshot(form, tab.slug),
+      invoiceSectionSnapshot(savedForm, tab.slug)
+    );
+    const status = !validation.valid
+      ? "needs-attention"
+      : dirty
+        ? "unsaved"
+        : savedForm.updatedAt && validation.configured
+          ? "complete"
+          : "not-started";
+    return { ...tab, ...validation, dirty, status };
+  });
+  const hasUnsavedChanges = sectionStates.some((section) => section.dirty);
+  const hasInvalidChanges = sectionStates.some((section) => !section.valid);
+  const canSave = !savedForm.updatedAt || hasUnsavedChanges;
+  const settingsLayoutProps = {
+    sectionStates,
+    currentTab,
+    routePrefix,
+    savedAt: savedForm.updatedAt,
+    saving,
+    dirty: hasUnsavedChanges,
+    invalid: hasInvalidChanges,
+    canSave,
+    onDiscard: handleCancel
+  };
 
   const numberingPreview = useMemo(() => {
     const startNumber = Number(form.nextInvoiceNumber) || 1;
@@ -1127,7 +1276,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
       setForm(cloneSettings(nextSettings));
       setSavedForm(cloneSettings(nextSettings));
       setOptions({ ...emptyOptions, ...(data.options || {}) });
-      setConfigurationStatus(data.configurationStatus || null);
       setNumberingActivity(data.numberingActivity || []);
     } catch (error) {
       setErrors([error.message]);
@@ -1139,6 +1287,17 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
   useEffect(() => {
     loadSettings();
   }, []);
+
+  useEffect(() => {
+    function warnBeforeLeaving(event) {
+      if (!hasUnsavedChanges) return;
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [hasUnsavedChanges]);
 
   function setSectionField(section, field, value) {
     setForm((current) => ({
@@ -1205,6 +1364,9 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
     if (!Number.isInteger(Number(form.nextInvoiceNumber)) || Number(form.nextInvoiceNumber) < 1) {
       nextErrors.push("Next invoice number must be 1 or higher.");
     }
+    for (const section of sectionStates.filter((item) => !item.valid)) {
+      if (!nextErrors.includes(section.note)) nextErrors.push(section.note);
+    }
     return nextErrors;
   }
 
@@ -1227,7 +1389,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
       const savedSettings = normalizeSettings(data.settings);
       setForm(cloneSettings(savedSettings));
       setSavedForm(cloneSettings(savedSettings));
-      setConfigurationStatus(data.configurationStatus || null);
       setNumberingActivity(data.numberingActivity || []);
       setMessage(data.message || "Invoice settings saved.");
     } catch (error) {
@@ -1273,6 +1434,7 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
           <div className="flex min-w-max gap-1">
             {tabs.map((tab) => {
               const isActive = tab.slug === currentTab;
+              const tabState = sectionStates.find((section) => section.slug === tab.slug);
               return (
                 <Link
                   key={tab.slug}
@@ -1284,11 +1446,19 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
                   }`}
                 >
                   {tab.label}
+                  {tabState?.dirty ? <span className="ml-2 inline-block h-2 w-2 rounded-full bg-amber-500" aria-label="Unsaved changes" /> : null}
                 </Link>
               );
             })}
           </div>
         </nav>
+
+        {hasUnsavedChanges ? (
+          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+            <span>You have unsaved invoice configuration changes.</span>
+          </div>
+        ) : null}
 
         {errors.length > 0 ? (
           <MessageBanner type="error">
@@ -1302,15 +1472,8 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
 
         {currentTab === "numbering" ? (
           <SettingsTabLayout
-            configurationStatus={configurationStatus}
-            saving={saving}
-            onCancel={handleCancel}
-            asideExtra={(
-              <>
-                <NumberingPreviewPanel form={form} previewNumbers={numberingPreview} />
-                <LastSavedPanel value={savedForm.updatedAt} />
-              </>
-            )}
+            {...settingsLayoutProps}
+            asideExtra={<NumberingPreviewPanel form={form} previewNumbers={numberingPreview} />}
           >
             <NumberingTab
               form={form}
@@ -1323,29 +1486,15 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
             />
           </SettingsTabLayout>
         ) : currentTab === "email" ? (
-          <SettingsTabLayout
-            configurationStatus={configurationStatus}
-            saving={saving}
-            onCancel={handleCancel}
-          >
+          <SettingsTabLayout {...settingsLayoutProps}>
             <EmailSettingsTab form={form} onChange={setRootField} />
           </SettingsTabLayout>
         ) : currentTab === "payments" ? (
-          <SettingsTabLayout
-            configurationStatus={configurationStatus}
-            saving={saving}
-            onCancel={handleCancel}
-          >
+          <SettingsTabLayout {...settingsLayoutProps}>
             <PaymentSettingsTab form={form} onChange={setRootField} />
           </SettingsTabLayout>
-        ) : currentTab !== "general" ? (
-          <TabPlaceholder label={currentTabConfig.label} />
         ) : (
-          <SettingsTabLayout
-            configurationStatus={configurationStatus}
-            saving={saving}
-            onCancel={handleCancel}
-          >
+          <SettingsTabLayout {...settingsLayoutProps}>
               <SettingsCard title="General & Defaults" icon={FileText}>
                 <div className="grid gap-4 lg:grid-cols-2">
                   {generalSelectFields.map((config) => (

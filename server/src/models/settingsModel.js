@@ -637,6 +637,13 @@ async function deleteUserAccountByAdmin(userId, adminId, note = "Deleted from Pa
       await connection.query(`INSERT INTO account_action_requests (company_id, user_id, user_name, user_email, request_type, status, requested_at, reviewed_at, reviewed_by, review_note) VALUES (?, ?, ?, ?, 'account_deletion', 'approved', NOW(), NOW(), ?, ?)`, [companyId, userId, user.name, user.email, adminId, note]);
     }
     await connection.query("UPDATE staff SET user_user_id = NULL WHERE user_user_id = ? AND company_id = ?", [userId, companyId]);
+    // Null out all FK references to this user before deleting
+    await connection.query("UPDATE public_holidays SET created_by = NULL WHERE created_by = ? AND company_id = ?", [userId, companyId]);
+    await connection.query("UPDATE claims_and_loans SET created_by = NULL WHERE created_by = ? AND company_id = ?", [userId, companyId]);
+    await connection.query("DELETE FROM user_privacy_settings WHERE user_id = ?", [userId]);
+    await connection.query("DELETE FROM notification WHERE user_id = ? AND company_id = ?", [userId, companyId]);
+    // audit_logs.user_id — null it out to preserve audit history
+    await connection.query("UPDATE audit_logs SET user_id = NULL WHERE user_id = ? AND company_id = ?", [userId, companyId]);
     await connection.query("DELETE FROM user WHERE user_id = ? AND company_id = ?", [userId, companyId]);
     await connection.commit();
     return { deleted: true, user: { userId, name: user.name, email: user.email } };

@@ -18,13 +18,44 @@ function parseCSV(filePath) {
   return rows;
 }
 
+/**
+ * Safely extract a scalar value from an ExcelJS cell value.
+ * Handles: Date, rich text, hyperlink objects, formula results, error cells.
+ */
+function extractCellValue(value) {
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value !== "object") return value;
+
+  // Rich text: { richText: [{ text: '...' }, ...] }
+  if (Array.isArray(value.richText)) {
+    return value.richText.map((r) => (r && typeof r.text === "string" ? r.text : "")).join("").trim();
+  }
+
+  // Hyperlink / display text: { text: '...', hyperlink: '...' }
+  if (typeof value.text === "string") return value.text.trim();
+
+  // Formula cell: { formula: '...', result: <value> }
+  if (value.formula !== undefined || value.sharedFormula !== undefined) {
+    return extractCellValue(value.result);
+  }
+
+  // Shared string / wrapped result
+  if (typeof value.result !== "undefined") return extractCellValue(value.result);
+
+  // Error value
+  if (typeof value.error === "string") return "";
+
+  return "";
+}
+
 async function parseExcel(filePath) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(filePath);
   const sheet = workbook.worksheets[0];
   if (!sheet) return [];
   // Normalize header names for easier mapping to staff profile fields
-  const headerRow = sheet.getRow(1).values.slice(1).map(v => String(v).trim());
+  const headerRow = sheet.getRow(1).values.slice(1).map(v => String(extractCellValue(v) ?? "").trim());
   const rows = [];
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
@@ -60,7 +91,7 @@ async function parseExcel(filePath) {
       };
 
       const mappedKey = headerMap[key] || key;
-      obj[mappedKey] = values[i] ?? "";
+      obj[mappedKey] = extractCellValue(values[i]);
     }
     rows.push(obj);
   });

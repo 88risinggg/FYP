@@ -24,6 +24,8 @@
   "homepage": "https://github.com/88risinggg/FYP#readme",
   "description": "",
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "@playwright/test": "^1.62.0",
+    "concurrently": "^9.2.1",
+    "playwright": "^1.62.0"
   }
 }

@@ -158,11 +158,35 @@ const importColumns = {
   baseSalary: ["basesalary", "salary", "basicsalary", "monthlysalary", "monthlybasicsalary", "grosssalary"], bank: ["bank", "bankname"],
   accountNo: ["accountno", "accountnumber", "bankaccount", "bankaccountnumber", "bankaccountno"]
 };
-const excelValue = (value) => value instanceof Date
-  ? value.toISOString().slice(0, 10)
-  : value && typeof value === "object"
-    ? (value.text || value.result || (Array.isArray(value.richText) ? value.richText.map((item) => item.text || "").join("") : ""))
-    : (value ?? "");
+function excelValue(value) {
+  // Null / undefined / primitive — return as-is
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value !== "object") return value;
+
+  // Rich text: { richText: [{ text: '...' }, ...] }
+  if (Array.isArray(value.richText)) {
+    return value.richText.map((r) => (r && typeof r.text === "string" ? r.text : "")).join("").trim();
+  }
+
+  // Hyperlink / display text: { text: '...', hyperlink: '...' }
+  if (typeof value.text === "string") return value.text.trim();
+
+  // Formula cell: { formula: '...', result: <value> }
+  // The result itself might be a Date, a primitive, or another object
+  if (value.formula !== undefined || value.sharedFormula !== undefined) {
+    return excelValue(value.result);
+  }
+
+  // Shared string result wrapped in an object
+  if (typeof value.result !== "undefined") return excelValue(value.result);
+
+  // Error value: { error: '#REF!' }
+  if (typeof value.error === "string") return "";
+
+  // Fallback — avoid [object Object]
+  return "";
+}
 const excelHeader = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 const knownImportHeaders = new Set(Object.values(importColumns).flat());
 

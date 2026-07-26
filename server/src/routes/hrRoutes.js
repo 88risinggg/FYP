@@ -2013,4 +2013,85 @@ router.get("/staff/export/excel", authenticateToken, allowRoles("Admin", "HR"), 
   }
 });
 
+// HR verify own password (used before staff-only deletion)
+router.post("/users/verify-password", authenticateToken, allowRoles("HR"), async (req, res) => {
+  try {
+    const bcrypt = require("bcrypt");
+    const { password } = req.body || {};
+    if (!password) return res.status(400).json({ valid: false, message: "Password is required." });
+    const [rows] = await pool.query("SELECT password FROM user WHERE user_id = ? LIMIT 1", [req.user.userId]);
+    if (!rows.length) return res.status(401).json({ valid: false, message: "Session invalid." });
+    const valid = await bcrypt.compare(password, rows[0].password);
+    return res.json({ valid });
+  } catch (err) {
+    return res.status(500).json({ valid: false, message: err.message });
+  }
+});
+
+// HR delete user account + staff record — requires HR's own password for confirmation
+router.delete("/users/:userId/account", authenticateToken, allowRoles("HR"), async (req, res) => {
+  try {
+    const bcrypt = require("bcrypt");
+    const { deleteUserAccountByAdmin } = require("../models/settingsModel");
+    const { password } = req.body || {};
+
+    if (!password || typeof password !== "string" || !password.trim()) {
+      return res.status(400).json({ message: "Your password is required to delete a user account." });
+    }
+
+    // Verify HR user's own password
+    const [hrRows] = await pool.query("SELECT password FROM user WHERE user_id = ? LIMIT 1", [req.user.userId]);
+    if (!hrRows.length) return res.status(401).json({ message: "Session invalid. Please log in again." });
+    const passwordValid = await bcrypt.compare(password, hrRows[0].password);
+    if (!passwordValid) return res.status(403).json({ message: "Incorrect password. Account deletion cancelled." });
+
+    const targetUserId = Number(req.params.userId);
+    if (targetUserId === req.user.userId) {
+      return res.status(409).json({ message: "You cannot delete your own account." });
+    }
+
+    // Get the staff record linked to this user before deleting
+    const [staffRows] = await pool.query(
+      "SELECT employee_id FROM staff WHERE user_user_id = ? LIMIT 1",
+      [targetUserId]
+    );
+    const linkedEmployeeId = staffRows[0]?.employee_id || null;
+
+    // Delete the user account
+    const result = await deleteUserAccountByAdmin(
+      targetUserId,
+      req.user.userId,
+      `Deleted by HR (${req.user.email}) with password confirmation`
+    );
+
+    if (result.notFound) return res.status(404).json({ message: "User account not found." });
+    if (result.selfDelete) return res.status(409).json({ message: "You cannot delete your own account." });
+    if (result.lastAdmin) return res.status(409).json({ message: "The last active Admin account cannot be deleted." });
+
+    // Also delete the staff record if one was linked
+    if (linkedEmployeeId) {
+      await pool.query("DELETE FROM staff WHERE employee_id = ?", [linkedEmployeeId]).catch(() => null);
+    }
+
+    try {
+      await writeAuditLog({
+        module: "HR", activityType: "user_deleted",
+        action: `HR deleted user account ${result.user.email} (ID ${targetUserId})${linkedEmployeeId ? ` and staff record ${linkedEmployeeId}` : ""}`,
+        entityType: "user", entityId: targetUserId,
+        userId: req.user.userId, userName: req.user.name || req.user.email,
+        newValue: JSON.stringify({ deleted_user: result.user.email, deleted_staff: linkedEmployeeId }),
+        ipAddress: req.ip, deviceInfo: req.get("user-agent"), status: "Success"
+      });
+    } catch (_e) { /* ignore audit errors */ }
+
+    return res.json({
+      message: `Account and staff record for ${result.user.name} have been permanently removed.`,
+      deletedUser: result.user,
+      deletedStaffId: linkedEmployeeId
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Failed to delete user account.", detail: err.message });
+  }
+});
+
 module.exports = router;
