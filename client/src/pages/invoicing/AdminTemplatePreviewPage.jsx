@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   Eye, RefreshCw, AlertCircle
 } from "lucide-react";
-import { Link } from "react-router-dom";
 
 import InvoiceTemplate from "../../components/invoicing/InvoiceTemplate.jsx";
 import { getInvoiceSettings } from "../../services/adminInvoiceSettingsService.js";
@@ -57,7 +56,6 @@ export default function AdminTemplatePreviewPage() {
   const [settings, setSettings] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [previewStatus, setPreviewStatus] = useState("Sent");
   const [zoom, setZoom] = useState("fit");
   const previewContainerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(800);
@@ -176,12 +174,10 @@ export default function AdminTemplatePreviewPage() {
     return () => observer.disconnect();
   }, []);
 
-  // Build preview invoice with current status
+  // Build a sent sample invoice using the saved invoice-number prefix.
   const previewInvoice = {
     ...SAMPLE_INVOICE,
-    status: previewStatus,
     invoiceId: `${settings?.invoicePrefix || "INV"}-2026-000001`,
-    amount_paid: previewStatus === "Paid" ? SAMPLE_INVOICE.total_amount : 0,
   };
 
   // Compute scale based on zoom setting
@@ -200,80 +196,26 @@ export default function AdminTemplatePreviewPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-64px)] overflow-hidden">
-      {/* Left Panel — Settings Controls */}
-      <div className="w-[380px] shrink-0 overflow-y-auto border-r bg-white p-4 space-y-5">
+    <div className="flex h-[calc(100vh-64px)] flex-col overflow-hidden bg-[#FFF6F2]">
+      <div className="border-b bg-white px-5 py-4">
         <h2 className="flex items-center gap-2 text-lg font-bold text-[#251E1F]">
           <Eye className="h-5 w-5 text-[#2D7C83]" />
           Template Preview
         </h2>
-        <p className="text-xs text-[#7B6660]">
-          This preview uses the saved Invoice Settings. Finance invoices use the same saved settings when invoices are created, sent, viewed, and exported.
+        <p className="mt-1 text-sm text-[#7B6660]">
+          This sample invoice uses the latest saved Invoice Settings. The same settings are used for Finance invoices sent to customers.
         </p>
-        <Link
-          to="/dashboard/invoicing/admin/settings"
-          className="inline-flex w-full items-center justify-center rounded-lg border border-[#F38978] px-3 py-2 text-sm font-bold text-[#F38978] transition hover:bg-[#fff8f5]"
-        >
-          Edit Invoice Settings
-        </Link>
 
         {loadError && (
-          <div className="flex items-center gap-2 rounded-lg border border-[#FDD9CD] bg-[#FDD9CD] px-3 py-2 text-xs text-amber-700">
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-[#FDD9CD] bg-[#FFF4E8] px-3 py-2 text-xs text-amber-700">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>Could not load saved settings. Using defaults.</span>
           </div>
         )}
-
-        {/* Status Preview Selector */}
-        <div>
-          <label className="mb-1 block text-xs font-medium text-[#7B6660]">Preview Status</label>
-          <select
-            value={previewStatus}
-            onChange={(e) => setPreviewStatus(e.target.value)}
-            className="w-full rounded border px-2 py-1.5 text-sm"
-          >
-            {["Draft", "Sent", "Viewed", "Paid", "Overdue"].map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="rounded-lg border border-[#ead3cc] bg-[#fff8f5] p-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-[#251E1F]">Saved Settings Used</p>
-          <dl className="mt-3 space-y-2 text-sm">
-            <div>
-              <dt className="text-xs text-[#7B6660]">Company</dt>
-              <dd className="font-semibold text-[#251E1F]">{settings.companyName || "-"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-[#7B6660]">Currency</dt>
-              <dd className="font-semibold text-[#251E1F]">{settings.defaultCurrency || "SGD"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-[#7B6660]">GST</dt>
-              <dd className="font-semibold text-[#251E1F]">
-                {settings.taxEnabled ? `${settings.taxName || "GST"} ${settings.taxPercentage || 0}%` : "Disabled"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-[#7B6660]">Payment Terms</dt>
-              <dd className="font-semibold text-[#251E1F]">{settings.paymentTerms || "Net 30"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-[#7B6660]">Bank Transfer</dt>
-              <dd className="font-semibold text-[#251E1F]">{settings.bankName || "-"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-[#7B6660]">PayNow</dt>
-              <dd className="font-semibold text-[#251E1F]">{settings.paynowIdentifier || "-"}</dd>
-            </div>
-          </dl>
-        </div>
-
       </div>
 
-      {/* Right Panel — Live Preview */}
-      <div className="flex flex-1 flex-col overflow-hidden bg-[#FFF6F2]">
+      {/* Read-only invoice preview */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {/* Zoom Controls */}
         <div className="flex items-center gap-2 border-b bg-white px-4 py-2">
           <Eye className="h-4 w-4 text-[#7B6660]" />
@@ -317,13 +259,9 @@ export default function AdminTemplatePreviewPage() {
               options={{
                 logoUrl: settings.companyLogoUrl || "",
                 qrCodeUrl: settings.qrCodeDisplay ? "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI3MCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMCIgeT0iNzAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0MCIgeT0iNDAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzMCIgeT0iMTAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI1MCIgeT0iMzAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48L3N2Zz4=" : "",
-                // Sample Stripe payment link for preview (non-Paid statuses)
-                paymentUrl: !["Paid", "Cancelled", "Refunded"].includes(previewStatus)
-                  ? "https://checkout.stripe.com/c/pay/sample_preview_link"
-                  : "",
-                stripeQrCodeUrl: !["Paid", "Cancelled", "Refunded"].includes(previewStatus)
-                  ? "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI3MCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMCIgeT0iNzAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0MCIgeT0iNDAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzMCIgeT0iMTAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI1MCIgeT0iMzAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48L3N2Zz4="
-                  : "",
+                // Safe sample link and QR code used only in this read-only preview.
+                paymentUrl: "https://checkout.stripe.com/c/pay/sample_preview_link",
+                stripeQrCodeUrl: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI3MCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMCIgeT0iNzAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0MCIgeT0iNDAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzMCIgeT0iMTAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI1MCIgeT0iMzAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48L3N2Zz4=",
                 signatureUrl: "",
                 stampUrl: "",
               }}

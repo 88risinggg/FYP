@@ -77,6 +77,7 @@ function usePerformanceSection(section, initialRange) {
     try {
       const filters = {
         section,
+        ...(section === "status-changes" ? { pageSize: 5 } : {}),
         ...(section === "activity" ? { activityDetails: true } : {}),
         ...(range === "custom" ? custom : {})
       };
@@ -290,6 +291,7 @@ export default function AdminInvoicePerformancePage() {
 
         <Card title="Recent Status Changes" controls={<RangeControl state={changesState} label="Recent Status Changes" />}>
           <SectionState state={changesState} emptyMessage="No status changes found for this range.">
+            <p className="mb-3 text-xs text-[#7b6660]">Latest 5 invoice status changes, newest first.</p>
             {recentChanges.length ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
@@ -298,7 +300,7 @@ export default function AdminInvoicePerformancePage() {
                 </table>
               </div>
             ) : <p className="rounded-xl border border-dashed border-[#f0c9bf] bg-[#fff8f5] p-8 text-center text-sm text-[#7b6660]">No status changes found for this range.</p>}
-            <div className="mt-4"><ErrorAwareLink to={`${performancePath}/status-changes?range=${encodeURIComponent(changesState.range)}${changesState.range === "custom" ? `&startDate=${changesState.custom.startDate}&endDate=${changesState.custom.endDate}` : ""}`}>View All Status Changes</ErrorAwareLink></div>
+            <div className="mt-4"><ErrorAwareLink to={`${performancePath}/status-changes?range=${encodeURIComponent(changesState.range)}${changesState.range === "custom" ? `&startDate=${changesState.custom.startDate}&endDate=${changesState.custom.endDate}` : ""}`}>View All</ErrorAwareLink></div>
           </SectionState>
         </Card>
       </div>

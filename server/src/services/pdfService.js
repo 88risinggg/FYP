@@ -83,46 +83,26 @@ function formatMoney(value, settings = {}) {
   return `${symbol}${formatted}`;
 }
 
-const invoiceTranslations = {
-  en: {
-    invoice: "INVOICE",
-    invoiceDate: "Invoice Date",
-    invoiceNumber: "Invoice Number",
-    serviceProvider: "Service Provider",
-    description: "Description",
-    qty: "Qty",
-    unitPrice: "Unit Price",
-    amount: "Amount",
-    noItems: "No invoice items",
-    subtotal: "Subtotal",
-    total: "Total",
-    lessAmountPaid: "Less Amount Paid",
-    amountDue: "Amount Due",
-    dueDate: "Due Date",
-    paymentTerm: "Payment Term"
-  },
-  ms: {
-    invoice: "INVOIS",
-    invoiceDate: "Tarikh Invois",
-    invoiceNumber: "Nombor Invois",
-    serviceProvider: "Penyedia Perkhidmatan",
-    description: "Penerangan",
-    qty: "Kuantiti",
-    unitPrice: "Harga Seunit",
-    amount: "Jumlah",
-    noItems: "Tiada item invois",
-    subtotal: "Subjumlah",
-    total: "Jumlah",
-    lessAmountPaid: "Tolak Jumlah Dibayar",
-    amountDue: "Jumlah Perlu Dibayar",
-    dueDate: "Tarikh Akhir",
-    paymentTerm: "Terma Pembayaran"
-  }
+const invoiceLabels = {
+  invoice: "INVOICE",
+  invoiceDate: "Invoice Date",
+  invoiceNumber: "Invoice Number",
+  serviceProvider: "Service Provider",
+  description: "Description",
+  qty: "Qty",
+  unitPrice: "Unit Price",
+  amount: "Amount",
+  noItems: "No invoice items",
+  subtotal: "Subtotal",
+  total: "Total",
+  lessAmountPaid: "Less Amount Paid",
+  amountDue: "Amount Due",
+  dueDate: "Due Date",
+  paymentTerm: "Payment Term"
 };
 
-function invoiceText(settings, key) {
-  const language = settings.defaultLanguage || settings.general?.defaultLanguage || "en";
-  return (invoiceTranslations[language] || invoiceTranslations.en)[key] || invoiceTranslations.en[key] || key;
+function invoiceText(_settings, key) {
+  return invoiceLabels[key] || key;
 }
 
 async function resolveLogoDataUri(logoUrl) {

@@ -17,6 +17,7 @@ import AdminValidationErrorsPage from "./pages/invoicing/AdminValidationErrorsPa
 import AdminRecentStatusChangesPage from "./pages/invoicing/AdminRecentStatusChangesPage.jsx";
 import AdminInvoicingRecordPage from "./pages/invoicing/AdminInvoicingRecordPage.jsx";
 import AdminInvoiceAuditTrailPage from "./pages/invoicing/AdminInvoiceAuditTrailPage.jsx";
+import AdminNumberingSettingsHistoryPage from "./pages/invoicing/AdminNumberingSettingsHistoryPage.jsx";
 import FinanceInvoicingPage from "./pages/invoicing/FinanceInvoicingPage.jsx";
 import SettingsPage from "./pages/settings/SettingsPage.jsx";
 import RoleSettingsPage from "./pages/settings/RoleSettingsPage.jsx";
@@ -327,6 +328,14 @@ export default function App() {
         element={
           <AdminInvoicingRoute>
             <AdminGstHistoryPage />
+          </AdminInvoicingRoute>
+        }
+      />
+      <Route
+        path="/dashboard/invoicing/admin/invoice-settings/numbering/history"
+        element={
+          <AdminInvoicingRoute>
+            <AdminNumberingSettingsHistoryPage />
           </AdminInvoicingRoute>
         }
       />

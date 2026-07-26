@@ -74,3 +74,16 @@ test("dynamic invoice values are HTML escaped", () => {
   expect(html).not.toContain("null");
   expect(escapeHtml('<script>alert("x")</script>')).toBe("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;");
 });
+
+test("invoice labels remain English for legacy saved language values", () => {
+  const html = buildInvoiceHtml(invoice, {
+    ...settings,
+    defaultLanguage: "ms",
+    general: { defaultLanguage: "zh" }
+  });
+
+  expect(html).toContain("Invoice Date");
+  expect(html).toContain("Invoice Number");
+  expect(html).not.toContain("Tarikh Invois");
+  expect(html).not.toContain("Nombor Invois");
+});
