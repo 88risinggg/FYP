@@ -2032,7 +2032,7 @@ router.post("/users/verify-password", authenticateToken, allowRoles("HR"), async
 router.delete("/users/:userId/account", authenticateToken, allowRoles("HR"), async (req, res) => {
   try {
     const bcrypt = require("bcrypt");
-    const { deleteUserAccountByAdmin } = require("../models/settingsModel");
+    const { createAccountActionRequest, deleteUserAccountByAdmin, notifyAdminsOfDeletionRequest } = require("../models/settingsModel");
     const { password } = req.body || {};
 
     if (!password || typeof password !== "string" || !password.trim()) {
@@ -2040,7 +2040,7 @@ router.delete("/users/:userId/account", authenticateToken, allowRoles("HR"), asy
     }
 
     // Verify HR user's own password
-    const [hrRows] = await pool.query("SELECT password FROM user WHERE user_id = ? LIMIT 1", [req.user.userId]);
+    const [hrRows] = await pool.query("SELECT password FROM user WHERE user_id = ? AND company_id = ? LIMIT 1", [req.user.userId, req.user.companyId]);
     if (!hrRows.length) return res.status(401).json({ message: "Session invalid. Please log in again." });
     const passwordValid = await bcrypt.compare(password, hrRows[0].password);
     if (!passwordValid) return res.status(403).json({ message: "Incorrect password. Account deletion cancelled." });
@@ -2050,10 +2050,35 @@ router.delete("/users/:userId/account", authenticateToken, allowRoles("HR"), asy
       return res.status(409).json({ message: "You cannot delete your own account." });
     }
 
+    const [targetRows] = await pool.query(
+      "SELECT role_name FROM user WHERE user_id = ? AND company_id = ? LIMIT 1",
+      [targetUserId, req.user.companyId]
+    );
+    if (!targetRows.length) return res.status(404).json({ message: "User account not found." });
+    if (targetRows[0].role_name !== "Staff") {
+      const request = await createAccountActionRequest(targetUserId, "account_deletion", req.user.userId);
+      await notifyAdminsOfDeletionRequest(request);
+      await writeAuditLog({
+        module: "HR", activityType: "account_deletion_requested",
+        action: `HR requested deletion of ${targetRows[0].role_name} account ID ${targetUserId}`,
+        entityType: "account_action_request", entityId: request.request_id,
+        userId: req.user.userId, userName: req.user.name || req.user.email,
+        newValue: JSON.stringify({ target_user_id: targetUserId, target_role: targetRows[0].role_name }),
+        ipAddress: req.ip, deviceInfo: req.get("user-agent"), status: "Success"
+      });
+      return res.status(request.alreadyPending ? 200 : 202).json({
+        code: "ADMIN_APPROVAL_REQUIRED",
+        message: request.alreadyPending
+          ? "This account deletion is already awaiting approval from a different tenant Admin."
+          : "Deletion request submitted. A different tenant Admin must approve it before the account is removed.",
+        request
+      });
+    }
+
     // Get the staff record linked to this user before deleting
     const [staffRows] = await pool.query(
-      "SELECT employee_id FROM staff WHERE user_user_id = ? LIMIT 1",
-      [targetUserId]
+      "SELECT employee_id FROM staff WHERE user_user_id = ? AND company_id = ? LIMIT 1",
+      [targetUserId, req.user.companyId]
     );
     const linkedEmployeeId = staffRows[0]?.employee_id || null;
 
@@ -2070,7 +2095,7 @@ router.delete("/users/:userId/account", authenticateToken, allowRoles("HR"), asy
 
     // Also delete the staff record if one was linked
     if (linkedEmployeeId) {
-      await pool.query("DELETE FROM staff WHERE employee_id = ?", [linkedEmployeeId]).catch(() => null);
+      await pool.query("DELETE FROM staff WHERE employee_id = ? AND company_id = ?", [linkedEmployeeId, req.user.companyId]).catch(() => null);
     }
 
     try {

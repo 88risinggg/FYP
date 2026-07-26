@@ -514,7 +514,7 @@ async function getPersonalDataExport(userId) {
   return { exported_at: new Date().toISOString(), account, privacy, notifications, appearance, audit_logs: audit.logs };
 }
 
-async function createAccountActionRequest(userId, requestType) {
+async function createAccountActionRequest(userId, requestType, requestedBy = null) {
   await ensurePrivacyTables();
   const companyId = currentCompanyId();
   const [users] = await pool.query("SELECT name, email FROM user WHERE user_id = ? AND company_id = ?", [userId, companyId]);
@@ -525,9 +525,9 @@ async function createAccountActionRequest(userId, requestType) {
   );
   if (pending[0]) return { ...pending[0], alreadyPending: true };
   const [result] = await pool.query(
-    `INSERT INTO account_action_requests (company_id, user_id, user_name, user_email, request_type)
-     VALUES (?, ?, ?, ?, ?)`,
-    [companyId, userId, users[0].name, users[0].email, requestType]
+    `INSERT INTO account_action_requests (company_id, user_id, user_name, user_email, request_type, requested_by)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [companyId, userId, users[0].name, users[0].email, requestType, requestedBy || userId]
   );
   return {
     request_id: result.insertId,
@@ -570,7 +570,7 @@ async function listDeletionRequests() {
   await ensurePrivacyTables();
   const companyId = currentCompanyId();
   const [rows] = await pool.query(
-    `SELECT request_id, user_id, user_name, user_email, status, requested_at, reviewed_at, reviewed_by, review_note
+    `SELECT request_id, user_id, user_name, user_email, requested_by, status, requested_at, reviewed_at, reviewed_by, review_note
      FROM account_action_requests WHERE request_type = 'account_deletion' AND company_id = ?
      ORDER BY FIELD(status, 'pending', 'rejected', 'approved'), requested_at DESC`,
     [companyId]
@@ -600,6 +600,11 @@ async function reviewDeletionRequest(requestId, adminId, decision, note = "") {
         if (Number(count.total) <= 1) { await connection.rollback(); throw new Error("The final active Admin account cannot be deleted"); }
       }
       await connection.query("UPDATE staff SET user_user_id = NULL WHERE user_user_id = ? AND company_id = ?", [request.user_id, companyId]);
+      await connection.query("UPDATE public_holidays SET created_by = NULL WHERE created_by = ? AND company_id = ?", [request.user_id, companyId]);
+      await connection.query("UPDATE claims_and_loans SET created_by = NULL WHERE created_by = ? AND company_id = ?", [request.user_id, companyId]);
+      await connection.query("DELETE FROM user_privacy_settings WHERE user_id = ?", [request.user_id]);
+      await connection.query("DELETE FROM notification WHERE user_id = ? AND company_id = ?", [request.user_id, companyId]);
+      await connection.query("UPDATE audit_logs SET user_id = NULL WHERE user_id = ? AND company_id = ?", [request.user_id, companyId]);
     }
     await connection.query(
       `UPDATE account_action_requests SET status = ?, reviewed_at = NOW(), reviewed_by = ?, review_note = ?

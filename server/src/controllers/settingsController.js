@@ -509,6 +509,9 @@ async function reviewDeletionRequest(req, res) {
     if (pending && Number(pending.user_id) === Number(req.user.userId)) {
       return res.status(409).json({ message: "An admin cannot review their own deletion request" });
     }
+    if (pending && Number(pending.requested_by) === Number(req.user.userId)) {
+      return res.status(409).json({ message: "The person who requested deletion cannot approve or reject the same request" });
+    }
     const request = await settingsModel.reviewDeletionRequest(
       Number(req.params.id), req.user.userId, decision, String(req.body.note || "").trim()
     );
