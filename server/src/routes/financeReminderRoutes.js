@@ -13,6 +13,7 @@ const {
   getFinanceRemindersSummary,
   completeReminderHandler,
   dismissReminderHandler,
+  generateRemindersHandler,
 } = require("../controllers/financeReminderController");
 
 const router = express.Router();
@@ -26,5 +27,6 @@ router.get("/summary", allowRoles("Admin", "Finance"), getFinanceRemindersSummar
 // ─── Actions ──────────────────────────────────────────────────────────────────
 router.patch("/:id/complete", allowRoles("Admin", "Finance"), completeReminderHandler);
 router.patch("/:id/dismiss",  allowRoles("Admin", "Finance"), dismissReminderHandler);
+router.post("/generate",      allowRoles("Admin", "Finance"), generateRemindersHandler);
 
 module.exports = router;

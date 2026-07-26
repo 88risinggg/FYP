@@ -14,6 +14,7 @@
  */
 
 const { processAutomaticReminders } = require("../services/invoiceReminderService");
+const { generateInvoiceReminders } = require("../models/financeReminderModel");
 
 // Run every 6 hours (covers morning and afternoon checks)
 const REMINDER_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -33,6 +34,16 @@ function startReminderNotificationScheduler() {
     } catch (error) {
       console.error("[REMINDER SCHEDULER] Startup check failed:", error.message);
     }
+
+    // Generate finance reminders for the dashboard
+    try {
+      const genResult = await generateInvoiceReminders(null);
+      if (genResult.created > 0) {
+        console.log(`[REMINDER SCHEDULER] Generated ${genResult.created} finance reminder(s).`);
+      }
+    } catch (error) {
+      console.error("[REMINDER SCHEDULER] Finance reminder generation failed:", error.message);
+    }
   }, 10000); // 10 second delay
 
   // Schedule every 6 hours
@@ -42,6 +53,16 @@ function startReminderNotificationScheduler() {
       console.log(`[REMINDER SCHEDULER] Periodic run: sent ${result.sent}, skipped ${result.skipped}.`);
     } catch (error) {
       console.error("[REMINDER SCHEDULER] Periodic run failed:", error.message);
+    }
+
+    // Generate finance reminders for the dashboard
+    try {
+      const genResult = await generateInvoiceReminders(null);
+      if (genResult.created > 0) {
+        console.log(`[REMINDER SCHEDULER] Generated ${genResult.created} finance reminder(s).`);
+      }
+    } catch (error) {
+      console.error("[REMINDER SCHEDULER] Finance reminder generation failed:", error.message);
     }
   }, REMINDER_INTERVAL_MS);
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
@@ -57,11 +57,6 @@ import {
 } from "../../services/invoiceService.js";
 import { getStoredSession } from "../../services/sessionService.js";
 import {
-  startNotificationPolling,
-  markNotificationRead as apiMarkNotificationRead,
-  markAllNotificationsRead as apiMarkAllNotificationsRead
-} from "../../services/financeNotificationService.js";
-import {
   createPdfDocument,
   addCoverPage,
   addPageFooter,
@@ -80,8 +75,7 @@ import VanidayImportPage from "./VanidayImportPage.jsx";
 import SubscriptionsView from "../../components/invoicing/SubscriptionsView.jsx";
 import FinanceRemindersView from "../../components/invoicing/FinanceRemindersView.jsx";
 import FinanceSettingsView from "./FinanceSettingsView.jsx";
-import WhatsAppDashboardWidgets from "../../components/invoicing/WhatsAppDashboardWidgets.jsx";
-import WhatsAppNotificationLogsPage from "./WhatsAppNotificationLogsPage.jsx";
+import FinanceInvoiceSettingsPage from "./FinanceInvoiceSettingsPage.jsx";
 
 const financeSidebarSections = [
   {
@@ -132,24 +126,15 @@ const financeSidebarSections = [
         label: "Reminders",
         icon: Bell,
         path: "/dashboard/invoicing/finance/reminders"
-      }
-    ]
-  },
-  {
-    label: "WHATSAPP",
-    items: [
-      {
-        label: "WhatsApp Notifications",
-        icon: Send,
-        path: "/dashboard/invoicing/finance/whatsapp"
       },
       {
-        label: "Notification Logs",
-        icon: FileText,
-        path: "/dashboard/invoicing/finance/whatsapp-logs"
+        label: "Invoice Settings",
+        icon: Settings2,
+        path: "/dashboard/invoicing/finance/invoice-settings"
       }
     ]
   },
+
   {
     label: "REPORTS",
     items: [
@@ -3895,9 +3880,6 @@ export default function FinanceInvoicingPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [globalSearch, setGlobalSearch] = useState("");
-  const [notifications, setNotifications] = useState([]);
-  const [notificationBadgeCount, setNotificationBadgeCount] = useState(0);
-  const stopPollingRef = useRef(null);
 
   // Use real data only — no demo fallback
   const displayInvoices = invoices;
@@ -3928,16 +3910,12 @@ export default function FinanceInvoicingPage() {
       return "reminders";
     }
 
+    if (location.pathname.endsWith("/invoice-settings")) {
+      return "invoice-settings";
+    }
+
     if (location.pathname.endsWith("/reports")) {
       return "reports";
-    }
-
-    if (location.pathname.endsWith("/whatsapp")) {
-      return "whatsapp";
-    }
-
-    if (location.pathname.endsWith("/whatsapp-logs")) {
-      return "whatsapp-logs";
     }
 
     if (location.pathname.includes("/subscriptions")) {
@@ -3978,22 +3956,6 @@ export default function FinanceInvoicingPage() {
     }
   }
 
-  function handleMarkNotificationRead(notifId) {
-    // Mark locally
-    setNotifications((current) =>
-      current.map((n) => (n.notification_id || n.id) === notifId ? { ...n, is_read: 1, read: true } : n)
-    );
-    setNotificationBadgeCount((c) => Math.max(0, c - 1));
-    // Mark on server
-    apiMarkNotificationRead(notifId).catch(() => {});
-  }
-
-  function handleMarkAllRead() {
-    setNotifications((current) => current.map((n) => ({ ...n, is_read: 1, read: true })));
-    setNotificationBadgeCount(0);
-    apiMarkAllNotificationsRead().catch(() => {});
-  }
-
   useEffect(() => {
     async function loadInitialData() {
       setIsLoading(true);
@@ -4007,20 +3969,6 @@ export default function FinanceInvoicingPage() {
     }
 
     loadInitialData();
-
-    // Start notification polling (Finance-only, from database)
-    if (session?.user?.role === "Finance") {
-      stopPollingRef.current = startNotificationPolling(({ notifications: notifs, unreadCount }) => {
-        setNotifications(notifs);
-        setNotificationBadgeCount(unreadCount);
-      }, 15000);
-    }
-
-    return () => {
-      if (stopPollingRef.current) {
-        stopPollingRef.current();
-      }
-    };
   }, []);
 
   // Refresh invoice data when navigating back to the invoices view
@@ -4061,9 +4009,6 @@ export default function FinanceInvoicingPage() {
             error={error}
             navigate={navigate}
           />
-          <div className="mt-6">
-            <WhatsAppDashboardWidgets />
-          </div>
         </>
       );
     }
@@ -4096,16 +4041,12 @@ export default function FinanceInvoicingPage() {
       return <FinanceRemindersView />;
     }
 
+    if (activeView === "invoice-settings") {
+      return <FinanceInvoiceSettingsPage />;
+    }
+
     if (activeView === "reports") {
       return <ReportsView />;
-    }
-
-    if (activeView === "whatsapp") {
-      return <WhatsAppDashboardWidgets />;
-    }
-
-    if (activeView === "whatsapp-logs") {
-      return <WhatsAppNotificationLogsPage />;
     }
 
     if (activeView === "subscriptions") {
@@ -4142,10 +4083,6 @@ export default function FinanceInvoicingPage() {
       sidebarTitle="Automated Invoicing & Payroll System"
       searchPlaceholder="Search invoices, customers, payments..."
       onSearch={handleGlobalSearch}
-      notifications={notifications}
-      notificationBadgeCount={notificationBadgeCount}
-      onMarkNotificationRead={handleMarkNotificationRead}
-      onMarkAllRead={handleMarkAllRead}
       theme="adminInvoicing"
     >
       <div className="space-y-6">

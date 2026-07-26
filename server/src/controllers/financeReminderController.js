@@ -11,6 +11,7 @@ const {
   getFinanceReminderSummary,
   completeFinanceReminder,
   dismissFinanceReminder,
+  generateInvoiceReminders,
 } = require("../models/financeReminderModel");
 
 // ─── GET /api/finance-reminders ───────────────────────────────────────────────
@@ -107,9 +108,25 @@ async function dismissReminderHandler(req, res) {
   }
 }
 
+// ─── POST /api/finance-reminders/generate ─────────────────────────────────────
+
+async function generateRemindersHandler(req, res) {
+  try {
+    const companyId = getCompanyId(req);
+    const result = await generateInvoiceReminders(companyId);
+    res.json({ message: `Generated ${result.created} new reminder(s).`, created: result.created });
+  } catch (error) {
+    if (error.code === "ER_NO_SUCH_TABLE") {
+      return res.json({ message: "Reminder table not yet created. No reminders generated.", created: 0 });
+    }
+    res.status(500).json({ message: "Failed to generate reminders.", detail: error.message });
+  }
+}
+
 module.exports = {
   getFinanceReminders,
   getFinanceRemindersSummary,
   completeReminderHandler,
   dismissReminderHandler,
+  generateRemindersHandler,
 };

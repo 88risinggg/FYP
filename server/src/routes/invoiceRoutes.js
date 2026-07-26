@@ -26,7 +26,30 @@ router.get("/", getInvoices);
 router.get("/customers", getCustomers);
 router.get("/settings", async (req, res) => {
   try {
-    res.json({ settings: await getInvoiceSettings(getCompanyId(req)) });
+    const companyId = getCompanyId(req);
+    const settings = await getInvoiceSettings(companyId);
+
+    // Enhanced payload: include GST rates and reminder rules for Finance read-only view
+    let gstRates = [];
+    let reminderRules = [];
+
+    try {
+      const { listGstRates } = require("../models/invoiceGstRateModel");
+      const rates = await listGstRates(companyId);
+      gstRates = rates || [];
+    } catch { /* GST table may not exist */ }
+
+    try {
+      const { listReminderSettings } = require("../models/reminderModel");
+      const reminders = await listReminderSettings();
+      reminderRules = reminders || [];
+    } catch { /* Reminder table may not exist */ }
+
+    res.json({
+      settings,
+      gstRates,
+      reminderRules
+    });
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch invoice settings.", detail: error.message });
   }
