@@ -344,7 +344,8 @@ async function listAuditActivityInsight({ from, to, granularity }) {
   const [rows] = await pool.execute(
     `SELECT ${bucketSql} AS bucket, COUNT(*) AS event_count
      FROM audit_logs
-     WHERE company_id=? AND created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)
+     WHERE company_id=? AND module='Payroll'
+       AND created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)
      GROUP BY ${bucketSql}
      ORDER BY bucket`,
     [companyId, from, to]
@@ -353,32 +354,35 @@ async function listAuditActivityInsight({ from, to, granularity }) {
 }
 
 async function listUserRoleInsight({ accountStatus = "all" } = {}) {
+  const companyId = currentCompanyId();
   const statusClauses = {
     active: "u.status = 1",
     pending: "COALESCE(ar.has_pending, 0) = 1",
     disabled: "u.status <> 1 AND COALESCE(ar.has_pending, 0) = 0"
   };
-  const where = statusClauses[accountStatus] ? `WHERE ${statusClauses[accountStatus]}` : "";
+  const statusWhere = statusClauses[accountStatus] ? ` AND ${statusClauses[accountStatus]}` : "";
   const [rows] = await pool.execute(
     `SELECT COALESCE(NULLIF(TRIM(u.role_name), ''), 'Unassigned') AS role_name,
             COUNT(*) AS user_count
      FROM user u
      LEFT JOIN (
-       SELECT user_id, MAX(status = 'pending') AS has_pending
+       SELECT company_id, user_id, MAX(status = 'pending') AS has_pending
        FROM account_action_requests
        WHERE request_type = 'user_activation'
-       GROUP BY user_id
-     ) ar ON ar.user_id = u.user_id
-     ${where}
+       GROUP BY company_id, user_id
+     ) ar ON ar.user_id = u.user_id AND ar.company_id = u.company_id
+     WHERE u.company_id=?${statusWhere}
      GROUP BY COALESCE(NULLIF(TRIM(u.role_name), ''), 'Unassigned')
-     ORDER BY role_name`
+     ORDER BY role_name`,
+    [companyId]
   );
   return rows;
 }
 
 async function listAccountStatusInsight({ role = "all" } = {}) {
-  const params = [];
-  const roleWhere = role !== "all" ? "WHERE u.role_name = ?" : "";
+  const companyId = currentCompanyId();
+  const params = [companyId];
+  const roleWhere = role !== "all" ? " AND u.role_name = ?" : "";
   if (role !== "all") params.push(role);
   const [[accountCounts]] = await pool.execute(
     `SELECT
@@ -387,17 +391,20 @@ async function listAccountStatusInsight({ role = "all" } = {}) {
        SUM(CASE WHEN u.status <> 1 AND COALESCE(ar.has_pending, 0) = 0 THEN 1 ELSE 0 END) AS disabled_count
      FROM user u
      LEFT JOIN (
-       SELECT user_id, MAX(status = 'pending') AS has_pending
+       SELECT company_id, user_id, MAX(status = 'pending') AS has_pending
        FROM account_action_requests
        WHERE request_type = 'user_activation'
-       GROUP BY user_id
-     ) ar ON ar.user_id = u.user_id
-     ${roleWhere}`,
+       GROUP BY company_id, user_id
+     ) ar ON ar.user_id = u.user_id AND ar.company_id = u.company_id
+     WHERE u.company_id=?${roleWhere}`,
     params
   );
   let unlinkedCount = 0;
   if (role === "all") {
-    const [[unlinked]] = await pool.execute("SELECT COUNT(*) AS total FROM staff WHERE user_user_id IS NULL");
+    const [[unlinked]] = await pool.execute(
+      "SELECT COUNT(*) AS total FROM staff WHERE user_user_id IS NULL AND company_id=?",
+      [companyId]
+    );
     unlinkedCount = Number(unlinked.total || 0);
   }
   return [

@@ -202,7 +202,7 @@ const payrollSidebarSections = [
         path: "/dashboard/payroll/admin/compliance-rules",
       },
       {
-        label: "Payslip Layouts",
+        label: "Payslip Template",
         icon: Palette,
         path: "/dashboard/payroll/admin/payslip-layouts",
       },
@@ -508,17 +508,17 @@ const workflowSteps = [
     path: "/dashboard/payroll/admin/user-management",
   },
   {
-    title: "Import Payslip Layout",
+    title: "Configure Payslip Template",
     icon: Palette,
-    status: "Not Configured",
+    status: "Standard Template",
     owner: "Admin",
     updatedKey: "layouts",
     details: [
-      "Upload layout file",
-      "Set default template",
+      "Apply company branding",
+      "Review payroll display safeguards",
       "Preview sample payslip output",
     ],
-    action: "Import Design",
+    action: "Manage Template",
     path: "/dashboard/payroll/admin/payslip-layouts",
   },
   {
@@ -976,8 +976,10 @@ function getDashboardUpdateSegments(data = {}) {
       updatedAt: getLatestTimestamp(source.payrollRuns),
     },
     {
-      label: "Payslip Layouts",
-      records: `${source.layouts?.length || 0} layout(s)`,
+      label: "Payslip Template",
+      records: source.layouts?.length
+        ? "Standard template ready"
+        : "Template setup required",
       updatedAt: getLatestTimestamp(source.layouts),
     },
     {
@@ -1211,13 +1213,13 @@ function DashboardView({ data, onNavigate }) {
       onClick: () => onNavigate("/dashboard/payroll/admin/effective-rules"),
     },
     {
-      label: "Payslip Layouts",
-      value: stats.payslipLayouts ?? data?.layouts?.length ?? 0,
+      label: "Payslip Template",
+      value: data?.layouts?.length ? "Ready" : "Setup",
       icon: Palette,
       iconClass: "dashboard-icon--green",
       note: data?.layouts?.some((item) => Number(item.is_default) === 1)
-        ? "Default layout configured"
-        : "Default layout required",
+        ? "Standard template configured"
+        : "Complete template setup",
     },
     {
       label: "Admin Logs",
@@ -1256,9 +1258,9 @@ function DashboardView({ data, onNavigate }) {
       onClick: () => onNavigate("/dashboard/payroll/admin/user-management"),
     },
     {
-      title: "Payslip Management",
-      description: "Import, preview and set the default payslip layout.",
-      action: "Manage Payslips",
+      title: "Payslip Template",
+      description: "Manage company branding and preview the standard payslip.",
+      action: "Manage Template",
       updatedAt: getLatestTimestamp(data?.layouts),
       icon: Palette,
       iconClass: "dashboard-icon--rose",
@@ -1900,16 +1902,23 @@ function InsightDataTable({ insight }) {
       insight.series.flatMap((series) => series.data.map((point) => point.x)),
     ),
   ];
+  const firstColumnLabel = ["audit_activity", "run_health"].includes(
+    insight.dataset,
+  )
+    ? "Period"
+    : "Category";
   return (
     <details className="admin-insights__data">
-      <summary>View chart data</summary>
+      <summary>View graph details</summary>
       <div>
         <table>
           <thead>
             <tr>
-              <th>Label</th>
+              <th>{firstColumnLabel}</th>
               {insight.series.map((series) => (
-                <th key={series.key}>{series.label}</th>
+                <th key={series.key}>
+                  {series.label} ({adminInsightDatasets[insight.dataset]?.unit || "records"})
+                </th>
               ))}
             </tr>
           </thead>

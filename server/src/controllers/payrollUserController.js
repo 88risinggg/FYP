@@ -359,8 +359,18 @@ async function resendSetupEmail(req, res) {
     if (!context) return res.status(404).json({ message: "Activation request not found." });
     if (context.status !== "approved") return res.status(409).json({ message: "Approve the account before sending its setup link." });
     const setupEmail = await deliverSetupEmail(requestId, context);
-    const status = setupEmail.status === "Sent" ? 200 : 422;
-    return res.status(status).json({ approved: true, accountStatus: Number(context.account_status) === 1 ? "Active" : "Inactive", setupEmail });
+    const completedSetup = setupEmail.status === "Not Required";
+    const status = setupEmail.status === "Sent" || completedSetup ? 200 : 422;
+    return res.status(status).json({
+      approved: true,
+      accountStatus: Number(context.account_status) === 1 ? "Active" : "Inactive",
+      message: completedSetup
+        ? "This employee has already completed account setup. No new setup link is required."
+        : setupEmail.status === "Sent"
+          ? "A new account setup link was sent."
+          : setupEmail.error || "The account setup link could not be sent.",
+      setupEmail
+    });
   } catch (error) {
     return res.status(500).json({ message: "Unable to resend the account setup link.", detail: error.message });
   }
