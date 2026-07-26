@@ -55,15 +55,19 @@ async function notifyUser(userId, event) {
   const message = actorName && !String(event.message).includes(actorName)
     ? `${event.message} Initiated by ${actorName}.`
     : event.message;
+  const emailEnabled = event.email !== false;
   const [result] = await pool.execute(
     `INSERT INTO notification
       (company_id, user_id, type, title, message, is_read, created_at, channel, delivery_status,
        action_path, actor_user_id, entity_type, entity_id, metadata)
-     VALUES (?, ?, ?, ?, ?, 0, NOW(), 'in_app,email', 'Pending', ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, 0, NOW(), ?, ?, ?, ?, ?, ?, ?)`,
     [companyId, recipient.user_id, event.type || "payroll_workflow", event.title, message,
+      emailEnabled ? "in_app,email" : "in_app", emailEnabled ? "Pending" : "Skipped",
       event.actionPath || null, event.actorUserId || null, event.entityType || null,
       event.entityId == null ? null : String(event.entityId), JSON.stringify(event.metadata || {})]
   );
+
+  if (!emailEnabled) return result.insertId;
 
   const mailer = createTransporter();
   if (!mailer) {

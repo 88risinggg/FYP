@@ -4,6 +4,7 @@ const { pool } = require("../config/db");
 const { notifyUser } = require("./payrollNotificationService");
 const { listPayslipLayouts } = require("../models/adminPayrollModel");
 const { generatePayslipPDF } = require("./payslipPdfService");
+const { sendPayslipEmail } = require("./emailService");
 const { currentCompanyId } = require("./tenantContext");
 
 const OUTPUT_ROOT = path.join(__dirname, "..", "..", "uploads", "payslips");
@@ -79,6 +80,24 @@ async function generateAndSendPayslip(payrollId, options = {}) {
   const pdf = await generatePayslipPDF(payslip, options.browser || null);
   fs.writeFileSync(absolutePath, pdf);
 
+  const period = new Date(Number(payslip.payroll_year), Number(payslip.payroll_month) - 1, 1)
+    .toLocaleDateString("en-SG", { month: "long", year: "numeric", timeZone: "Asia/Singapore" });
+  let emailDelivery;
+  try {
+    emailDelivery = await sendPayslipEmail({
+      to: payslip.staff_email,
+      name: payslip.employee_name,
+      period,
+      companyName: payslip.company_legal_name || payslip.company_name,
+      pdf,
+      filename: fileName
+    });
+  } catch (error) {
+    if (fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
+    error.code = error.code || "PAYSLIP_EMAIL_FAILED";
+    throw error;
+  }
+
   const [result] = await pool.query(
     `UPDATE payroll
      SET payslip_status = 'sent_to_staff', payslip_sent_at = NOW(),
@@ -99,10 +118,17 @@ async function generateAndSendPayslip(payrollId, options = {}) {
     actorUserId: options.actorUserId || null,
     entityType: "payslip",
     entityId: payrollId,
-    actionPath: "/dashboard/payroll/staff/payslips"
+    actionPath: "/dashboard/payroll/staff/payslips",
+    email: false,
+    metadata: { emailRecipient: emailDelivery.recipient, emailMessageId: emailDelivery.messageId }
   }).catch(() => null);
 
-  return { status: 200, message: "Payslip generated and sent to the linked employee", payslip: { ...payslip, file_path: publicPath } };
+  return {
+    status: 200,
+    message: "Payslip PDF was emailed and made available to the linked employee",
+    email: { recipient: emailDelivery.recipient, messageId: emailDelivery.messageId },
+    payslip: { ...payslip, file_path: publicPath }
+  };
 }
 
 module.exports = { generateAndSendPayslip, getIncludedClaims, getPayslipDataset };

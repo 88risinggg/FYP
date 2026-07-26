@@ -158,7 +158,7 @@ function HRPayrollRoute({ children }) {
   return children;
 }
 
-function StaffPayrollRoute({ children }) {
+function PersonalPayrollRoute({ children }) {
   const session = getStoredSession();
   const user = session?.user;
   const canAccessPayroll = user?.allowedModules?.includes("payroll");
@@ -167,7 +167,7 @@ function StaffPayrollRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (user?.role !== "Staff" || !canAccessPayroll) {
+  if (!["Admin", "Finance", "HR", "Staff"].includes(user?.role) || !canAccessPayroll) {
     return <Navigate to="/module-selection" replace />;
   }
 
@@ -369,9 +369,9 @@ export default function App() {
       <Route
         path="/dashboard/payroll/staff/*"
         element={
-          <StaffPayrollRoute>
+          <PersonalPayrollRoute>
             <StaffPayrollPage />
-          </StaffPayrollRoute>
+          </PersonalPayrollRoute>
         }
       />
       <Route

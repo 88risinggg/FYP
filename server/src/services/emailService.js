@@ -105,9 +105,51 @@ async function sendAccountSetupEmail({ to, name, setupUrl, temporaryPassword }) 
   });
 }
 
+async function sendPayslipEmail({ to, name, period, companyName, pdf, filename }) {
+  const recipient = String(to || "").trim();
+  if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+    const error = new Error("The employee does not have a valid staff email address. HR must correct the staff record before retrying.");
+    error.code = "PAYSLIP_EMAIL_INVALID";
+    throw error;
+  }
+  if (!Buffer.isBuffer(pdf) || !pdf.length) {
+    const error = new Error("The payslip PDF could not be attached to the email.");
+    error.code = "PAYSLIP_PDF_MISSING";
+    throw error;
+  }
+
+  const transporter = createTransporter();
+  const employer = String(companyName || "your employer").trim();
+  const payPeriod = String(period || "the selected payroll period").trim();
+  const info = await transporter.sendMail({
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    to: recipient,
+    subject: `Your ${payPeriod} payslip is ready`,
+    text: [
+      `Hello ${name || "there"},`,
+      `Your payslip for ${payPeriod} from ${employer} is attached to this email.`,
+      "You can also sign in to PayNivo to view your payslip and payroll history.",
+      "This document contains confidential payroll information. Do not forward it to anyone.",
+      "If you believe any information is incorrect, contact your HR team."
+    ].join("\n\n"),
+    attachments: [{
+      filename: filename || "payslip.pdf",
+      content: pdf,
+      contentType: "application/pdf"
+    }]
+  });
+
+  return {
+    messageId: info.messageId || null,
+    recipient,
+    accepted: Array.isArray(info.accepted) ? info.accepted : []
+  };
+}
+
 module.exports = {
   sendAccountSetupEmail,
   sendAuthOtpEmail,
+  sendPayslipEmail,
   sendReminderEmail,
   sendTestReminderEmail
 };

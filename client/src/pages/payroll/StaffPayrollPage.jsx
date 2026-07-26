@@ -25,7 +25,7 @@ import StaffLeaveView from "./StaffLeaveView.jsx";
 import StaffLoanPage from "./StaffLoanPage.jsx";
 import StaffClaimsPage from "./StaffClaimsPage.jsx";
 
-const pageTitle = "Automated Payroll System – Staff Payroll Portal";
+const pageTitle = "PayNivo - My Payroll";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 const payrollSidebarSections = [
