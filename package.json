@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "build": "npm install --prefix server --omit=dev && npm install --prefix client --include=dev && npm run build --prefix client",
+    "start": "node server/src/server.js",
     "client": "npm run dev --prefix client",
     "server": "npm run dev --prefix server",
     "dev": "concurrently \"npm run server\" \"npm run client\"",

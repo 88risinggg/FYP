@@ -3,6 +3,8 @@ require("./config/timezone");
 
 const cors = require("cors");
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
 
 // Route imports
 const healthRoutes = require("./routes/healthRoutes");
@@ -125,6 +127,17 @@ app.use("/api/settings", authenticateToken, requireTenant, settingsRoutes);
 
 // Routes — Finance Dashboard
 app.use("/api/finance", authenticateToken, requireTenant, financeDashboardRoutes);
+
+// In production, Discloud exposes a single web process. Serve the Vite build
+// from Express so the frontend and API share the same HTTPS origin.
+const clientDistPath = path.resolve(__dirname, "../../client/dist");
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/") || req.path.startsWith("/uploads/")) return next();
+    return res.sendFile(path.join(clientDistPath, "index.html"));
+  });
+}
 
 // 404 handler
 app.use((req, res) => {

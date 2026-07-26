@@ -1,0 +1,17 @@
+.git/
+.github/
+.vscode/
+.kiro/
+node_modules/
+client/node_modules/
+server/node_modules/
+client/dist/
+coverage/
+generated/
+TEST_RESULTS/
+*.log
+npm-debug.log*
+.env
+client/.env
+server/.env
+server/uploads/

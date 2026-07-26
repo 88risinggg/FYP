@@ -47,7 +47,8 @@ function getExecutablePath() {
   if (process.platform === "darwin") {
     return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
   }
-  return "/usr/bin/google-chrome";
+  const candidates = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"];
+  return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
 }
 
 /**
