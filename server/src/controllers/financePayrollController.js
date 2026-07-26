@@ -84,7 +84,7 @@ async function getPayslipPeriodSummary(req, res) {
        SUM(LOWER(p.payslip_status) = 'draft') AS prepared,
        SUM(LOWER(p.payslip_status) = 'hold') AS held,
        SUM(LOWER(p.payslip_status) = 'finance_pending') AS financePending,
-       SUM(LOWER(p.payslip_status) IN ('approved','finance_approved')) AS financeApproved,
+       SUM(LOWER(p.payslip_status) = 'finance_approved') AS financeApproved,
        SUM(LOWER(p.payslip_status) IN ('sent','sent_to_staff')) AS sent,
        ROUND(SUM(p.gross_salary), 2) AS totalGross,
        ROUND(SUM(p.net_salary), 2) AS totalNet,

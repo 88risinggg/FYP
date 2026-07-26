@@ -1,140 +1,269 @@
-const { staffProfiles } = require('../services/data');
+const { pool } = require('../config/db');
 const { addAudit } = require('../services/audit');
 
 /**
- * Create staff record (Create)
- * Endpoint expected use: POST /api/hr/staff or POST /api/staff (if present)
+ * Create staff record
+ * POST /api/staff
  */
-function createStaff(req, res) {
+async function createStaff(req, res) {
   const body = req.body || {};
-  const employee_id = body.employee_id || body.staff_id || `STF${String(staffProfiles.length + 1).padStart(3,'0')}`;
-  const now = new Date().toISOString();
-  const profile = {
-    employee_id,
-    name: body.name || body.staff_name || '',
-    email: body.email || '',
-    phone: body.phone || '',
-    hire_date: body.hire_date || null,
-    base_salary: body.base_salary ? Number(body.base_salary) : 0,
-    status: body.status || 'Active',
-    created_at: now,
-    updated_at: now,
-    department_id: body.department_id || null,
-    user_user_id: body.user_user_id || null,
-    race: body.race || null,
-    religion: body.religion || null,
-    bank: body.bank || null,
-    account_no: body.account_no || null
-  };
-  staffProfiles.push(profile);
-  addAudit(req.user && req.user.email ? req.user.email : 'system', `Added staff record ${profile.employee_id}`, 'Staff');
-  return res.status(201).json(profile);
+  const now = new Date();
+  try {
+    const [result] = await pool.query(
+      `INSERT INTO staff
+        (employee_code, name, date_of_birth, gender, email, phone, address,
+         department_name, hire_date, status, race, religion, base_salary,
+         bank, account_no, user_user_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        body.employee_code || null,
+        body.name || body.staff_name || '',
+        body.date_of_birth || null,
+        body.gender || null,
+        body.email || '',
+        body.phone || null,
+        body.address || null,
+        body.department_name || null,
+        body.hire_date || null,
+        body.status !== undefined ? body.status : 1,
+        body.race || null,
+        body.religion || null,
+        body.base_salary ? Number(body.base_salary) : 0,
+        body.bank || null,
+        body.account_no || null,
+        body.user_user_id || null,
+        now,
+        now
+      ]
+    );
+    const insertId = result.insertId;
+    const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? LIMIT 1', [insertId]);
+    addAudit(
+      req.user && req.user.email ? req.user.email : 'system',
+      `Added staff record ${insertId}`,
+      'Staff'
+    );
+    return res.status(201).json(rows[0]);
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to create staff record', error: err.message });
+  }
 }
 
 /**
- * List staff (Read - list)
- * Endpoint expected use: GET /api/staff
+ * List all staff
+ * GET /api/staff
  */
-function getStaffList(req, res) {
-  return res.json(staffProfiles);
+async function getStaffList(req, res) {
+  try {
+    const [rows] = await pool.query('SELECT * FROM staff ORDER BY name');
+    return res.json(rows);
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to retrieve staff list', error: err.message });
+  }
 }
 
 /**
- * Get single staff by id (Read - single)
- * Endpoint expected use: GET /api/hr/staff/:id or GET /api/staff/:id
+ * Get a single staff member by employee_id
+ * GET /api/staff/:id
  */
-function getStaffById(req, res) {
+async function getStaffById(req, res) {
   const id = req.params.id || req.params.employeeId;
-  const staff = staffProfiles.find(s => s.staff_id === id || s.employee_id === id);
-  if (!staff) return res.status(404).json({ message: 'Staff profile not found' });
-  return res.json(staff);
+  try {
+    const [rows] = await pool.query(
+      'SELECT * FROM staff WHERE employee_id = ? LIMIT 1',
+      [id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Staff profile not found' });
+    return res.json(rows[0]);
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to retrieve staff profile', error: err.message });
+  }
 }
 
 /**
- * Update staff by id (Update)
- * Endpoint expected use: PUT/PATCH /api/hr/staff/:id or PATCH /api/staff/profile/:employeeId
- * Should enforce Staff-role self-update restriction if present.
+ * Update a staff member by employee_id
+ * PUT /api/staff/:id  or  PATCH /api/staff/profile/:employeeId
  */
-function updateStaff(req, res) {
+async function updateStaff(req, res) {
   const employeeId = req.params.id || req.params.employeeId;
-  const profile = staffProfiles.find(p => p.employee_id === employeeId || p.staff_id === employeeId);
-  if (!profile) return res.status(404).json({ message: 'Staff profile not found' });
 
-  // Keep the same Staff self-edit restriction used in routes
+  // Staff-role self-update restriction
   if (req.user && req.user.role === 'Staff' && req.user.employeeId !== employeeId) {
     return res.status(403).json({ message: 'Staff can only update own profile' });
   }
 
-  const updatable = [
-    'name', 'email', 'phone', 'hire_date', 'base_salary', 'status',
-    'department_id', 'user_user_id', 'race', 'religion', 'bank', 'account_no'
+  const allowed = [
+    'name', 'email', 'phone', 'date_of_birth', 'gender', 'address',
+    'hire_date', 'base_salary', 'status', 'department_name',
+    'user_user_id', 'race', 'religion', 'bank', 'account_no'
   ];
-  updatable.forEach(k => {
-    if (req.body[k] !== undefined) profile[k] = req.body[k];
+
+  const updates = [];
+  const values = [];
+  allowed.forEach(k => {
+    if (req.body[k] !== undefined) {
+      updates.push(`${k} = ?`);
+      values.push(req.body[k]);
+    }
   });
 
-  profile.updated_at = new Date().toISOString();
-  addAudit(req.user && req.user.email ? req.user.email : 'system', `Updated profile for ${profile.employee_id}`, 'Staff');
-  return res.json(profile);
+  if (!updates.length) {
+    return res.status(400).json({ message: 'No updatable fields provided' });
+  }
+
+  updates.push('updated_at = ?');
+  values.push(new Date());
+  values.push(employeeId);
+
+  try {
+    const [result] = await pool.query(
+      `UPDATE staff SET ${updates.join(', ')} WHERE employee_id = ?`,
+      values
+    );
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Staff profile not found' });
+    }
+    const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? LIMIT 1', [employeeId]);
+    addAudit(
+      req.user && req.user.email ? req.user.email : 'system',
+      `Updated profile for ${employeeId}`,
+      'Staff'
+    );
+    return res.json(rows[0]);
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to update staff profile', error: err.message });
+  }
 }
 
 /**
- * Delete staff by id (Delete)
- * Endpoint expected use: DELETE /api/hr/staff/:id
+ * Delete a staff member by employee_id
+ * DELETE /api/staff/:id
  */
-function deleteStaff(req, res) {
+async function deleteStaff(req, res) {
   const id = req.params.id || req.params.employeeId;
-  const index = staffProfiles.findIndex(s => s.staff_id === id || s.employee_id === id);
-  if (index === -1) return res.status(404).json({ message: 'Staff record not found' });
-  const deleted = staffProfiles.splice(index, 1)[0];
-  addAudit(req.user && req.user.email ? req.user.email : 'system', `Deleted staff record ${id}`, 'Staff');
-  return res.json({ message: 'Staff record deleted', deleted });
+  try {
+    const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? LIMIT 1', [id]);
+    if (!rows.length) return res.status(404).json({ message: 'Staff record not found' });
+    await pool.query('DELETE FROM staff WHERE employee_id = ?', [id]);
+    addAudit(
+      req.user && req.user.email ? req.user.email : 'system',
+      `Deleted staff record ${id}`,
+      'Staff'
+    );
+    return res.json({ message: 'Staff record deleted', deleted: rows[0] });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to delete staff record', error: err.message });
+  }
 }
 
 /**
- * Bulk import / create staff profiles (existing POST /import behaviour)
- * Endpoint expected use: POST /api/staff/import
+ * Bulk import / upsert staff profiles
+ * POST /api/staff/import
  */
-function importProfiles(req, res) {
+async function importProfiles(req, res) {
   const profiles = Array.isArray(req.body) ? req.body : [req.body];
   const created = [];
-  profiles.forEach(p => {
-    const now = new Date().toISOString();
-    const employeeId = p.employee_id || p.employeeId || null;
-    if (!employeeId) return; // skip invalid rows
+  const now = new Date();
 
-    // Prevent duplicates: update if exists
-    let existing = staffProfiles.find(s => s.employee_id === employeeId);
-    if (existing) {
-      Object.assign(existing, p);
-      existing.updated_at = now;
-      created.push(existing);
-      return;
+  try {
+    for (const p of profiles) {
+      const employeeId = p.employee_id || p.employeeId || null;
+      if (!employeeId) continue;
+
+      // Upsert: update if exists, insert if not
+      const [existing] = await pool.query(
+        'SELECT employee_id FROM staff WHERE employee_id = ? LIMIT 1',
+        [employeeId]
+      );
+
+      if (existing.length) {
+        await pool.query(
+          `UPDATE staff SET
+            employee_code = COALESCE(?, employee_code),
+            name = COALESCE(?, name),
+            email = COALESCE(?, email),
+            phone = COALESCE(?, phone),
+            date_of_birth = COALESCE(?, date_of_birth),
+            gender = COALESCE(?, gender),
+            address = COALESCE(?, address),
+            department_name = COALESCE(?, department_name),
+            hire_date = COALESCE(?, hire_date),
+            status = COALESCE(?, status),
+            race = COALESCE(?, race),
+            religion = COALESCE(?, religion),
+            base_salary = COALESCE(?, base_salary),
+            bank = COALESCE(?, bank),
+            account_no = COALESCE(?, account_no),
+            user_user_id = COALESCE(?, user_user_id),
+            updated_at = ?
+           WHERE employee_id = ?`,
+          [
+            p.employee_code || null,
+            p.name || p.staff_name || null,
+            p.email || null,
+            p.phone || null,
+            p.date_of_birth || null,
+            p.gender || null,
+            p.address || null,
+            p.department_name || null,
+            p.hire_date || null,
+            p.status !== undefined ? p.status : null,
+            p.race || null,
+            p.religion || null,
+            p.base_salary ? Number(p.base_salary) : null,
+            p.bank || null,
+            p.account_no || null,
+            p.user_user_id || null,
+            now,
+            employeeId
+          ]
+        );
+      } else {
+        await pool.query(
+          `INSERT INTO staff
+            (employee_id, employee_code, name, email, phone, date_of_birth, gender,
+             address, department_name, hire_date, status, race, religion,
+             base_salary, bank, account_no, user_user_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            employeeId,
+            p.employee_code || null,
+            p.name || p.staff_name || '',
+            p.email || '',
+            p.phone || null,
+            p.date_of_birth || null,
+            p.gender || null,
+            p.address || null,
+            p.department_name || null,
+            p.hire_date || null,
+            p.status !== undefined ? p.status : 1,
+            p.race || null,
+            p.religion || null,
+            p.base_salary ? Number(p.base_salary) : 0,
+            p.bank || null,
+            p.account_no || null,
+            p.user_user_id || null,
+            p.created_at || now,
+            now
+          ]
+        );
+      }
+
+      const [saved] = await pool.query('SELECT * FROM staff WHERE employee_id = ? LIMIT 1', [employeeId]);
+      if (saved.length) created.push(saved[0]);
     }
 
-    const profile = {
-      employee_id: employeeId,
-      name: p.name || p.staff_name || '',
-      email: p.email || '',
-      phone: p.phone || '',
-      hire_date: p.hire_date || null,
-      base_salary: p.base_salary ? Number(p.base_salary) : 0,
-      status: p.status || 'active',
-      created_at: p.created_at || now,
-      updated_at: p.updated_at || now,
-      department_id: p.department_id || null,
-      user_user_id: p.user_user_id || null,
-      race: p.race || null,
-      religion: p.religion || null,
-      bank: p.bank || null,
-      account_no: p.account_no || null
-    };
-    staffProfiles.push(profile);
-    created.push(profile);
-  });
+    addAudit(
+      req.user && req.user.email ? req.user.email : 'system',
+      `Imported ${created.length} staff profiles`,
+      'Staff'
+    );
 
-  addAudit(req.user && req.user.email ? req.user.email : 'system', `Imported ${created.length} staff profiles`, 'Staff');
-  return res.json({ created, total: staffProfiles.length });
+    const [countRows] = await pool.query('SELECT COUNT(*) AS total FROM staff');
+    return res.json({ created, total: countRows[0].total });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to import staff profiles', error: err.message });
+  }
 }
 
 module.exports = {

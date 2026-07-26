@@ -216,9 +216,26 @@ async function updateProfileByUserId(req, res) {
       'SELECT employee_id, name, email, phone, address, bank, account_no FROM staff WHERE user_user_id = ?',
       [userId]
     );
+
+    // Non-staff roles (HR, Finance, Admin) may not have a staff row — update user table directly
     if (existingRows.length === 0) {
-      return res.status(404).json({ message: "Staff profile not found" });
+      if (userRole === "Staff") {
+        return res.status(404).json({ message: "Staff profile not found" });
+      }
+      // HR/Finance/Admin: persist name and email on the user table.
+      // phone/address are not on the user table — acknowledge them but skip silently.
+      const userFields = [];
+      const userValues = [];
+      if (typeof name  !== 'undefined') { userFields.push('name = ?');  userValues.push(name); }
+      if (typeof email !== 'undefined') { userFields.push('email = ?'); userValues.push(email); }
+      if (userFields.length > 0) {
+        userValues.push(userId);
+        await pool.query(`UPDATE user SET ${userFields.join(', ')} WHERE user_id = ?`, userValues);
+      }
+      // Return updated profile (phone/address will be null for non-staff — that is expected)
+      return getProfileByUserId(req, res);
     }
+
     const oldProfile = existingRows[0];
 
     values.push(userId);

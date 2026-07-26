@@ -200,10 +200,33 @@ export default function StaffPayrollPage() {
     return new Date(year, month - 1, 1).toLocaleDateString("en-SG", { month: "long", year: "numeric" });
   }
 
-  function downloadPayslip(payslip) {
-    if (!payslip.file_path) return;
-    const url = `${import.meta.env.VITE_API_BASE_URL || ""}${payslip.file_path}`;
-    window.open(url, "_blank");
+  async function downloadPayslip(payslip) {
+    const id = payslip.payslip_id || payslip.payroll_id;
+    if (!id) return;
+    try {
+      const session = getStoredSession();
+      const token = session?.token;
+      const url = `${import.meta.env.VITE_API_BASE_URL || ""}/api/payslips/${id}/pdf`;
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        console.error("PDF download failed:", body.message || res.status);
+        return;
+      }
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `payslip-${payslip.period_month || ""}-${payslip.period_year || ""}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      console.error("PDF download error:", err);
+    }
   }
 
   function printStaffPayslip(payslip) {

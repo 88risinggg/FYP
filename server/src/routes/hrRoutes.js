@@ -1316,7 +1316,7 @@ router.get("/payslips", authenticateToken, allowRoles("HR", "Finance", "Staff"),
   try {
     const conditions = [];
     const params = [];
-    if (req.user.role === "Finance") conditions.push("p.payslip_status IN ('finance_pending','finance_approved','Approved')");
+    if (req.user.role === "Finance") conditions.push("p.payslip_status IN ('finance_pending','finance_approved')");
     if (req.user.role === "Staff") {
       conditions.push("s.user_user_id = ? AND p.payslip_status IN ('Sent','sent_to_staff')");
       params.push(req.user.userId);
@@ -1343,33 +1343,6 @@ router.get("/payslips", authenticateToken, allowRoles("HR", "Finance", "Staff"),
     return res.json(rows);
   } catch (error) {
     return next(error);
-  }
-});
-
-router.put("/payslips/:id/send-to-finance", authenticateToken, allowRoles("HR"), async (req, res) => {
-  const [result] = await pool.query(
-    `UPDATE payroll SET payslip_status = 'finance_pending'
-     WHERE payroll_id = ? AND payslip_status = 'Draft'`,
-    [req.params.id]
-  );
-  if (!result.affectedRows) return res.status(409).json({ message: "Only compliant draft payslips can be sent to Finance" });
-  await notifyRoles("Finance", {
-    type: "payslip_finance_review", title: "Payslip awaiting Finance approval",
-    message: `Payslip ${req.params.id} requires Finance review.`, actorUserId: req.user.userId,
-    entityType: "payslip", entityId: req.params.id,
-    actionPath: "/dashboard/payroll/finance/payslips-approval"
-  }, { excludeUserId: req.user.userId });
-  return res.json({ message: "Payslip sent to Finance" });
-});
-
-router.put("/payslips/:id/send-to-staff", authenticateToken, allowRoles("HR"), async (req, res) => {
-  try {
-    const result = await generateAndSendPayslip(req.params.id, { actorUserId: req.user.userId });
-    if (result.status !== 200) return res.status(result.status).json({ message: result.message });
-    addAudit(req.user.email, `Generated and sent payslip ${req.params.id} to employee ${result.payslip.employee_id}`, "HR");
-    return res.json(result);
-  } catch (error) {
-    return res.status(500).json({ message: "Failed to generate and send payslip", error: error.message });
   }
 });
 
