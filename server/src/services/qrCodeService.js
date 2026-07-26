@@ -12,10 +12,10 @@
 const QRCode = require("qrcode");
 
 // =====================================================
-// PayNow Configuration (set in .env or defaults)
+// PayNow Configuration (read at call time from .env)
 // =====================================================
-const PAYNOW_UEN = process.env.PAYNOW_UEN || "";
-const PAYNOW_MOBILE = process.env.PAYNOW_MOBILE || "";
+function getPayNowUEN() { return process.env.PAYNOW_UEN || ""; }
+function getPayNowMobile() { return process.env.PAYNOW_MOBILE || ""; }
 
 /**
  * Generate a QR code as a base64 PNG data URI from any string/URL.
@@ -133,6 +133,8 @@ function calculateCRC16(str) {
  * Generate a PayNow QR code as a base64 data URI.
  */
 async function generatePayNowQRCode(invoice, overrides = {}) {
+  const PAYNOW_UEN = getPayNowUEN();
+  const PAYNOW_MOBILE = getPayNowMobile();
   const proxyValue = overrides.proxyValue || PAYNOW_UEN || PAYNOW_MOBILE;
   const proxyType = overrides.proxyType || (PAYNOW_UEN ? "UEN" : "MOBILE");
 
@@ -155,6 +157,8 @@ async function generatePayNowQRCode(invoice, overrides = {}) {
  * Generate a PayNow QR code as a PNG buffer.
  */
 async function generatePayNowQRCodeBuffer(invoice, overrides = {}) {
+  const PAYNOW_UEN = getPayNowUEN();
+  const PAYNOW_MOBILE = getPayNowMobile();
   const proxyValue = overrides.proxyValue || PAYNOW_UEN || PAYNOW_MOBILE;
   const proxyType = overrides.proxyType || (PAYNOW_UEN ? "UEN" : "MOBILE");
 
