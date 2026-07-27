@@ -3,6 +3,7 @@ require("./config/timezone");
 
 const cors = require("cors");
 const express = require("express");
+const path = require("path");
 
 // Route imports
 const healthRoutes = require("./routes/healthRoutes");
@@ -125,6 +126,21 @@ app.use("/api/settings", authenticateToken, requireTenant, settingsRoutes);
 
 // Routes — Finance Dashboard
 app.use("/api/finance", authenticateToken, requireTenant, financeDashboardRoutes);
+
+// Serve the production React build from the same origin as the API.
+// Keeping this after all API routes prevents the SPA fallback from swallowing
+// API 404 responses while still allowing direct refreshes on React routes.
+const clientDistDirectory = path.resolve(__dirname, "..", "..", "client", "dist");
+app.use(express.static(clientDistDirectory));
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api/") || req.path === "/api" || req.path.startsWith("/uploads/")) {
+    return next();
+  }
+
+  return res.sendFile(path.join(clientDistDirectory, "index.html"), (error) => {
+    if (error) next(error);
+  });
+});
 
 // 404 handler
 app.use((req, res) => {

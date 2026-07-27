@@ -35,7 +35,15 @@ function getExecutablePath() {
     return paths[0]; // fallback to default
   }
   if (process.platform === "darwin") return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-  return "/usr/bin/google-chrome";
+
+  const fs = require("fs");
+  const linuxPaths = [
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable"
+  ];
+  return linuxPaths.find((candidate) => fs.existsSync(candidate)) || linuxPaths[0];
 }
 
 function escapeHtml(value) {
