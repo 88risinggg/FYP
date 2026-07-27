@@ -1,7 +1,9 @@
 require("dotenv").config();
 const { APPLICATION_TIMEZONE } = require("./config/timezone");
 
-const port = process.env.PORT || 5000;
+// Discloud routes site traffic to port 8080. PORT can still override this for
+// local development and other hosting environments.
+const port = process.env.PORT || 8080;
 const host = process.env.HOST || "0.0.0.0";
 const { waitForDatabase } = require("./config/db");
 
