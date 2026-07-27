@@ -38,7 +38,7 @@ beforeEach(() => {
     user_id: 42,
     name: "Standalone User",
     account_email: "standalone@example.com",
-    staff_email: null,
+    staff_email: "different-staff@example.com",
     account_status: 1,
     must_change_password: 1
   });
@@ -66,4 +66,38 @@ test("returns the SMTP delivery error instead of activation-request not found", 
   expect(res.statusCode).toBe(422);
   expect(res.body.message).toBe("Email delivery is not configured.");
   expect(res.body.setupEmail.status).toBe("Failed");
+});
+
+test("does not send another initial link after account setup is complete", async () => {
+  mockGetUserSetupContext.mockResolvedValueOnce({
+    request_id: null,
+    status: "approved",
+    user_id: 42,
+    account_email: "standalone@example.com",
+    account_status: 1,
+    must_change_password: 0
+  });
+  const res = response();
+  await resendUserSetupEmail({ params: { userId: "42" } }, res);
+
+  expect(res.statusCode).toBe(200);
+  expect(res.body.setupEmail.status).toBe("Not Required");
+  expect(mockSendAccountSetupEmail).not.toHaveBeenCalled();
+});
+
+test("requires Admin approval and active access before sending initial setup", async () => {
+  mockGetUserSetupContext.mockResolvedValueOnce({
+    request_id: 8,
+    status: "pending",
+    user_id: 42,
+    account_email: "standalone@example.com",
+    account_status: 0,
+    must_change_password: 1
+  });
+  const res = response();
+  await resendUserSetupEmail({ params: { userId: "42" } }, res);
+
+  expect(res.statusCode).toBe(409);
+  expect(res.body.message).toMatch(/Enable or approve/);
+  expect(mockSendAccountSetupEmail).not.toHaveBeenCalled();
 });

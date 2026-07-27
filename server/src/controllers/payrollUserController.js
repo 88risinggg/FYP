@@ -332,14 +332,14 @@ async function reviewRequest(req, res) {
 
 async function deliverSetupEmail(requestId, suppliedContext = null) {
   const context = suppliedContext || await getActivationSetupContext(requestId);
-  const recipient = String(context?.staff_email || context?.account_email || context?.user_email || "").trim().toLowerCase();
+  const recipient = String(context?.account_email || context?.user_email || context?.staff_email || "").trim().toLowerCase();
   let result;
   if (!context || context.status !== "approved") {
     result = { status: "Failed", recipient, sentAt: null, error: "The activation request is not approved." };
   } else if (Number(context.must_change_password) !== 1) {
     result = { status: "Not Required", recipient, sentAt: null, error: "The employee already completed account setup." };
   } else if (!emailPattern.test(recipient)) {
-    result = { status: "Failed", recipient, sentAt: null, error: "HR must provide a valid staff email before the setup link can be sent." };
+    result = { status: "Failed", recipient, sentAt: null, error: "A valid account email is required before the setup link can be sent." };
   } else {
     const setupToken = jwt.sign({ userId: context.user_id, purpose: "first_login_password" }, process.env.JWT_SECRET, { expiresIn: "24h" });
     const setupUrl = `${publicClientUrl()}/login?setup_token=${encodeURIComponent(setupToken)}`;

@@ -191,7 +191,7 @@ async function reviewActivationRequest({ requestId, action, reviewerId, reason }
 async function getActivationSetupContext(requestId) {
   const companyId = currentCompanyId();
   const [rows] = await pool.execute(
-    `SELECT ar.*, u.name, u.status AS account_status, u.must_change_password,
+    `SELECT ar.*, u.name, u.email AS account_email, u.status AS account_status, u.must_change_password,
             s.email AS staff_email,
             JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.status')) AS setup_email_status,
             JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.recipient')) AS setup_email_recipient,
