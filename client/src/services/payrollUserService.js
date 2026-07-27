@@ -22,12 +22,7 @@ export const updateActivationRequest = (requestId, payload) => apiRequest(`/api/
 export const reviewActivationRequest = (requestId, action, reason = "") => apiRequest(`/api/payroll/users/activation-requests/${requestId}/${action}`, {
   method: "POST", body: JSON.stringify({ reason })
 });
-export const resendAccountSetup = ({ requestId, userId }) => apiRequest(
-  requestId
-    ? `/api/payroll/users/activation-requests/${requestId}/resend-setup`
-    : `/api/payroll/users/${userId}/resend-setup`,
-  { method: "POST" }
-);
+export const resendAccountSetup = ({ userId }) => apiRequest(`/api/payroll/users/${userId}/resend-setup`, { method: "POST" });
 export const deleteManagedPayrollUser = (userId, note = "") => apiRequest(`/api/settings/managed-users/${userId}`, { method: "DELETE", body: JSON.stringify({ note }) });
 export const deleteUserAccountByHR = (userId, password) => apiRequest(`/api/hr/users/${userId}/account`, { method: "DELETE", body: JSON.stringify({ password }) });
 
