@@ -908,8 +908,8 @@ function StaffRecordsView({ onStartHire }) {
   };
 
   const handleUnauthorized = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("authUser");
+    sessionStorage.removeItem("authToken");
+    sessionStorage.removeItem("authUser");
     navigate("/login", { state: { from: location, message: "Session expired. Please login again." } });
     return null;
   };
@@ -1525,8 +1525,8 @@ function PayrollUploadView() {
   const [alert, setAlert] = useState(null);
 
   const handleUnauthorized = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("authUser");
+    sessionStorage.removeItem("authToken");
+    sessionStorage.removeItem("authUser");
     navigate("/login", { state: { from: location, message: "Session expired." } });
   };
 
@@ -1971,8 +1971,8 @@ function PayrollRunsView() {
   const [detailLoading, setDetailLoading] = useState(null);
 
   const handleUnauthorized = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("authUser");
+    sessionStorage.removeItem("authToken");
+    sessionStorage.removeItem("authUser");
     navigate("/login", { state: { from: location, message: "Session expired." } });
   };
 
@@ -2303,8 +2303,8 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
   const [expandedCpf, setExpandedCpf] = useState(null);
 
   const handleUnauthorized = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("authUser");
+    sessionStorage.removeItem("authToken");
+    sessionStorage.removeItem("authUser");
     navigate("/login", { state: { from: location, message: "Session expired." } });
   };
 
@@ -3199,8 +3199,8 @@ function NotificationsView() {
   const [error, setError] = useState("");
 
   const handleUnauthorized = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("authUser");
+    sessionStorage.removeItem("authToken");
+    sessionStorage.removeItem("authUser");
     navigate("/login", { state: { from: location, message: "Session expired." } });
   };
 

@@ -24,7 +24,7 @@ export function fetchModuleAuditSummary(module, filters = {}) {
 
 export async function exportModuleAuditLogs(module, filters = {}) {
   const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-  const token = localStorage.getItem("authToken");
+  const token = sessionStorage.getItem("authToken");
   const response = await fetch(
     `${API_BASE}/api/audit-logs/export${toQuery({ module, ...filters })}`,
     { headers: { Authorization: `Bearer ${token}` } }

@@ -11,7 +11,7 @@ function forceLogout() {
 }
 
 export async function apiRequest(path, options = {}) {
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = sessionStorage.getItem(TOKEN_KEY);
   const headers = {
     "Content-Type": "application/json",
     ...options.headers

@@ -19,7 +19,7 @@ export function getAdminPayrollReports() {
 }
 export async function exportAdminPayrollReport(reportType, params = {}) {
   const query = new URLSearchParams({ reportType, format: "xlsx", ...Object.fromEntries(Object.entries(params).filter(([, value]) => value)) });
-  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || ""}/api/payroll/admin/reports/export?${query}`, { headers: { Authorization: `Bearer ${localStorage.getItem("authToken") || ""}` } });
+  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || ""}/api/payroll/admin/reports/export?${query}`, { headers: { Authorization: `Bearer ${sessionStorage.getItem("authToken") || ""}` } });
   if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.message || "Excel export failed."); }
   const blob = await response.blob();
   downloadBlob(blob, `${reportType.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.xlsx`);
@@ -52,12 +52,12 @@ export function setDefaultPayslipLayout(layoutId) {
   });
 }
 export async function getPayslipLayoutPreview(layoutId) {
-  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || ""}/api/payroll/admin/payslip-layouts/${layoutId}/preview`, { headers: { Authorization: `Bearer ${localStorage.getItem("authToken") || ""}` } });
+  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || ""}/api/payroll/admin/payslip-layouts/${layoutId}/preview`, { headers: { Authorization: `Bearer ${sessionStorage.getItem("authToken") || ""}` } });
   if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.message || "Payslip preview failed."); }
   return response.blob();
 }
 export async function getPayslipSamplePreview() {
-  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || ""}/api/payroll/admin/payslip-layouts/sample/preview`, { headers: { Authorization: `Bearer ${localStorage.getItem("authToken") || ""}` } });
+  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || ""}/api/payroll/admin/payslip-layouts/sample/preview`, { headers: { Authorization: `Bearer ${sessionStorage.getItem("authToken") || ""}` } });
   if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.message || "Sample payslip preview failed."); }
   return response.blob();
 }

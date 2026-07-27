@@ -116,7 +116,7 @@ export default function DashboardLayout({
       setCompany(result.company);
       try {
         const stored = getStoredSession();
-        if (stored?.user) localStorage.setItem("authUser", JSON.stringify({ ...stored.user, company: result.company }));
+        if (stored?.user) sessionStorage.setItem("authUser", JSON.stringify({ ...stored.user, company: result.company }));
       } catch { /* The live header can still use the refreshed profile. */ }
     }).catch(() => setCompany(sessionCompany));
     return () => { active = false; };

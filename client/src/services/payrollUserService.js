@@ -11,7 +11,7 @@ export const importPayrollHires = (file, mode = "preview") => {
   return apiRequest("/api/payroll/users/hires/import", { method: "POST", headers: { "Content-Type": undefined }, body: form });
 };
 export const exportStaffWorkbook = async () => {
-  const token = localStorage.getItem("authToken");
+  const token = sessionStorage.getItem("authToken");
   const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || ""}/api/hr/staff/export/excel`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   if (!response.ok) throw new Error("Unable to export staff records.");
   return response.blob();

@@ -100,7 +100,7 @@ export default function FinanceInvoiceSettingsPage() {
       setLoading(true);
       setError("");
       try {
-        const token = localStorage.getItem("authToken");
+        const token = sessionStorage.getItem("authToken");
         const headers = { "Content-Type": "application/json" };
         if (token) headers.Authorization = `Bearer ${token}`;
 

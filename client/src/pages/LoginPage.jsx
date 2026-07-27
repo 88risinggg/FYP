@@ -88,7 +88,6 @@ export default function LoginPage() {
   const shouldReduceMotion = useReducedMotion();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -148,7 +147,7 @@ export default function LoginPage() {
         return;
       }
       if (data.token && data.user) {
-        saveSession(data.token, data.user, rememberMe);
+        saveSession(data.token, data.user);
         startHealthCheck();
         navigate(getPostAuthDestination(data.user), { replace: true });
         return;
@@ -167,7 +166,7 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       const data = await verifyLoginOtp(twoFactorChallenge.challengeId, twoFactorCode);
-      saveSession(data.token, data.user, rememberMe);
+      saveSession(data.token, data.user);
       startHealthCheck();
       navigate(getPostAuthDestination(data.user), { replace: true });
     } catch (requestError) {
@@ -204,7 +203,7 @@ export default function LoginPage() {
         termsAccepted,
         privacyAccepted
       );
-      saveSession(data.token, data.user, rememberMe);
+      saveSession(data.token, data.user);
       setSetupToken("");
       startHealthCheck();
       navigate(getPostAuthDestination(data.user), { replace: true });
@@ -648,15 +647,7 @@ export default function LoginPage() {
                 </div>
 
                 <div className="flex items-center justify-between gap-4 text-sm">
-                  <label className="flex cursor-pointer items-center gap-2 text-[#7b6660]">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(event) => setRememberMe(event.target.checked)}
-                      className="h-4 w-4 rounded border-[#F0D2CA] bg-transparent text-[#F38978] focus:ring-[#F38978]"
-                    />
-                    Remember me
-                  </label>
+                  <span className="text-[#7b6660]">Session ends when this tab is closed</span>
                   <Link className="font-medium text-[#F38978] hover:text-[#6f5b55]" to="/forgot-password">
                     Forgot password?
                   </Link>

@@ -39,7 +39,7 @@ export default function AuthLoginPage() {
         setMessage("Create a permanent password before continuing.");
         return;
       }
-      saveSession(data.token, data.user, true);
+      saveSession(data.token, data.user);
       startHealthCheck();
       navigate("/module-selection", { replace: true });
     } catch (requestError) {
@@ -66,7 +66,7 @@ export default function AuthLoginPage() {
 
     try {
       const data = await completeFirstLogin(setupToken, newPassword);
-      saveSession(data.token, data.user, true);
+      saveSession(data.token, data.user);
       startHealthCheck();
       navigate("/module-selection", { replace: true });
     } catch (requestError) {

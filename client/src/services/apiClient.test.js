@@ -5,12 +5,14 @@ import { getStoredSession, saveSession } from "./sessionService.js";
 describe("apiRequest session handling", () => {
   beforeEach(() => {
     localStorage.clear();
-    saveSession("valid-token", { role: "Finance" }, false);
+    sessionStorage.clear();
+    saveSession("valid-token", { role: "Finance" });
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   it("preserves the session for an ordinary permission denial", async () => {

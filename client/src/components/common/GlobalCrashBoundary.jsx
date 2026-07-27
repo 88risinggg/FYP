@@ -86,8 +86,8 @@ export default class GlobalCrashBoundary extends React.Component {
             <button
               type="button"
               onClick={() => {
-                localStorage.removeItem("authToken");
-                localStorage.removeItem("authUser");
+                sessionStorage.removeItem("authToken");
+                sessionStorage.removeItem("authUser");
                 window.location.href = "/login";
               }}
               className="rounded-lg border border-[#ead3cc] bg-white/80 px-4 py-2 text-sm font-semibold text-[#251E1F] hover:bg-[#FDD9CD]/45"
