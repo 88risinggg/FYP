@@ -1,5 +1,5 @@
 const { pool } = require('../config/db');
-const { addAudit } = require('../services/audit');
+const { writeAuditLog } = require('../services/auditService');
 const { requireCompanyId } = require('../utils/companyScope');
 const { getCompany } = require('../services/companyService');
 const { encryptTenantPayload } = require('../services/tenantCryptoService');
@@ -54,11 +54,16 @@ async function createStaff(req, res) {
     const encrypted = encryptTenantPayload(company, 'staff', insertId, 'sensitive_payload', sensitiveStaff(body));
     await pool.query('UPDATE staff SET sensitive_payload=? WHERE employee_id=? AND company_id=?', [encrypted, insertId, companyId]);
     const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? AND company_id=? LIMIT 1', [insertId, companyId]);
-    addAudit(
-      req.user && req.user.email ? req.user.email : 'system',
-      `Added staff record ${insertId}`,
-      'Staff'
-    );
+    writeAuditLog({
+      module: "HR",
+      activityType: "staff_created",
+      action: `Added staff record ${insertId}`,
+      entityType: "staff",
+      entityId: insertId,
+      userId: req.user?.userId || null,
+      userName: req.user?.email || "system",
+      status: "Success",
+    });
     return res.status(201).json(rows[0]);
   } catch (err) {
     return res.status(500).json({ message: 'Failed to create staff record', error: err.message });
@@ -147,11 +152,16 @@ async function updateStaff(req, res) {
     const merged = { ...rows[0], ...req.body };
     const encrypted = encryptTenantPayload(company, 'staff', employeeId, 'sensitive_payload', sensitiveStaff(merged));
     await pool.query('UPDATE staff SET sensitive_payload=? WHERE employee_id=? AND company_id=?', [encrypted, employeeId, companyId]);
-    addAudit(
-      req.user && req.user.email ? req.user.email : 'system',
-      `Updated profile for ${employeeId}`,
-      'Staff'
-    );
+    writeAuditLog({
+      module: "HR",
+      activityType: "staff_updated",
+      action: `Updated profile for ${employeeId}`,
+      entityType: "staff",
+      entityId: employeeId,
+      userId: req.user?.userId || null,
+      userName: req.user?.email || "system",
+      status: "Success",
+    });
     return res.json(rows[0]);
   } catch (err) {
     return res.status(500).json({ message: 'Failed to update staff profile', error: err.message });
@@ -169,11 +179,16 @@ async function deleteStaff(req, res) {
     const [rows] = await pool.query('SELECT * FROM staff WHERE employee_id = ? AND company_id=? LIMIT 1', [id, companyId]);
     if (!rows.length) return res.status(404).json({ message: 'Staff record not found' });
     await pool.query('DELETE FROM staff WHERE employee_id = ? AND company_id=?', [id, companyId]);
-    addAudit(
-      req.user && req.user.email ? req.user.email : 'system',
-      `Deleted staff record ${id}`,
-      'Staff'
-    );
+    writeAuditLog({
+      module: "HR",
+      activityType: "staff_deleted",
+      action: `Deleted staff record ${id}`,
+      entityType: "staff",
+      entityId: id,
+      userId: req.user?.userId || null,
+      userName: req.user?.email || "system",
+      status: "Success",
+    });
     return res.json({ message: 'Staff record deleted', deleted: rows[0] });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to delete staff record', error: err.message });
@@ -285,11 +300,15 @@ async function importProfiles(req, res) {
       if (saved.length) created.push(saved[0]);
     }
 
-    addAudit(
-      req.user && req.user.email ? req.user.email : 'system',
-      `Imported ${created.length} staff profiles`,
-      'Staff'
-    );
+    writeAuditLog({
+      module: "HR",
+      activityType: "staff_imported",
+      action: `Imported ${created.length} staff profiles`,
+      entityType: "staff",
+      userId: req.user?.userId || null,
+      userName: req.user?.email || "system",
+      status: "Success",
+    });
 
     const [countRows] = await pool.query('SELECT COUNT(*) AS total FROM staff');
     return res.json({ created, total: countRows[0].total });

@@ -13,7 +13,7 @@ const {
   getPendingReviews,
   reviewPaymentSubmission
 } = require("../controllers/manualPaymentController");
-const { addAudit } = require("../services/audit");
+const { writeAuditLog } = require("../services/auditService");
 const {
   setupModernTreasuryRecipients,
   submitModernTreasuryPayrollBatch,
@@ -65,11 +65,14 @@ async function setupModernTreasuryRecipientAccounts(req, res) {
   try {
     const result = await setupModernTreasuryRecipients({ employees, forceNew });
 
-    addAudit(
-      req.user.email,
-      `${forceNew ? "Refreshed" : "Set up"} ${result.recipientCount} Modern Treasury payroll recipient(s) for ${payrollRunId || "selected run"}`,
-      "Payroll Payment"
-    );
+    writeAuditLog({
+      module: "Payroll",
+      activityType: "Payroll Payment",
+      action: `${forceNew ? "Refreshed" : "Set up"} ${result.recipientCount} Modern Treasury payroll recipient(s) for ${payrollRunId || "selected run"}`,
+      userId: req.user?.userId || null,
+      userName: req.user?.email || null,
+      status: "Success",
+    });
 
     res.status(201).json(result);
   } catch (error) {
@@ -95,11 +98,14 @@ async function submitModernTreasuryTransfer(req, res) {
   try {
     const result = await submitModernTreasuryPayrollBatch({ payrollRunId, payrollPeriod, employees });
 
-    addAudit(
-      req.user.email,
-      `${result.message}: ${result.batchReference} for ${payrollRunId}`,
-      "Payroll Payment"
-    );
+    writeAuditLog({
+      module: "Payroll",
+      activityType: "Payroll Payment",
+      action: `${result.message}: ${result.batchReference} for ${payrollRunId}`,
+      userId: req.user?.userId || null,
+      userName: req.user?.email || null,
+      status: "Success",
+    });
 
     res.status(201).json(result);
   } catch (error) {

@@ -45,6 +45,7 @@ const financeReminderRoutes = require("./routes/financeReminderRoutes");
 const whatsappRoutes = require("./routes/whatsappRoutes");
 const integrationRoutes = require("./routes/integrationRoutes");
 const companyRoutes = require("./routes/companyRoutes");
+const backupRoutes = require("./routes/backupRoutes");
 const { authenticateToken } = require("./middleware/authMiddleware");
 const { requireTenant } = require("./middleware/tenantMiddleware");
 
@@ -122,6 +123,7 @@ app.use("/api/admin/users", authenticateToken, requireTenant, adminUserRoutes);
 app.use("/api/admin/roles", authenticateToken, requireTenant, adminRoleRoutes);
 app.use("/api/admin/invoicing", authenticateToken, requireTenant, adminReminderRoutes);
 app.use("/api/admin/invoicing/audit-logs", authenticateToken, requireTenant, adminAuditLogRoutes);
+app.use("/api/admin/backups", backupRoutes);
 app.use("/api/audit-logs", authenticateToken, requireTenant, auditLogRoutes);
 
 // Routes — Settings module

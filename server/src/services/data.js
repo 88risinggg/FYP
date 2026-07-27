@@ -1,11 +1,22 @@
+/**
+ * Legacy in-memory data store.
+ *
+ * DEPRECATED — All new code should use the database directly.
+ * Retained temporarily for:
+ *   - staffProfiles[]: fallback in hrRoutes.js when DB query fails
+ *   - payrollRuns[]: referenced by HR search (to be removed)
+ *   - payslips[]: fallback payslip retrieval (to be removed)
+ *   - payrollRateConfig: GET/PUT /api/payroll/rates (to be migrated to payroll_configuration table)
+ *
+ * PAYSLIP_STATUSES moved to utils/constants.js
+ * auditLogs removed — use auditService.js writeAuditLog() instead
+ */
+
 const staffProfiles = [];
 
 const payrollRuns = [];
 
 const payslips = [];
-
-// In-memory audit log for development/testing
-const auditLogs = [];
 
 // Payroll rate configuration (HR keeps CPF/SDL rates only)
 const payrollRateConfig = {
@@ -17,31 +28,9 @@ const payrollRateConfig = {
   updatedAt: new Date().toISOString()
 };
 
-// Donation fund mapping (configured by Admin module):
-// islam         → MBMF
-// hindu         → SINDA
-// buddhism      → CDAC
-// taoism        → CDAC
-// christianity  → CDAC
-// others/foreign → none
-
-// Note: audit logs and payroll records are handled by Admin/Finance modules
-// via the real `audit_log` and payroll tables. Removed in-memory copies from HR.
-
-// Payslip status workflow: draft → finance_pending → finance_approved → sent_to_staff
-const PAYSLIP_STATUSES = {
-  DRAFT: 'draft',
-  FINANCE_PENDING: 'finance_pending',
-  FINANCE_APPROVED: 'finance_approved',
-  SENT_TO_STAFF: 'sent_to_staff',
-  REJECTED: 'rejected'
-};
-
 module.exports = {
-  staffProfiles,  // temporary until DB is connected
-  payrollRuns,    // temporary until DB is connected
-  payslips,       // temporary until DB is connected
-  payrollRateConfig, // CPF and SDL rates only
-  PAYSLIP_STATUSES,
-  auditLogs
+  staffProfiles,
+  payrollRuns,
+  payslips,
+  payrollRateConfig,
 };

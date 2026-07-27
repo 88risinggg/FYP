@@ -13,8 +13,8 @@ jest.mock("../middleware/authMiddleware", () => ({
 jest.mock("../middleware/rolesMiddleware", () => ({
   allowRoles: () => (_req, _res, next) => next()
 }));
-jest.mock("../services/audit", () => ({
-  addAudit: jest.fn()
+jest.mock("../services/auditService", () => ({
+  writeAuditLog: jest.fn()
 }));
 jest.mock("../services/payrollNotificationService", () => ({
   notifyRoles: jest.fn()
