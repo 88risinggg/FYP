@@ -4453,7 +4453,22 @@ export default function FinancePayrollPage() {
         }];
       }));
       await executeWorkflowAction("save-recipients", { paymentRecipients });
-      setRecipientProgress({ open: true, running: false, progress: 100, phase: result.failedCount ? "Recipient configuration completed with items requiring attention." : "All recipient mappings are configured and saved.", result: { configured: result.recipientCount, reused: result.reusedCount || 0, failed: result.failedCount || 0 }, error: result.failedCount ? `${result.failedCount} recipient(s) could not be configured. Retry will process only missing mappings.` : "" });
+      setRecipientProgress({
+        open: true,
+        running: false,
+        progress: 100,
+        phase: result.failedCount
+          ? "Recipient configuration completed with items requiring attention."
+          : "All recipient mappings are configured and saved.",
+        result: {
+          configured: result.recipientCount,
+          reused: result.reusedCount || 0,
+          failed: result.failedCount || 0,
+        },
+        error: result.failedCount
+          ? `${result.failedCount} recipient(s) could not be configured. ${result.failures?.[0]?.message || "Retry will process only missing mappings."}`
+          : "",
+      });
     } catch (error) {
       setPaymentError(error.message || "Modern Treasury recipient setup failed.");
       setRecipientProgress((current) => ({ ...current, running: false, phase: "Recipient configuration stopped.", error: error.message || "Modern Treasury recipient setup failed." }));

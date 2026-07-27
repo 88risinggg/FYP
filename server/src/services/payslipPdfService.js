@@ -47,7 +47,8 @@ function getExecutablePath() {
   if (process.platform === "darwin") {
     return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
   }
-  return "/usr/bin/google-chrome";
+  const candidates = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"];
+  return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
 }
 
 /**
@@ -147,6 +148,9 @@ function buildPayslipHtml(payslip) {
   const companyName = payslip.company_name || "PayNivo";
   const legalName = payslip.company_legal_name || companyName;
   const currency = payslip.company_currency || "SGD";
+  const brandColor = /^#[0-9a-f]{6}$/i.test(String(payslip.company_brand_color || ""))
+    ? String(payslip.company_brand_color)
+    : "#ef2b32";
   const logo = companyLogoDataUri(payslip);
   const lastDay = month && year ? new Date(year, month, 0) : new Date();
   const firstDay = month && year ? new Date(year, month - 1, 1) : new Date();
@@ -203,7 +207,7 @@ function buildPayslipHtml(payslip) {
     @page { size: A4 landscape; margin: 0; }
     body { color: #161616; font-size: 10px; }
     .payslip { position: relative; width: 297mm; height: 209mm; overflow: hidden; border: 0; }
-    .header { height: 40mm; display: grid; grid-template-columns: 29% 43% 28%; align-items: center; gap: 0; padding: 5mm 10mm 4mm; background: linear-gradient(120deg, #071622, #03101a); border-bottom: 3px solid #ef2b32; }
+    .header { height: 40mm; display: grid; grid-template-columns: 29% 43% 28%; align-items: center; gap: 0; padding: 5mm 10mm 4mm; background: linear-gradient(120deg, #071622, #03101a); border-bottom: 3px solid ${brandColor}; }
     .brand { display: flex; align-items: center; height: 30mm; padding-right: 7mm; border-right: 1px solid #777; }
     .logo { width: 56mm; height: 25mm; object-fit: contain; object-position: left center; filter: invert(1) grayscale(1) brightness(3); mix-blend-mode: screen; }
     .company { display: flex; height: 30mm; flex-direction: column; justify-content: center; padding: 2mm 7mm 0; border-right: 1px solid #777; color: #fff; font-size: 11.5px; line-height: 1.4; }
@@ -215,7 +219,7 @@ function buildPayslipHtml(payslip) {
     .meta { display: grid; grid-template-columns: 54% 46%; gap: 8mm; padding: 7mm 10mm 5mm; }
     .meta-card { display: grid; grid-template-columns: 40mm 1fr; align-content: start; row-gap: 5px; }
     .meta-card + .meta-card { padding-left: 8mm; border-left: 1px solid #aeb7c0; }
-    .meta-card h3 { grid-column: 1 / -1; margin: 0 0 3mm; color: #d92b31; font-size: 12px; text-transform: uppercase; }
+    .meta-card h3 { grid-column: 1 / -1; margin: 0 0 3mm; color: ${brandColor}; font-size: 12px; text-transform: uppercase; }
     .meta-card strong { font-weight: 400; } .meta-card span { font-weight: 600; }
     .pay-grid { gap: 3mm; padding: 4mm 8mm 0; }
     .pay-column { overflow: hidden; border: 1px solid #bbb; border-radius: 4px; }

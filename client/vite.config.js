@@ -19,7 +19,9 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: "dist",
+    // Keep the production client beside the Express application so Discloud's
+    // runtime image retains it together with the server source.
+    outDir: "../server/public",
     emptyOutDir: true
   }
 });

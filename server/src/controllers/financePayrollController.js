@@ -13,7 +13,7 @@ const { launchPayslipBrowser } = require("../services/payslipPdfService");
 const { notifyRoles } = require("../services/payrollNotificationService");
 const { pool } = require("../config/db");
 const { buildFinanceWorkflowState } = require("../services/financePayrollWorkflowState");
-const { submitModernTreasuryEmployeePayment } = require("../services/modernTreasuryPaymentService");
+const { setupModernTreasuryRecipients, submitModernTreasuryEmployeePayment } = require("../services/modernTreasuryPaymentService");
 const ExcelJS = require("exceljs");
 const {
   applyScheduleDefaultsToRun,
@@ -386,12 +386,45 @@ async function runWorkflowAction(req, res) {
       let current = await findFinanceRun(req.params.runId);
       if (!current) return res.status(404).json({ code: "PAYROLL_RUN_NOT_FOUND", message: "Payroll run not found." });
       if (["Processing", "Submitted"].includes(current.paymentStatus) && current.bankReference) return res.json(workflowResponse(current, current.bankReference));
-      const employees = current.employees.filter((employee) => employee.financeStatus === "Approved").map((employee) => ({
+      let employees = current.employees.filter((employee) => employee.financeStatus === "Approved").map((employee) => ({
         employeeId: employee.id, payrollId: employee.payrollId, staffEmployeeId: employee.staffEmployeeId, employeeName: employee.name, bankName: employee.bank,
         bankAccount: employee.accountNo, amount: employee.netPay, currency: "SGD",
         modernTreasuryCounterpartyId: employee.modernTreasuryCounterpartyId,
         modernTreasuryReceivingAccountId: employee.modernTreasuryReceivingAccountId
       }));
+      const hasSimulationMappings = employees.some((employee) =>
+        String(employee.modernTreasuryCounterpartyId || "").startsWith("sim_")
+        || String(employee.modernTreasuryReceivingAccountId || "").startsWith("sim_")
+      );
+      if (hasSimulationMappings) {
+        const setup = await setupModernTreasuryRecipients({ employees, forceNew: false });
+        if (setup.failedCount) {
+          return res.status(502).json({
+            code: "RECIPIENT_UPGRADE_FAILED",
+            message: `${setup.failedCount} simulated recipient mapping(s) could not be upgraded to the live sandbox.`,
+            errors: setup.failures
+          });
+        }
+        const byEmployeeId = new Map(setup.recipients.map((recipient) => [String(recipient.employeeId), recipient]));
+        employees = employees.map((employee) => {
+          const recipient = byEmployeeId.get(String(employee.employeeId));
+          return recipient ? {
+            ...employee,
+            modernTreasuryCounterpartyId: recipient.modernTreasuryCounterpartyId,
+            modernTreasuryReceivingAccountId: recipient.modernTreasuryReceivingAccountId
+          } : employee;
+        });
+        const paymentRecipients = Object.fromEntries(employees.map((employee) => [String(employee.staffEmployeeId), {
+          modernTreasuryCounterpartyId: employee.modernTreasuryCounterpartyId,
+          modernTreasuryReceivingAccountId: employee.modernTreasuryReceivingAccountId
+        }]));
+        current = await applyFinancePayrollWorkflowAction({
+          runId: current.id,
+          action: "save-recipients",
+          payload: { paymentRecipients, actor: req.user?.email },
+          userId: req.user?.userId
+        });
+      }
       const batchReference = current.paymentBatch?.batchReference || current.bankReference || `MT-PAYROLL-${current.id}`;
       current = await applyFinancePayrollWorkflowAction({ runId: current.id, action: "payment-initialize", payload: { batchReference, total: employees.length, actor: req.user?.email }, userId: req.user?.userId });
       const completed = current.paymentBatch?.transfers || {};

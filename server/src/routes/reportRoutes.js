@@ -29,7 +29,9 @@ router.post("/generate-pdf", async (req, res) => {
       if (process.platform === "darwin") {
         return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
       }
-      return "/usr/bin/google-chrome";
+      const fs = require("fs");
+      const candidates = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"];
+      return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
     }
 
     const browser = await puppeteer.launch({
