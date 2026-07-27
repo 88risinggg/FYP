@@ -377,9 +377,9 @@ export default function PayrollUserManagement({ role, defaultShowHire = false })
   };
 
   const resendSetup = async (record) => {
-    setBusy(`resend-${record.request_id}`); beginProgress("Resend account setup link", "Validating staff email…");
+    setBusy(`resend-${record.request_id || record.user_id}`); beginProgress("Resend account setup link", "Validating account email…");
     try {
-      const result = await resendAccountSetup(record.request_id);
+      const result = await resendAccountSetup({ requestId: record.request_id, userId: record.user_id });
       await load();
       const setupComplete = result.setupEmail?.status === "Not Required";
       finishProgress(

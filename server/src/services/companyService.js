@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const { pool } = require("../config/db");
 const { wrapTenantKey } = require("./tenantCryptoService");
 const { sendAccountSetupEmail } = require("./emailService");
+const { publicClientUrl } = require("./emailTransportService");
 
 function generateTemporaryPassword() {
   return `Pn!${crypto.randomBytes(9).toString("base64url")}9aA`;
@@ -77,7 +78,7 @@ async function provisionCompany({ company, admin, sourceCompanyId = 1, fullClone
         VALUES (?,?,?,1,1,'Admin',?,NOW(),NOW())`, [String(admin.email).trim().toLowerCase(), admin.name || "Company Admin", randomPassword, companyId]);
       await connection.execute("UPDATE companies SET owner_user_id=?,setup_status='admin_invited' WHERE company_id=?", [createdUser.insertId, companyId]);
       const setupToken = jwt.sign({ userId: createdUser.insertId, purpose: "first_login_password" }, process.env.JWT_SECRET, { expiresIn: "24h" });
-      const setupUrl = `${process.env.CLIENT_URL || "http://localhost:5173"}/login?setupToken=${encodeURIComponent(setupToken)}`;
+      const setupUrl = `${publicClientUrl()}/login?setupToken=${encodeURIComponent(setupToken)}`;
       setupEmail = { status: "pending", recipient: admin.email, setupUrl, name: admin.name, temporaryPassword };
     }
     await connection.execute(`INSERT INTO audit_logs (user_id,company_id,module,activity_type,action_description,affected_record,status,created_at)
@@ -113,7 +114,7 @@ async function onboardExistingCompany({ workspaceId, company, admin, operatorUse
     const [createdUser] = await connection.execute(`INSERT INTO user (email,name,password,status,must_change_password,role_name,company_id,created_at,updated_at) VALUES (?,?,?,1,1,'Admin',?,NOW(),NOW())`, [email, name, randomPassword, existing.company_id]);
     await connection.execute("UPDATE companies SET owner_user_id=?,setup_status='admin_invited' WHERE company_id=?", [createdUser.insertId, existing.company_id]);
     const setupToken = jwt.sign({ userId: createdUser.insertId, purpose: "first_login_password" }, process.env.JWT_SECRET, { expiresIn: "24h" });
-    setupEmail = { status: "pending", recipient: email, name, temporaryPassword, setupUrl: `${process.env.CLIENT_URL || "http://localhost:5173"}/login?setupToken=${encodeURIComponent(setupToken)}` };
+    setupEmail = { status: "pending", recipient: email, name, temporaryPassword, setupUrl: `${publicClientUrl()}/login?setupToken=${encodeURIComponent(setupToken)}` };
     await connection.execute(`INSERT INTO audit_logs (user_id,company_id,module,activity_type,action_description,affected_record,status,created_at) VALUES (?,?,'Platform','Company Onboarding','Completed initial company registration and invited tenant Admin',?,'Success',NOW())`, [operatorUserId || null, existing.company_id, workspaceId]).catch(() => {});
     await connection.commit();
     const oneTimeTemporaryPassword = setupEmail.temporaryPassword;
@@ -139,7 +140,7 @@ async function resendCompanyAdminSetup({ workspaceId, operatorUserId }) {
     await connection.execute(`INSERT INTO audit_logs (user_id,company_id,module,activity_type,action_description,affected_record,status,created_at) VALUES (?,?,'Platform','Admin Setup Retry','Rotated first tenant Admin temporary credential',?,'Success',NOW())`, [operatorUserId || null, account.company_id, String(account.owner_user_id)]).catch(() => {});
     await connection.commit();
     const setupToken = jwt.sign({ userId: account.owner_user_id, purpose: "first_login_password" }, process.env.JWT_SECRET, { expiresIn: "24h" });
-    const setupUrl = `${process.env.CLIENT_URL || "http://localhost:5173"}/login?setupToken=${encodeURIComponent(setupToken)}`;
+    const setupUrl = `${publicClientUrl()}/login?setupToken=${encodeURIComponent(setupToken)}`;
     try { await sendAccountSetupEmail({ to: account.email, name: account.name, setupUrl, temporaryPassword }); delivery = { status: "sent", recipient: account.email, oneTimeTemporaryPassword: temporaryPassword }; }
     catch (error) { delivery = { status: "failed", recipient: account.email, error: error.code || "EMAIL_DELIVERY_FAILED", oneTimeTemporaryPassword: temporaryPassword }; }
     return { setupEmail: delivery };

@@ -6,14 +6,17 @@ const {
   ROLE_NAMES,
   createHireWithAccount,
   getActivationSetupContext,
+  getUserSetupContext,
   listManagedUsers,
   logSetupEmailAudit,
+  logUserSetupEmailAudit,
   reviewActivationRequest,
   saveSetupEmailResult,
   updatePendingRequest
 } = require("../models/payrollUserModel");
 const { notifyRoles, notifyUser } = require("../services/payrollNotificationService");
 const { sendAccountSetupEmail } = require("../services/emailService");
+const { publicClientUrl } = require("../services/emailTransportService");
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -329,7 +332,7 @@ async function reviewRequest(req, res) {
 
 async function deliverSetupEmail(requestId, suppliedContext = null) {
   const context = suppliedContext || await getActivationSetupContext(requestId);
-  const recipient = String(context?.staff_email || "").trim().toLowerCase();
+  const recipient = String(context?.staff_email || context?.account_email || context?.user_email || "").trim().toLowerCase();
   let result;
   if (!context || context.status !== "approved") {
     result = { status: "Failed", recipient, sentAt: null, error: "The activation request is not approved." };
@@ -339,7 +342,7 @@ async function deliverSetupEmail(requestId, suppliedContext = null) {
     result = { status: "Failed", recipient, sentAt: null, error: "HR must provide a valid staff email before the setup link can be sent." };
   } else {
     const setupToken = jwt.sign({ userId: context.user_id, purpose: "first_login_password" }, process.env.JWT_SECRET, { expiresIn: "24h" });
-    const setupUrl = `${process.env.CLIENT_URL || "http://localhost:5173"}/login?setup_token=${encodeURIComponent(setupToken)}`;
+    const setupUrl = `${publicClientUrl()}/login?setup_token=${encodeURIComponent(setupToken)}`;
     try {
       const delivery = await sendAccountSetupEmail({ to: recipient, name: context.name || context.user_name, setupUrl });
       result = { status: "Sent", recipient, sentAt: new Date().toISOString(), error: null, providerMessageId: delivery?.messageId || null };
@@ -347,8 +350,12 @@ async function deliverSetupEmail(requestId, suppliedContext = null) {
       result = { status: "Failed", recipient, sentAt: null, error: String(error.message || "Email delivery failed").slice(0, 500) };
     }
   }
-  await saveSetupEmailResult(requestId, result);
-  await logSetupEmailAudit(requestId, result);
+  if (requestId) {
+    await saveSetupEmailResult(requestId, result);
+    await logSetupEmailAudit(requestId, result);
+  } else if (context?.user_id) {
+    await logUserSetupEmailAudit(context.user_id, result);
+  }
   return result;
 }
 
@@ -376,4 +383,29 @@ async function resendSetupEmail(req, res) {
   }
 }
 
-module.exports = { createHire, editRequest, getManagedUsers, importHires, resendSetupEmail, reviewRequest, toAdminManagedUser, toHrManagedUser };
+async function resendUserSetupEmail(req, res) {
+  try {
+    const context = await getUserSetupContext(Number(req.params.userId));
+    if (!context) return res.status(404).json({ message: "User account not found." });
+    if (context.status !== "approved" || Number(context.account_status) !== 1) {
+      return res.status(409).json({ message: "Enable or approve the account before sending its setup link." });
+    }
+    const setupEmail = await deliverSetupEmail(context.request_id || null, context);
+    const completedSetup = setupEmail.status === "Not Required";
+    const status = setupEmail.status === "Sent" || completedSetup ? 200 : 422;
+    return res.status(status).json({
+      approved: true,
+      accountStatus: "Active",
+      message: completedSetup
+        ? "This employee has already completed account setup. No new setup link is required."
+        : setupEmail.status === "Sent"
+          ? "A new account setup link was sent."
+          : setupEmail.error || "The account setup link could not be sent.",
+      setupEmail
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Unable to resend the account setup link.", detail: error.message });
+  }
+}
+
+module.exports = { createHire, editRequest, getManagedUsers, importHires, resendSetupEmail, resendUserSetupEmail, reviewRequest, toAdminManagedUser, toHrManagedUser };

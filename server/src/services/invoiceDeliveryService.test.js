@@ -34,6 +34,7 @@ const { sendInvoiceEmail } = require("./invoiceDeliveryService");
 beforeAll(() => {
   process.env.SMTP_HOST = "smtp.example.com";
   process.env.SMTP_USER = "mailer@example.com";
+  process.env.SMTP_PASS = "secret";
 });
 
 test("invoice email uses saved settings and attaches the generated PDF", async () => {

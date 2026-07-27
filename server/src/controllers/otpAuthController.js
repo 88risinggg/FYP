@@ -10,29 +10,14 @@
 
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
-const nodemailer = require("nodemailer");
 const { pool } = require("../config/db");
+const { sendEmail } = require("../services/emailTransportService");
 
 // In-memory OTP store: email -> { otp, expiresAt, attempts }
 const pendingOtps = new Map();
 
 const OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_ATTEMPTS = 5;
-
-/**
- * Create nodemailer transporter.
- */
-function getTransporter() {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    }
-  });
-}
 
 /**
  * POST /api/auth/otp/request
@@ -46,10 +31,6 @@ async function requestOtp(req, res) {
 
     if (!email || !email.includes("@")) {
       return res.status(400).json({ message: "Valid email is required." });
-    }
-
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      return res.status(500).json({ message: "Email service not configured." });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -67,11 +48,9 @@ async function requestOtp(req, res) {
     }
 
     // Send email
-    const transporter = getTransporter();
     const companyName = process.env.COMPANY_NAME || "PayNivo";
 
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    await sendEmail({
       to: normalizedEmail,
       subject: `${companyName} - Your Login Code`,
       html: `

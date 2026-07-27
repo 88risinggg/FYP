@@ -1,20 +1,9 @@
-const nodemailer = require("nodemailer");
-
 const { defaultSettings, getInvoiceSettings } = require("../models/invoiceSettingsModel");
 const { escapeHtml, generateInvoicePDF, hydrateInvoice } = require("./pdfService");
-
-function createTransporter() {
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER) return null;
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: Number(process.env.SMTP_PORT) === 465,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-  });
-}
+const { createEmailTransport, emailFrom, publicClientUrl } = require("./emailTransportService");
 
 function templateValues(invoice, settings, options = {}) {
-  const viewUrl = `${process.env.CLIENT_URL || "http://localhost:5173"}/invoice/view/${invoice.invoiceId}`;
+  const viewUrl = `${publicClientUrl()}/invoice/view/${invoice.invoiceId}`;
   const currency = settings.defaultCurrency || settings.general?.defaultCurrency || "SGD";
   return {
     invoice_number: invoice.invoiceId || "",
@@ -96,23 +85,11 @@ function buildInvoiceEmailHtml(invoice, settings, options = {}) {
 async function sendInvoiceEmail(invoice, options = {}) {
   const settings = { ...defaultSettings, ...((await getInvoiceSettings(invoice.company_id || invoice.companyId || null)) || {}) };
   const hydratedInvoice = await hydrateInvoice(invoice);
-  const transporter = createTransporter();
+  const transporter = createEmailTransport();
   let pdfBuffer = options.pdfBuffer || null;
 
   if (settings.attachPdfInvoice !== false && !pdfBuffer) {
     pdfBuffer = await generateInvoicePDF(hydratedInvoice, options);
-  }
-
-  if (!transporter) {
-    console.log(`[EMAIL] Invoice ${hydratedInvoice.invoiceId} -> ${hydratedInvoice.customer_email} (${hydratedInvoice.customer_name})`);
-    if (pdfBuffer) console.log(`[EMAIL] PDF attached (${pdfBuffer.length} bytes)`);
-    return {
-      provider: "console",
-      deliveredAt: new Date().toISOString(),
-      recipientEmail: hydratedInvoice.customer_email,
-      subject: renderTemplate(settings.emailSubjectTemplate, templateValues(hydratedInvoice, settings, options)),
-      message: "SMTP not configured. Email logged to console."
-    };
   }
 
   const attachments = [];
@@ -137,7 +114,7 @@ async function sendInvoiceEmail(invoice, options = {}) {
   }
 
   const values = templateValues(hydratedInvoice, settings, options);
-  const smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const smtpFrom = emailFrom();
   const info = await transporter.sendMail({
     from: settings.senderName
       ? `"${String(settings.senderName).replaceAll('"', "")}" <${smtpFrom}>`
@@ -176,7 +153,7 @@ async function sendInvoiceSettingsTestEmail(recipient) {
 }
 
 async function sendPaymentReceiptEmail(invoice, transactionId) {
-  const transporter = createTransporter();
+  const transporter = createEmailTransport();
   const settings = { ...defaultSettings, ...((await getInvoiceSettings(invoice.company_id || invoice.companyId || null)) || {}) };
   const amount = Number(invoice.total_amount || 0).toFixed(2);
   const currency = settings.defaultCurrency || "SGD";
@@ -189,12 +166,7 @@ async function sendPaymentReceiptEmail(invoice, transactionId) {
   </div>`;
 
   const subject = `Payment Receipt - Invoice ${invoice.invoiceId}`;
-  if (!transporter) {
-    const result = { provider: "console", deliveredAt: new Date().toISOString(), recipientEmail: invoice.customer_email, subject };
-    await logPaymentReceiptDelivery(invoice, transactionId, "Sent", result);
-    return result;
-  }
-  const smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const smtpFrom = emailFrom();
   try {
     const info = await transporter.sendMail({
       from: settings.senderName ? `"${String(settings.senderName).replaceAll('"', "")}" <${smtpFrom}>` : smtpFrom,

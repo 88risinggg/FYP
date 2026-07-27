@@ -31,6 +31,7 @@ import HRReportsPage from "./HRReportsPage.jsx";
 import ClaimManagementPage from "./ClaimManagementPage.jsx";
 import PayrollUserManagement from "../../components/payroll/PayrollUserManagement.jsx";
 import PayrollNotificationsView from "../../components/payroll/PayrollNotificationsView.jsx";
+import PayrollProgressTracker from "../../components/payroll/PayrollProgressTracker.jsx";
 import { getCompanyScopedKey, getStoredSession } from "../../services/sessionService.js";
 import { printConfiguredPayslip } from "../../utils/payslipPdf.js";
 import { getEffectivePayrollRules } from "../../services/adminPayrollService.js";
@@ -1796,8 +1797,8 @@ function PayrollUploadView() {
 const HR_SELECTED_RUN_KEY = "hrPayrollSelectedRunId";
 
 function SharedPayrollRunTracker({ workflow, run }) {
-  const stages = workflow?.stages || [];
-  return <nav aria-label="Shared payroll run progress" className="app-panel rounded-2xl p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold text-[#251E1F]">Shared payroll run progress</h3><p className="text-xs text-[#7b6660]">{run?.id || "Select a payroll run"}</p></div><span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Live shared state</span></div><ol className="mt-3 flex min-w-max items-center overflow-x-auto pb-2">{stages.map((stage, index) => <li key={stage.key} className="flex items-center"><div className={`flex w-40 items-center gap-2 rounded-xl border px-3 py-2 transition motion-reduce:transition-none ${stage.status === "completed" ? "border-emerald-200 bg-emerald-50" : stage.status === "failed" || stage.status === "blocked" ? "border-red-200 bg-red-50" : stage.status === "current" || stage.status === "processing" ? "border-[#F38978] bg-[#F38978]/10" : "border-[#f0d2ca] bg-white"}`}><span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${stage.status === "completed" ? "bg-emerald-600 text-white" : stage.status === "failed" || stage.status === "blocked" ? "bg-red-500 text-white" : stage.status === "current" || stage.status === "processing" ? "bg-[#F38978] text-white motion-safe:animate-pulse" : "bg-[#f0d2ca] text-[#7b6660]"}`}>{stage.status === "completed" ? "✓" : stage.status === "failed" || stage.status === "blocked" ? "!" : index + 1}</span><span className="min-w-0"><strong className="block truncate text-xs">{stage.label}</strong><small className="capitalize text-[#7b6660]">{stage.status}{stage.owner ? ` · ${stage.owner}` : ""}</small></span></div>{index < stages.length - 1 ? <span className={`h-1 w-7 ${stage.status === "completed" ? "bg-emerald-500" : "bg-[#f0d2ca]"}`}/> : null}</li>)}</ol></nav>;
+  const stages = (workflow?.stages || []).map((stage) => ({ ...stage, detail: `${stage.status}${stage.owner ? ` · ${stage.owner}` : ""}` }));
+  return <PayrollProgressTracker ariaLabel="Shared payroll run progress" title="Shared payroll run progress" runId={run?.id} stages={stages} badge={<span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Live shared state</span>} />;
 }
 
 function HRPayrollRunWorkflowView({ deliveryMode = false }) {

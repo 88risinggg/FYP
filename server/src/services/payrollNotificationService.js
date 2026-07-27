@@ -1,22 +1,10 @@
-const nodemailer = require("nodemailer");
 const { pool } = require("../config/db");
 const { currentCompanyId } = require("./tenantContext");
+const { createEmailTransport, emailFrom, publicClientUrl } = require("./emailTransportService");
 
 function eventCompanyId(event) {
   if (Number(event?.companyId) > 0) return Number(event.companyId);
   try { return currentCompanyId(); } catch { return process.env.NODE_ENV === "test" ? 1 : null; }
-}
-
-function createTransporter() {
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER) return null;
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: Number(process.env.SMTP_PORT) === 465,
-    auth: process.env.SMTP_PASS
-      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-      : undefined
-  });
 }
 
 function escapeHtml(value) {
@@ -26,7 +14,7 @@ function escapeHtml(value) {
 }
 
 function payrollEmailHtml({ recipientName, title, message, actorName, actionPath }) {
-  const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+  const clientUrl = publicClientUrl();
   const actionUrl = actionPath ? `${clientUrl}${actionPath}` : clientUrl;
   return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#251E1F">
     <h2 style="color:#F38978">${escapeHtml(title)}</h2><p>Hello ${escapeHtml(recipientName || "PayNivo user")},</p>
@@ -69,7 +57,7 @@ async function notifyUser(userId, event) {
 
   if (!emailEnabled) return result.insertId;
 
-  const mailer = createTransporter();
+  const mailer = createEmailTransport({ required: false });
   if (!mailer) {
     await pool.execute(
       "UPDATE notification SET delivery_status = 'Skipped', error_message = ? WHERE notification_id = ? AND company_id = ?",
@@ -80,7 +68,7 @@ async function notifyUser(userId, event) {
 
   try {
     await mailer.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      from: emailFrom(),
       to: recipient.email,
       subject: `[PayNivo] ${event.title}`,
       html: payrollEmailHtml({ recipientName: recipient.name, title: event.title, message, actorName, actionPath: event.actionPath })

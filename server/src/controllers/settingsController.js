@@ -8,6 +8,7 @@
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const settingsModel = require("../models/settingsModel");
+const { sendAuthOtpEmail, sendSystemTestEmail } = require("../services/emailService");
 
 // ─── Profile ────────────────────────────────────────────────────────────────
 
@@ -553,9 +554,12 @@ async function deleteManagedUser(req, res) {
 
 async function sendOtp(req, res) {
   try {
-    // Generate a 6-digit OTP (placeholder - would integrate with SMS/email service)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const { type } = req.body; // "phone" or "email"
+
+    if (type === "email") {
+      await sendAuthOtpEmail({ to: req.user.email, otp, purpose: "verification" });
+    }
 
     // In production, store OTP with expiry and send via SMS/email service
     // For now, return success with the OTP for testing
@@ -565,9 +569,9 @@ async function sendOtp(req, res) {
       ip_address: req.ip
     });
 
-    res.json({ message: `OTP sent to your ${type}`, otp_preview: otp });
+    res.json({ message: `OTP sent to your ${type}` });
   } catch (error) {
-    res.status(500).json({ message: "Failed to send OTP" });
+    res.status(error.code === "SMTP_NOT_CONFIGURED" ? 503 : 500).json({ message: "Failed to send OTP", detail: error.message });
   }
 }
 
@@ -669,10 +673,12 @@ async function updateEmailSettings(req, res) {
 
 async function sendTestEmail(req, res) {
   try {
-    // In production, this would send a real test email
-    res.json({ message: "Test email sent successfully" });
+    const profile = await settingsModel.getProfile(req.user.userId);
+    const recipient = String(req.body?.recipient || req.user.email || "").trim();
+    const delivery = await sendSystemTestEmail({ to: recipient, name: profile?.name });
+    res.json({ message: `Test email sent to ${delivery.recipient}.`, delivery });
   } catch (error) {
-    res.status(500).json({ message: "Failed to send test email" });
+    res.status(error.code === "SMTP_NOT_CONFIGURED" ? 503 : 500).json({ message: "Failed to send test email", detail: error.message });
   }
 }
 

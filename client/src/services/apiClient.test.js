@@ -32,4 +32,16 @@ describe("apiRequest session handling", () => {
     await expect(apiRequest("/api/payroll")).rejects.toThrow("Server is unavailable");
     expect(getStoredSession()?.token).toBe("valid-token");
   });
+
+  it("turns a proxy HTML timeout into an actionable message", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false,
+      status: 504,
+      headers: { get: () => "text/html" }
+    }));
+
+    await expect(apiRequest("/api/payroll/finance/runs/7_2026/workflow/submit-payment"))
+      .rejects.toThrow("The server returned an unexpected 504 response. Please retry.");
+    expect(getStoredSession()?.token).toBe("valid-token");
+  });
 });
