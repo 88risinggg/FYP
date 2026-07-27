@@ -19,9 +19,18 @@
  *   - Scheduler (daily reminders, retries)
  */
 
-const twilio = require("twilio");
 const configModel = require("../models/whatsappConfigModel");
 const messageModel = require("../models/whatsappMessageModel");
+
+let twilioSdk = null;
+
+// WhatsApp is an optional integration. Load its SDK only when the integration
+// is actually used so a missing package cannot prevent the web server from
+// starting and taking down unrelated invoicing/payroll routes.
+function getTwilioSdk() {
+  if (!twilioSdk) twilioSdk = require("twilio");
+  return twilioSdk;
+}
 
 // ─── Cached Twilio Client ─────────────────────────────────────────────────────
 
@@ -54,7 +63,7 @@ async function getTwilioClient() {
   }
 
   try {
-    cachedClient = twilio(config.account_sid, config.auth_token);
+    cachedClient = getTwilioSdk()(config.account_sid, config.auth_token);
     cachedConfig = config;
     cacheTimestamp = now;
     return { client: cachedClient, config: cachedConfig };
@@ -449,7 +458,7 @@ async function testConnection() {
   }
 
   try {
-    const client = twilio(config.account_sid, config.auth_token);
+    const client = getTwilioSdk()(config.account_sid, config.auth_token);
     const account = await client.api.accounts(config.account_sid).fetch();
 
     const status = account.status || "active";
