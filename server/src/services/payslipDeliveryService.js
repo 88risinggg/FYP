@@ -34,7 +34,8 @@ async function getPayslipDataset(payrollId) {
             c.display_name AS company_name, c.legal_name AS company_legal_name,
             c.registration_number AS company_registration_number, c.gst_number AS company_gst_number,
             c.company_email, c.company_phone, c.company_address, c.company_website,
-            c.logo_path AS company_logo_path, c.brand_color AS company_brand_color,
+            c.logo_path AS company_logo_path, c.logo_data AS company_logo_data,
+            c.logo_mime AS company_logo_mime, c.brand_color AS company_brand_color,
             c.currency AS company_currency, c.timezone AS company_timezone
      FROM payroll p
      INNER JOIN staff s ON s.employee_id = p.staff_employee_id AND s.company_id=p.company_id

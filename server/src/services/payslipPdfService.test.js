@@ -18,6 +18,8 @@ describe("PayNivo payslip PDF template", () => {
       company_legal_name: "Vaniday Singapore Pte. Ltd.",
       company_registration_number: "201812345K",
       company_address: "200 Victoria Street, Singapore",
+      company_logo_data: Buffer.from("new-company-logo"),
+      company_logo_mime: "image/jpeg",
       company_brand_color: "#F38978",
       deduction_breakdown: JSON.stringify({
         employeeCpf: 702.4,
@@ -29,7 +31,7 @@ describe("PayNivo payslip PDF template", () => {
       layout: { layout_name: "Vaniday Default" }
     });
 
-    expect(html).toContain("data:image/png;base64,");
+    expect(html).toContain(`data:image/jpeg;base64,${Buffer.from("new-company-logo").toString("base64")}`);
     expect(html).toContain("Vaniday Singapore Pte. Ltd.");
     expect(html).toContain("border-bottom: 3px solid #F38978");
     expect(html).toContain("PS-2026-07-");

@@ -21,6 +21,13 @@ async function initializeDatabaseServices() {
     return;
   }
 
+  try {
+    const { ensureCompanyLogoStorage } = require("./services/companyLogoStorageService");
+    await ensureCompanyLogoStorage();
+  } catch (error) {
+    console.error("Unable to initialize durable company-logo storage:", error.message);
+  }
+
   if (!schedulersEnabled()) {
     console.log("Background schedulers disabled.");
     return;

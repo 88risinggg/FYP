@@ -13,6 +13,13 @@ const PAYNIVO_LOGO_DATA_URI = `data:image/png;base64,${fs
   .toString("base64")}`;
 
 function companyLogoDataUri(payslip) {
+  const databaseLogo = payslip.company_logo_data;
+  if (databaseLogo && (Buffer.isBuffer(databaseLogo) || databaseLogo instanceof Uint8Array)) {
+    const mime = ["image/png", "image/jpeg"].includes(payslip.company_logo_mime)
+      ? payslip.company_logo_mime
+      : "image/png";
+    return `data:${mime};base64,${Buffer.from(databaseLogo).toString("base64")}`;
+  }
   const stored = String(payslip.company_logo_path || "");
   if (!stored) return PAYNIVO_LOGO_DATA_URI;
   const absolute = path.resolve(__dirname, "..", "..", stored);

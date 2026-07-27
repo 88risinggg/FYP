@@ -1,5 +1,4 @@
 const express = require("express");
-const crypto = require("crypto");
 const fs = require("fs");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
@@ -13,16 +12,18 @@ const router = express.Router();
 const logoRoot = path.join(__dirname, "..", "..", "uploads", "company-branding");
 fs.mkdirSync(logoRoot, { recursive: true });
 const logoUpload = multer({
-  storage: multer.diskStorage({
-    destination: (req, _file, callback) => { const folder = path.join(logoRoot, String(req.user.companyId)); fs.mkdirSync(folder, { recursive: true }); callback(null, folder); },
-    filename: (_req, file, callback) => callback(null, `${crypto.randomUUID()}${path.extname(file.originalname).toLowerCase()}`)
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 3 * 1024 * 1024, files: 1 },
   fileFilter: (_req, file, callback) => { const ok = ["image/png", "image/jpeg"].includes(file.mimetype) && [".png", ".jpg", ".jpeg"].includes(path.extname(file.originalname).toLowerCase()); callback(ok ? null : new Error("Upload a PNG or JPG logo."), ok); }
 });
 router.get("/branding/:workspaceId/logo", async (req, res, next) => {
   try {
-    const [rows] = await pool.execute("SELECT logo_path FROM companies WHERE workspace_id=? AND status='active' LIMIT 1", [req.params.workspaceId]);
+    const [rows] = await pool.execute("SELECT logo_path,logo_data,logo_mime FROM companies WHERE workspace_id=? AND status='active' LIMIT 1", [req.params.workspaceId]);
+    if (rows[0]?.logo_data) {
+      res.setHeader("Content-Type", rows[0].logo_mime || "image/png");
+      res.setHeader("Cache-Control", "no-cache, must-revalidate");
+      return res.send(rows[0].logo_data);
+    }
     const logoPath = rows[0]?.logo_path;
     if (!logoPath) return res.status(404).end();
     const absolute = path.resolve(__dirname, "..", "..", logoPath);
@@ -43,15 +44,17 @@ router.post("/profile/logo", requireRole("Admin"), requireTenant, (req, res, nex
     if (error) return res.status(400).json({ message: error.code === "LIMIT_FILE_SIZE" ? "Company logo must not exceed 3MB." : error.message });
     if (!req.file) return res.status(400).json({ message: "Select a company logo." });
     try {
-      const bytes = fs.readFileSync(req.file.path);
+      const bytes = req.file.buffer;
       const valid = req.file.mimetype === "image/png" ? bytes.subarray(0, 8).equals(Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a])) : bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-      if (!valid) { fs.unlinkSync(req.file.path); return res.status(400).json({ message: "The logo file signature is invalid." }); }
-      const relative = path.relative(path.join(__dirname, "..", ".."), req.file.path).split(path.sep).join("/");
-      await pool.execute("UPDATE companies SET logo_path=?,updated_at=NOW() WHERE company_id=?", [relative, req.user.companyId]);
+      if (!valid) return res.status(400).json({ message: "The logo file signature is invalid." });
+      await pool.execute(
+        "UPDATE companies SET logo_path='database',logo_data=?,logo_mime=?,updated_at=NOW() WHERE company_id=?",
+        [bytes, req.file.mimetype, req.user.companyId]
+      );
       await pool.execute(`INSERT INTO audit_logs (user_id,company_id,module,activity_type,action_description,affected_record,status,created_at)
         VALUES (?,?,'Company','Branding Update','Updated company brand logo',?,'Success',NOW())`, [req.user.userId || null, req.user.companyId, String(req.user.companyId)]).catch(() => {});
       return res.json({ company: safeCompany(await getCompany(req.user.companyId)) });
-    } catch (uploadError) { if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path); return next(uploadError); }
+    } catch (uploadError) { return next(uploadError); }
   });
 });
 
