@@ -411,6 +411,13 @@ async function sendInvoiceWhatsApp(req, res) {
     });
 
     if (result.success) {
+      // Update invoice status to "Sent" (same as email send)
+      if (!["Paid", "Void", "Cancelled", "Refunded"].includes(invoice.status)) {
+        await pool.query(
+          "UPDATE invoice SET status = 'Sent', scheduled_at = NULL WHERE invoice_id = ?",
+          [invoiceId]
+        );
+      }
       res.json({ message: "Invoice sent via WhatsApp.", messageId: result.messageId, logId: result.logId });
     } else {
       res.status(422).json({ message: "Failed to send invoice.", error: result.error, logId: result.logId });

@@ -1313,7 +1313,8 @@ function InvoiceTable({
   onView,
   onSend,
   onScheduleInvoice,
-  onVoidInvoice
+  onVoidInvoice,
+  onRefresh
 }) {
   if (invoices.length === 0) {
     return (
@@ -1410,7 +1411,7 @@ function InvoiceTable({
                     <Download size={14} />
                     Download PDF
                   </button>
-                  <SendWhatsAppButton invoiceId={invoice.invoice_id} size="small" />
+                  <SendWhatsAppButton invoiceId={invoice.invoice_id} size="small" onSent={() => onRefresh && onRefresh()} />
                   {invoice.status === "Draft" ? (
                     <button
                       type="button"
@@ -2642,6 +2643,7 @@ function InvoicesView({
               setIsScheduleModalOpen(true);
             }}
             onVoidInvoice={setVoidTarget}
+            onRefresh={loadWorkspaceData}
           />
         )}
       </SectionShell>
