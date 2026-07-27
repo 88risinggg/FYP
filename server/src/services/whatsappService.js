@@ -254,13 +254,8 @@ async function sendAndLog(params) {
     return { success: false, messageId: null, logId, error: phoneValidation.error };
   }
 
-  // Check for duplicates (same invoice + type today)
-  if (invoiceId) {
-    const alreadySent = await messageModel.hasSentToday(invoiceId, messageType);
-    if (alreadySent) {
-      return { success: false, messageId: null, logId: null, error: "A message of this type was already sent for this invoice today." };
-    }
-  }
+  // Duplicate prevention removed — allow re-sending the same message type
+  // for an invoice multiple times per day (needed for retries and testing).
 
   // Create log entry (queued)
   const logId = await messageModel.createMessage({

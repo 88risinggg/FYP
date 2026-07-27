@@ -225,7 +225,7 @@ async function getLatestForInvoice(invoiceId) {
 async function hasSentToday(invoiceId, messageType) {
   const [rows] = await pool.query(
     `SELECT id FROM whatsapp_messages
-     WHERE invoice_id = ? AND message_type = ? AND status IN ('queued', 'sent', 'delivered', 'read')
+     WHERE invoice_id = ? AND message_type = ? AND status IN ('sent', 'delivered', 'read')
      AND DATE(created_at) = CURDATE()
      LIMIT 1`,
     [invoiceId, messageType]
