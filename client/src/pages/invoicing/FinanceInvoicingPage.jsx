@@ -2643,7 +2643,7 @@ function InvoicesView({
               setIsScheduleModalOpen(true);
             }}
             onVoidInvoice={setVoidTarget}
-            onRefresh={loadWorkspaceData}
+            onRefresh={onScheduleInvoices}
           />
         )}
       </SectionShell>
