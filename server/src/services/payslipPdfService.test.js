@@ -32,6 +32,8 @@ describe("PayNivo payslip PDF template", () => {
     });
 
     expect(html).toContain(`data:image/jpeg;base64,${Buffer.from("new-company-logo").toString("base64")}`);
+    expect(html).not.toContain("filter: invert(1)");
+    expect(html).not.toContain("mix-blend-mode: screen");
     expect(html).toContain("Vaniday Singapore Pte. Ltd.");
     expect(html).toContain("border-bottom: 3px solid #F38978");
     expect(html).toContain("PS-2026-07-");
