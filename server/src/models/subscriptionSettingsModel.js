@@ -133,40 +133,48 @@ function normalizeSubscriptionSettings(input = {}) {
 
 async function ensureSubscriptionSettingsTable() {
   if (settingsTableReady) return;
-  await pool.query(
-    `CREATE TABLE IF NOT EXISTS subscription_settings (
-      company_id INT NOT NULL,
-      plans_json JSON NULL,
-      billing_rules_json JSON NULL,
-      automation_settings_json JSON NULL,
-      updated_by INT NULL,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (company_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
-  );
+  // Subscription settings are now stored directly on the companies table (1:1 merge).
+  // Ensure the column exists for backward compatibility during migration.
+  try {
+    const [cols] = await pool.query(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'companies' AND COLUMN_NAME = 'subscription_settings_json'`
+    );
+    if (cols.length === 0) {
+      await pool.query(`ALTER TABLE companies ADD COLUMN subscription_settings_json JSON NULL`);
+    }
+  } catch (error) {
+    // Column already exists — safe to ignore
+    if (error.code !== "ER_DUP_FIELDNAME") throw error;
+  }
   settingsTableReady = true;
 }
 
 async function getSubscriptionSettings(companyId) {
   await ensureSubscriptionSettingsTable();
   const companyKey = Number(companyId) > 0 ? Number(companyId) : 0;
+
+  if (companyKey === 0) {
+    return { ...normalizeSubscriptionSettings(defaultSubscriptionSettings), updatedAt: null };
+  }
+
   const [rows] = await pool.query(
-    `SELECT plans_json, billing_rules_json, automation_settings_json, updated_at
-     FROM subscription_settings
+    `SELECT subscription_settings_json, updated_at
+     FROM companies
      WHERE company_id = ?
      LIMIT 1`,
     [companyKey]
   );
 
-  if (!rows[0]) {
+  if (!rows[0] || !rows[0].subscription_settings_json) {
     return { ...normalizeSubscriptionSettings(defaultSubscriptionSettings), updatedAt: null };
   }
 
+  const raw = parseJson(rows[0].subscription_settings_json, {});
   const normalized = normalizeSubscriptionSettings({
-    plans: parseJson(rows[0].plans_json, []),
-    billingRules: parseJson(rows[0].billing_rules_json, {}),
-    automation: parseJson(rows[0].automation_settings_json, {})
+    plans: raw.plans || [],
+    billingRules: raw.billingRules || {},
+    automation: raw.automation || {}
   });
 
   return { ...normalized, updatedAt: rows[0].updated_at || null };
@@ -177,23 +185,19 @@ async function saveSubscriptionSettings(companyId, input, updatedBy) {
   const companyKey = Number(companyId) > 0 ? Number(companyId) : 0;
   const settings = normalizeSubscriptionSettings(input);
 
+  if (companyKey === 0) {
+    return { ...settings, updatedAt: null };
+  }
+
+  const payload = JSON.stringify({
+    plans: settings.plans,
+    billingRules: settings.billingRules,
+    automation: settings.automation
+  });
+
   await pool.query(
-    `INSERT INTO subscription_settings
-       (company_id, plans_json, billing_rules_json, automation_settings_json, updated_by)
-     VALUES (?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       plans_json = VALUES(plans_json),
-       billing_rules_json = VALUES(billing_rules_json),
-       automation_settings_json = VALUES(automation_settings_json),
-       updated_by = VALUES(updated_by),
-       updated_at = NOW()`,
-    [
-      companyKey,
-      JSON.stringify(settings.plans),
-      JSON.stringify(settings.billingRules),
-      JSON.stringify(settings.automation),
-      updatedBy || null
-    ]
+    `UPDATE companies SET subscription_settings_json = ?, updated_at = NOW() WHERE company_id = ?`,
+    [payload, companyKey]
   );
 
   return getSubscriptionSettings(companyKey);

@@ -28,6 +28,17 @@ async function initializeDatabaseServices() {
     console.error("Unable to initialize durable company-logo storage:", error.message);
   }
 
+  // Auto-seed WhatsApp config from env vars if DB table is empty
+  try {
+    const { ensureWhatsAppConfig } = require("./services/whatsappConfigBootstrap");
+    await ensureWhatsAppConfig();
+  } catch (error) {
+    // Non-critical — WhatsApp is optional
+    if (error.code !== "MODULE_NOT_FOUND") {
+      console.error("WhatsApp config auto-seed skipped:", error.message);
+    }
+  }
+
   if (!schedulersEnabled()) {
     console.log("Background schedulers disabled.");
     return;

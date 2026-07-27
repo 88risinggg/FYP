@@ -43,6 +43,7 @@ const subscriptionRoutes = require("./routes/subscriptionRoutes");
 const subscriptionReminderRoutes = require("./routes/subscriptionReminderRoutes");
 const financeReminderRoutes = require("./routes/financeReminderRoutes");
 const whatsappRoutes = require("./routes/whatsappRoutes");
+const integrationRoutes = require("./routes/integrationRoutes");
 const companyRoutes = require("./routes/companyRoutes");
 const { authenticateToken } = require("./middleware/authMiddleware");
 const { requireTenant } = require("./middleware/tenantMiddleware");
@@ -96,6 +97,7 @@ app.use("/api/subscriptions", authenticateToken, requireTenant, subscriptionRout
 app.use("/api/subscription-reminders", authenticateToken, requireTenant, subscriptionReminderRoutes);
 app.use("/api/finance-reminders", authenticateToken, requireTenant, financeReminderRoutes);
 app.use("/api/whatsapp", whatsappRoutes);
+app.use("/api/integrations", integrationRoutes);
 
 // Routes — Payroll module
 app.use("/api/profile", authenticateToken, requireTenant, profileRoutes);

@@ -298,6 +298,24 @@ router.post("/:id/whatsapp", async (req, res) => {
       return res.status(400).json({ message: "Customer does not have a WhatsApp number. Provide phone in request body." });
     }
 
+    // Ensure a valid Stripe payment link exists (create session if missing)
+    let paymentUrl = invoice.payment_url;
+    if (!paymentUrl || !paymentUrl.startsWith("https://checkout.stripe.com/")) {
+      try {
+        const { createCheckoutSession } = require("../services/stripeService");
+        const stripeResult = await createCheckoutSession(invoice);
+        paymentUrl = stripeResult.paymentUrl;
+        await pool.query(
+          "UPDATE invoice SET payment_url = ?, stripe_session_id = ? WHERE invoice_id = ?",
+          [paymentUrl, stripeResult.sessionId, invoice.invoice_id]
+        );
+      } catch (stripeErr) {
+        console.warn("[WHATSAPP] Stripe session creation failed:", stripeErr.message);
+        const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+        paymentUrl = `${clientUrl}/invoice/${invoice.invoiceId}`;
+      }
+    }
+
     const result = await whatsappService.sendInvoice({
       customerId: invoice.customer_id,
       customerName: invoice.customer_name,
@@ -306,7 +324,7 @@ router.post("/:id/whatsapp", async (req, res) => {
       invoiceNumber: invoice.invoiceId,
       amount: invoice.total_amount,
       dueDate: invoice.due_date,
-      paymentLink: invoice.payment_url || null,
+      paymentLink: paymentUrl,
       sentBy: req.user?.userId
     });
 

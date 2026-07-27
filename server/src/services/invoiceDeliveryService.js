@@ -1,6 +1,12 @@
 const { defaultSettings, getInvoiceSettings } = require("../models/invoiceSettingsModel");
 const { escapeHtml, generateInvoicePDF, hydrateInvoice } = require("./pdfService");
 const { createEmailTransport, emailFrom, publicClientUrl } = require("./emailTransportService");
+const {
+  createEmailLog,
+  markEmailSent,
+  markEmailFailed,
+  isDuplicateEmail
+} = require("./integrationLogService");
 
 function templateValues(invoice, settings, options = {}) {
   const viewUrl = `${publicClientUrl()}/invoice/view/${invoice.invoiceId}`;
@@ -153,32 +159,72 @@ async function sendInvoiceSettingsTestEmail(recipient) {
 }
 
 async function sendPaymentReceiptEmail(invoice, transactionId) {
+  // Deduplication: prevent sending the same payment receipt twice
+  const dedupKey = `payment_confirmation:${invoice.invoiceId}:${transactionId}`;
+  const alreadySent = await isDuplicateEmail(dedupKey);
+  if (alreadySent) {
+    return { provider: "skipped", message: "Payment receipt already sent for this transaction." };
+  }
+
   const transporter = createEmailTransport();
   const settings = { ...defaultSettings, ...((await getInvoiceSettings(invoice.company_id || invoice.companyId || null)) || {}) };
   const amount = Number(invoice.total_amount || 0).toFixed(2);
   const currency = settings.defaultCurrency || "SGD";
+  const subject = `Payment Receipt - Invoice ${invoice.invoiceId}`;
+  const recipient = invoice.customer_email;
+
   const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px">
     <h1>${escapeHtml(settings.companyName || "Payment Receipt")}</h1>
     <h2>Payment received</h2>
-    <p>Invoice: <strong>${escapeHtml(invoice.invoiceId)}</strong></p>
-    <p>Amount paid: <strong>${escapeHtml(currency)} ${escapeHtml(amount)}</strong></p>
-    <p>Transaction ID: <strong>${escapeHtml(transactionId)}</strong></p>
+    <p>Dear ${escapeHtml(invoice.customer_name || "Customer")},</p>
+    <p>We have received your payment. Here are the details:</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0">
+      <tr><td style="padding:8px 0;color:#7b6660">Invoice:</td><td style="padding:8px 0;font-weight:700">${escapeHtml(invoice.invoiceId)}</td></tr>
+      <tr><td style="padding:8px 0;color:#7b6660">Amount paid:</td><td style="padding:8px 0;font-weight:700">${escapeHtml(currency)} ${escapeHtml(amount)}</td></tr>
+      <tr><td style="padding:8px 0;color:#7b6660">Transaction ID:</td><td style="padding:8px 0;font-weight:700">${escapeHtml(transactionId)}</td></tr>
+      <tr><td style="padding:8px 0;color:#7b6660">Date:</td><td style="padding:8px 0">${new Date().toLocaleDateString("en-SG", { day: "2-digit", month: "short", year: "numeric" })}</td></tr>
+    </table>
+    <p style="color:#7b6660">Thank you for your payment.</p>
+    <hr style="border:none;border-top:1px solid #f0e8e5;margin:20px 0" />
+    <p style="font-size:12px;color:#9e8e89">${escapeHtml(settings.companyName || "PayNivo")}</p>
   </div>`;
 
-  const subject = `Payment Receipt - Invoice ${invoice.invoiceId}`;
+  // Create email log entry
+  const logId = await createEmailLog({
+    customerId: invoice.customer_id || null,
+    invoiceId: invoice.invoice_id || null,
+    emailType: "payment_confirmation",
+    recipient: recipient || "",
+    subject,
+    deduplicationKey: dedupKey,
+    triggeredBy: "webhook"
+  });
+
+  if (!transporter) {
+    console.log(`[EMAIL] Payment receipt ${invoice.invoiceId} -> ${recipient}`);
+    if (logId) await markEmailSent(logId, "console-mode");
+    const result = { provider: "console", deliveredAt: new Date().toISOString(), recipientEmail: recipient, subject };
+    await logPaymentReceiptDelivery(invoice, transactionId, "Sent", result);
+    return result;
+  }
+
   const smtpFrom = emailFrom();
   try {
     const info = await transporter.sendMail({
       from: settings.senderName ? `"${String(settings.senderName).replaceAll('"', "")}" <${smtpFrom}>` : smtpFrom,
       replyTo: settings.replyToEmail || settings.financeEmail || undefined,
-      to: invoice.customer_email,
+      to: recipient,
       subject,
-      html
+      html,
+      text: `Payment Receipt\n\nInvoice: ${invoice.invoiceId}\nAmount: ${currency} ${amount}\nTransaction: ${transactionId}\n\nThank you for your payment.`
     });
-    const result = { provider: "smtp", messageId: info.messageId, deliveredAt: new Date().toISOString(), recipientEmail: invoice.customer_email, subject };
+
+    if (logId) await markEmailSent(logId, info.messageId);
+    const result = { provider: "smtp", messageId: info.messageId, deliveredAt: new Date().toISOString(), recipientEmail: recipient, subject };
     await logPaymentReceiptDelivery(invoice, transactionId, "Sent", result);
     return result;
   } catch (error) {
+    if (logId) await markEmailFailed(logId, error.code || "SMTP_ERROR", error.message);
     await logPaymentReceiptDelivery(invoice, transactionId, "Failed", { subject, errorMessage: error.message, errorCode: error.code });
     throw error;
   }
