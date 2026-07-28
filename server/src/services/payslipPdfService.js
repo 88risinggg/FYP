@@ -69,7 +69,17 @@ async function launchPayslipBrowser() {
   return puppeteer.launch({
     headless: true,
     executablePath: getExecutablePath(),
-    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--disable-extensions",
+      "--disable-background-networking",
+      "--no-first-run",
+      "--no-zygote",
+      "--single-process"
+    ]
   });
 }
 
@@ -80,7 +90,9 @@ async function generatePayslipPDF(payslip, existingBrowser = null) {
 
   try {
     page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    // Payslips contain only inline HTML and data-URI images. Waiting for
+    // network-idle needlessly keeps Chromium busy in small hosted containers.
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 15000 });
     const pdfBuffer = await page.pdf({
       format: "A4",
       landscape: true,
