@@ -23,12 +23,15 @@ const { generateAndSendPayslip } = require("../services/payslipDeliveryService")
 const { deliverRunPayslips, findRun } = require("../services/payrollRunPayslipService");
 const { buildFinanceWorkflowState } = require("../services/financePayrollWorkflowState");
 const { writeAuditLog } = require("../services/auditService");
+const { currentCompanyId, runWithTenant } = require("../services/tenantContext");
+const { createBackgroundJobRegistry } = require("../services/backgroundJobRegistry");
 const {
   createFinancePayrollRunFromStaff,
   listFinancePayrollRuns
 } = require("../models/financePayrollModel");
 
 const router = express.Router();
+const activePayslipDeliveries = createBackgroundJobRegistry();
 
 const uploadsDir = path.join(__dirname, "..", "..", "uploads");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -42,14 +45,52 @@ router.get("/payroll-runs/:runId/workflow", authenticateToken, allowRoles("HR"),
 });
 
 router.post("/payroll-runs/:runId/payslips/send", authenticateToken, allowRoles("HR"), async (req, res) => {
+  const runId = req.params.runId;
+  const companyId = currentCompanyId();
+  const jobKey = `${companyId}:${runId}`;
+  const reservation = activePayslipDeliveries.reserve(jobKey);
+  if (!reservation.acquired) {
+    return res.status(202).json({
+      code: "PAYSLIP_DELIVERY_IN_PROGRESS",
+      message: "Payslip delivery is already running.",
+      startedAt: reservation.job.startedAt
+    });
+  }
+
+  const { startedAt } = reservation.job;
+  const userId = req.user?.userId;
+  const actor = req.user?.email || "HR";
+
   try {
-    const result = await deliverRunPayslips({ runId: req.params.runId, userId: req.user?.userId, actor: req.user?.email || "HR" });
-    await writeAuditLog({ module: "Payroll", activityType: "Payslip Delivery", action: `HR delivered payroll-run payslips for ${req.params.runId}`, entityId: req.params.runId, entityType: "payroll_run", userId: req.user?.userId, status: result.delivery.failed ? "Partial" : "Success" });
-    await notifyRoles("Finance", { type: result.delivery.failed ? "payslip_delivery_attention" : "payslip_delivery_complete", title: result.delivery.failed ? "HR payslip delivery needs attention" : "HR completed payslip delivery", message: result.delivery.failed ? `${result.delivery.failed} payslip(s) remain unsuccessful for ${req.params.runId}.` : `All payslips for ${req.params.runId} were delivered by HR.`, entityType: "payroll_run", entityId: req.params.runId, actionPath: "/dashboard/payroll/finance/statutory-ledger" });
-    return res.status(result.delivery.failed ? 409 : 200).json(result.delivery.failed ? { ...result, code: "PAYSLIP_DELIVERY_INCOMPLETE", message: `${result.delivery.failed} payslip(s) could not be delivered. Retry sends only unsuccessful records.` } : result);
+    const run = await findRun(runId);
+    if (!run) {
+      activePayslipDeliveries.release(jobKey);
+      return res.status(404).json({ code: "PAYROLL_RUN_NOT_FOUND", message: "Payroll run not found." });
+    }
+    if (!run.paidAt) {
+      activePayslipDeliveries.release(jobKey);
+      return res.status(409).json({ code: "PAYMENT_NOT_CONFIRMED", message: "Finance must confirm payment before HR can deliver payslips." });
+    }
+
+    activePayslipDeliveries.run(
+      jobKey,
+      () => runWithTenant(companyId, async () => {
+        const result = await deliverRunPayslips({ runId, userId, actor });
+        await writeAuditLog({ module: "Payroll", activityType: "Payslip Delivery", action: `HR delivered payroll-run payslips for ${runId}`, entityId: runId, entityType: "payroll_run", userId, status: result.delivery.failed ? "Partial" : "Success" });
+        await notifyRoles("Finance", { type: result.delivery.failed ? "payslip_delivery_attention" : "payslip_delivery_complete", title: result.delivery.failed ? "HR payslip delivery needs attention" : "HR completed payslip delivery", message: result.delivery.failed ? `${result.delivery.failed} payslip(s) remain unsuccessful for ${runId}.` : `All payslips for ${runId} were delivered by HR.`, entityType: "payroll_run", entityId: runId, actionPath: "/dashboard/payroll/finance/statutory-ledger" });
+      }),
+      (error) => console.error(`Payslip delivery job failed for ${jobKey}:`, error)
+    );
+
+    return res.status(202).json({
+      code: "PAYSLIP_DELIVERY_STARTED",
+      message: "Payslip delivery started. Progress will update automatically.",
+      startedAt
+    });
   } catch (error) {
+    activePayslipDeliveries.release(jobKey);
     const status = ["PAYROLL_RUN_NOT_FOUND"].includes(error.code) ? 404 : ["PAYMENT_NOT_CONFIRMED"].includes(error.code) ? 409 : 500;
-    return res.status(status).json({ code: error.code || "PAYSLIP_DELIVERY_FAILED", message: error.message || "Unable to deliver payroll-run payslips." });
+    return res.status(status).json({ code: error.code || "PAYSLIP_DELIVERY_FAILED", message: error.message || "Unable to start payroll-run payslip delivery." });
   }
 });
 

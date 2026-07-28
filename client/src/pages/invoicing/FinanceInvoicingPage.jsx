@@ -288,7 +288,7 @@ function escapeHtml(value) {
 
 function openPrintableInvoice(invoice) {
   const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-  const token = localStorage.getItem("authToken");
+  const token = sessionStorage.getItem("authToken");
 
   // Download the actual PDF from the server
   fetch(`${API_BASE}/api/invoices/${invoice.invoice_id}/pdf`, {
@@ -1347,7 +1347,8 @@ function InvoiceTable({
   onView,
   onSend,
   onScheduleInvoice,
-  onVoidInvoice
+  onVoidInvoice,
+  onRefresh
 }) {
   if (invoices.length === 0) {
     return (
@@ -1444,7 +1445,7 @@ function InvoiceTable({
                     <Download size={14} />
                     Download PDF
                   </button>
-                  <SendWhatsAppButton invoiceId={invoice.invoice_id} size="small" />
+                  <SendWhatsAppButton invoiceId={invoice.invoice_id} size="small" onSent={() => onRefresh && onRefresh()} />
                   {invoice.status === "Draft" ? (
                     <button
                       type="button"
@@ -1592,7 +1593,7 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
   useEffect(() => {
     async function loadDashboardExtras() {
       const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-      const token = localStorage.getItem("authToken");
+      const token = sessionStorage.getItem("authToken");
       const headers = { "Content-Type": "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -2382,7 +2383,7 @@ function ComplianceDashboardView({ invoices, isLoading, error }) {
   useEffect(() => {
     async function loadFraudData() {
       const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-      const token = localStorage.getItem("authToken");
+      const token = sessionStorage.getItem("authToken");
       const headers = { "Content-Type": "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -2444,7 +2445,7 @@ function AccountingDashboardView({ invoices, isLoading, error }) {
   useEffect(() => {
     async function loadSettingsData() {
       const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-      const token = localStorage.getItem("authToken");
+      const token = sessionStorage.getItem("authToken");
       const headers = { "Content-Type": "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -2676,6 +2677,7 @@ function InvoicesView({
               setIsScheduleModalOpen(true);
             }}
             onVoidInvoice={setVoidTarget}
+            onRefresh={onScheduleInvoices}
           />
         )}
       </SectionShell>
@@ -2727,7 +2729,7 @@ async function parseSpreadsheetFile(file) {
 
   if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-    const token = localStorage.getItem("authToken");
+    const token = sessionStorage.getItem("authToken");
 
     const formData = new FormData();
     formData.append("file", file);
@@ -2874,7 +2876,7 @@ function BulkUploadView({ onProcessed }) {
       if (flaggedRows.length > 0) {
         try {
           const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-          const token = localStorage.getItem("authToken");
+          const token = sessionStorage.getItem("authToken");
           await fetch(`${API_BASE}/api/fraud/flag-invalid-rows`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

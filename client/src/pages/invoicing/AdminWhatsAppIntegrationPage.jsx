@@ -41,7 +41,7 @@ import {
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 function getHeaders() {
-  const token = localStorage.getItem("authToken");
+  const token = sessionStorage.getItem("authToken");
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
   return headers;

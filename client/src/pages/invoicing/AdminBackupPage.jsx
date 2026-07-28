@@ -375,7 +375,7 @@ export default function AdminBackupPage() {
                             link.href = `${import.meta.env.VITE_API_BASE_URL || ""}/api/admin/backups/${backup.backup_id}/download`;
                             link.setAttribute("download", "");
                             // Use fetch with auth header for download
-                            const token = localStorage.getItem("authToken");
+                            const token = sessionStorage.getItem("authToken");
                             fetch(link.href, { headers: { Authorization: `Bearer ${token}` } })
                               .then(res => res.blob())
                               .then(blob => {

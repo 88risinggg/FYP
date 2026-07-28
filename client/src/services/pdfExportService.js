@@ -228,7 +228,7 @@ class PdfDocument {
    */
   async save(fileName) {
     const html = this._buildHtml();
-    const token = localStorage.getItem("authToken");
+    const token = sessionStorage.getItem("authToken");
 
     const response = await fetch(`${API_BASE}/api/reports/generate-pdf`, {
       method: "POST",

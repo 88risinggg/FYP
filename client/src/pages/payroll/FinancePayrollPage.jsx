@@ -32,6 +32,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
+import PayrollProgressTracker from "../../components/payroll/PayrollProgressTracker.jsx";
 import { getEffectivePayrollRules, getPayrollRuleConfig } from "../../services/adminPayrollService.js";
 import {
   createFinancePayrollRunFromStaff,
@@ -1793,17 +1794,27 @@ function FinancePayrollJourney({ run, isLiveUpdating = false, lastSyncAt = null,
     ["Reconcile & report", "/dashboard/payroll/finance/reconciliation-reports", completed.reconciled, !completed.ledgerRecorded, "Reconcile"]
   ];
   const currentIndex = stages.findIndex((stage) => !stage[2] && !stage[3]);
+  const trackerStages = stages.map(([label, path, done, blocked, fallback], index) => {
+    const current = index === currentIndex;
+    return {
+      key: `${path}:${label}`,
+      label,
+      path,
+      status: blocked ? "blocked" : done ? "completed" : current ? "current" : "upcoming",
+      detail: blocked ? "Blocked" : done ? "Complete" : current ? "Current" : fallback || "Upcoming"
+    };
+  });
   return (
-    <nav aria-label="Finance payroll progress" className="app-panel mb-5 rounded-2xl px-4 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-semibold text-[#251E1F]">Payroll Run Progress</p><p className="mt-0.5 text-[11px] font-medium text-[#7b6660]">{formatPayrollRunId(run)}</p></div><div className="flex items-center gap-2"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${isLiveUpdating ? "bg-blue-100 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}><span className={`h-2 w-2 rounded-full ${isLiveUpdating ? "bg-blue-500 motion-safe:animate-pulse" : "bg-emerald-500"}`}/>{isLiveUpdating ? activityLabel || "Updating workflow…" : `Live${lastSyncAt ? ` · ${lastSyncAt.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}`}</span><span className="text-xs font-medium text-[#7b6660]">{formatPayrollPeriod(run)}</span></div></div>
-      <ol className="mt-3 flex min-w-max items-center overflow-x-auto pb-2">
-        {stages.map(([label, path, done, blocked, fallback], index) => {
-          const current = index === currentIndex;
-          const status = blocked ? "Blocked" : done ? "Complete" : current ? "Current" : fallback || "Upcoming";
-          return <li key={label} className="flex items-center"><button type="button" onClick={() => navigate(path)} aria-label={`${label}: ${status}`} className={`relative flex h-full w-44 items-center gap-2 rounded-xl border px-3 py-2 text-left transition-all duration-500 motion-reduce:transition-none ${blocked ? "border-red-300 bg-red-50" : done ? "border-emerald-200 bg-emerald-50" : current ? "border-[#F38978] bg-[#F38978]/10 shadow-lg shadow-[#F38978]/20" : "border-[#f0d2ca] bg-white"}`}><span className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${done ? "bg-emerald-600 text-white" : blocked ? "bg-red-500 text-white" : current ? "bg-[#F38978] text-white motion-safe:animate-pulse" : "bg-[#f0d2ca] text-[#7b6660]"}`}>{current ? <span aria-hidden="true" className="absolute inset-0 rounded-full border-2 border-[#F38978] motion-safe:animate-ping"/> : null}<span className="relative">{done ? "✓" : blocked ? "!" : index + 1}</span></span><span className="min-w-0"><strong className="block truncate text-xs text-[#251E1F]">{label}</strong><small className={`block text-[11px] ${blocked ? "text-red-700" : current ? "font-semibold text-[#F38978]" : "text-[#7b6660]"}`}>{status}</small></span></button>{index < stages.length - 1 ? <span aria-hidden="true" className={`h-1 w-8 overflow-hidden rounded-full ${done ? "bg-emerald-200" : "bg-[#f0d2ca]"}`}><span className={`block h-full rounded-full transition-all duration-700 motion-reduce:transition-none ${done ? "w-full bg-emerald-500" : current ? "w-1/2 bg-[#F38978] motion-safe:animate-pulse" : "w-0"}`}/></span> : null}</li>;
-        })}
-      </ol>
-    </nav>
+    <PayrollProgressTracker
+      ariaLabel="Finance payroll progress"
+      title="Payroll Run Progress"
+      runId={formatPayrollRunId(run)}
+      period={formatPayrollPeriod(run)}
+      stages={trackerStages}
+      onSelectStage={(stage) => navigate(stage.path)}
+      className="mb-5"
+      badge={<span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${isLiveUpdating ? "bg-blue-100 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}><span className={`h-2 w-2 rounded-full ${isLiveUpdating ? "bg-blue-500 motion-safe:animate-pulse" : "bg-emerald-500"}`}/>{isLiveUpdating ? activityLabel || "Updating workflow…" : `Live${lastSyncAt ? ` · ${lastSyncAt.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}`}</span>}
+    />
   );
 }
 
@@ -3921,7 +3932,7 @@ function GuidedWorkflowStageView({ stage, selectedRun, payrollRuns, onSelectRun,
       </section>
       <aside className="app-panel rounded-2xl p-5"><h3 className="font-semibold text-[#251E1F]">Stage checklist</h3><ul className="mt-4 space-y-3">{displayedChecks.map(([label, complete]) => <li key={label} className="flex items-start gap-2 text-sm"><span className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold ${complete ? "bg-emerald-600 text-white" : "bg-[#f0d2ca] text-[#7b6660]"}`}>{complete ? "✓" : "·"}</span><span className={complete ? "text-emerald-700" : "text-[#7b6660]"}>{label}</span></li>)}</ul>
         {busy ? <div role="status" aria-live="polite" className="mt-5 overflow-hidden rounded-xl border border-[#2D7C83]/25 bg-[#2D7C83]/10 p-3 text-sm text-[#2D7C83]"><div className="flex items-center gap-2 font-semibold"><Loader2 size={17} className="motion-safe:animate-spin"/><span>Validating and saving this stage…</span></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/80"><span className="block h-full w-2/3 rounded-full bg-gradient-to-r from-[#2D7C83] via-emerald-400 to-[#2D7C83] motion-safe:animate-pulse"/></div><p className="mt-2 text-xs">The next stage unlocks only after the database confirms this action.</p></div> : null}
-        <div className="mt-6 space-y-2">{stage === "review" && selectedRun.rulesChanged ? <ActionButton icon={RefreshCw} disabled={busy} onClick={onRecalculate}>Recalculate with current rules</ActionButton> : stage === "review" ? reviewResultsVisible ? <ActionButton icon={ArrowRight} onClick={() => navigate("/dashboard/payroll/finance/staff-payroll-details")}>Next: Staff Review &amp; Adjustments</ActionButton> : <ActionButton icon={ShieldCheck} disabled={busy} onClick={runComplianceReview}>Run automated review</ActionButton> : stage === "preparation" ? <><ActionButton icon={Download} disabled={!state.approved || busy || Boolean(selectedRun.paymentFileGeneratedAt)} onClick={onGeneratePaymentFile}>{selectedRun.paymentFileGeneratedAt ? "Payment PDF generated" : "Generate payment PDF"}</ActionButton><ActionButton icon={Users} variant="secondary" disabled={!state.approved || busy} onClick={onSetupRecipients}>{selectedRun.paymentRecipientsConfigured >= selectedRun.employees.length ? "Recipients configured" : "Configure recipients"}</ActionButton></> : stage === "payment" ? <>{selectedRun.paymentStatus === "Submitting" ? <ActionButton icon={Loader2} disabled>Submission in progress</ActionButton> : ["Failed", "Partially Submitted"].includes(selectedRun.paymentStatus) ? <ActionButton icon={RefreshCw} disabled={!item.ready || busy} onClick={() => runAction("retry-payment")}>Retry remaining payments</ActionButton> : !selectedRun.paymentSubmittedAt ? <ActionButton icon={Send} disabled={!item.ready || busy} onClick={onSubmitPayment}>Submit to Modern Treasury</ActionButton> : !state.paid ? <ActionButton icon={CheckCircle2} disabled={busy} onClick={() => runAction("confirm-payment", { manual: true, batchReference: selectedRun.bankReference })}>Awaiting settlement confirmation</ActionButton> : !state.payslipsSent ? <ActionButton icon={History} variant="secondary" onClick={() => navigate("/dashboard/payroll/finance/activity-log")}>View payroll activity</ActionButton> : <ActionButton icon={ArrowRight} onClick={() => navigate("/dashboard/payroll/finance/statutory-ledger")}>Continue to Statutory &amp; Ledger</ActionButton>}</> : <ActionButton icon={CheckCircle2} disabled={!item.ready || item.done || busy} onClick={() => runAction(item.action)}>{item.done ? "Stage completed" : item.label}</ActionButton>}</div>
+        <div className="mt-6 space-y-2">{stage === "review" && selectedRun.rulesChanged ? <ActionButton icon={RefreshCw} disabled={busy} onClick={onRecalculate}>Recalculate with current rules</ActionButton> : stage === "review" ? reviewResultsVisible ? <ActionButton icon={ArrowRight} onClick={() => navigate("/dashboard/payroll/finance/staff-payroll-details")}>Next: Staff Review &amp; Adjustments</ActionButton> : <ActionButton icon={ShieldCheck} disabled={busy} onClick={runComplianceReview}>Run automated review</ActionButton> : stage === "preparation" ? <><ActionButton icon={Download} disabled={!state.approved || busy || Boolean(selectedRun.paymentFileGeneratedAt)} onClick={onGeneratePaymentFile}>{selectedRun.paymentFileGeneratedAt ? "Payment PDF generated" : "Generate payment PDF"}</ActionButton><ActionButton icon={Users} variant="secondary" disabled={!state.approved || busy} onClick={onSetupRecipients}>{selectedRun.paymentRecipientsConfigured >= selectedRun.employees.length ? "Recipients configured" : "Configure recipients"}</ActionButton></> : stage === "payment" ? <>{selectedRun.paymentStatus === "Submitting" ? <ActionButton icon={Loader2} disabled>Submission in progress</ActionButton> : ["Failed", "Partially Submitted"].includes(selectedRun.paymentStatus) ? <ActionButton icon={RefreshCw} disabled={!item.ready || busy} onClick={() => onSubmitPayment("retry-payment")}>Retry remaining payments</ActionButton> : !selectedRun.paymentSubmittedAt ? <ActionButton icon={Send} disabled={!item.ready || busy} onClick={onSubmitPayment}>Submit to Modern Treasury</ActionButton> : !state.paid ? <ActionButton icon={CheckCircle2} disabled={busy} onClick={() => runAction("confirm-payment", { manual: true, batchReference: selectedRun.bankReference })}>Awaiting settlement confirmation</ActionButton> : !state.payslipsSent ? <ActionButton icon={History} variant="secondary" onClick={() => navigate("/dashboard/payroll/finance/activity-log")}>View payroll activity</ActionButton> : <ActionButton icon={ArrowRight} onClick={() => navigate("/dashboard/payroll/finance/statutory-ledger")}>Continue to Statutory &amp; Ledger</ActionButton>}</> : <ActionButton icon={CheckCircle2} disabled={!item.ready || item.done || busy} onClick={() => runAction(item.action)}>{item.done ? "Stage completed" : item.label}</ActionButton>}</div>
         {!item.ready && !item.done ? <p className="mt-3 text-xs text-red-600">Complete the unchecked prerequisites before continuing.</p> : null}
       </aside>
     </div>
@@ -4397,7 +4408,7 @@ export default function FinancePayrollPage() {
     }
   };
 
-  const handleSubmitModernTreasuryTransfer = async () => {
+  const handleSubmitModernTreasuryTransfer = async (action = "submit-payment") => {
     const approvedRecipients = getApprovedPaymentRecipients(selectedRun);
 
     if (!approvedRecipients.length) {
@@ -4407,10 +4418,30 @@ export default function FinancePayrollPage() {
 
     setPaymentProcessing(true);
     setPaymentError("");
+    setFinanceDbError("");
 
     try {
-      const refreshed = await executeWorkflowAction("submit-payment");
-      if (refreshed.paymentBatch?.failed) setPaymentError(`${refreshed.paymentBatch.failed} payment(s) failed to submit. ${refreshed.paymentBatch.succeeded || 0} succeeded and will not be duplicated; retry the remaining payments.`);
+      const started = await performFinancePayrollWorkflowAction(selectedRun.id, action, { expectedUpdatedAt: selectedRun.updatedAt });
+      if (started.run) applyWorkflowResult(started);
+      let refreshed = started.run ? normalizeFinancePayrollRuns([started.run])[0] : selectedRun;
+
+      for (let attempt = 0; attempt < 150; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 2000));
+        const result = await getFinancePayrollWorkflow(selectedRun.id);
+        refreshed = applyWorkflowResult(result);
+        if (["Submitted", "Partially Submitted", "Failed"].includes(refreshed.paymentStatus) || refreshed.paymentSubmittedAt) break;
+      }
+
+      if (!["Submitted", "Partially Submitted", "Failed"].includes(refreshed.paymentStatus) && !refreshed.paymentSubmittedAt) {
+        throw new Error("Payment submission is still running. Refresh shortly to check its progress.");
+      }
+      if (refreshed.paymentBatch?.failed) {
+        setPaymentError(`${refreshed.paymentBatch.failed} payment(s) failed to submit. ${refreshed.paymentBatch.succeeded || 0} succeeded and will not be duplicated; retry the remaining payments.`);
+      } else if (refreshed.paymentStatus === "Failed") {
+        setPaymentError(refreshed.paymentFailureReason || "Modern Treasury submission failed. Correct the payment configuration and retry.");
+      } else {
+        scheduleAfterAction(action, refreshed);
+      }
     } catch (error) {
       setPaymentError(formatComplianceFailure(error));
     } finally {

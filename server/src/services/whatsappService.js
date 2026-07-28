@@ -19,9 +19,18 @@
  *   - Scheduler (daily reminders, retries)
  */
 
-const twilio = require("twilio");
 const configModel = require("../models/whatsappConfigModel");
 const messageModel = require("../models/whatsappMessageModel");
+
+let twilioSdk = null;
+
+// WhatsApp is an optional integration. Load its SDK only when the integration
+// is actually used so a missing package cannot prevent the web server from
+// starting and taking down unrelated invoicing/payroll routes.
+function getTwilioSdk() {
+  if (!twilioSdk) twilioSdk = require("twilio");
+  return twilioSdk;
+}
 
 // ─── Cached Twilio Client ─────────────────────────────────────────────────────
 
@@ -54,7 +63,7 @@ async function getTwilioClient() {
   }
 
   try {
-    cachedClient = twilio(config.account_sid, config.auth_token);
+    cachedClient = getTwilioSdk()(config.account_sid, config.auth_token);
     cachedConfig = config;
     cacheTimestamp = now;
     return { client: cachedClient, config: cachedConfig };
@@ -245,13 +254,8 @@ async function sendAndLog(params) {
     return { success: false, messageId: null, logId, error: phoneValidation.error };
   }
 
-  // Check for duplicates (same invoice + type today)
-  if (invoiceId) {
-    const alreadySent = await messageModel.hasSentToday(invoiceId, messageType);
-    if (alreadySent) {
-      return { success: false, messageId: null, logId: null, error: "A message of this type was already sent for this invoice today." };
-    }
-  }
+  // Duplicate prevention removed — allow re-sending the same message type
+  // for an invoice multiple times per day (needed for retries and testing).
 
   // Create log entry (queued)
   const logId = await messageModel.createMessage({
@@ -449,7 +453,7 @@ async function testConnection() {
   }
 
   try {
-    const client = twilio(config.account_sid, config.auth_token);
+    const client = getTwilioSdk()(config.account_sid, config.auth_token);
     const account = await client.api.accounts(config.account_sid).fetch();
 
     const status = account.status || "active";

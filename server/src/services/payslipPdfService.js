@@ -13,6 +13,13 @@ const PAYNIVO_LOGO_DATA_URI = `data:image/png;base64,${fs
   .toString("base64")}`;
 
 function companyLogoDataUri(payslip) {
+  const databaseLogo = payslip.company_logo_data;
+  if (databaseLogo && (Buffer.isBuffer(databaseLogo) || databaseLogo instanceof Uint8Array)) {
+    const mime = ["image/png", "image/jpeg"].includes(payslip.company_logo_mime)
+      ? payslip.company_logo_mime
+      : "image/png";
+    return `data:${mime};base64,${Buffer.from(databaseLogo).toString("base64")}`;
+  }
   const stored = String(payslip.company_logo_path || "");
   if (!stored) return PAYNIVO_LOGO_DATA_URI;
   const absolute = path.resolve(__dirname, "..", "..", stored);
@@ -209,7 +216,7 @@ function buildPayslipHtml(payslip) {
     .payslip { position: relative; width: 297mm; height: 209mm; overflow: hidden; border: 0; }
     .header { height: 40mm; display: grid; grid-template-columns: 29% 43% 28%; align-items: center; gap: 0; padding: 5mm 10mm 4mm; background: linear-gradient(120deg, #071622, #03101a); border-bottom: 3px solid ${brandColor}; }
     .brand { display: flex; align-items: center; height: 30mm; padding-right: 7mm; border-right: 1px solid #777; }
-    .logo { width: 56mm; height: 25mm; object-fit: contain; object-position: left center; filter: invert(1) grayscale(1) brightness(3); mix-blend-mode: screen; }
+    .logo { width: 56mm; height: 25mm; object-fit: contain; object-position: left center; }
     .company { display: flex; height: 30mm; flex-direction: column; justify-content: center; padding: 2mm 7mm 0; border-right: 1px solid #777; color: #fff; font-size: 11.5px; line-height: 1.4; }
     .company h1 { margin: 0 0 4px; font-size: 19px; line-height: 1.15; }
     .company p, .document p { margin: 2px 0; }

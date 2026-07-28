@@ -7,6 +7,7 @@ import { createPayrollHire, deleteManagedPayrollUser, deleteUserAccountByHR, exp
 import { resetUserPassword, updateUserRole, updateUserStatus } from "../../services/adminPayrollService.js";
 import { apiRequest } from "../../services/apiClient.js";
 import { downloadBlob } from "../../services/apiClient.js";
+import { accountSetupRecipient, canAdminSendInitialSetup, initialSetupActionLabel } from "../../utils/payrollAccountSetup.js";
 
 const emptyHire = {
   name: "", email: "", employeeCode: "", phone: "", departmentName: "",
@@ -202,7 +203,9 @@ function AdminUserDirectory({ data, loading, busy, error, success, temporaryPass
         <div><span>Account access</span><button onClick={() => accountAction(selected, "status", selected.account_locked_at ? 1 : Number(selected.account_status) === 1 ? 0 : 1)}>{selected.account_locked_at ? "Reactivate account" : Number(selected.account_status) === 1 ? "Disable account" : "Enable account"}</button></div>
         <div><span>Password security</span><button onClick={() => accountAction(selected, "password")}><KeyRound size={15}/>Issue temporary password</button></div>
       </div> : null}
-      {selected.activation_status === "Approved" && Number(selected.must_change_password) === 1 ? <div className={`admin-user-management__request-note ${selected.setup_email_status === "Failed" ? "admin-user-management__request-note--locked" : ""}`}><strong>Setup email: {selected.setup_email_status || "Not sent"}</strong><br/>{selected.setup_email_recipient || selected.staff_email || "No staff email"}{selected.setup_email_error ? <><br/>{selected.setup_email_error}</> : null}<div className="mt-3"><button type="button" disabled={busy} onClick={() => resendSetup(selected)} className="admin-user-management__secondary">Resend setup link</button></div></div> : null}
+      {canAdminSendInitialSetup(selected) ? <div className={`admin-user-management__request-note ${selected.setup_email_status === "Failed" ? "admin-user-management__request-note--locked" : ""}`}><strong>Initial setup email: {selected.setup_email_status || "Not sent"}</strong><br/>Recipient: {accountSetupRecipient(selected)}{selected.setup_email_error ? <><br/>{selected.setup_email_error}</> : null}<div className="mt-3"><button type="button" disabled={busy} onClick={() => resendSetup(selected)} className="admin-user-management__secondary"><Mail size={15}/>{initialSetupActionLabel(selected)}</button></div></div> : null}
+      {selected.user_id && selected.activation_status === "Approved" && Number(selected.must_change_password) === 1 && Number(selected.account_status) !== 1 ? <p className="admin-user-management__request-note"><strong>Initial setup incomplete.</strong><br/>Enable the account before resending its setup email.</p> : null}
+      {selected.user_id && selected.activation_status === "Approved" && Number(selected.must_change_password) !== 1 ? <p className="admin-user-management__request-note"><strong>Account setup completed.</strong><br/>The initial setup link is no longer required.</p> : null}
       {selected.user_id ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4"><div className="flex items-center justify-between gap-3"><div><strong className="text-sm text-red-700">Delete account</strong><p className="mt-1 text-xs text-red-600">{selected.deletion_request_status === "pending" ? "This user requested deletion and is awaiting Admin approval." : "Removes login access while preserving the HR staff record."}</p></div><button type="button" disabled={busy} onClick={async () => { if (await deleteAccount(selected)) setSelected(null); }} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white"><Trash2 size={14}/>{selected.deletion_request_status === "pending" ? "Approve deletion" : "Delete account"}</button></div></div> : null}
       {!selected.user_id ? <p className="admin-user-management__request-note">This staff record has no PayNivo account. HR must create and submit the account request.</p> : null}
       <footer><button type="button" onClick={() => setSelected(null)} className="admin-user-management__secondary">Close</button></footer>
@@ -377,16 +380,16 @@ export default function PayrollUserManagement({ role, defaultShowHire = false })
   };
 
   const resendSetup = async (record) => {
-    setBusy(`resend-${record.request_id}`); beginProgress("Resend account setup link", "Validating staff email…");
+    setBusy(`resend-${record.request_id || record.user_id}`); beginProgress("Resend account setup link", "Validating account email…");
     try {
-      const result = await resendAccountSetup(record.request_id);
+      const result = await resendAccountSetup({ userId: record.user_id });
       await load();
       const setupComplete = result.setupEmail?.status === "Not Required";
       finishProgress(
         setupComplete ? "Account setup already completed" : "Setup email sent",
         setupComplete
           ? result.message
-          : `Sent to ${result.setupEmail?.recipient || record.staff_email}.`,
+          : `Sent to ${result.setupEmail?.recipient || accountSetupRecipient(record)}.`,
       );
       return true;
     }

@@ -55,7 +55,7 @@ export function getMyLoanReport(params = {}) {
 // ─── Export Helpers ──────────────────────────────────────────────────────────
 
 export async function exportReport(reportType, params = {}, format = "excel") {
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = sessionStorage.getItem(TOKEN_KEY);
   const queryParams = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
@@ -82,7 +82,7 @@ export async function exportReport(reportType, params = {}, format = "excel") {
 }
 
 export async function exportMyReport(reportType, params = {}, format = "excel") {
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = sessionStorage.getItem(TOKEN_KEY);
   const queryParams = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {

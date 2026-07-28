@@ -15,15 +15,22 @@ let privacyTablesPromise;
 function ensurePrivacyTables() {
   if (!privacyTablesPromise) {
     privacyTablesPromise = Promise.all([
-      pool.query(`CREATE TABLE IF NOT EXISTS user_privacy_settings (
-        user_id INT NOT NULL PRIMARY KEY,
-        analytics_tracking TINYINT(1) NOT NULL DEFAULT 1,
-        profile_visible TINYINT(1) NOT NULL DEFAULT 1,
-        activity_visible TINYINT(1) NOT NULL DEFAULT 0,
-        analytics_cookies TINYINT(1) NOT NULL DEFAULT 1,
-        marketing_cookies TINYINT(1) NOT NULL DEFAULT 0,
-        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )`),
+      // Privacy columns are now stored directly on the user table (merged 1:1).
+      // Ensure the columns exist for backward compatibility during migration.
+      (async () => {
+        const cols = ['analytics_tracking', 'profile_visible', 'activity_visible', 'analytics_cookies', 'marketing_cookies'];
+        const defaults = ['1', '1', '0', '1', '0'];
+        const [existing] = await pool.query(
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME IN (?)`,
+          [cols]
+        );
+        const existingSet = new Set(existing.map(r => r.COLUMN_NAME));
+        for (let i = 0; i < cols.length; i++) {
+          if (!existingSet.has(cols[i])) {
+            await pool.query(`ALTER TABLE user ADD COLUMN ${cols[i]} TINYINT(1) NOT NULL DEFAULT ${defaults[i]}`).catch(() => {});
+          }
+        }
+      })(),
       pool.query(`CREATE TABLE IF NOT EXISTS account_action_requests (
         request_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
@@ -494,14 +501,14 @@ async function upsertApiSettings(userId, data) {
   );
 }
 
-// Privacy preferences and account action requests are kept separately so their
-// lifecycle and approval history remain available even if an account is deleted.
+// Privacy preferences are now stored directly on the user table (1:1 merge).
+// account_action_requests remains separate (1:N relationship).
 async function getPrivacySettings(userId) {
   await ensurePrivacyTables();
   const [rows] = await pool.query(
     `SELECT analytics_tracking, profile_visible, activity_visible,
             analytics_cookies, marketing_cookies
-     FROM user_privacy_settings WHERE user_id = ?`,
+     FROM user WHERE user_id = ?`,
     [userId]
   );
   return rows[0] || {
@@ -517,17 +524,15 @@ async function upsertPrivacySettings(userId, data) {
   await ensurePrivacyTables();
   const value = (key, fallback) => data[key] === undefined ? fallback : (data[key] ? 1 : 0);
   await pool.query(
-    `INSERT INTO user_privacy_settings
-       (user_id, analytics_tracking, profile_visible, activity_visible, analytics_cookies, marketing_cookies)
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       analytics_tracking = VALUES(analytics_tracking),
-       profile_visible = VALUES(profile_visible),
-       activity_visible = VALUES(activity_visible),
-       analytics_cookies = VALUES(analytics_cookies),
-       marketing_cookies = VALUES(marketing_cookies)`,
-    [userId, value("analytics_tracking", 1), value("profile_visible", 1), value("activity_visible", 0),
-      value("analytics_cookies", 1), value("marketing_cookies", 0)]
+    `UPDATE user SET
+       analytics_tracking = ?,
+       profile_visible = ?,
+       activity_visible = ?,
+       analytics_cookies = ?,
+       marketing_cookies = ?
+     WHERE user_id = ?`,
+    [value("analytics_tracking", 1), value("profile_visible", 1), value("activity_visible", 0),
+      value("analytics_cookies", 1), value("marketing_cookies", 0), userId]
   );
   return getPrivacySettings(userId);
 }
@@ -635,7 +640,7 @@ async function reviewDeletionRequest(requestId, adminId, decision, note = "") {
       await connection.query("UPDATE staff SET user_user_id = NULL WHERE user_user_id = ? AND company_id = ?", [request.user_id, companyId]);
       await connection.query("UPDATE public_holidays SET created_by = NULL WHERE created_by = ? AND company_id = ?", [request.user_id, companyId]);
       await connection.query("UPDATE claims_and_loans SET created_by = NULL WHERE created_by = ? AND company_id = ?", [request.user_id, companyId]);
-      await connection.query("DELETE FROM user_privacy_settings WHERE user_id = ?", [request.user_id]);
+      // Privacy columns are now on the user row — no separate table to clean up.
       await connection.query("DELETE FROM notification WHERE user_id = ? AND company_id = ?", [request.user_id, companyId]);
       await connection.query("UPDATE audit_logs SET user_id = NULL WHERE user_id = ? AND company_id = ?", [request.user_id, companyId]);
     }
@@ -678,7 +683,7 @@ async function deleteUserAccountByAdmin(userId, adminId, note = "Deleted from Pa
     // Null out all FK references to this user before deleting
     await connection.query("UPDATE public_holidays SET created_by = NULL WHERE created_by = ? AND company_id = ?", [userId, companyId]);
     await connection.query("UPDATE claims_and_loans SET created_by = NULL WHERE created_by = ? AND company_id = ?", [userId, companyId]);
-    await connection.query("DELETE FROM user_privacy_settings WHERE user_id = ?", [userId]);
+    // Privacy columns are now on the user row — no separate table to clean up.
     await connection.query("DELETE FROM notification WHERE user_id = ? AND company_id = ?", [userId, companyId]);
     // audit_logs.user_id — null it out to preserve audit history
     await connection.query("UPDATE audit_logs SET user_id = NULL WHERE user_id = ? AND company_id = ?", [userId, companyId]);
@@ -691,17 +696,16 @@ async function deleteUserAccountByAdmin(userId, adminId, note = "Deleted from Pa
 
 async function resetUserSettings(userId) {
   await ensurePrivacyTables();
-  await Promise.all([
-    pool.query(
-      `UPDATE user SET notification_preferences = NULL, payroll_config_json = NULL,
-       connected_accounts_json = NULL, theme = 'system', accent_color = '#F38978',
-       compact_mode = 0, font_size = 'medium', ui_language = 'en',
-       api_key = NULL, webhook_url = NULL, webhook_secret = NULL, webhooks_enabled = 0
-       WHERE user_id = ?`,
-      [userId]
-    ),
-    pool.query("DELETE FROM user_privacy_settings WHERE user_id = ?", [userId])
-  ]);
+  await pool.query(
+    `UPDATE user SET notification_preferences = NULL, payroll_config_json = NULL,
+     connected_accounts_json = NULL, theme = 'system', accent_color = '#F38978',
+     compact_mode = 0, font_size = 'medium', ui_language = 'en',
+     api_key = NULL, webhook_url = NULL, webhook_secret = NULL, webhooks_enabled = 0,
+     analytics_tracking = 1, profile_visible = 1, activity_visible = 0,
+     analytics_cookies = 1, marketing_cookies = 0
+     WHERE user_id = ?`,
+    [userId]
+  );
 }
 
 // ─── Subscription Settings ──────────────────────────────────────────────────

@@ -32,6 +32,6 @@ export async function restoreBackup(id) {
 }
 
 export function getBackupDownloadUrl(id) {
-  const token = localStorage.getItem("authToken");
+  const token = sessionStorage.getItem("authToken");
   return `${API_BASE_URL}/api/admin/backups/${id}/download?token=${token}`;
 }

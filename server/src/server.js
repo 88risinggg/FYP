@@ -1,8 +1,8 @@
 require("dotenv").config();
 const { APPLICATION_TIMEZONE } = require("./config/timezone");
 
-// Discloud exposes sites through port 8080. Local development can continue to
-// override this with PORT in server/.env.
+// Discloud routes site traffic to port 8080. PORT can still override this for
+// local development and other hosting environments.
 const port = process.env.PORT || 8080;
 const host = process.env.HOST || "0.0.0.0";
 const { waitForDatabase } = require("./config/db");
@@ -11,32 +11,46 @@ function schedulersEnabled() {
   return process.env.SCHEDULERS_ENABLED !== "false";
 }
 
-async function startServer() {
+async function initializeDatabaseServices() {
   try {
     await waitForDatabase();
     console.log("Database connection ready.");
   } catch (error) {
-    console.error(`Unable to start: database connection failed (${error.code || error.message}).`);
-    console.error("Check DB_HOST, DB_PORT, DB_SSL and the database firewall/network settings, then restart the server.");
-    process.exit(1);
+    console.error(`Database connection unavailable (${error.code || error.message}).`);
+    console.error("The web server remains online, but database-backed features and background schedulers are unavailable.");
+    return;
   }
 
-  // Load database-backed controllers only after the database is reachable.
-  const app = require("./app");
-  const { startInvoiceScheduler } = require("./workers/invoiceScheduler");
-  const { startReminderScheduler } = require("./services/reminderScheduler");
-  const { startOverdueScheduler } = require("./workers/overdueScheduler");
-  const { startReminderNotificationScheduler } = require("./workers/reminderNotificationScheduler");
-  const { startPayrollReleaseScheduler } = require("./workers/payrollReleaseScheduler");
-  const { startSubscriptionScheduler } = require("./workers/subscriptionScheduler");
+  try {
+    const { ensureCompanyLogoStorage } = require("./services/companyLogoStorageService");
+    await ensureCompanyLogoStorage();
+  } catch (error) {
+    console.error("Unable to initialize durable company-logo storage:", error.message);
+  }
 
-  const server = app.listen(port, host, async () => {
-    console.log(`Server listening on ${host}:${port} (${APPLICATION_TIMEZONE})`);
-
-    if (!schedulersEnabled()) {
-      console.log("Background schedulers disabled.");
-      return;
+  // Auto-seed WhatsApp config from env vars if DB table is empty
+  try {
+    const { ensureWhatsAppConfig } = require("./services/whatsappConfigBootstrap");
+    await ensureWhatsAppConfig();
+  } catch (error) {
+    // Non-critical — WhatsApp is optional
+    if (error.code !== "MODULE_NOT_FOUND") {
+      console.error("WhatsApp config auto-seed skipped:", error.message);
     }
+  }
+
+  if (!schedulersEnabled()) {
+    console.log("Background schedulers disabled.");
+    return;
+  }
+
+  try {
+    const { startInvoiceScheduler } = require("./workers/invoiceScheduler");
+    const { startReminderScheduler } = require("./services/reminderScheduler");
+    const { startOverdueScheduler } = require("./workers/overdueScheduler");
+    const { startReminderNotificationScheduler } = require("./workers/reminderNotificationScheduler");
+    const { startPayrollReleaseScheduler } = require("./workers/payrollReleaseScheduler");
+    const { startSubscriptionScheduler } = require("./workers/subscriptionScheduler");
 
     startInvoiceScheduler();
     await startReminderScheduler();
@@ -44,6 +58,18 @@ async function startServer() {
     startReminderNotificationScheduler();
     startPayrollReleaseScheduler();
     startSubscriptionScheduler();
+  } catch (error) {
+    console.error("Unable to start background schedulers:", error);
+  }
+}
+
+function startServer() {
+  // Bind the HTTP port before checking external services. Discloud can then
+  // keep the site alive and /api/health can report even during a DB outage.
+  const app = require("./app");
+  const server = app.listen(port, host, () => {
+    console.log(`Server listening on ${host}:${port} (${APPLICATION_TIMEZONE})`);
+    void initializeDatabaseServices();
   });
 
   server.on("error", (error) => {

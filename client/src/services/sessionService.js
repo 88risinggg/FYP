@@ -1,11 +1,17 @@
 const TOKEN_KEY = "authToken";
 const USER_KEY = "authUser";
 
+function clearLegacyPersistentSession() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem("rememberMe");
+}
+
 export function getCompanyScopedKey(baseKey, companyId) {
   return companyId ? `${baseKey}:${companyId}` : baseKey;
 }
 
-export function saveSession(token, user, rememberMe) {
+export function saveSession(token, user) {
   const moduleDefaults = {
     Admin: ["invoicing", "payroll"],
     Finance: ["invoicing", "payroll"],
@@ -17,9 +23,9 @@ export function saveSession(token, user, rememberMe) {
     ...user,
     allowedModules: Array.isArray(user?.allowedModules) ? user.allowedModules : (moduleDefaults[user?.role] || [])
   };
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(normalizedUser));
-  localStorage.setItem("rememberMe", rememberMe ? "true" : "false");
+  clearLegacyPersistentSession();
+  sessionStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(USER_KEY, JSON.stringify(normalizedUser));
 }
 
 export function getPostAuthDestination(user) {
@@ -30,8 +36,9 @@ export function getPostAuthDestination(user) {
 }
 
 export function getStoredSession() {
-  const token = localStorage.getItem(TOKEN_KEY);
-  const userValue = localStorage.getItem(USER_KEY);
+  clearLegacyPersistentSession();
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  const userValue = sessionStorage.getItem(USER_KEY);
 
   if (!token || !userValue) {
     return null;
@@ -49,25 +56,26 @@ export function getStoredSession() {
 }
 
 export function clearSession() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-  localStorage.removeItem("rememberMe");
+  sessionStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(USER_KEY);
+  sessionStorage.removeItem("rememberMe");
+  clearLegacyPersistentSession();
 }
 
 export function enterSupportSession(token, company, supportContext, expiresAt) {
   const current = getStoredSession();
   if (!current) throw new Error("The platform session is unavailable.");
   sessionStorage.setItem("platformReturnSession", JSON.stringify(current));
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify({ ...current.user, role: "Admin", allowedModules: ["invoicing", "payroll"], company, supportContext: { ...supportContext, expiresAt } }));
+  sessionStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(USER_KEY, JSON.stringify({ ...current.user, role: "Admin", allowedModules: ["invoicing", "payroll"], company, supportContext: { ...supportContext, expiresAt } }));
 }
 
 export function leaveSupportSession() {
   const value = sessionStorage.getItem("platformReturnSession");
   if (!value) return false;
   const session = JSON.parse(value);
-  localStorage.setItem(TOKEN_KEY, session.token);
-  localStorage.setItem(USER_KEY, JSON.stringify(session.user));
+  sessionStorage.setItem(TOKEN_KEY, session.token);
+  sessionStorage.setItem(USER_KEY, JSON.stringify(session.user));
   sessionStorage.removeItem("platformReturnSession");
   return true;
 }

@@ -71,11 +71,13 @@ describe("subscription settings", () => {
       .mockResolvedValueOnce([{}])
       .mockResolvedValueOnce([[
         {
-          plans_json: JSON.stringify([
-            { id: "plan-1", name: "Premium", billingFrequency: "Monthly", active: true }
-          ]),
-          billing_rules_json: JSON.stringify({}),
-          automation_settings_json: JSON.stringify({}),
+          subscription_settings_json: JSON.stringify({
+            plans: [
+              { id: "plan-1", name: "Premium", billingFrequency: "Monthly", active: true }
+            ],
+            billingRules: {},
+            automation: {}
+          }),
           updated_at: "2026-07-28 10:00:00"
         }
       ]])

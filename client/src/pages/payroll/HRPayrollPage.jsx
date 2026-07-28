@@ -31,9 +31,16 @@ import HRReportsPage from "./HRReportsPage.jsx";
 import ClaimManagementPage from "./ClaimManagementPage.jsx";
 import PayrollUserManagement from "../../components/payroll/PayrollUserManagement.jsx";
 import PayrollNotificationsView from "../../components/payroll/PayrollNotificationsView.jsx";
+import PayrollProgressTracker from "../../components/payroll/PayrollProgressTracker.jsx";
 import { getCompanyScopedKey, getStoredSession } from "../../services/sessionService.js";
 import { printConfiguredPayslip } from "../../utils/payslipPdf.js";
 import { getEffectivePayrollRules } from "../../services/adminPayrollService.js";
+import {
+  getPayslipDeliveryFailureCount,
+  getPayslipDeliveryStartedAt,
+  isPayslipDeliveryAttemptComplete,
+  readPayslipDeliveryResponse
+} from "../../utils/payslipDelivery.js";
 
 const pageTitle = "Automated Payroll System – HR Payroll Upload & Payslip Generation";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
@@ -908,8 +915,8 @@ function StaffRecordsView({ onStartHire }) {
   };
 
   const handleUnauthorized = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("authUser");
+    sessionStorage.removeItem("authToken");
+    sessionStorage.removeItem("authUser");
     navigate("/login", { state: { from: location, message: "Session expired. Please login again." } });
     return null;
   };
@@ -1525,8 +1532,8 @@ function PayrollUploadView() {
   const [alert, setAlert] = useState(null);
 
   const handleUnauthorized = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("authUser");
+    sessionStorage.removeItem("authToken");
+    sessionStorage.removeItem("authUser");
     navigate("/login", { state: { from: location, message: "Session expired." } });
   };
 
@@ -1790,8 +1797,8 @@ function PayrollUploadView() {
 const HR_SELECTED_RUN_KEY = "hrPayrollSelectedRunId";
 
 function SharedPayrollRunTracker({ workflow, run }) {
-  const stages = workflow?.stages || [];
-  return <nav aria-label="Shared payroll run progress" className="app-panel rounded-2xl p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold text-[#251E1F]">Shared payroll run progress</h3><p className="text-xs text-[#7b6660]">{run?.id || "Select a payroll run"}</p></div><span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Live shared state</span></div><ol className="mt-3 flex min-w-max items-center overflow-x-auto pb-2">{stages.map((stage, index) => <li key={stage.key} className="flex items-center"><div className={`flex w-40 items-center gap-2 rounded-xl border px-3 py-2 transition motion-reduce:transition-none ${stage.status === "completed" ? "border-emerald-200 bg-emerald-50" : stage.status === "failed" || stage.status === "blocked" ? "border-red-200 bg-red-50" : stage.status === "current" || stage.status === "processing" ? "border-[#F38978] bg-[#F38978]/10" : "border-[#f0d2ca] bg-white"}`}><span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${stage.status === "completed" ? "bg-emerald-600 text-white" : stage.status === "failed" || stage.status === "blocked" ? "bg-red-500 text-white" : stage.status === "current" || stage.status === "processing" ? "bg-[#F38978] text-white motion-safe:animate-pulse" : "bg-[#f0d2ca] text-[#7b6660]"}`}>{stage.status === "completed" ? "✓" : stage.status === "failed" || stage.status === "blocked" ? "!" : index + 1}</span><span className="min-w-0"><strong className="block truncate text-xs">{stage.label}</strong><small className="capitalize text-[#7b6660]">{stage.status}{stage.owner ? ` · ${stage.owner}` : ""}</small></span></div>{index < stages.length - 1 ? <span className={`h-1 w-7 ${stage.status === "completed" ? "bg-emerald-500" : "bg-[#f0d2ca]"}`}/> : null}</li>)}</ol></nav>;
+  const stages = (workflow?.stages || []).map((stage) => ({ ...stage, detail: `${stage.status}${stage.owner ? ` · ${stage.owner}` : ""}` }));
+  return <PayrollProgressTracker ariaLabel="Shared payroll run progress" title="Shared payroll run progress" runId={run?.id} stages={stages} badge={<span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Live shared state</span>} />;
 }
 
 function HRPayrollRunWorkflowView({ deliveryMode = false }) {
@@ -1930,7 +1937,45 @@ function HRPayrollRunWorkflowView({ deliveryMode = false }) {
     }
   };
 
-  const sendPending = async () => { try { setSending(true); setError(""); const response = await fetch(`${API_BASE_URL}/api/hr/payroll-runs/${encodeURIComponent(selectedId)}/payslips/send`, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: "{}" }); const body = await response.json(); setState(body); if (!response.ok) throw new Error(body.message || "Payslip delivery was not completed."); } catch (e) { setError(e.message); await loadWorkflow(selectedId).catch(() => {}); } finally { setSending(false); } };
+  const sendPending = async () => {
+    try {
+      setSending(true);
+      setError("");
+      const response = await fetch(`${API_BASE_URL}/api/hr/payroll-runs/${encodeURIComponent(selectedId)}/payslips/send`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: "{}"
+      });
+      const body = await readPayslipDeliveryResponse(response);
+      if (!response.ok) throw new Error(body.message || "Payslip delivery could not be started.");
+
+      const startedAt = getPayslipDeliveryStartedAt(body.startedAt);
+      setSuccessMessage(body.message || "Payslip delivery started. Progress will update automatically.");
+      addToast("success", body.message || "Payslip delivery started.");
+
+      for (let attempt = 0; attempt < 150; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 2000));
+        const workflowResponse = await fetch(`${API_BASE_URL}/api/payroll/workflow/runs/${encodeURIComponent(selectedId)}`, { headers });
+        const workflowType = workflowResponse.headers.get("content-type") || "";
+        if (!workflowType.includes("application/json")) continue;
+        const workflowBody = await workflowResponse.json();
+        if (!workflowResponse.ok) throw new Error(workflowBody.message || "Unable to refresh payslip delivery progress.");
+        setState(workflowBody);
+        if (isPayslipDeliveryAttemptComplete(workflowBody, startedAt)) {
+          const failed = getPayslipDeliveryFailureCount(workflowBody);
+          if (failed) throw new Error(`${failed} payslip(s) could not be delivered. Correct the failed employee details, then retry.`);
+          setSuccessMessage("Payslip delivery completed successfully.");
+          return;
+        }
+      }
+      throw new Error("Payslip delivery is still running. Use Refresh shortly to check its progress.");
+    } catch (e) {
+      setError(e.message || "Payslip delivery was not completed.");
+      await loadWorkflow(selectedId).catch(() => {});
+    } finally {
+      setSending(false);
+    }
+  };
   const previewPayslip = async (employee) => { try { setError(""); const response = await fetch(`${API_BASE_URL}/api/payslips/${employee.payrollId}/pdf`, { headers }); if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.message || "Unable to preview payslip."); } const url = URL.createObjectURL(await response.blob()); setPreview({ url, name: employee.name }); } catch (e) { setError(e.message); } };
   const run = state?.run || runs.find((item) => item.id === selectedId);
   const progress = state?.workflow?.payslipProgress || {};
@@ -1971,8 +2016,8 @@ function PayrollRunsView() {
   const [detailLoading, setDetailLoading] = useState(null);
 
   const handleUnauthorized = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("authUser");
+    sessionStorage.removeItem("authToken");
+    sessionStorage.removeItem("authUser");
     navigate("/login", { state: { from: location, message: "Session expired." } });
   };
 
@@ -2303,8 +2348,8 @@ function PayslipsView({ holdTooltip, setHoldTooltip, openHoldTooltip, getHoldToo
   const [expandedCpf, setExpandedCpf] = useState(null);
 
   const handleUnauthorized = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("authUser");
+    sessionStorage.removeItem("authToken");
+    sessionStorage.removeItem("authUser");
     navigate("/login", { state: { from: location, message: "Session expired." } });
   };
 
@@ -3199,8 +3244,8 @@ function NotificationsView() {
   const [error, setError] = useState("");
 
   const handleUnauthorized = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("authUser");
+    sessionStorage.removeItem("authToken");
+    sessionStorage.removeItem("authUser");
     navigate("/login", { state: { from: location, message: "Session expired." } });
   };
 

@@ -121,8 +121,8 @@ router.get("/pending-reviews", getPendingReviews);
 router.get("/stripe-config", (req, res) => {
   res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null });
 });
-router.post("/manual", recordManualPayment);
-router.post("/stripe-link", createStripePaymentLink);
+router.post("/manual", allowRoles("Admin", "Finance"), recordManualPayment);
+router.post("/stripe-link", allowRoles("Admin", "Finance"), createStripePaymentLink);
 router.post("/paynow-qr", allowRoles("Admin", "Finance"), generatePayNowQR);
 router.post("/paynow-confirm", allowRoles("Admin", "Finance"), confirmPayNowPayment);
 router.post("/review/:submissionId", allowRoles("Admin", "Finance"), reviewPaymentSubmission);

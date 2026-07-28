@@ -82,12 +82,32 @@ async function onInvoiceSent(invoice) {
 /**
  * Trigger: Payment Received
  * Called after a payment is successfully recorded.
+ * Looks up customer_id from the invoice if not directly provided.
  */
 async function onPaymentReceived(payment) {
   try {
     if (!(await isRuleEnabled("payment_confirmation"))) return;
 
-    const customer = await getCustomerPhone(payment.customer_id);
+    // Resolve customer_id — may not be passed from webhook context
+    let customerId = payment.customer_id;
+    let invoiceNumber = payment.invoiceId || "";
+
+    if (!customerId && payment.invoice_id) {
+      try {
+        const [rows] = await pool.query(
+          "SELECT customer_id, invoiceId FROM invoice WHERE invoice_id = ? LIMIT 1",
+          [payment.invoice_id]
+        );
+        if (rows[0]) {
+          customerId = rows[0].customer_id;
+          if (!invoiceNumber) invoiceNumber = rows[0].invoiceId;
+        }
+      } catch { /* non-critical */ }
+    }
+
+    if (!customerId) return;
+
+    const customer = await getCustomerPhone(customerId);
     if (!customer) return;
 
     await whatsappService.sendPaymentConfirmation({
@@ -95,11 +115,11 @@ async function onPaymentReceived(payment) {
       customerName: customer.name,
       phone: customer.whatsapp_number,
       invoiceId: payment.invoice_id,
-      invoiceNumber: payment.invoiceId,
+      invoiceNumber,
       amount: payment.amount
     });
 
-    console.log(`[AUTO-TRIGGER] Payment Confirmation for ${payment.invoiceId}`);
+    console.log(`[AUTO-TRIGGER] Payment Confirmation for ${invoiceNumber}`);
   } catch (err) {
     console.error(`[AUTO-TRIGGER] Payment Confirmation failed:`, err.message);
   }

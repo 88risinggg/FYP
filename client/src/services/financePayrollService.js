@@ -6,7 +6,7 @@ export function getFinancePayrollRuns() {
 
 export async function exportFinancePayrollReport(runId, reportType) {
   const query = new URLSearchParams({ runId, reportType, format: "xlsx" });
-  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || ""}/api/payroll/finance/reports/export?${query}`, { headers: { Authorization: `Bearer ${localStorage.getItem("authToken") || ""}` } });
+  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || ""}/api/payroll/finance/reports/export?${query}`, { headers: { Authorization: `Bearer ${sessionStorage.getItem("authToken") || ""}` } });
   if (!response.ok) { const body = await response.json().catch(() => ({})); throw Object.assign(new Error(body.message || "Excel export failed."), { code: body.code }); }
   const blob = await response.blob();
   const slug = reportType.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");

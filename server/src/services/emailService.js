@@ -1,24 +1,4 @@
-const nodemailer = require("nodemailer");
-
-function createTransporter() {
-  const host = String(process.env.SMTP_HOST || "").trim();
-  const user = String(process.env.SMTP_USER || "").trim();
-  const pass = String(process.env.SMTP_PASS || "").trim();
-
-  if (!host || !user || !pass) {
-    const error = new Error("Email delivery is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM on the server, then retry the setup email.");
-    error.code = "SMTP_NOT_CONFIGURED";
-    throw error;
-  }
-
-  const port = Number(process.env.SMTP_PORT || 587);
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass }
-  });
-}
+const { sendEmail, validEmail } = require("./emailTransportService");
 
 function renderTemplate(template, values) {
   return String(template || "").replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_match, key) => {
@@ -40,11 +20,9 @@ function buildReminderValues(invoice, override = {}) {
 }
 
 async function sendReminderEmail({ rule, invoice }) {
-  const transporter = createTransporter();
   const values = buildReminderValues(invoice);
 
-  return transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+  return sendEmail({
     to: invoice.clientEmail,
     subject: renderTemplate(rule.emailSubject, values),
     text: renderTemplate(rule.emailBody, values)
@@ -52,7 +30,6 @@ async function sendReminderEmail({ rule, invoice }) {
 }
 
 async function sendTestReminderEmail({ to, rule }) {
-  const transporter = createTransporter();
   const values = buildReminderValues(
     {
       clientName: "Demo Client",
@@ -64,8 +41,7 @@ async function sendTestReminderEmail({ to, rule }) {
     { payment_link: "https://example.com/pay/INV-TEST-001" }
   );
 
-  return transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+  return sendEmail({
     to,
     subject: renderTemplate(rule.emailSubject, values),
     text: renderTemplate(rule.emailBody, values)
@@ -73,10 +49,8 @@ async function sendTestReminderEmail({ to, rule }) {
 }
 
 async function sendAuthOtpEmail({ to, otp, purpose }) {
-  const transporter = createTransporter();
   const isLogin = purpose === "login";
-  return transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+  return sendEmail({
     to,
     subject: isLogin ? "Your PayNivo login code" : "Verify your PayNivo email",
     text: [
@@ -88,9 +62,7 @@ async function sendAuthOtpEmail({ to, otp, purpose }) {
 }
 
 async function sendAccountSetupEmail({ to, name, setupUrl, temporaryPassword }) {
-  const transporter = createTransporter();
-  return transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+  return sendEmail({
     to,
     subject: "Your PayNivo account has been approved",
     text: [
@@ -107,7 +79,7 @@ async function sendAccountSetupEmail({ to, name, setupUrl, temporaryPassword }) 
 
 async function sendPayslipEmail({ to, name, period, companyName, pdf, filename }) {
   const recipient = String(to || "").trim();
-  if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+  if (!validEmail(recipient)) {
     const error = new Error("The employee does not have a valid staff email address. HR must correct the staff record before retrying.");
     error.code = "PAYSLIP_EMAIL_INVALID";
     throw error;
@@ -118,11 +90,9 @@ async function sendPayslipEmail({ to, name, period, companyName, pdf, filename }
     throw error;
   }
 
-  const transporter = createTransporter();
   const employer = String(companyName || "your employer").trim();
   const payPeriod = String(period || "the selected payroll period").trim();
-  const info = await transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+  const info = await sendEmail({
     to: recipient,
     subject: `Your ${payPeriod} payslip is ready`,
     text: [
@@ -146,10 +116,24 @@ async function sendPayslipEmail({ to, name, period, companyName, pdf, filename }
   };
 }
 
+async function sendSystemTestEmail({ to, name }) {
+  const info = await sendEmail({
+    to,
+    subject: "PayNivo email delivery test",
+    text: [
+      `Hello ${name || "there"},`,
+      "This test confirms that PayNivo can send email from the live server.",
+      `Test time: ${new Date().toISOString()}`
+    ].join("\n\n")
+  });
+  return { messageId: info.messageId || null, recipient: String(to || "").trim() };
+}
+
 module.exports = {
   sendAccountSetupEmail,
   sendAuthOtpEmail,
   sendPayslipEmail,
   sendReminderEmail,
+  sendSystemTestEmail,
   sendTestReminderEmail
 };

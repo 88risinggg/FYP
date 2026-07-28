@@ -14,6 +14,8 @@ const { notifyRoles } = require("../services/payrollNotificationService");
 const { pool } = require("../config/db");
 const { buildFinanceWorkflowState } = require("../services/financePayrollWorkflowState");
 const { setupModernTreasuryRecipients, submitModernTreasuryEmployeePayment } = require("../services/modernTreasuryPaymentService");
+const { currentCompanyId, runWithTenant } = require("../services/tenantContext");
+const { createBackgroundJobRegistry } = require("../services/backgroundJobRegistry");
 const ExcelJS = require("exceljs");
 const {
   applyScheduleDefaultsToRun,
@@ -30,6 +32,8 @@ const {
   listAdjustmentProposals,
   reviewAdjustmentProposals
 } = require("../services/financePayrollAdjustmentService");
+
+const activePaymentSubmissions = createBackgroundJobRegistry();
 
 async function getFinancePayrollRuns(req, res) {
   try {
@@ -363,6 +367,54 @@ function workflowResponse(run, actionReference = null) {
   return { run, workflow: buildFinanceWorkflowState(run), actionReference };
 }
 
+async function processModernTreasuryPaymentSubmission({ runId, user, ipAddress, deviceInfo }) {
+  let current = await findFinanceRun(runId);
+  if (!current) throw Object.assign(new Error("Payroll run not found."), { code: "PAYROLL_RUN_NOT_FOUND" });
+  let employees = current.employees.filter((employee) => employee.financeStatus === "Approved").map((employee) => ({
+    employeeId: employee.id, payrollId: employee.payrollId, staffEmployeeId: employee.staffEmployeeId, employeeName: employee.name, bankName: employee.bank,
+    bankAccount: employee.accountNo, amount: employee.netPay, currency: "SGD",
+    modernTreasuryCounterpartyId: employee.modernTreasuryCounterpartyId,
+    modernTreasuryReceivingAccountId: employee.modernTreasuryReceivingAccountId
+  }));
+  if (!employees.length) throw Object.assign(new Error("No approved employee payments are ready for Modern Treasury submission."), { code: "EMPLOYEES_NOT_APPROVED" });
+  const hasSimulationMappings = employees.some((employee) =>
+    String(employee.modernTreasuryCounterpartyId || "").startsWith("sim_")
+    || String(employee.modernTreasuryReceivingAccountId || "").startsWith("sim_")
+  );
+  if (hasSimulationMappings) {
+    const setup = await setupModernTreasuryRecipients({ employees, forceNew: false });
+    if (setup.failedCount) throw Object.assign(new Error(`${setup.failedCount} simulated recipient mapping(s) could not be upgraded to the live sandbox.`), { code: "RECIPIENT_UPGRADE_FAILED", details: setup.failures });
+    const byEmployeeId = new Map(setup.recipients.map((recipient) => [String(recipient.employeeId), recipient]));
+    employees = employees.map((employee) => {
+      const recipient = byEmployeeId.get(String(employee.employeeId));
+      return recipient ? { ...employee, modernTreasuryCounterpartyId: recipient.modernTreasuryCounterpartyId, modernTreasuryReceivingAccountId: recipient.modernTreasuryReceivingAccountId } : employee;
+    });
+    const paymentRecipients = Object.fromEntries(employees.map((employee) => [String(employee.staffEmployeeId), {
+      modernTreasuryCounterpartyId: employee.modernTreasuryCounterpartyId,
+      modernTreasuryReceivingAccountId: employee.modernTreasuryReceivingAccountId
+    }]));
+    current = await applyFinancePayrollWorkflowAction({ runId: current.id, action: "save-recipients", payload: { paymentRecipients, actor: user.email }, userId: user.userId });
+  }
+
+  const batchReference = current.paymentBatch?.batchReference || current.bankReference || `MT-PAYROLL-${current.id}`;
+  current = await applyFinancePayrollWorkflowAction({ runId: current.id, action: "payment-initialize", payload: { batchReference, total: employees.length, actor: user.email }, userId: user.userId });
+  const completed = current.paymentBatch?.transfers || {};
+  for (const employee of employees) {
+    const employeeKey = String(employee.payrollId || employee.staffEmployeeId);
+    if (completed[employeeKey]?.status === "Submitted") continue;
+    let transfer;
+    try {
+      const providerTransfer = await submitModernTreasuryEmployeePayment({ payrollRunId: current.id, payrollPeriod: `${current.month}/${current.year}`, employee, batchReference });
+      transfer = { status: "Submitted", transferId: providerTransfer.transferId, modernTreasuryReference: providerTransfer.modernTreasuryReference, idempotencyKey: providerTransfer.idempotencyKey, employeeId: employee.employeeId };
+    } catch (providerError) {
+      transfer = { status: "Failed", employeeId: employee.employeeId, message: String(providerError.message || "Provider submission failed").slice(0, 300) };
+    }
+    current = await applyFinancePayrollWorkflowAction({ runId: current.id, action: "payment-transfer-progress", payload: { batchReference, total: employees.length, employeeKey, transfer, actor: user.email }, userId: user.userId });
+  }
+  await logAuditEvent({ userId: user.userId, userName: user.email, activityType: "Payroll Workflow", actionDescription: `Modern Treasury batch ${current.paymentBatch?.status} for ${current.id}: ${current.paymentBatch?.succeeded || 0}/${employees.length}`, affectedRecord: current.id, status: current.paymentBatch?.failed ? "Partial" : "Success", ipAddress, deviceInfo });
+  return current;
+}
+
 async function getRunWorkflow(req, res) {
   try {
     const run = await findFinanceRun(req.params.runId);
@@ -383,65 +435,31 @@ async function runWorkflowAction(req, res) {
   try {
     let payload = { ...(req.body || {}), actor: req.user?.email };
     if (["submit-payment", "retry-payment"].includes(action)) {
-      let current = await findFinanceRun(req.params.runId);
+      const current = await findFinanceRun(req.params.runId);
       if (!current) return res.status(404).json({ code: "PAYROLL_RUN_NOT_FOUND", message: "Payroll run not found." });
-      if (["Processing", "Submitted"].includes(current.paymentStatus) && current.bankReference) return res.json(workflowResponse(current, current.bankReference));
-      let employees = current.employees.filter((employee) => employee.financeStatus === "Approved").map((employee) => ({
-        employeeId: employee.id, payrollId: employee.payrollId, staffEmployeeId: employee.staffEmployeeId, employeeName: employee.name, bankName: employee.bank,
-        bankAccount: employee.accountNo, amount: employee.netPay, currency: "SGD",
-        modernTreasuryCounterpartyId: employee.modernTreasuryCounterpartyId,
-        modernTreasuryReceivingAccountId: employee.modernTreasuryReceivingAccountId
-      }));
-      const hasSimulationMappings = employees.some((employee) =>
-        String(employee.modernTreasuryCounterpartyId || "").startsWith("sim_")
-        || String(employee.modernTreasuryReceivingAccountId || "").startsWith("sim_")
+      if (current.paymentStatus === "Submitted" && current.bankReference) return res.json(workflowResponse(current, current.bankReference));
+
+      const companyId = currentCompanyId();
+      const jobKey = `${companyId}:${req.params.runId}`;
+      const reservation = activePaymentSubmissions.reserve(jobKey);
+      if (!reservation.acquired) return res.status(202).json({ ...workflowResponse(current), code: "PAYMENT_SUBMISSION_IN_PROGRESS", message: "Modern Treasury submission is already running.", startedAt: reservation.job.startedAt });
+
+      const user = { userId: req.user?.userId, email: req.user?.email || "Finance" };
+      const ipAddress = getClientIp(req);
+      const deviceInfo = getDeviceInfo(req);
+      activePaymentSubmissions.run(
+        jobKey,
+        () => runWithTenant(companyId, () => processModernTreasuryPaymentSubmission({ runId: req.params.runId, user, ipAddress, deviceInfo })),
+        async (error) => {
+          console.error("Modern Treasury background submission failed", { runId: req.params.runId, code: error.code, message: error.message });
+          try {
+            await runWithTenant(companyId, () => applyFinancePayrollWorkflowAction({ runId: req.params.runId, action: "payment-failed", payload: { reason: error.message, actor: user.email }, userId: user.userId }));
+          } catch (stateError) {
+            console.error("Unable to persist Modern Treasury background failure", { runId: req.params.runId, message: stateError.message });
+          }
+        }
       );
-      if (hasSimulationMappings) {
-        const setup = await setupModernTreasuryRecipients({ employees, forceNew: false });
-        if (setup.failedCount) {
-          return res.status(502).json({
-            code: "RECIPIENT_UPGRADE_FAILED",
-            message: `${setup.failedCount} simulated recipient mapping(s) could not be upgraded to the live sandbox.`,
-            errors: setup.failures
-          });
-        }
-        const byEmployeeId = new Map(setup.recipients.map((recipient) => [String(recipient.employeeId), recipient]));
-        employees = employees.map((employee) => {
-          const recipient = byEmployeeId.get(String(employee.employeeId));
-          return recipient ? {
-            ...employee,
-            modernTreasuryCounterpartyId: recipient.modernTreasuryCounterpartyId,
-            modernTreasuryReceivingAccountId: recipient.modernTreasuryReceivingAccountId
-          } : employee;
-        });
-        const paymentRecipients = Object.fromEntries(employees.map((employee) => [String(employee.staffEmployeeId), {
-          modernTreasuryCounterpartyId: employee.modernTreasuryCounterpartyId,
-          modernTreasuryReceivingAccountId: employee.modernTreasuryReceivingAccountId
-        }]));
-        current = await applyFinancePayrollWorkflowAction({
-          runId: current.id,
-          action: "save-recipients",
-          payload: { paymentRecipients, actor: req.user?.email },
-          userId: req.user?.userId
-        });
-      }
-      const batchReference = current.paymentBatch?.batchReference || current.bankReference || `MT-PAYROLL-${current.id}`;
-      current = await applyFinancePayrollWorkflowAction({ runId: current.id, action: "payment-initialize", payload: { batchReference, total: employees.length, actor: req.user?.email }, userId: req.user?.userId });
-      const completed = current.paymentBatch?.transfers || {};
-      for (const employee of employees) {
-        const employeeKey = String(employee.payrollId || employee.staffEmployeeId);
-        if (completed[employeeKey]?.status === "Submitted") continue;
-        let transfer;
-        try {
-          const providerTransfer = await submitModernTreasuryEmployeePayment({ payrollRunId: current.id, payrollPeriod: `${current.month}/${current.year}`, employee, batchReference });
-          transfer = { status: "Submitted", transferId: providerTransfer.transferId, modernTreasuryReference: providerTransfer.modernTreasuryReference, idempotencyKey: providerTransfer.idempotencyKey, employeeId: employee.employeeId };
-        } catch (providerError) {
-          transfer = { status: "Failed", employeeId: employee.employeeId, message: String(providerError.message || "Provider submission failed").slice(0, 300) };
-        }
-        current = await applyFinancePayrollWorkflowAction({ runId: current.id, action: "payment-transfer-progress", payload: { batchReference, total: employees.length, employeeKey, transfer, actor: req.user?.email }, userId: req.user?.userId });
-      }
-      await logAuditEvent({ userId: req.user?.userId, userName: req.user?.email, activityType: "Payroll Workflow", actionDescription: `Modern Treasury batch ${current.paymentBatch?.status} for ${current.id}: ${current.paymentBatch?.succeeded || 0}/${employees.length}`, affectedRecord: current.id, status: current.paymentBatch?.failed ? "Partial" : "Success", ipAddress: getClientIp(req), deviceInfo: getDeviceInfo(req) });
-      return res.status(current.paymentBatch?.failed ? 207 : 200).json(workflowResponse(current, batchReference));
+      return res.status(202).json({ ...workflowResponse(current), code: "PAYMENT_SUBMISSION_STARTED", message: "Modern Treasury submission started. Progress will update automatically.", startedAt: reservation.job.startedAt });
     }
     if (action === "send-payslips") {
       const current = await findFinanceRun(req.params.runId);

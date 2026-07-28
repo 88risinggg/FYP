@@ -11,7 +11,7 @@ function forceLogout() {
 }
 
 export async function apiRequest(path, options = {}) {
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = sessionStorage.getItem(TOKEN_KEY);
   const headers = {
     "Content-Type": "application/json",
     ...options.headers
@@ -33,7 +33,10 @@ export async function apiRequest(path, options = {}) {
       ...options,
       headers
     });
-    const data = await response.json().catch(() => ({}));
+    const contentType = response.headers?.get?.("content-type") || "application/json";
+    const data = contentType.includes("application/json")
+      ? await response.json().catch(() => ({}))
+      : { message: response.ok ? "Request completed." : `The server returned an unexpected ${response.status} response. Please retry.` };
 
     const sessionMustEnd = response.status === 401 || data.code === "ACCOUNT_DISABLED" || data.code === "ACCOUNT_LOCKED";
 

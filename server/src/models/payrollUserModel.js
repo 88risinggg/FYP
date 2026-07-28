@@ -191,7 +191,7 @@ async function reviewActivationRequest({ requestId, action, reviewerId, reason }
 async function getActivationSetupContext(requestId) {
   const companyId = currentCompanyId();
   const [rows] = await pool.execute(
-    `SELECT ar.*, u.name, u.status AS account_status, u.must_change_password,
+    `SELECT ar.*, u.name, u.email AS account_email, u.status AS account_status, u.must_change_password,
             s.email AS staff_email,
             JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.status')) AS setup_email_status,
             JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.recipient')) AS setup_email_recipient,
@@ -204,6 +204,32 @@ async function getActivationSetupContext(requestId) {
     [requestId, companyId, companyId]
   );
   return rows[0] || null;
+}
+
+async function getUserSetupContext(userId) {
+  const companyId = currentCompanyId();
+  const [rows] = await pool.execute(
+    `SELECT ar.request_id, ar.status, ar.user_name, ar.user_email,
+            u.user_id, u.name, u.email AS account_email,
+            u.status AS account_status, u.must_change_password,
+            s.email AS staff_email,
+            JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.status')) AS setup_email_status,
+            JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.recipient')) AS setup_email_recipient,
+            JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.sentAt')) AS setup_email_sent_at,
+            JSON_UNQUOTE(JSON_EXTRACT(ar.metadata, '$.setupEmail.error')) AS setup_email_error
+     FROM user u
+     LEFT JOIN staff s ON s.user_user_id = u.user_id AND s.company_id = u.company_id
+     LEFT JOIN account_action_requests ar ON ar.request_id = (
+       SELECT MAX(latest.request_id) FROM account_action_requests latest
+       WHERE latest.user_id = u.user_id AND latest.company_id = u.company_id
+         AND latest.request_type = 'user_activation'
+     )
+     WHERE u.user_id = ? AND u.company_id = ? LIMIT 1`,
+    [userId, companyId]
+  );
+  const context = rows[0] || null;
+  if (context && !context.request_id && Number(context.account_status) === 1) context.status = "approved";
+  return context;
 }
 
 async function saveSetupEmailResult(requestId, setupEmail) {
@@ -221,6 +247,10 @@ async function saveSetupEmailResult(requestId, setupEmail) {
 
 async function logSetupEmailAudit(requestId, setupEmail) {
   await writeAuditLog({ module: "Payroll", activityType: "Account Setup Email", action: `Account setup email ${setupEmail.status.toLowerCase()}`, entityId: requestId, entityType: "account_action_request", status: setupEmail.status === "Sent" ? "Success" : setupEmail.status === "Not Required" ? "Info" : "Failed", newValue: JSON.stringify({ status: setupEmail.status, recipient: setupEmail.recipient, sentAt: setupEmail.sentAt, error: setupEmail.error }) });
+}
+
+async function logUserSetupEmailAudit(userId, setupEmail) {
+  await writeAuditLog({ module: "Payroll", activityType: "Account Setup Email", action: `Account setup email ${setupEmail.status.toLowerCase()}`, entityId: userId, entityType: "user", status: setupEmail.status === "Sent" ? "Success" : setupEmail.status === "Not Required" ? "Info" : "Failed", newValue: JSON.stringify({ status: setupEmail.status, recipient: setupEmail.recipient, sentAt: setupEmail.sentAt, error: setupEmail.error }) });
 }
 
 async function updatePendingRequest({ requestId, requestedBy, staff, account }) {
@@ -267,4 +297,4 @@ async function updatePendingRequest({ requestId, requestedBy, staff, account }) 
   }
 }
 
-module.exports = { ROLE_NAMES, createHireWithAccount, getActivationSetupContext, listManagedUsers, logSetupEmailAudit, reviewActivationRequest, saveSetupEmailResult, updatePendingRequest };
+module.exports = { ROLE_NAMES, createHireWithAccount, getActivationSetupContext, getUserSetupContext, listManagedUsers, logSetupEmailAudit, logUserSetupEmailAudit, reviewActivationRequest, saveSetupEmailResult, updatePendingRequest };
