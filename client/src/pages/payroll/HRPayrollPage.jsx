@@ -1828,6 +1828,10 @@ function HRPayrollRunWorkflowView({ deliveryMode = false }) {
 
   const loadRuns = async () => {
     const response = await fetch(`${API_BASE_URL}/api/payroll/workflow/runs`, { headers });
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      throw new Error(`Payroll service returned an unexpected ${response.status} response. Wait briefly and refresh.`);
+    }
     const body = await response.json();
     if (!response.ok) throw new Error(body.message || "Unable to load payroll runs.");
     const values = body.runs || [];
@@ -1839,6 +1843,10 @@ function HRPayrollRunWorkflowView({ deliveryMode = false }) {
   const loadWorkflow = async (runId) => {
     if (!runId) return;
     const response = await fetch(`${API_BASE_URL}/api/payroll/workflow/runs/${encodeURIComponent(runId)}`, { headers });
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      throw new Error(`Payroll service returned an unexpected ${response.status} response. Wait briefly and refresh.`);
+    }
     const body = await response.json();
     if (!response.ok) throw new Error(body.message || "Unable to restore payroll workflow.");
     setState(body);

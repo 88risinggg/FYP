@@ -13,6 +13,7 @@ async function deliverRunPayslips({ runId, userId, actor }) {
   if (!current.paidAt) throw Object.assign(new Error("Finance must confirm payment before HR can deliver payslips."), { code: "PAYMENT_NOT_CONFIRMED" });
   const delivery = { total: current.employees.length, sent: 0, failed: 0, skipped: 0, pending: current.employees.length, errors: [], owner: "HR", attemptedAt: new Date().toISOString() };
   const browser = current.employees.length ? await launchPayslipBrowser() : null;
+  let run = current;
   try {
     for (const employee of current.employees) {
       try {
@@ -27,11 +28,17 @@ async function deliverRunPayslips({ runId, userId, actor }) {
         delivery.errors.push({ employee: employee.name, employeeId: employee.id, payrollId: employee.payrollId, message: error.message, correctiveAction: "Correct the employee account or payslip source data, then retry." });
       }
       delivery.pending = Math.max(0, delivery.total - delivery.sent - delivery.skipped - delivery.failed);
+      run = await applyFinancePayrollWorkflowAction({
+        runId,
+        action: "payslips-progress",
+        payload: { delivery, actor: actor || "HR" },
+        userId
+      });
     }
   } finally { if (browser) await browser.close(); }
 
   const action = delivery.failed ? "payslips-progress" : "payslips-completed";
-  const run = await applyFinancePayrollWorkflowAction({ runId, action, payload: { delivery, actor: actor || "HR" }, userId });
+  run = await applyFinancePayrollWorkflowAction({ runId, action, payload: { delivery, actor: actor || "HR" }, userId });
   return { run, workflow: buildFinanceWorkflowState(run), delivery };
 }
 
