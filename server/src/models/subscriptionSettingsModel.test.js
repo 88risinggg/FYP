@@ -6,55 +6,91 @@ jest.mock("../config/db", () => ({
 
 const {
   findActivePlan,
+  getSubscriptionSettings,
   normalizeSubscriptionSettings
 } = require("./subscriptionSettingsModel");
+const { pool } = require("../config/db");
 
 describe("subscription settings", () => {
-  test("normalizes plan and automation values used by Finance subscriptions", () => {
+  test("normalizes the Admin plan template fields used by Finance subscriptions", () => {
     const settings = normalizeSubscriptionSettings({
       plans: [{
         name: "Premium",
-        price: "199.90",
         billingFrequency: "Yearly",
         active: true
-      }],
-      billingRules: {
-        requireApprovedPlan: true,
-        lockPlanPricing: true
-      },
-      automation: {
-        automaticInvoiceGeneration: true,
-        autoSendMode: "always",
-        renewalReminderDays: 14
-      }
+      }]
     });
 
     expect(settings.plans[0]).toMatchObject({
       name: "Premium",
-      price: 199.9,
       billingFrequency: "Yearly",
       active: true
     });
-    expect(settings.billingRules.requireApprovedPlan).toBe(true);
-    expect(settings.automation.autoSendMode).toBe("always");
-    expect(settings.automation.renewalReminderDays).toBe(14);
+    expect(settings.plans[0]).not.toHaveProperty("price");
+    expect(settings.plans[0]).not.toHaveProperty("autoRenewDefault");
     expect(findActivePlan(settings, "premium")).toEqual(settings.plans[0]);
   });
 
   test("rejects duplicate plan names regardless of letter case", () => {
     expect(() => normalizeSubscriptionSettings({
       plans: [
-        { name: "Basic", price: 10 },
-        { name: "basic", price: 20 }
+        { name: "Basic" },
+        { name: "basic" }
       ]
     })).toThrow(/unique/i);
   });
 
   test("inactive plans are not available to the Finance workflow", () => {
     const settings = normalizeSubscriptionSettings({
-      plans: [{ name: "Legacy", price: 50, active: false }]
+      plans: [{ name: "Legacy", active: false }]
     });
 
     expect(findActivePlan(settings, "Legacy")).toBeNull();
+  });
+
+  test("keeps automated safeguards enabled and customer pricing unlocked", () => {
+    const settings = normalizeSubscriptionSettings({
+      billingRules: {
+        lockPlanPricing: true,
+        allowPause: false
+      },
+      automation: {
+        automaticInvoiceGeneration: false,
+        notifyFinanceOnFailure: false
+      }
+    });
+
+    expect(settings.billingRules.lockPlanPricing).toBe(false);
+    expect(settings.billingRules.allowPause).toBe(true);
+    expect(settings.automation.automaticInvoiceGeneration).toBe(true);
+    expect(settings.automation.notifyFinanceOnFailure).toBe(true);
+  });
+
+  test("adds active customer-subscription usage counts to plan templates", async () => {
+    pool.query
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([[
+        {
+          subscription_settings_json: JSON.stringify({
+            plans: [
+              { id: "plan-1", name: "Premium", billingFrequency: "Monthly", active: true }
+            ],
+            billingRules: {},
+            automation: {}
+          }),
+          updated_at: "2026-07-28 10:00:00"
+        }
+      ]])
+      .mockResolvedValueOnce([[
+        { plan_key: "premium", usage_count: 3 }
+      ]]);
+
+    const settings = await getSubscriptionSettings(1);
+
+    expect(settings.plans[0]).toMatchObject({
+      id: "plan-1",
+      name: "Premium",
+      usageCount: 3
+    });
   });
 });

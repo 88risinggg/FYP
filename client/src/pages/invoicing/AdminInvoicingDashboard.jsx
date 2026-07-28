@@ -158,9 +158,6 @@ const routeHeadings = {
   "/dashboard/invoicing/admin/integrations/whatsapp": "WhatsApp Integration",
   "/dashboard/invoicing/admin/template-preview": "Template Preview",
   "/dashboard/invoicing/admin/subscription-settings": "Subscription Settings",
-  "/dashboard/invoicing/admin/subscription-settings/plans": "Plans & Pricing",
-  "/dashboard/invoicing/admin/subscription-settings/billing-rules": "Billing Rules",
-  "/dashboard/invoicing/admin/subscription-settings/automation": "Automation Settings",
   "/dashboard/invoicing/admin/audit-logs": "Audit Logs",
   "/dashboard/invoicing/admin/reports": "Reports"
 };
@@ -193,10 +190,8 @@ export default function AdminInvoicingDashboard() {
   const isReminderSettings = normalizedPath === "/dashboard/invoicing/admin/reminder-settings";
   const isWhatsAppSettings = normalizedPath === "/dashboard/invoicing/admin/integrations/whatsapp";
   const isTemplatePreview = normalizedPath === "/dashboard/invoicing/admin/template-preview";
-  const subscriptionSettingsMatch = normalizedPath.match(
-    /^\/dashboard\/invoicing\/admin\/subscription-settings(?:\/(plans|billing-rules|automation))?$/
-  );
-  const isSubscriptionSettings = Boolean(subscriptionSettingsMatch);
+  const isSubscriptionSettings =
+    normalizedPath === "/dashboard/invoicing/admin/subscription-settings";
   const isAuditLogs = normalizedPath === "/dashboard/invoicing/admin/audit-logs";
   const isInvoicePerformance = normalizedPath === "/dashboard/invoicing/admin/dashboard/invoice-performance";
   const isInvoiceList = normalizedPath === "/dashboard/invoicing/admin/invoices";
@@ -253,7 +248,7 @@ export default function AdminInvoicingDashboard() {
       ) : isInvoiceSettings ? (
         <AdminInvoiceSettingsPage activeTab={invoiceSettingsMatch?.[1] || "general"} />
       ) : isSubscriptionSettings ? (
-        <AdminSubscriptionSettingsPage activeSection={subscriptionSettingsMatch?.[1] || "plans"} />
+        <AdminSubscriptionSettingsPage />
       ) : isReminderSettings ? (
         <AdminReminderSettingsPage />
       ) : isWhatsAppSettings ? (

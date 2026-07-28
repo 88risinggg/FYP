@@ -5,7 +5,6 @@ import {
   Clock3,
   FileClock,
   FileWarning,
-  RefreshCw,
   XCircle
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -206,12 +205,10 @@ function UploadHistory({ uploads }) {
 export default function AdminValidationSummaryPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  async function load(isRefresh = false) {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+  async function load() {
+    setLoading(true);
     setError("");
 
     try {
@@ -220,7 +217,6 @@ export default function AdminValidationSummaryPage() {
       setError(requestError.message);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }
 
@@ -247,16 +243,11 @@ export default function AdminValidationSummaryPage() {
     <section className="-m-4 min-h-[calc(100vh-5rem)] p-4 text-[#251E1F] sm:-m-6 sm:p-6"
       style={{ backgroundImage: "linear-gradient(90deg, #FDD9CD 0%, #fff8f5 15%, #fffaf8 58%, #FDD9CD 100%)" }}>
       <div className="mx-auto max-w-[1600px] space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#f0d2ca] pb-5">
+        <div className="border-b border-[#f0d2ca] pb-5">
           <div>
             <h2 className="text-2xl font-bold">Invoice Validation Summary</h2>
             <p className="mt-1 text-sm text-[#6f5b55]">Monitor invoice upload results and investigate validation errors.</p>
           </div>
-          <button type="button" onClick={() => load(true)} disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#ead3cc] bg-white px-4 py-2 text-sm font-bold hover:border-[#F38978] disabled:opacity-60">
-            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
-            {refreshing ? "Refreshing..." : "Refresh"}
-          </button>
         </div>
 
         {error ? <div className="rounded-xl border border-[#FDD9CD] bg-[#FDD9CD] px-4 py-3 text-sm font-semibold text-rose-700">{error}</div> : null}

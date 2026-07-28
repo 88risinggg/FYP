@@ -528,7 +528,7 @@ export default function AdminWhatsAppIntegrationPage() {
       {/* Integration Logs Tab */}
       {activeTab === "logs" && (
         <div className="rounded-xl border border-[#f0d2ca] bg-white p-6">
-          <div className="flex items-center justify-between mb-5">
+          <div className="mb-5 flex items-center">
             <div className="flex items-center gap-3">
               <Settings2 size={20} className="text-[#F38978]" />
               <div>
@@ -536,10 +536,6 @@ export default function AdminWhatsAppIntegrationPage() {
                 <p className="text-xs text-[#7b6660]">{logsTotal} total events recorded</p>
               </div>
             </div>
-            <button type="button" onClick={loadLogs}
-              className="rounded-lg border border-[#f0d2ca] px-3 py-1.5 text-xs font-medium text-[#7b6660] hover:bg-[#FDD9CD]/30">
-              Refresh
-            </button>
           </div>
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
             {logs.map((log) => (

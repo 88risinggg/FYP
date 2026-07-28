@@ -12,8 +12,9 @@ export function fetchCustomers() {
   return apiRequest("/api/customers");
 }
 
-export function fetchNextInvoiceNumber() {
-  return apiRequest("/api/invoices/next-number");
+export function fetchNextInvoiceNumber(issueDate = "") {
+  const query = issueDate ? `?issueDate=${encodeURIComponent(issueDate)}` : "";
+  return apiRequest(`/api/invoices/next-number${query}`);
 }
 
 export function createInvoice(payload) {

@@ -1,17 +1,17 @@
-import { useEffect, useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  Bot,
-  CalendarClock,
   CheckCircle2,
-  Circle,
+  ChevronLeft,
+  ChevronRight,
+  CircleOff,
+  FileStack,
   Loader2,
+  Pencil,
   Plus,
-  RotateCcw,
-  Save,
+  Search,
   Tags,
-  Trash2
+  X
 } from "lucide-react";
 
 import {
@@ -20,551 +20,628 @@ import {
 } from "../../services/adminSubscriptionSettingsService.js";
 
 const frequencies = ["Weekly", "Monthly", "Quarterly", "Yearly"];
-const subscriptionTabs = [
-  { slug: "plans", key: "plans", label: "Plans & Pricing" },
-  { slug: "billing-rules", key: "billingRules", label: "Billing Rules" },
-  { slug: "automation", key: "automation", label: "Automation Settings" }
-];
+const pageSize = 8;
 
-const emptySettings = {
-  plans: [],
-  billingRules: {
-    requireApprovedPlan: false,
-    lockPlanPricing: true,
-    allowPause: true,
-    allowCancellation: true,
-    allowManualInvoiceGeneration: true,
-    defaultAutoRenew: true
-  },
-  automation: {
-    automaticInvoiceGeneration: true,
-    autoSendMode: "finance_choice",
-    renewalReminderDays: 7,
-    notifyFinanceOnFailure: true
-  }
-};
-
-function cloneSettings(settings) {
-  return JSON.parse(JSON.stringify(settings));
+function normalizePlans(plans = []) {
+  return plans.map((plan) => ({
+    id: plan.id,
+    name: plan.name || "",
+    description: plan.description || "",
+    billingFrequency: frequencies.includes(plan.billingFrequency)
+      ? plan.billingFrequency
+      : "Monthly",
+    active: plan.active !== false,
+    usageCount: Number(plan.usageCount || 0)
+  }));
 }
 
-function valuesMatch(left, right) {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function formatSavedAt(value) {
-  if (!value) return "Not saved yet";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Not saved yet";
-  return new Intl.DateTimeFormat("en-SG", {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(date);
-}
-
-function validateSection(section, settings) {
-  if (section === "plans") {
-    if (!settings.plans.length) {
-      return { valid: true, configured: false, note: "Add at least one active plan." };
-    }
-    const invalidPlan = settings.plans.find((plan) => (
-      !String(plan.name || "").trim()
-      || !Number.isFinite(Number(plan.price))
-      || Number(plan.price) <= 0
-      || !frequencies.includes(plan.billingFrequency)
-    ));
-    if (invalidPlan) {
-      return { valid: false, configured: false, note: "Complete every plan name, price and billing frequency." };
-    }
-    if (!settings.plans.some((plan) => plan.active)) {
-      return { valid: true, configured: false, note: "Activate at least one plan." };
-    }
-    return { valid: true, configured: true, note: "Active plans are ready for Finance." };
-  }
-
-  if (section === "automation") {
-    const days = Number(settings.automation.renewalReminderDays);
-    const validMode = ["finance_choice", "always", "never"].includes(settings.automation.autoSendMode);
-    const validDays = Number.isInteger(days) && days >= 0 && days <= 90;
-    return validMode && validDays
-      ? { valid: true, configured: true, note: "Automation rules are valid." }
-      : { valid: false, configured: false, note: "Choose a delivery mode and enter 0–90 reminder days." };
-  }
-
-  return { valid: true, configured: true, note: "Billing permissions and defaults are ready." };
-}
-
-function statusMeta(status) {
-  if (status === "complete") {
-    return {
-      label: "Complete",
-      icon: CheckCircle2,
-      badge: "bg-emerald-100 text-emerald-700",
-      iconClass: "text-emerald-600"
-    };
-  }
-  if (status === "unsaved") {
-    return {
-      label: "Unsaved changes",
-      icon: AlertTriangle,
-      badge: "bg-amber-100 text-amber-800",
-      iconClass: "text-amber-600"
-    };
-  }
-  if (status === "needs-attention") {
-    return {
-      label: "Needs attention",
-      icon: AlertTriangle,
-      badge: "bg-rose-100 text-rose-700",
-      iconClass: "text-rose-600"
-    };
-  }
+function emptyPlan() {
   return {
-    label: "Not started",
-    icon: Circle,
-    badge: "bg-slate-100 text-slate-600",
-    iconClass: "text-slate-400"
+    id: `plan-${Date.now()}`,
+    name: "",
+    description: "",
+    billingFrequency: "Monthly",
+    active: true
   };
 }
 
-function Toggle({ label, note, checked, onChange }) {
-  return (
-    <label className="flex items-start justify-between gap-5 rounded-xl border border-[#f2d5cc]/70 bg-white/80 p-4">
-      <span>
-        <span className="block text-sm font-bold text-[#251E1F]">{label}</span>
-        {note ? <span className="mt-1 block text-xs leading-5 text-[#7b6660]">{note}</span> : null}
-      </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="mt-1 h-5 w-5 accent-[#F38978]"
-      />
-    </label>
-  );
-}
-
-function Field({ label, children, note }) {
-  return (
-    <label className="block">
-      <span className="text-xs font-bold text-[#251E1F]">{label}</span>
-      <div className="mt-1">{children}</div>
-      {note ? <span className="mt-1 block text-xs text-[#7b6660]">{note}</span> : null}
-    </label>
-  );
-}
-
-function PlansPanel({ plans, onChange }) {
-  function addPlan() {
-    onChange([
-      ...plans,
-      {
-        id: `plan-${Date.now()}`,
-        name: "",
-        description: "",
-        price: "",
-        billingFrequency: "Monthly",
-        active: true,
-        autoRenewDefault: true
-      }
-    ]);
-  }
-
-  function updatePlan(index, field, value) {
-    onChange(plans.map((plan, planIndex) => (
-      planIndex === index ? { ...plan, [field]: value } : plan
-    )));
-  }
+function SummaryCard({ label, value, icon: Icon, tone }) {
+  const tones = {
+    coral: "bg-[#fff3ee] text-[#E8573D]",
+    green: "bg-emerald-50 text-emerald-700",
+    slate: "bg-slate-100 text-slate-600"
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="rounded-2xl border border-[#f2d5cc]/70 bg-white/90 p-4 shadow-sm">
+      <div className="flex items-center gap-3">
+        <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${tones[tone]}`}>
+          <Icon size={19} />
+        </span>
         <div>
-          <h2 className="text-xl font-bold text-[#251E1F]">Plans & Pricing</h2>
-          <p className="mt-1 text-sm text-[#7b6660]">
-            Define the approved plans that the existing Finance subscription workflow can use.
-          </p>
+          <p className="text-2xl font-bold text-[#251E1F]">{value}</p>
+          <p className="text-xs font-semibold text-[#7b6660]">{label}</p>
         </div>
-        <button
-          type="button"
-          onClick={addPlan}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#F38978] px-4 py-2 text-sm font-bold text-white hover:bg-[#e47767]"
-        >
-          <Plus size={16} /> Add Plan
-        </button>
       </div>
+    </div>
+  );
+}
 
-      {plans.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-[#e8c8bf] bg-white/60 px-6 py-12 text-center">
-          <Tags className="mx-auto text-[#F38978]" />
-          <p className="mt-3 text-sm font-bold text-[#251E1F]">No plans configured</p>
-          <p className="mt-1 text-xs text-[#7b6660]">Finance can continue using its current manual plan fields until enforcement is enabled.</p>
+function PlanDrawer({ drawer, saving, error, onChange, onClose, onSave }) {
+  if (!drawer) return null;
+
+  const plan = drawer.plan;
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/30" role="presentation">
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        onClick={saving ? undefined : onClose}
+        aria-label="Close plan editor"
+      />
+
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="plan-drawer-title"
+        className="relative z-10 flex h-full w-full max-w-lg flex-col bg-[#fffaf8] shadow-2xl"
+      >
+        <div className="flex items-start justify-between border-b border-[#f2d5cc] bg-white px-6 py-5">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#F38978]">
+              Plan Template
+            </p>
+            <h2 id="plan-drawer-title" className="mt-1 text-xl font-bold text-[#251E1F]">
+              {drawer.mode === "create" ? "Create Plan Template" : "Edit Plan Template"}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-lg p-2 text-[#7b6660] hover:bg-[#fff3ee] disabled:opacity-50"
+            aria-label="Close"
+          >
+            <X size={20} />
+          </button>
         </div>
-      ) : (
-        plans.map((plan, index) => (
-          <article key={plan.id || index} className="rounded-2xl border border-[#f2d5cc]/70 bg-white/85 p-5 shadow-sm">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <Field label="Plan Name">
-                <input
-                  value={plan.name}
-                  onChange={(event) => updatePlan(index, "name", event.target.value)}
-                  className="h-11 w-full rounded-lg border border-[#ead3cc] px-3 text-sm outline-none focus:border-[#F38978]"
-                  placeholder="e.g. Premium"
-                />
-              </Field>
-              <Field label="Price (SGD)">
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={plan.price}
-                  onChange={(event) => updatePlan(index, "price", event.target.value)}
-                  className="h-11 w-full rounded-lg border border-[#ead3cc] px-3 text-sm outline-none focus:border-[#F38978]"
-                />
-              </Field>
-              <Field label="Billing Frequency">
-                <select
-                  value={plan.billingFrequency}
-                  onChange={(event) => updatePlan(index, "billingFrequency", event.target.value)}
-                  className="h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm outline-none focus:border-[#F38978]"
-                >
-                  {frequencies.map((frequency) => <option key={frequency}>{frequency}</option>)}
-                </select>
-              </Field>
-              <div className="flex items-end justify-between gap-3">
-                <label className="flex h-11 items-center gap-2 text-sm font-semibold text-[#5a3f39]">
-                  <input
-                    type="checkbox"
-                    checked={plan.active}
-                    onChange={(event) => updatePlan(index, "active", event.target.checked)}
-                    className="h-4 w-4 accent-[#F38978]"
-                  />
-                  Active
-                </label>
-                <button
-                  type="button"
-                  onClick={() => onChange(plans.filter((_, planIndex) => planIndex !== index))}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50"
-                  aria-label={`Remove ${plan.name || "plan"}`}
-                >
-                  <Trash2 size={17} />
-                </button>
-              </div>
+
+        <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
+          {drawer.mode === "edit" && plan.usageCount > 0 ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-bold">
+                Used by {plan.usageCount} active customer subscription{plan.usageCount === 1 ? "" : "s"}
+              </p>
+              <p className="mt-1 text-xs leading-5">
+                Changes apply to future subscriptions only. Existing customer prices,
+                billing dates and subscription details remain unchanged.
+              </p>
             </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto]">
-              <Field label="Description">
-                <input
-                  value={plan.description}
-                  onChange={(event) => updatePlan(index, "description", event.target.value)}
-                  className="h-11 w-full rounded-lg border border-[#ead3cc] px-3 text-sm outline-none focus:border-[#F38978]"
-                  placeholder="Description used for recurring invoice items"
-                />
-              </Field>
-              <label className="flex items-end gap-2 pb-3 text-sm font-semibold text-[#5a3f39]">
+          ) : null}
+
+          <label className="block">
+            <span className="text-sm font-bold text-[#251E1F]">Plan name *</span>
+            <input
+              type="text"
+              value={plan.name}
+              onChange={(event) => onChange("name", event.target.value)}
+              placeholder="Example: Monthly Beauty Package"
+              className="mt-2 h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm outline-none focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/15"
+            />
+            <span className="mt-1.5 block text-xs text-[#7b6660]">
+              Use a short name that Finance can recognise easily.
+            </span>
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-bold text-[#251E1F]">Description</span>
+            <textarea
+              value={plan.description}
+              onChange={(event) => onChange("description", event.target.value)}
+              rows={5}
+              placeholder="Explain when Finance should use this plan"
+              className="mt-2 w-full rounded-lg border border-[#ead3cc] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/15"
+            />
+            <span className="mt-1.5 block text-xs text-[#7b6660]">
+              Optional. Do not include customer-specific prices or private details.
+            </span>
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-bold text-[#251E1F]">Default billing frequency</span>
+            <select
+              value={plan.billingFrequency}
+              onChange={(event) => onChange("billingFrequency", event.target.value)}
+              className="mt-2 h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm outline-none focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/15"
+            >
+              {frequencies.map((frequency) => (
+                <option key={frequency} value={frequency}>{frequency}</option>
+              ))}
+            </select>
+            <span className="mt-1.5 block text-xs text-[#7b6660]">
+              Finance can confirm the final frequency for each customer subscription.
+            </span>
+          </label>
+
+          <div className="rounded-xl border border-[#ead3cc] bg-white p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-bold text-[#251E1F]">Plan status</p>
+                <p className="mt-1 text-xs leading-5 text-[#7b6660]">
+                  Active plans are available for new subscriptions. Inactive plans remain saved
+                  but should not be used for new customers.
+                </p>
+              </div>
+              <label className="inline-flex shrink-0 cursor-pointer items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={plan.autoRenewDefault}
-                  onChange={(event) => updatePlan(index, "autoRenewDefault", event.target.checked)}
+                  checked={plan.active}
+                  onChange={(event) => onChange("active", event.target.checked)}
                   className="h-4 w-4 accent-[#F38978]"
                 />
-                Auto-renew by default
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                  plan.active
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-slate-100 text-slate-600"
+                }`}>
+                  {plan.active ? "Active" : "Inactive"}
+                </span>
               </label>
             </div>
-          </article>
-        ))
-      )}
-    </div>
-  );
-}
+          </div>
 
-function BillingRulesPanel({ rules, onChange }) {
-  const setRule = (field, value) => onChange({ ...rules, [field]: value });
-  return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-xl font-bold text-[#251E1F]">Billing Rules</h2>
-        <p className="mt-1 text-sm text-[#7b6660]">Control what the existing Finance subscription actions are allowed to do.</p>
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Toggle label="Require an approved plan" note="When enabled, Finance must enter a plan name configured in Plans & Pricing." checked={rules.requireApprovedPlan} onChange={(value) => setRule("requireApprovedPlan", value)} />
-        <Toggle label="Lock approved plan pricing" note="An approved plan's price and frequency override values submitted by Finance." checked={rules.lockPlanPricing} onChange={(value) => setRule("lockPlanPricing", value)} />
-        <Toggle label="Allow subscriptions to be paused" checked={rules.allowPause} onChange={(value) => setRule("allowPause", value)} />
-        <Toggle label="Allow subscriptions to be cancelled" checked={rules.allowCancellation} onChange={(value) => setRule("allowCancellation", value)} />
-        <Toggle label="Allow manual invoice generation" note="Controls the existing Generate Invoice Now action." checked={rules.allowManualInvoiceGeneration} onChange={(value) => setRule("allowManualInvoiceGeneration", value)} />
-        <Toggle label="Default new subscriptions to auto-renew" note="Used when the existing workflow does not provide an explicit choice." checked={rules.defaultAutoRenew} onChange={(value) => setRule("defaultAutoRenew", value)} />
-      </div>
-    </div>
-  );
-}
+          {error ? (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
+              {error}
+            </div>
+          ) : null}
+        </div>
 
-function AutomationPanel({ automation, onChange }) {
-  const setValue = (field, value) => onChange({ ...automation, [field]: value });
-  return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-xl font-bold text-[#251E1F]">Automation Settings</h2>
-        <p className="mt-1 text-sm text-[#7b6660]">Configure the backend scheduler used by Finance subscriptions.</p>
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Toggle label="Automatically generate recurring invoices" note="If disabled, the scheduler skips subscriptions for this company." checked={automation.automaticInvoiceGeneration} onChange={(value) => setValue("automaticInvoiceGeneration", value)} />
-        <Toggle label="Notify Finance when automation fails" checked={automation.notifyFinanceOnFailure} onChange={(value) => setValue("notifyFinanceOnFailure", value)} />
-        <Field label="Automatic invoice delivery" note="This is enforced by the backend without adding new controls to the Finance page.">
-          <select
-            value={automation.autoSendMode}
-            onChange={(event) => setValue("autoSendMode", event.target.value)}
-            className="h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm outline-none focus:border-[#F38978]"
+        <div className="flex items-center justify-end gap-3 border-t border-[#f2d5cc] bg-white px-6 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-lg border border-[#dfc3bb] px-4 py-2.5 text-sm font-bold text-[#6f4f47] hover:bg-[#fff3ee] disabled:opacity-50"
           >
-            <option value="finance_choice">Use Finance selection</option>
-            <option value="always">Always send automatically</option>
-            <option value="never">Always save as draft</option>
-          </select>
-        </Field>
-        <Field label="Renewal reminder lead time (days)" note="Accepted range: 0–90 days.">
-          <input
-            type="number"
-            min="0"
-            max="90"
-            value={automation.renewalReminderDays}
-            onChange={(event) => setValue("renewalReminderDays", Number(event.target.value))}
-            className="h-11 w-full rounded-lg border border-[#ead3cc] px-3 text-sm outline-none focus:border-[#F38978]"
-          />
-        </Field>
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-lg bg-[#251E1F] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#4b3834] disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+            {saving ? "Saving..." : "Save Plan Template"}
+          </button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function ImpactConfirmationModal({ confirmation, saving, onCancel, onConfirm }) {
+  if (!confirmation) return null;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 px-4">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="impact-warning-title"
+        aria-describedby="impact-warning-description"
+        className="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-6 shadow-2xl"
+      >
+        <div className="flex items-start gap-4">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+            <AlertTriangle size={22} />
+          </span>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">
+              Change Impact Warning
+            </p>
+            <h2 id="impact-warning-title" className="mt-1 text-xl font-bold text-[#251E1F]">
+              Confirm plan changes
+            </h2>
+          </div>
+        </div>
+
+        <div id="impact-warning-description" className="mt-5 space-y-3 text-sm leading-6 text-[#6f4f47]">
+          <p>
+            <strong className="text-[#251E1F]">{confirmation.planName}</strong> is currently
+            used by <strong className="text-[#251E1F]">{confirmation.usageCount} active customer
+            subscription{confirmation.usageCount === 1 ? "" : "s"}</strong>.
+          </p>
+          <p className="rounded-xl bg-amber-50 px-4 py-3 text-amber-900">
+            These changes apply to future subscriptions only. Existing customer prices,
+            billing dates and subscription details will remain unchanged.
+          </p>
+          <p>Do you want to continue and save this Plan Template?</p>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={saving}
+            className="rounded-lg border border-[#dfc3bb] px-4 py-2.5 text-sm font-bold text-[#6f4f47] hover:bg-[#fff3ee] disabled:opacity-50"
+          >
+            Go Back
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+            {saving ? "Saving..." : "Confirm & Save"}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-export default function AdminSubscriptionSettingsPage({ activeSection = "plans" }) {
-  const location = useLocation();
-  const [settings, setSettings] = useState(emptySettings);
-  const [savedSettings, setSavedSettings] = useState(emptySettings);
-  const [savedAt, setSavedAt] = useState(null);
+export default function AdminSubscriptionSettingsPage() {
+  const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const currentSection = subscriptionTabs.some((tab) => tab.slug === activeSection)
-    ? activeSection
-    : "plans";
-  const routePrefix = location.pathname.startsWith("/admin")
-    ? "/admin/subscription-settings"
-    : "/dashboard/invoicing/admin/subscription-settings";
-  const sectionStates = subscriptionTabs.map((tab) => {
-    const validation = validateSection(tab.slug, settings);
-    const dirty = !valuesMatch(settings[tab.key], savedSettings[tab.key]);
-    const status = !validation.valid
-      ? "needs-attention"
-      : dirty
-        ? "unsaved"
-        : savedAt && validation.configured
-          ? "complete"
-          : "not-started";
-    return { ...tab, ...validation, dirty, status };
-  });
-  const hasUnsavedChanges = sectionStates.some((section) => section.dirty);
-  const hasInvalidChanges = sectionStates.some((section) => !section.valid);
-  const canSave = !savedAt || hasUnsavedChanges;
-  const completedSteps = sectionStates.filter((section) => section.status === "complete").length;
-  const progressPercent = Math.round((completedSteps / subscriptionTabs.length) * 100);
+  const [drawer, setDrawer] = useState(null);
+  const [impactConfirmation, setImpactConfirmation] = useState(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [frequencyFilter, setFrequencyFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("name");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     getAdminSubscriptionSettings()
-      .then((data) => {
-        const loadedSettings = {
-          plans: data.plans || [],
-          billingRules: { ...emptySettings.billingRules, ...(data.billingRules || {}) },
-          automation: { ...emptySettings.automation, ...(data.automation || {}) }
-        };
-        setSettings(cloneSettings(loadedSettings));
-        setSavedSettings(cloneSettings(loadedSettings));
-        setSavedAt(data.updatedAt || null);
-      })
+      .then((data) => setPlans(normalizePlans(data.plans || [])))
       .catch((loadError) => setError(loadError.message))
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    function warnBeforeLeaving(event) {
-      if (!hasUnsavedChanges) return;
-      event.preventDefault();
-      event.returnValue = "";
-    }
+    setPage(1);
+  }, [search, statusFilter, frequencyFilter, sortBy]);
 
-    window.addEventListener("beforeunload", warnBeforeLeaving);
-    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
-  }, [hasUnsavedChanges]);
+  const stats = useMemo(() => ({
+    total: plans.length,
+    active: plans.filter((plan) => plan.active).length,
+    inactive: plans.filter((plan) => !plan.active).length
+  }), [plans]);
 
-  async function save() {
-    if (hasInvalidChanges) {
-      setError("Complete the fields marked Needs attention before saving.");
-      return;
-    }
-    setSaving(true);
+  const filteredPlans = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const result = plans.filter((plan) => {
+      const matchesSearch = !query
+        || plan.name.toLowerCase().includes(query)
+        || plan.description.toLowerCase().includes(query);
+      const matchesStatus = statusFilter === "all"
+        || (statusFilter === "active" ? plan.active : !plan.active);
+      const matchesFrequency = frequencyFilter === "all"
+        || plan.billingFrequency === frequencyFilter;
+
+      return matchesSearch && matchesStatus && matchesFrequency;
+    });
+
+    return [...result].sort((left, right) => {
+      if (sortBy === "frequency") {
+        return left.billingFrequency.localeCompare(right.billingFrequency)
+          || left.name.localeCompare(right.name);
+      }
+      if (sortBy === "status") {
+        return Number(right.active) - Number(left.active)
+          || left.name.localeCompare(right.name);
+      }
+      return left.name.localeCompare(right.name);
+    });
+  }, [plans, search, statusFilter, frequencyFilter, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPlans.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const visiblePlans = filteredPlans.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  function openCreateDrawer() {
+    setDrawer({ mode: "create", index: null, plan: emptyPlan() });
+    setError("");
     setMessage("");
+  }
+
+  function openEditDrawer(plan) {
+    setDrawer({
+      mode: "edit",
+      index: plans.findIndex((item) => item.id === plan.id),
+      plan: { ...plan }
+    });
+    setError("");
+    setMessage("");
+  }
+
+  function updateDrawer(field, value) {
+    setDrawer((current) => ({
+      ...current,
+      plan: { ...current.plan, [field]: value }
+    }));
+    setError("");
+  }
+
+  async function persistPlans(nextPlans, mode) {
+    setSaving(true);
     setError("");
     try {
-      const data = await updateAdminSubscriptionSettings(settings);
-      const saved = {
-        plans: data.plans || [],
-        billingRules: data.billingRules,
-        automation: data.automation
-      };
-      setSettings(cloneSettings(saved));
-      setSavedSettings(cloneSettings(saved));
-      setSavedAt(data.updatedAt || new Date().toISOString());
-      setMessage("Subscription settings saved and linked to the Finance subscription workflow.");
+      const data = await updateAdminSubscriptionSettings({ plans: nextPlans });
+      setPlans(normalizePlans(data.plans || []));
+      setImpactConfirmation(null);
+      setDrawer(null);
+      setMessage(
+        mode === "create"
+          ? "Plan template created successfully."
+          : "Plan template updated successfully."
+      );
     } catch (saveError) {
       setError(saveError.message);
+      setImpactConfirmation(null);
     } finally {
       setSaving(false);
     }
   }
 
-  function discardChanges() {
-    setSettings(cloneSettings(savedSettings));
-    setMessage("Unsaved changes were discarded.");
-    setError("");
+  async function saveDrawer() {
+    const name = String(drawer.plan.name || "").trim();
+    if (!name) {
+      setError("Plan name is required.");
+      return;
+    }
+
+    const duplicate = plans.some((plan, index) => (
+      index !== drawer.index && plan.name.trim().toLowerCase() === name.toLowerCase()
+    ));
+    if (duplicate) {
+      setError("Plan names must be unique.");
+      return;
+    }
+
+    const cleanPlan = {
+      ...drawer.plan,
+      name,
+      description: String(drawer.plan.description || "").trim()
+    };
+    const nextPlans = drawer.mode === "create"
+      ? [...plans, cleanPlan]
+      : plans.map((plan, index) => (index === drawer.index ? cleanPlan : plan));
+
+    if (drawer.mode === "edit" && cleanPlan.usageCount > 0) {
+      setImpactConfirmation({
+        nextPlans,
+        mode: drawer.mode,
+        planName: cleanPlan.name,
+        usageCount: cleanPlan.usageCount
+      });
+      return;
+    }
+
+    await persistPlans(nextPlans, drawer.mode);
   }
 
   if (loading) {
-    return <div className="flex min-h-[20rem] items-center justify-center"><Loader2 className="animate-spin text-[#F38978]" /></div>;
+    return (
+      <div className="flex min-h-[20rem] items-center justify-center">
+        <Loader2 className="animate-spin text-[#F38978]" />
+      </div>
+    );
   }
 
   return (
     <section className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#F38978]">Subscription Settings</p>
-          <h1 className="mt-1 text-2xl font-bold text-[#251E1F]">Subscription Settings</h1>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#F38978]">
+            Subscription Settings
+          </p>
+          <h1 className="mt-1 text-2xl font-bold text-[#251E1F]">Plan Library</h1>
+          <p className="mt-1 max-w-2xl text-sm text-[#7b6660]">
+            Manage reusable subscription templates for Finance without changing
+            customer-specific prices or billing details.
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {hasUnsavedChanges ? (
-            <button
-              type="button"
-              onClick={discardChanges}
-              disabled={saving}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#dfc3bb] bg-white px-4 py-2.5 text-sm font-bold text-[#6f4f47] hover:bg-[#fff3ee] disabled:opacity-60"
-            >
-              <RotateCcw size={16} /> Discard Changes
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving || !canSave || hasInvalidChanges}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#251E1F] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#4b3834] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            {saving ? "Saving..." : "Save Settings"}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={openCreateDrawer}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#F38978] px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[#e47767]"
+        >
+          <Plus size={16} /> Create Plan Template
+        </button>
       </div>
 
-      {hasUnsavedChanges ? (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-          <span>You have unsaved subscription configuration changes.</span>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <SummaryCard label="Total Plans" value={stats.total} icon={FileStack} tone="coral" />
+        <SummaryCard label="Active Plans" value={stats.active} icon={CheckCircle2} tone="green" />
+        <SummaryCard label="Inactive Plans" value={stats.inactive} icon={CircleOff} tone="slate" />
+      </div>
+
+      {message ? (
+        <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+          <CheckCircle2 size={18} />
+          <span>{message}</span>
         </div>
       ) : null}
 
-      <nav
-        aria-label="Subscription settings sections"
-        className="flex gap-1 overflow-x-auto rounded-xl border border-[#f2d5cc]/70 bg-white/75 p-1.5 shadow-sm"
-      >
-        {subscriptionTabs.map((tab) => {
-          const tabState = sectionStates.find((section) => section.slug === tab.slug);
-          return (
-            <NavLink
-              key={tab.slug}
-              to={`${routePrefix}/${tab.slug}`}
-              end
-              className={({ isActive }) => {
-                const selected = isActive || (currentSection === tab.slug && location.pathname === routePrefix);
-                return `whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-bold transition ${
-                  selected
-                    ? "bg-[#FDD9CD] text-[#E8573D] shadow-sm"
-                    : "text-[#6f4f47] hover:bg-[#fff3ee] hover:text-[#E8573D]"
-                }`;
-              }}
-            >
-              {tab.label}
-              {tabState?.dirty ? <span className="ml-2 inline-block h-2 w-2 rounded-full bg-amber-500" aria-label="Unsaved changes" /> : null}
-            </NavLink>
-          );
-        })}
-      </nav>
+      {!drawer && error ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
+          {error}
+        </div>
+      ) : null}
 
-      {message ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{message}</div> : null}
-      {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">{error}</div> : null}
-
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]">
-        <div className="rounded-2xl border border-[#f2d5cc]/70 bg-[#fff9f7]/70 p-5 shadow-sm sm:p-6">
-          {currentSection === "billing-rules" ? (
-            <BillingRulesPanel rules={settings.billingRules} onChange={(billingRules) => setSettings({ ...settings, billingRules })} />
-          ) : currentSection === "automation" ? (
-            <AutomationPanel automation={settings.automation} onChange={(automation) => setSettings({ ...settings, automation })} />
-          ) : (
-            <PlansPanel plans={settings.plans} onChange={(plans) => setSettings({ ...settings, plans })} />
-          )}
+      <div className="overflow-hidden rounded-2xl border border-[#f2d5cc]/70 bg-white/90 shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-[#f2d5cc]/70 bg-[#fff9f7] p-4 lg:flex-row lg:items-center">
+          <div className="relative min-w-0 flex-1">
+            <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9b7c74]" />
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search plan name or description"
+              className="h-10 w-full rounded-lg border border-[#ead3cc] bg-white pl-9 pr-3 text-sm outline-none focus:border-[#F38978]"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className="h-10 rounded-lg border border-[#ead3cc] bg-white px-3 text-sm text-[#6f4f47]"
+            aria-label="Filter by status"
+          >
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          <select
+            value={frequencyFilter}
+            onChange={(event) => setFrequencyFilter(event.target.value)}
+            className="h-10 rounded-lg border border-[#ead3cc] bg-white px-3 text-sm text-[#6f4f47]"
+            aria-label="Filter by billing frequency"
+          >
+            <option value="all">All frequencies</option>
+            {frequencies.map((frequency) => (
+              <option key={frequency} value={frequency}>{frequency}</option>
+            ))}
+          </select>
+          <select
+            value={sortBy}
+            onChange={(event) => setSortBy(event.target.value)}
+            className="h-10 rounded-lg border border-[#ead3cc] bg-white px-3 text-sm text-[#6f4f47]"
+            aria-label="Sort plans"
+          >
+            <option value="name">Sort: Plan name</option>
+            <option value="frequency">Sort: Frequency</option>
+            <option value="status">Sort: Status</option>
+          </select>
         </div>
 
-        <aside className="rounded-2xl border border-[#f2d5cc]/70 bg-white/90 p-5 shadow-sm xl:sticky xl:top-20">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#F38978]">Configuration Status</p>
-          <div className="mt-3 flex items-end justify-between gap-3">
-            <div>
-              <p className="text-2xl font-bold text-[#251E1F]">{completedSteps} of {subscriptionTabs.length}</p>
-              <p className="text-xs font-semibold text-[#7b6660]">steps completed</p>
-            </div>
-            <span className="text-sm font-bold text-[#E8573D]">{progressPercent}%</span>
+        {visiblePlans.length === 0 ? (
+          <div className="px-6 py-14 text-center">
+            <Tags className="mx-auto text-[#F38978]" />
+            <p className="mt-3 text-sm font-bold text-[#251E1F]">
+              {plans.length === 0 ? "No plan templates yet" : "No matching plans"}
+            </p>
+            <p className="mt-1 text-xs text-[#7b6660]">
+              {plans.length === 0
+                ? "Create the first reusable plan template for Finance."
+                : "Try changing the search or filters."}
+            </p>
           </div>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#f4e3de]">
-            <div className="h-full rounded-full bg-[#F38978] transition-all" style={{ width: `${progressPercent}%` }} />
-          </div>
-
-          <div className="mt-5 space-y-3">
-            {sectionStates.map((section) => {
-              const meta = statusMeta(section.status);
-              const StatusIcon = meta.icon;
-              const isCurrent = currentSection === section.slug;
-              return (
-                <NavLink
-                  key={section.slug}
-                  to={`${routePrefix}/${section.slug}`}
-                  className={`block rounded-xl border p-3 transition ${
-                    isCurrent
-                      ? "border-[#F38978] bg-[#fff3ee]"
-                      : "border-[#f2d5cc]/70 bg-white hover:border-[#e8b8ac]"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <StatusIcon size={18} className={`mt-0.5 shrink-0 ${meta.iconClass}`} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-bold text-[#251E1F]">{section.label}</p>
-                        {isCurrent ? <span className="rounded-full bg-[#FDD9CD] px-2 py-0.5 text-[10px] font-bold uppercase text-[#E8573D]">Current</span> : null}
-                      </div>
-                      <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${meta.badge}`}>
-                        {meta.label}
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-[#f2d5cc]/70 bg-white text-xs uppercase tracking-wide text-[#7b6660]">
+                  <th className="px-5 py-3 font-bold">Plan name</th>
+                  <th className="px-5 py-3 font-bold">Description</th>
+                  <th className="px-5 py-3 font-bold">Default frequency</th>
+                  <th className="px-5 py-3 font-bold">Status</th>
+                  <th className="px-5 py-3 text-right font-bold">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visiblePlans.map((plan) => (
+                  <tr key={plan.id} className="border-b border-[#f2d5cc]/50 last:border-0 hover:bg-[#fffaf8]">
+                    <td className="px-5 py-4 font-bold text-[#251E1F]">{plan.name}</td>
+                    <td className="max-w-sm px-5 py-4 text-[#6f4f47]">
+                      <p className="line-clamp-2">{plan.description || "No description"}</p>
+                    </td>
+                    <td className="px-5 py-4 text-[#6f4f47]">{plan.billingFrequency}</td>
+                    <td className="px-5 py-4">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${
+                        plan.active
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-slate-100 text-slate-600"
+                      }`}>
+                        {plan.active ? "Active" : "Inactive"}
                       </span>
-                      <p className="mt-2 text-xs leading-5 text-[#7b6660]">{section.note}</p>
-                    </div>
-                  </div>
-                </NavLink>
-              );
-            })}
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => openEditDrawer(plan)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#ead3cc] bg-white px-3 py-2 text-xs font-bold text-[#6f4f47] hover:border-[#F38978] hover:text-[#E8573D]"
+                      >
+                        <Pencil size={14} /> Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        )}
 
-          <div className="mt-5 border-t border-[#f2d5cc]/70 pt-4">
-            <p className="text-xs font-bold text-[#7b6660]">Last saved</p>
-            <p className="mt-1 text-sm font-bold text-[#251E1F]">{formatSavedAt(savedAt)}</p>
+        <div className="flex flex-col gap-3 border-t border-[#f2d5cc]/70 bg-[#fff9f7] px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs font-semibold text-[#7b6660]">
+            Showing {visiblePlans.length} of {filteredPlans.length} plans
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((value) => Math.max(1, value - 1))}
+              disabled={currentPage === 1}
+              className="rounded-lg border border-[#ead3cc] bg-white p-2 text-[#6f4f47] disabled:opacity-40"
+              aria-label="Previous page"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="min-w-20 text-center text-xs font-bold text-[#6f4f47]">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+              disabled={currentPage === totalPages}
+              className="rounded-lg border border-[#ead3cc] bg-white p-2 text-[#6f4f47] disabled:opacity-40"
+              aria-label="Next page"
+            >
+              <ChevronRight size={16} />
+            </button>
           </div>
-        </aside>
+        </div>
       </div>
 
-      <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-sm text-blue-900">
-        {currentSection === "automation" ? <Bot size={19} className="mt-0.5 shrink-0" /> : <CalendarClock size={19} className="mt-0.5 shrink-0" />}
-        <p>GST, invoice numbering, payment terms and template appearance continue to come from Invoice Settings.</p>
+      <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-sm text-blue-900">
+        Admin manages reusable templates only. Customer price, purchased items, billing dates,
+        auto-renewal, pause, resume and cancellation remain Finance responsibilities.
       </div>
+
+      <PlanDrawer
+        drawer={drawer}
+        saving={saving}
+        error={drawer ? error : ""}
+        onChange={updateDrawer}
+        onClose={() => {
+          if (!saving) {
+            setImpactConfirmation(null);
+            setDrawer(null);
+            setError("");
+          }
+        }}
+        onSave={saveDrawer}
+      />
+
+      <ImpactConfirmationModal
+        confirmation={impactConfirmation}
+        saving={saving}
+        onCancel={() => setImpactConfirmation(null)}
+        onConfirm={() => persistPlans(
+          impactConfirmation.nextPlans,
+          impactConfirmation.mode
+        )}
+      />
     </section>
   );
 }

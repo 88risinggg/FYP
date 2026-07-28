@@ -201,16 +201,29 @@ function SummarySection({ invoice, settings }) {
   const items = Array.isArray(invoice.items) ? invoice.items : [];
   const currency = settings.defaultCurrency || "SGD";
 
-  const subtotal = items.length
-    ? items.reduce((sum, item) => sum + Number(item.amount ?? Number(item.quantity || 0) * Number(item.unit_price || 0)), 0)
-    : Number(invoice.total_amount || 0);
+  const hasStoredSubtotal = invoice.subtotal_amount !== undefined
+    && invoice.subtotal_amount !== null
+    && invoice.subtotal_amount !== "";
+  const subtotal = hasStoredSubtotal
+    ? Number(invoice.subtotal_amount)
+    : items.length
+      ? items.reduce((sum, item) => sum + Number(item.amount ?? Number(item.quantity || 0) * Number(item.unit_price || 0)), 0)
+      : Number(invoice.total_amount || 0);
+  const appliedTaxName = invoice.tax_name || settings.taxName || "GST";
+  const appliedTaxRate = Number(invoice.tax_rate ?? settings.taxPercentage ?? 0);
+  const hasStoredTaxAmount = invoice.tax_amount !== undefined
+    && invoice.tax_amount !== null
+    && invoice.tax_amount !== "";
+  const showTax = appliedTaxRate > 0 && (invoice.tax_rate !== undefined || settings.taxEnabled);
 
   let taxAmount = 0;
-  if (settings.taxEnabled && settings.taxPercentage > 0) {
+  if (hasStoredTaxAmount) {
+    taxAmount = Number(invoice.tax_amount);
+  } else if (showTax) {
     if (settings.taxInclusive) {
-      taxAmount = subtotal - (subtotal / (1 + settings.taxPercentage / 100));
+      taxAmount = subtotal - (subtotal / (1 + appliedTaxRate / 100));
     } else {
-      taxAmount = subtotal * (settings.taxPercentage / 100);
+      taxAmount = subtotal * (appliedTaxRate / 100);
     }
   }
 
@@ -238,9 +251,9 @@ function SummarySection({ invoice, settings }) {
             <td style={{ height: "10mm", padding: "2.6mm 3.5mm", border: "0.3mm solid #F0D2CA", fontSize: "7.3pt", fontWeight: 800, textTransform: "uppercase" }}>Subtotal</td>
             <td style={{ height: "10mm", padding: "2.6mm 3.5mm", border: "0.3mm solid #F0D2CA", fontSize: "7.3pt", textAlign: "right" }}>{formatMoney(subtotal, settings)}</td>
           </tr>
-          {settings.taxEnabled && settings.taxPercentage > 0 && (
+          {showTax && (
             <tr>
-              <td style={{ height: "10mm", padding: "2.6mm 3.5mm", border: "0.3mm solid #F0D2CA", fontSize: "7.3pt", fontWeight: 800, textTransform: "uppercase" }}>{settings.taxName} ({settings.taxPercentage}%)</td>
+              <td style={{ height: "10mm", padding: "2.6mm 3.5mm", border: "0.3mm solid #F0D2CA", fontSize: "7.3pt", fontWeight: 800, textTransform: "uppercase" }}>{appliedTaxName} ({appliedTaxRate}%)</td>
               <td style={{ height: "10mm", padding: "2.6mm 3.5mm", border: "0.3mm solid #F0D2CA", fontSize: "7.3pt", textAlign: "right" }}>{formatMoney(taxAmount, settings)}</td>
             </tr>
           )}

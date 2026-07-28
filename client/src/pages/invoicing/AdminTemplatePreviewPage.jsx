@@ -4,24 +4,38 @@ import {
 } from "lucide-react";
 
 import InvoiceTemplate from "../../components/invoicing/InvoiceTemplate.jsx";
-import { getInvoiceSettings } from "../../services/adminInvoiceSettingsService.js";
+import {
+  getInvoiceGstRates,
+  getInvoiceSettings
+} from "../../services/adminInvoiceSettingsService.js";
 
 // =====================================================
 // Sample Invoice Data for Preview
 // =====================================================
 
+function singaporeDateInput(daysFromToday = 0) {
+  const date = new Date(Date.now() + daysFromToday * 86400000);
+  const parts = new Intl.DateTimeFormat("en", {
+    timeZone: "Asia/Singapore",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 const SAMPLE_INVOICE = {
   invoice_id: 0,
   invoiceId: "INV-2026-000001",
   status: "Sent",
-  issue_date: new Date().toISOString().slice(0, 10),
-  due_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+  issue_date: singaporeDateInput(),
+  due_date: singaporeDateInput(30),
   customer_name: "John Tan",
   customer_email: "john@email.com",
   customer_address: "123 Orchard Road, #04-01, Singapore 238858",
   service_provider: "Premium Hair Studio",
   shop_title: "Premium Hair Studio",
-  total_amount: 54.50,
   amount_paid: 0,
   notes: "",
   items: [
@@ -42,6 +56,20 @@ const ZOOM_LEVELS = [
   { label: "Fit", value: "fit" },
 ];
 
+function buildPreviewInvoiceNumber(settings, previewDate) {
+  const selectedYear = String(previewDate || "").slice(0, 4) || String(new Date().getFullYear());
+  const fullYear = settings?.sequenceRules?.yearlyReset
+    ? selectedYear
+    : String(settings?.invoiceYear || selectedYear);
+  const sequence = String(Number(settings?.nextInvoiceNumber) || 1).padStart(4, "0");
+
+  return String(settings?.invoiceFormat || "{PREFIX}-{YYYY}-{NNNN}")
+    .replaceAll("{PREFIX}", settings?.invoicePrefix || "INV")
+    .replaceAll("{YYYY}", fullYear)
+    .replaceAll("{YY}", fullYear.slice(-2))
+    .replaceAll("{NNNN}", sequence);
+}
+
 /**
  * Admin Template Preview Page
  *
@@ -57,6 +85,8 @@ export default function AdminTemplatePreviewPage() {
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [zoom, setZoom] = useState("fit");
+  const [previewDate, setPreviewDate] = useState(SAMPLE_INVOICE.issue_date);
+  const [effectiveGstRate, setEffectiveGstRate] = useState(null);
   const previewContainerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(800);
 
@@ -80,6 +110,10 @@ export default function AdminTemplatePreviewPage() {
           fontFamily: s.fontFamily || s.font_family || "Arial, Helvetica, sans-serif",
           fontSizeBase: s.fontSizeBase || s.font_size_base || 12,
           invoicePrefix: s.invoicePrefix || s.invoice_prefix || "INV",
+          invoiceYear: s.invoiceYear || s.invoice_year || "",
+          invoiceFormat: s.invoiceFormat || s.invoice_format || "{PREFIX}-{YYYY}-{NNNN}",
+          nextInvoiceNumber: s.nextInvoiceNumber ?? s.next_invoice_number ?? 1,
+          sequenceRules: s.sequenceRules || { yearlyReset: true },
           currencySymbol: s.currencySymbol || s.currency_symbol || "S$",
           currencyFormat: s.currencyFormat || s.currency_format || "symbol_before",
           displayDateFormat: s.displayDateFormat || s.display_date_format || "DD MMM YYYY",
@@ -162,6 +196,20 @@ export default function AdminTemplatePreviewPage() {
     loadSettings();
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    getInvoiceGstRates({ asOf: previewDate })
+      .then((data) => {
+        if (active) setEffectiveGstRate(data.currentRate || null);
+      })
+      .catch((error) => {
+        if (active) setLoadError(error.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [previewDate]);
+
   // Measure container width for "Fit" zoom
   useEffect(() => {
     if (!previewContainerRef.current) return;
@@ -177,8 +225,20 @@ export default function AdminTemplatePreviewPage() {
   // Build a sent sample invoice using the saved invoice-number prefix.
   const previewInvoice = {
     ...SAMPLE_INVOICE,
-    invoiceId: `${settings?.invoicePrefix || "INV"}-2026-000001`,
+    invoiceId: buildPreviewInvoiceNumber(settings, previewDate),
+    issue_date: previewDate,
+    due_date: new Date(new Date(`${previewDate}T00:00:00.000Z`).getTime() + 30 * 86400000)
+      .toISOString()
+      .slice(0, 10),
   };
+  const previewSettings = effectiveGstRate
+    ? {
+        ...settings,
+        taxEnabled: Number(effectiveGstRate.ratePercentage) > 0,
+        taxName: effectiveGstRate.taxName || "GST",
+        taxPercentage: Number(effectiveGstRate.ratePercentage)
+      }
+    : settings;
 
   // Compute scale based on zoom setting
   const A4_WIDTH_PX = 793; // 210mm at 96 DPI
@@ -202,9 +262,20 @@ export default function AdminTemplatePreviewPage() {
           <Eye className="h-5 w-5 text-[#2D7C83]" />
           Template Preview
         </h2>
-        <p className="mt-1 text-sm text-[#7B6660]">
-          This sample invoice uses the latest saved Invoice Settings. The same settings are used for Finance invoices sent to customers.
-        </p>
+        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <p className="text-sm text-[#7B6660]">
+            Select an invoice date to preview the GST rate effective on that date.
+          </p>
+          <label className="block">
+            <span className="text-xs font-semibold text-[#7B6660]">Preview invoice date</span>
+            <input
+              type="date"
+              value={previewDate}
+              onChange={(event) => setPreviewDate(event.target.value)}
+              className="mt-1 block rounded-lg border border-[#F0D2CA] bg-white px-3 py-2 text-sm font-semibold text-[#251E1F]"
+            />
+          </label>
+        </div>
 
         {loadError && (
           <div className="mt-3 flex items-center gap-2 rounded-lg border border-[#FDD9CD] bg-[#FFF4E8] px-3 py-2 text-xs text-amber-700">
@@ -255,10 +326,10 @@ export default function AdminTemplatePreviewPage() {
           >
             <InvoiceTemplate
               invoice={previewInvoice}
-              settings={settings}
+              settings={previewSettings}
               options={{
-                logoUrl: settings.companyLogoUrl || "",
-                qrCodeUrl: settings.qrCodeDisplay ? "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI3MCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMCIgeT0iNzAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0MCIgeT0iNDAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzMCIgeT0iMTAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI1MCIgeT0iMzAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48L3N2Zz4=" : "",
+                logoUrl: previewSettings.companyLogoUrl || "",
+                qrCodeUrl: previewSettings.qrCodeDisplay ? "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI3MCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMCIgeT0iNzAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0MCIgeT0iNDAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzMCIgeT0iMTAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI1MCIgeT0iMzAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48L3N2Zz4=" : "",
                 // Safe sample link and QR code used only in this read-only preview.
                 paymentUrl: "https://checkout.stripe.com/c/pay/sample_preview_link",
                 stripeQrCodeUrl: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI3MCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMCIgeT0iNzAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0MCIgeT0iNDAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzMCIgeT0iMTAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI1MCIgeT0iMzAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iYmxhY2siLz48L3N2Zz4=",

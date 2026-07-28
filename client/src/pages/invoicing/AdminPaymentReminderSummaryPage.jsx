@@ -13,11 +13,10 @@ import {
   ShieldCheck,
   XCircle
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { fetchPaymentReminderSummary } from "../../services/adminDashboardService.js";
-import { getStoredSession } from "../../services/sessionService.js";
 
 const basePath = "/dashboard/invoicing/admin";
 const rangeOptions = [
@@ -38,17 +37,6 @@ function formatCurrency(value) {
     style: "currency",
     currency: "SGD"
   }).format(Number(value || 0));
-}
-
-function formatDate(value) {
-  if (!value) return "-";
-
-  return new Intl.DateTimeFormat("en-SG", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "Asia/Singapore"
-  }).format(new Date(value));
 }
 
 function formatDateTime(value) {
@@ -270,7 +258,6 @@ function LoadingSkeleton() {
 }
 
 export default function AdminPaymentReminderSummaryPage() {
-  const session = getStoredSession();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialRange = rangeOptions.some((option) => option.value === searchParams.get("range"))
     ? searchParams.get("range")
@@ -280,7 +267,6 @@ export default function AdminPaymentReminderSummaryPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const now = useMemo(() => new Date(), []);
 
   async function loadSummary(nextRange = range, isRefresh = false) {
     if (isRefresh) {
@@ -346,17 +332,6 @@ export default function AdminPaymentReminderSummaryPage() {
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-3 rounded-lg border border-[#f0d2ca] bg-white px-3 py-2">
-              <CalendarDays size={17} className="text-[#F38978]" />
-              <div>
-                <p className="text-xs font-bold text-[#251E1F]">{formatDate(now)}</p>
-                <p className="text-[11px] text-[#7b6660]">Current date</p>
-              </div>
-            </div>
-            <div className="rounded-lg border border-[#f0d2ca] bg-white px-3 py-2">
-              <p className="text-xs font-bold text-[#251E1F]">{formatDateTime(session?.user?.lastLoginAt)}</p>
-              <p className="text-[11px] text-[#7b6660]">Last login</p>
-            </div>
             <select
               value={range}
               onChange={(event) => handleRangeChange(event.target.value)}
@@ -366,14 +341,6 @@ export default function AdminPaymentReminderSummaryPage() {
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
-            <button
-              type="button"
-              onClick={() => loadSummary(range, true)}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-sm font-bold text-[#251E1F] transition hover:border-[#F38978] hover:text-[#F38978]"
-            >
-              <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
-              Refresh
-            </button>
           </div>
         </div>
 

@@ -71,7 +71,8 @@ router.get("/:id/pdf", async (req, res) => {
     const invoiceId = Number(req.params.id);
     const companyId = getCompanyId(req);
     const [rows] = await pool.query(
-      `SELECT i.invoice_id, i.invoiceId, i.status, i.issue_date, i.due_date, i.total_amount,
+      `SELECT i.invoice_id, i.invoiceId, i.status, i.issue_date, i.due_date,
+              i.subtotal_amount, i.tax_name, i.tax_rate, i.tax_amount, i.total_amount,
               i.payment_url, i.qr_code_url,
               c.name AS customer_name, c.email AS customer_email, c.address AS customer_address
        FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id
@@ -173,7 +174,8 @@ router.get("/:id/html", async (req, res) => {
     const invoiceId = Number(req.params.id);
     const companyId = getCompanyId(req);
     const [rows] = await pool.query(
-      `SELECT i.invoice_id, i.invoiceId, i.status, i.issue_date, i.due_date, i.total_amount,
+      `SELECT i.invoice_id, i.invoiceId, i.status, i.issue_date, i.due_date,
+              i.subtotal_amount, i.tax_name, i.tax_rate, i.tax_amount, i.total_amount,
               i.payment_url, i.qr_code_url, i.shop_title, i.service_provider,
               c.name AS customer_name, c.email AS customer_email, c.address AS customer_address
        FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id

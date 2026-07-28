@@ -667,6 +667,20 @@ function InvoiceDetailsModal({ invoice, onClose }) {
                 )}
               </tbody>
               <tfoot className="border-t border-[#f0d2ca] bg-[#FDD9CD]/10">
+                {invoice.subtotal_amount !== null && invoice.subtotal_amount !== undefined ? (
+                  <tr>
+                    <td colSpan="3" className="px-4 py-3 text-right text-sm font-medium text-[#7b6660]">Subtotal</td>
+                    <td className="px-4 py-3 text-right text-sm font-medium text-[#251E1F]">{formatCurrency(invoice.subtotal_amount)}</td>
+                  </tr>
+                ) : null}
+                {Number(invoice.tax_rate || 0) > 0 ? (
+                  <tr>
+                    <td colSpan="3" className="px-4 py-3 text-right text-sm font-medium text-[#7b6660]">
+                      {invoice.tax_name || "GST"} ({Number(invoice.tax_rate)}%)
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm font-medium text-[#251E1F]">{formatCurrency(invoice.tax_amount)}</td>
+                  </tr>
+                ) : null}
                 <tr>
                   <td colSpan="3" className="px-4 py-3 text-right text-sm font-bold text-[#251E1F]">Total</td>
                   <td className="px-4 py-3 text-right text-sm font-bold text-[#251E1F]">{formatCurrency(invoice.total_amount)}</td>
@@ -981,13 +995,15 @@ function InvoiceCreationModal({ customers, nextInvoiceId, defaultDueDate: config
   });
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  const [effectiveGstRate, setEffectiveGstRate] = useState(currentGstRate);
+  const [isLoadingGst, setIsLoadingGst] = useState(false);
 
   const subtotal = useMemo(
     () => form.items.reduce((sum, item) => sum + getItemAmount(item), 0),
     [form.items]
   );
-  const gstRate = Number(currentGstRate?.ratePercentage || 0);
-  const gstName = currentGstRate?.taxName || "GST";
+  const gstRate = Number(effectiveGstRate?.ratePercentage || 0);
+  const gstName = effectiveGstRate?.taxName || "GST";
   const invoiceCurrency = invoiceSettings?.defaultCurrency || invoiceSettings?.general?.defaultCurrency || "SGD";
   const taxInclusive = invoiceSettings?.taxInclusive || invoiceSettings?.general?.priceDisplay === "tax_inclusive";
   const taxAmount = taxInclusive ? subtotal - subtotal / (1 + gstRate / 100) : subtotal * (gstRate / 100);
@@ -999,6 +1015,24 @@ function InvoiceCreationModal({ customers, nextInvoiceId, defaultDueDate: config
       due_date: addDaysToDateInput(current.issue_date, dueDays)
     }));
   }, [dueDays, form.issue_date]);
+
+  useEffect(() => {
+    let active = true;
+    setIsLoadingGst(true);
+    fetchNextInvoiceNumber(form.issue_date)
+      .then((response) => {
+        if (active) setEffectiveGstRate(response.currentGstRate || null);
+      })
+      .catch((requestError) => {
+        if (active) setError(requestError.message);
+      })
+      .finally(() => {
+        if (active) setIsLoadingGst(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [form.issue_date]);
 
   function updateItem(index, field, value) {
     setForm((current) => ({
@@ -1185,7 +1219,7 @@ function InvoiceCreationModal({ customers, nextInvoiceId, defaultDueDate: config
               <span>{formatCurrency(subtotal, invoiceCurrency)}</span>
             </div>
             <div className="flex justify-between py-1 text-sm text-[#7b6660]">
-              <span>{gstName} ({gstRate}%{taxInclusive ? ", included" : ""})</span>
+              <span>{gstName} ({gstRate}%{taxInclusive ? ", included" : ""}){isLoadingGst ? " · Updating…" : ""}</span>
               <span>{formatCurrency(taxAmount, invoiceCurrency)}</span>
             </div>
             <div className="mt-3 flex justify-between border-t border-[#f0d2ca] pt-3 text-base font-semibold text-[#251E1F]">
@@ -1199,7 +1233,7 @@ function InvoiceCreationModal({ customers, nextInvoiceId, defaultDueDate: config
           <button
             type="button"
             onClick={submitInvoice}
-            disabled={isSaving}
+            disabled={isSaving || isLoadingGst}
             className="primary-button inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold disabled:opacity-60"
           >
             {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}

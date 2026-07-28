@@ -3,6 +3,10 @@ const {
   findDueInvoicesForRule,
   listReminderSettings
 } = require("../models/reminderModel");
+const {
+  calculateInvoiceLateFee,
+  getInvoiceSettings
+} = require("../models/invoiceSettingsModel");
 const { sendReminderEmail } = require("./emailService");
 const { notifyReminderSent } = require("./invoiceNotificationService");
 const { runWithTenant } = require("./tenantContext");
@@ -78,12 +82,25 @@ async function processReminderRule(rule) {
     return;
   }
 
+  const invoiceSettings = await getInvoiceSettings(rule.companyId);
+
   for (const interval of getReminderIntervals(rule)) {
     const invoices = await findDueInvoicesForRule(rule, interval.type, interval.days);
 
     for (const invoice of invoices) {
       try {
-        await sendReminderEmail({ rule, invoice });
+        const lateFee = calculateInvoiceLateFee({
+          status: invoice.status,
+          total_amount: invoice.amountDue,
+          due_date: invoice.dueDate
+        }, invoiceSettings);
+        await sendReminderEmail({
+          rule,
+          invoice: {
+            ...invoice,
+            amountDue: lateFee.amountDue
+          }
+        });
         await createReminderLog({
           companyId: rule.companyId,
           reminderSettingId: rule.id,

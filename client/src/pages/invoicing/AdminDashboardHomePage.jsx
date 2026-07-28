@@ -2,12 +2,10 @@ import {
   AlertTriangle,
   Ban,
   Banknote,
-  CalendarDays,
   CheckCircle2,
   Clock3,
   CreditCard,
   FileText,
-  LogIn,
   ShieldAlert
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -212,37 +210,6 @@ function FocusItem({ item }) {
   );
 }
 
-function formatDashboardDate(date) {
-  return {
-    weekday: new Intl.DateTimeFormat("en-SG", {
-      weekday: "long",
-      timeZone: "Asia/Singapore"
-    }).format(date),
-    date: new Intl.DateTimeFormat("en-SG", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      timeZone: "Asia/Singapore"
-    }).format(date)
-  };
-}
-
-function formatLastLogin(value) {
-  if (!value) return "Not available";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Not available";
-
-  return new Intl.DateTimeFormat("en-SG", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "Asia/Singapore"
-  }).format(date);
-}
-
 export default function AdminDashboardHomePage() {
   const session = getStoredSession();
   const requestInFlightRef = useRef(false);
@@ -275,7 +242,6 @@ export default function AdminDashboardHomePage() {
 
   const admin = dashboard?.admin || session?.user || {};
   const adminName = admin.name || session?.user?.name || "Admin";
-  const dashboardDate = useMemo(() => formatDashboardDate(currentDate), [currentDate]);
   const summary = dashboard?.summary || {};
   const availability = dashboard?.availability || {};
   const hasInvoices = availability.invoices !== false && Number(summary.totalInvoices || 0) > 0;
@@ -305,20 +271,10 @@ export default function AdminDashboardHomePage() {
         {loading && !dashboard ? <DashboardSkeleton /> : (
           <>
             <header className="rounded-lg border border-[#f0d2ca] bg-white/70 p-5 shadow-[0_10px_28px_rgba(37,30,31,0.04)]">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+              <div>
                 <div>
                   <h2 className="text-2xl font-bold text-[#251E1F]">{getGreeting(currentDate)}, {adminName}</h2>
                   <p className="mt-1 text-sm text-[#6f5b55]">A clear view of invoicing health and items requiring attention.</p>
-                </div>
-                <div className="flex flex-col gap-2 text-sm text-[#6f5b55] sm:flex-row sm:gap-5">
-                  <div className="flex items-center gap-2">
-                    <CalendarDays size={16} className="text-[#b64d3b]" aria-hidden="true" />
-                    <span><span className="font-semibold text-[#514440]">{dashboardDate.weekday}</span>, {dashboardDate.date}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <LogIn size={16} className="text-[#b64d3b]" aria-hidden="true" />
-                    <span>Last login: <span className="font-semibold text-[#514440]">{formatLastLogin(admin.lastLoginAt)}</span></span>
-                  </div>
                 </div>
               </div>
             </header>
