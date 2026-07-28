@@ -76,9 +76,7 @@ async function launchPayslipBrowser() {
       "--disable-gpu",
       "--disable-extensions",
       "--disable-background-networking",
-      "--no-first-run",
-      "--no-zygote",
-      "--single-process"
+      "--no-first-run"
     ]
   });
 }

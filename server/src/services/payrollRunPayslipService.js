@@ -12,12 +12,21 @@ async function deliverRunPayslips({ runId, userId, actor }) {
   if (!current) throw Object.assign(new Error("Payroll run not found."), { code: "PAYROLL_RUN_NOT_FOUND" });
   if (!current.paidAt) throw Object.assign(new Error("Finance must confirm payment before HR can deliver payslips."), { code: "PAYMENT_NOT_CONFIRMED" });
   const delivery = { total: current.employees.length, sent: 0, failed: 0, skipped: 0, pending: current.employees.length, errors: [], owner: "HR", attemptedAt: new Date().toISOString() };
-  const browser = current.employees.length ? await launchPayslipBrowser() : null;
+  let browser = current.employees.length ? await launchPayslipBrowser() : null;
   let run = current;
   try {
     for (const employee of current.employees) {
       try {
-        const result = await generateAndSendPayslip(employee.payrollId, { browser, actorUserId: userId });
+        let result;
+        try {
+          result = await generateAndSendPayslip(employee.payrollId, { browser, actorUserId: userId });
+        } catch (error) {
+          const browserDisconnected = /target closed|connection closed|session closed|browser.*closed/i.test(String(error.message || ""));
+          if (!browserDisconnected) throw error;
+          if (browser) await browser.close().catch(() => null);
+          browser = await launchPayslipBrowser();
+          result = await generateAndSendPayslip(employee.payrollId, { browser, actorUserId: userId });
+        }
         if (result.status === 200) result.message.includes("already") ? delivery.skipped++ : delivery.sent++;
         else {
           delivery.failed++;
@@ -35,7 +44,7 @@ async function deliverRunPayslips({ runId, userId, actor }) {
         userId
       });
     }
-  } finally { if (browser) await browser.close(); }
+  } finally { if (browser) await browser.close().catch(() => null); }
 
   const action = delivery.failed ? "payslips-progress" : "payslips-completed";
   run = await applyFinancePayrollWorkflowAction({ runId, action, payload: { delivery, actor: actor || "HR" }, userId });
