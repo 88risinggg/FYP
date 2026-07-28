@@ -274,6 +274,12 @@ async function login(req, res) {
 
     return res.json(await authenticatedPayload(user, req));
   } catch (error) {
+    console.error("Login failed:", {
+      code: error.code || null,
+      message: error.message,
+      sqlState: error.sqlState || null,
+      sqlMessage: error.sqlMessage || null
+    });
     res.status(500).json({
       message: "Login failed. Please try again later."
     });
