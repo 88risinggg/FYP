@@ -119,6 +119,7 @@ async function postReminderSetting(req, res) {
 
     const created = await createReminderSetting(setting, companyId, req.user?.userId);
     await logAuditEvent({
+      module: "Invoice",
       userId: req.user?.userId,
       userName: req.user?.email || "Admin",
       activityType: "Reminder Settings",
@@ -160,6 +161,7 @@ async function putReminderSetting(req, res) {
       req.user?.userId
     );
     await logAuditEvent({
+      module: "Invoice",
       userId: req.user?.userId,
       userName: req.user?.email || "Admin",
       activityType: "Reminder Settings",
@@ -195,6 +197,7 @@ async function patchReminderStatus(req, res) {
       req.user?.userId
     );
     await logAuditEvent({
+      module: "Invoice",
       userId: req.user?.userId,
       userName: req.user?.email || "Admin",
       activityType: "Reminder Settings",
@@ -240,6 +243,7 @@ async function postTestReminder(req, res) {
 
     await sendTestReminderEmail({ to, rule: setting });
     await logAuditEvent({
+      module: "Invoice",
       userId: req.user?.userId,
       userName: req.user?.email || "Admin",
       activityType: "Reminder Settings",

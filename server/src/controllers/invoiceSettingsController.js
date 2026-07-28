@@ -411,14 +411,15 @@ async function postInvoicePreview(req, res) {
 async function getGstRates(req, res) {
   try {
     const companyId = getCompanyId(req);
+    const asOf = req.query.asOf || new Date();
     const listOptions = {
       limit: req.query.limit,
       order: req.query.order
     };
     const [rates, currentRate, nextRate] = await Promise.all([
       listGstRates(companyId, listOptions),
-      getEffectiveGstRate(companyId),
-      getNextScheduledGstRate(companyId)
+      getEffectiveGstRate(companyId, asOf),
+      getNextScheduledGstRate(companyId, asOf)
     ]);
     res.json({ rates, currentRate, nextRate });
   } catch (error) {
@@ -442,7 +443,11 @@ async function getNumberingActivity(req, res) {
 async function postGstRate(req, res) {
   try {
     const companyId = getCompanyId(req);
-    await createGstRate(req.body, companyId, req.user?.email || "Admin");
+    await createGstRate(req.body, companyId, {
+      userId: req.user?.userId,
+      email: req.user?.email,
+      displayName: req.user?.name
+    });
     await logAuditEvent({
       userId: req.user?.userId,
       userName: req.user?.email || "Admin",

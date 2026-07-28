@@ -500,13 +500,13 @@ function GstManagementTab() {
     try {
       const nextData = await createInvoiceGstRate({
         taxName: "GST",
-        ratePercentage: Number(form.ratePercentage),
+        ratePercentage: form.ratePercentage,
         effectiveFrom: form.effectiveFrom,
         effectiveTo: form.effectiveTo || null
       }, { limit: 5, order: "latest" });
       setData(nextData);
+      setMessage(`GST ${form.ratePercentage}% scheduled to start on ${shortDate(form.effectiveFrom)}.`);
       setForm({ ratePercentage: "", effectiveFrom: "", effectiveTo: "" });
-      setMessage("GST rate scheduled.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -519,8 +519,6 @@ function GstManagementTab() {
     setMessage("");
     setError("");
   }
-
-  const previewRates = data.rates.slice(0, 5);
 
   if (loading) {
     return (
@@ -653,9 +651,9 @@ function GstManagementTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f5e2dc] bg-white">
-                {previewRates.length === 0 ? (
+                {data.rates.length === 0 ? (
                   <tr><td colSpan="6" className="px-4 py-10 text-center font-semibold text-[#7b6660]">No GST rates configured.</td></tr>
-                ) : previewRates.map((rate) => (
+                ) : data.rates.map((rate) => (
                   <tr key={rate.id} className="align-middle">
                     <td className="px-4 py-3 font-bold text-[#251E1F]">{rate.taxCode}</td>
                     <td className="px-4 py-3 text-[#7b6660]">{rate.taxName}</td>
@@ -673,11 +671,6 @@ function GstManagementTab() {
             </table>
           </div>
         </div>
-        {data.rates.length > 5 ? (
-          <p className="mt-3 text-right text-xs font-semibold text-[#7b6660]">
-            Showing 5 of {data.rates.length} records
-          </p>
-        ) : null}
       </SettingsCard>
     </div>
   );
@@ -851,7 +844,7 @@ function SettingsCard({ title, icon: Icon, children }) {
   );
 }
 
-function ConfigurationStatusPanel({ sections, currentTab, routePrefix, savedAt }) {
+function ConfigurationStatusPanel({ sections, currentTab, routePrefix }) {
   const completedCount = sections.filter((section) => section.status === "complete").length;
   const percentage = Math.round((completedCount / sections.length) * 100);
 
@@ -901,10 +894,6 @@ function ConfigurationStatusPanel({ sections, currentTab, routePrefix, savedAt }
         })}
       </div>
 
-      <div className="mt-5 border-t border-[#f0d2ca] pt-4">
-        <p className="text-xs font-bold text-[#7b6660]">Last saved</p>
-        <p className="mt-1 text-sm font-bold text-[#251E1F]">{formatDateTime(savedAt)}</p>
-      </div>
     </SettingsCard>
   );
 }
@@ -1169,7 +1158,6 @@ function SettingsTabLayout({
   sectionStates,
   currentTab,
   routePrefix,
-  savedAt,
   saving,
   dirty,
   invalid,
@@ -1183,7 +1171,7 @@ function SettingsTabLayout({
         {children}
       </div>
       <aside className="space-y-5">
-        <ConfigurationStatusPanel sections={sectionStates} currentTab={currentTab} routePrefix={routePrefix} savedAt={savedAt} />
+        <ConfigurationStatusPanel sections={sectionStates} currentTab={currentTab} routePrefix={routePrefix} />
         <ActionPanel saving={saving} dirty={dirty} invalid={invalid} canSave={canSave} onDiscard={onDiscard} />
         {asideExtra}
       </aside>
@@ -1228,7 +1216,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
     sectionStates,
     currentTab,
     routePrefix,
-    savedAt: savedForm.updatedAt,
     saving,
     dirty: hasUnsavedChanges,
     invalid: hasInvalidChanges,

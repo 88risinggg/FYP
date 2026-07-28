@@ -2,13 +2,12 @@ const { randomUUID } = require("crypto");
 const { pool } = require("../config/db");
 
 const VALID_FREQUENCIES = new Set(["Weekly", "Monthly", "Quarterly", "Yearly"]);
-const VALID_AUTO_SEND_MODES = new Set(["finance_choice", "always", "never"]);
 
 const defaultSubscriptionSettings = {
   plans: [],
   billingRules: {
     requireApprovedPlan: false,
-    lockPlanPricing: true,
+    lockPlanPricing: false,
     allowPause: true,
     allowCancellation: true,
     allowManualInvoiceGeneration: true,
@@ -41,7 +40,6 @@ function parseJson(value, fallback) {
 
 function normalizePlan(plan, index) {
   const name = String(plan?.name || "").trim();
-  const price = Number(plan?.price);
   const billingFrequency = VALID_FREQUENCIES.has(plan?.billingFrequency)
     ? plan.billingFrequency
     : "Monthly";
@@ -51,20 +49,12 @@ function normalizePlan(plan, index) {
     error.status = 400;
     throw error;
   }
-  if (!Number.isFinite(price) || price <= 0) {
-    const error = new Error(`${name} requires a price greater than zero.`);
-    error.status = 400;
-    throw error;
-  }
-
   return {
     id: String(plan?.id || randomUUID()),
     name,
     description: String(plan?.description || "").trim(),
-    price: Number(price.toFixed(2)),
     billingFrequency,
-    active: boolValue(plan?.active, true),
-    autoRenewDefault: boolValue(plan?.autoRenewDefault, true)
+    active: boolValue(plan?.active, true)
   };
 }
 
@@ -83,51 +73,12 @@ function normalizeSubscriptionSettings(input = {}) {
     planNames.add(key);
   }
 
-  const billing = input.billingRules || {};
-  const automation = input.automation || {};
-  const reminderDays = Number(automation.renewalReminderDays);
-
   return {
     plans,
-    billingRules: {
-      requireApprovedPlan: boolValue(
-        billing.requireApprovedPlan,
-        defaultSubscriptionSettings.billingRules.requireApprovedPlan
-      ),
-      lockPlanPricing: boolValue(
-        billing.lockPlanPricing,
-        defaultSubscriptionSettings.billingRules.lockPlanPricing
-      ),
-      allowPause: boolValue(billing.allowPause, defaultSubscriptionSettings.billingRules.allowPause),
-      allowCancellation: boolValue(
-        billing.allowCancellation,
-        defaultSubscriptionSettings.billingRules.allowCancellation
-      ),
-      allowManualInvoiceGeneration: boolValue(
-        billing.allowManualInvoiceGeneration,
-        defaultSubscriptionSettings.billingRules.allowManualInvoiceGeneration
-      ),
-      defaultAutoRenew: boolValue(
-        billing.defaultAutoRenew,
-        defaultSubscriptionSettings.billingRules.defaultAutoRenew
-      )
-    },
-    automation: {
-      automaticInvoiceGeneration: boolValue(
-        automation.automaticInvoiceGeneration,
-        defaultSubscriptionSettings.automation.automaticInvoiceGeneration
-      ),
-      autoSendMode: VALID_AUTO_SEND_MODES.has(automation.autoSendMode)
-        ? automation.autoSendMode
-        : defaultSubscriptionSettings.automation.autoSendMode,
-      renewalReminderDays: Number.isInteger(reminderDays) && reminderDays >= 0 && reminderDays <= 90
-        ? reminderDays
-        : defaultSubscriptionSettings.automation.renewalReminderDays,
-      notifyFinanceOnFailure: boolValue(
-        automation.notifyFinanceOnFailure,
-        defaultSubscriptionSettings.automation.notifyFinanceOnFailure
-      )
-    }
+    // These are internal operating safeguards, not Admin-facing configuration.
+    // Keep Finance customer pricing editable and keep recurring billing reliable.
+    billingRules: { ...defaultSubscriptionSettings.billingRules },
+    automation: { ...defaultSubscriptionSettings.automation }
   };
 }
 
@@ -159,17 +110,39 @@ async function getSubscriptionSettings(companyId) {
     [companyKey]
   );
 
-  if (!rows[0]) {
-    return { ...normalizeSubscriptionSettings(defaultSubscriptionSettings), updatedAt: null };
+  const normalized = rows[0]
+    ? normalizeSubscriptionSettings({
+        plans: parseJson(rows[0].plans_json, []),
+        billingRules: parseJson(rows[0].billing_rules_json, {}),
+        automation: parseJson(rows[0].automation_settings_json, {})
+      })
+    : normalizeSubscriptionSettings(defaultSubscriptionSettings);
+
+  let usageByPlan = new Map();
+  try {
+    const [usageRows] = await pool.query(
+      `SELECT LOWER(TRIM(plan_name)) AS plan_key, COUNT(*) AS usage_count
+       FROM subscriptions
+       WHERE company_id = ?
+         AND status IN ('Active', 'Paused')
+       GROUP BY LOWER(TRIM(plan_name))`,
+      [companyKey]
+    );
+    usageByPlan = new Map(
+      usageRows.map((row) => [row.plan_key, Number(row.usage_count || 0)])
+    );
+  } catch (error) {
+    if (error.code !== "ER_NO_SUCH_TABLE") throw error;
   }
 
-  const normalized = normalizeSubscriptionSettings({
-    plans: parseJson(rows[0].plans_json, []),
-    billingRules: parseJson(rows[0].billing_rules_json, {}),
-    automation: parseJson(rows[0].automation_settings_json, {})
-  });
-
-  return { ...normalized, updatedAt: rows[0].updated_at || null };
+  return {
+    ...normalized,
+    plans: normalized.plans.map((plan) => ({
+      ...plan,
+      usageCount: usageByPlan.get(plan.name.toLowerCase()) || 0
+    })),
+    updatedAt: rows[0]?.updated_at || null
+  };
 }
 
 async function saveSubscriptionSettings(companyId, input, updatedBy) {

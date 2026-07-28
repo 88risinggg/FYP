@@ -37,6 +37,7 @@ export function getInvoiceGstRates(options = {}) {
   const query = new URLSearchParams();
   if (options.limit) query.set("limit", String(options.limit));
   if (options.order) query.set("order", options.order);
+  if (options.asOf) query.set("asOf", String(options.asOf));
   const suffix = query.size ? `?${query}` : "";
   return apiRequest(`/api/admin/invoicing/invoice-settings/gst-rates${suffix}`, {
     headers: authHeaders()

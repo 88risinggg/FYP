@@ -19,6 +19,7 @@ const {
   reserveNextInvoiceNumber
 } = require("../models/invoiceSettingsModel");
 const { getEffectiveGstRate } = require("../models/invoiceGstRateModel");
+const { calculateInvoiceTax } = require("../services/invoiceTaxCalculator");
 
 /** Set of valid invoice statuses used throughout the application. */
 const VALID_STATUSES = new Set(["Draft", "Scheduled", "Sent", "Viewed", "Paid", "Overdue", "Pending Review", "Void", "Cancelled", "Refunded"]);
@@ -220,6 +221,10 @@ async function getInvoices(req, res) {
         i.status,
         i.issue_date,
         i.due_date,
+        i.subtotal_amount,
+        i.tax_name,
+        i.tax_rate,
+        i.tax_amount,
         i.total_amount,
         i.customer_id,
         i.created_at,
@@ -409,8 +414,10 @@ async function getCustomers(req, res) {
 async function getNextInvoiceNumber(req, res) {
   try {
     const companyId = getCompanyId(req);
-    const preview = await previewNextInvoiceNumber(new Date(), companyId);
-    const currentGstRate = await getEffectiveGstRate(companyId);
+    const issueDate = normalizeDate(req.query.issueDate) || new Date();
+    const previewDate = new Date(issueDate);
+    const preview = await previewNextInvoiceNumber(previewDate, companyId);
+    const currentGstRate = await getEffectiveGstRate(companyId, issueDate);
 
     res.json({
       invoiceId: preview.invoiceId,
@@ -472,12 +479,11 @@ async function createInvoice(req, res) {
     const taxRate = Number(effectiveGstRate?.ratePercentage || 0);
     const taxInclusive = invoiceSettings.taxInclusive || invoiceSettings.general?.priceDisplay === "tax_inclusive";
     const configuredDueDate = calculateDueDate(invoiceSettings, invoice.issue_date);
-    const taxAmount = taxInclusive
-      ? toCurrencyNumber(subtotalAmount - subtotalAmount / (1 + taxRate / 100))
-      : toCurrencyNumber(subtotalAmount * (taxRate / 100));
-    const totalAmount = taxInclusive
-      ? toCurrencyNumber(subtotalAmount)
-      : toCurrencyNumber(subtotalAmount + taxAmount);
+    const { taxAmount, totalAmount } = calculateInvoiceTax({
+      subtotal: subtotalAmount,
+      taxRate,
+      taxInclusive
+    });
 
     // Lock and advance the canonical settings sequence in this invoice transaction.
     const { invoiceId } = await reserveNextInvoiceNumber(connection, new Date(invoice.issue_date), companyId);

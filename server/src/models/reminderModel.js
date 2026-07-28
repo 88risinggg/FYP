@@ -237,6 +237,7 @@ async function findDueInvoicesForRule(rule, reminderType, overdueDays) {
       `SELECT
         invoice.invoice_id AS invoiceId,
         COALESCE(invoice.invoiceId, CONCAT('INV-', invoice.invoice_id)) AS invoiceNumber,
+        invoice.status AS status,
         invoice.total_amount AS amountDue,
         invoice.due_date AS dueDate,
         invoice.payment_url AS paymentLink,

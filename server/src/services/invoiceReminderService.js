@@ -15,6 +15,10 @@
  */
 
 const { pool } = require("../config/db");
+const {
+  calculateInvoiceLateFee,
+  getInvoiceSettings
+} = require("../models/invoiceSettingsModel");
 const { generateQRCode } = require("./qrCodeService");
 const { createNotification } = require("./invoiceNotificationService");
 const nodemailer = require("nodemailer");
@@ -379,6 +383,9 @@ async function sendManualReminder(invoiceId, userId) {
 
   const reminderType = "Manual Reminder";
   let success = false;
+  const invoiceSettings = await getInvoiceSettings(companyId);
+  const lateFee = calculateInvoiceLateFee(invoice, invoiceSettings);
+  const payableAmount = lateFee.amountDue;
   const { listReminderSettings, createReminderLog } = require("../models/reminderModel");
   const policies = await listReminderSettings(companyId);
   const policy = policies.find((item) => item.enabled);
@@ -388,7 +395,7 @@ async function sendManualReminder(invoiceId, userId) {
     const templateInvoice = {
       clientName: invoice.customer_name,
       invoiceNumber: invoice.invoiceId,
-      amountDue: invoice.total_amount,
+      amountDue: payableAmount,
       dueDate: invoice.due_date,
       overdueDays: Math.max(0, Math.floor((Date.now() - new Date(invoice.due_date).getTime()) / 86400000)),
       paymentLink: invoice.payment_url
@@ -420,7 +427,10 @@ async function sendManualReminder(invoiceId, userId) {
       });
     }
   } else {
-    success = await sendReminderForInvoice(invoice, "manual");
+    success = await sendReminderForInvoice({
+      ...invoice,
+      total_amount: payableAmount
+    }, "manual");
   }
 
   if (success) {

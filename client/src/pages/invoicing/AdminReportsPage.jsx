@@ -7,7 +7,6 @@ import {
   Loader2,
   PieChart,
   ReceiptText,
-  RefreshCw,
   TrendingUp,
   Users
 } from "lucide-react";
@@ -304,15 +303,6 @@ export default function AdminReportsPage() {
           <p className="mt-2 text-sm text-[#7b6660]">Generated {reportGeneratedAt}</p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={loadReports}
-            disabled={loading}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#ead3cc] bg-white px-4 py-2.5 text-sm font-bold text-[#251E1F] hover:border-[#F38978] disabled:opacity-60"
-          >
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-            Refresh
-          </button>
           <button
             type="button"
             onClick={handleExport}

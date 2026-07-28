@@ -6,6 +6,7 @@ const { pool } = require("../config/db");
 const {
   buildInvoiceNumber,
   calculateDueDate,
+  calculateInvoiceLateFee,
   listNumberingActivityPage,
   optionLists,
   resolveInvoiceSequence
@@ -25,6 +26,35 @@ test("saved prefix and sequence produce a four-digit invoice number", () => {
 
 test("due date follows the configured due days", () => {
   expect(calculateDueDate({ dueDays: 30 }, new Date("2026-07-20T00:00:00Z"))).toBe("2026-08-19");
+});
+
+test("late reminder amount includes the configured one-time late fee", () => {
+  const result = calculateInvoiceLateFee({
+    status: "Overdue",
+    total_amount: 1000,
+    due_date: "2026-07-20"
+  }, {
+    general: { lateFeeValue: 2 }
+  }, new Date("2026-07-28T00:00:00Z"));
+
+  expect(result).toEqual({
+    lateFeeRate: 2,
+    lateFeeAmount: 20,
+    amountDue: 1020
+  });
+});
+
+test("reminder amount does not include a late fee before the due date", () => {
+  const result = calculateInvoiceLateFee({
+    status: "Sent",
+    total_amount: 1000,
+    due_date: "2026-07-30"
+  }, {
+    general: { lateFeeValue: 2 }
+  }, new Date("2026-07-28T00:00:00Z"));
+
+  expect(result.amountDue).toBe(1000);
+  expect(result.lateFeeAmount).toBe(0);
 });
 
 test("yearly reset starts the first sequence of a new year at one", () => {

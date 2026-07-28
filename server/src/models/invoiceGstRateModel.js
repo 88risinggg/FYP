@@ -1,4 +1,5 @@
 const { pool } = require("../config/db");
+const { APPLICATION_TIMEZONE } = require("../config/timezone");
 
 const DEFAULT_GST_RATE = {
   taxCode: "GST_9",
@@ -10,12 +11,23 @@ const DEFAULT_GST_RATE = {
 
 function toDateOnly(value) {
   if (!value) return null;
+  if (typeof value === "string") {
+    const dateOnlyMatch = value.match(/^(\d{4}-\d{2}-\d{2})(?:$|T)/);
+    if (dateOnlyMatch) return dateOnlyMatch[1];
+  }
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return value.toISOString().slice(0, 10);
+    const parts = new Intl.DateTimeFormat("en", {
+      timeZone: APPLICATION_TIMEZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(value);
+    const dateParts = Object.fromEntries(parts.map(({ type, value: partValue }) => [type, partValue]));
+    return `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString().slice(0, 10);
+  return toDateOnly(date);
 }
 
 function taxCodeFor(rate) {
@@ -34,7 +46,8 @@ function mapRow(row) {
     effectiveFrom: toDateOnly(row.effective_from),
     effectiveTo: toDateOnly(row.effective_to),
     isActive: row.is_active === 1 || row.is_active === true,
-    createdBy: row.created_by,
+    createdByUserId: row.created_by_user_id,
+    createdBy: row.created_by_name || row.created_by || "System",
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -51,6 +64,7 @@ async function ensureGstRatesTable(connection = pool) {
       effective_from DATE NOT NULL,
       effective_to DATE NULL,
       is_active TINYINT(1) NOT NULL DEFAULT 1,
+      created_by_user_id INT NULL,
       created_by VARCHAR(255) NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -58,6 +72,19 @@ async function ensureGstRatesTable(connection = pool) {
       INDEX idx_invoice_gst_rates_company_dates (company_id, is_active, effective_from, effective_to)
     )
   `);
+  const [creatorColumns] = await connection.query(
+    "SHOW COLUMNS FROM invoice_gst_rates LIKE 'created_by_user_id'"
+  );
+  if (creatorColumns.length === 0) {
+    try {
+      await connection.query(
+        "ALTER TABLE invoice_gst_rates ADD COLUMN created_by_user_id INT NULL AFTER is_active"
+      );
+    } catch (error) {
+      // Another request may have added the compatibility column concurrently.
+      if (error.code !== "ER_DUP_FIELDNAME") throw error;
+    }
+  }
 
   const [rows] = await connection.query(
     "SELECT COUNT(*) AS count FROM invoice_gst_rates WHERE company_id IS NULL"
@@ -85,10 +112,13 @@ async function listGstRates(companyId = null, options = {}) {
     ? Math.max(1, Math.min(Number.parseInt(options.limit, 10) || 5, 100))
     : null;
   const [rows] = await pool.query(
-    `SELECT * FROM invoice_gst_rates
-     WHERE is_active = 1
-       AND ${companyId ? "(company_id = ? OR company_id IS NULL)" : "company_id IS NULL"}
-     ORDER BY effective_from ${latestFirst ? "DESC" : "ASC"}, gst_rate_id ${latestFirst ? "DESC" : "ASC"}
+    `SELECT rates.*,
+            COALESCE(creator.name, creator.email, rates.created_by, 'System') AS created_by_name
+     FROM invoice_gst_rates rates
+     LEFT JOIN user creator ON creator.user_id = rates.created_by_user_id
+     WHERE rates.is_active = 1
+       AND ${companyId ? "(rates.company_id = ? OR rates.company_id IS NULL)" : "rates.company_id IS NULL"}
+     ORDER BY rates.effective_from ${latestFirst ? "DESC" : "ASC"}, rates.gst_rate_id ${latestFirst ? "DESC" : "ASC"}
      ${safeLimit ? `LIMIT ${safeLimit}` : ""}`,
     companyId ? [companyId] : []
   );
@@ -98,14 +128,21 @@ async function listGstRates(companyId = null, options = {}) {
 async function getEffectiveGstRate(companyId = null, asOf = new Date()) {
   await ensureGstRatesTable();
   const date = toDateOnly(asOf) || toDateOnly(new Date());
-  const companyClause = companyId ? "(company_id = ? OR company_id IS NULL)" : "company_id IS NULL";
+  const companyClause = companyId
+    ? "(rates.company_id = ? OR rates.company_id IS NULL)"
+    : "rates.company_id IS NULL";
   const [rows] = await pool.query(
-    `SELECT * FROM invoice_gst_rates
-     WHERE is_active = 1
+    `SELECT rates.*,
+            COALESCE(creator.name, creator.email, rates.created_by, 'System') AS created_by_name
+     FROM invoice_gst_rates rates
+     LEFT JOIN user creator ON creator.user_id = rates.created_by_user_id
+     WHERE rates.is_active = 1
        AND ${companyClause}
-       AND effective_from <= ?
-       AND (effective_to IS NULL OR effective_to >= ?)
-     ORDER BY effective_from DESC, CASE WHEN company_id IS NULL THEN 0 ELSE 1 END DESC, gst_rate_id DESC
+       AND rates.effective_from <= ?
+       AND (rates.effective_to IS NULL OR rates.effective_to >= ?)
+     ORDER BY rates.effective_from DESC,
+              CASE WHEN rates.company_id IS NULL THEN 0 ELSE 1 END DESC,
+              rates.gst_rate_id DESC
      LIMIT 1`,
     companyId ? [companyId, date, date] : [date, date]
   );
@@ -113,10 +150,15 @@ async function getEffectiveGstRate(companyId = null, asOf = new Date()) {
   if (rows[0]) return mapRow(rows[0]);
 
   const [fallbackRows] = await pool.query(
-    `SELECT * FROM invoice_gst_rates
-     WHERE is_active = 1
+    `SELECT rates.*,
+            COALESCE(creator.name, creator.email, rates.created_by, 'System') AS created_by_name
+     FROM invoice_gst_rates rates
+     LEFT JOIN user creator ON creator.user_id = rates.created_by_user_id
+     WHERE rates.is_active = 1
        AND ${companyClause}
-     ORDER BY effective_from ASC, CASE WHEN company_id IS NULL THEN 0 ELSE 1 END DESC, gst_rate_id ASC
+     ORDER BY rates.effective_from ASC,
+              CASE WHEN rates.company_id IS NULL THEN 0 ELSE 1 END DESC,
+              rates.gst_rate_id ASC
      LIMIT 1`,
     companyId ? [companyId] : []
   );
@@ -128,11 +170,16 @@ async function getNextScheduledGstRate(companyId = null, asOf = new Date()) {
   await ensureGstRatesTable();
   const date = toDateOnly(asOf) || toDateOnly(new Date());
   const [rows] = await pool.query(
-    `SELECT * FROM invoice_gst_rates
-     WHERE is_active = 1
-       AND ${companyId ? "(company_id = ? OR company_id IS NULL)" : "company_id IS NULL"}
-       AND effective_from > ?
-     ORDER BY effective_from ASC, CASE WHEN company_id IS NULL THEN 0 ELSE 1 END DESC, gst_rate_id ASC
+    `SELECT rates.*,
+            COALESCE(creator.name, creator.email, rates.created_by, 'System') AS created_by_name
+     FROM invoice_gst_rates rates
+     LEFT JOIN user creator ON creator.user_id = rates.created_by_user_id
+     WHERE rates.is_active = 1
+       AND ${companyId ? "(rates.company_id = ? OR rates.company_id IS NULL)" : "rates.company_id IS NULL"}
+       AND rates.effective_from > ?
+     ORDER BY rates.effective_from ASC,
+              CASE WHEN rates.company_id IS NULL THEN 0 ELSE 1 END DESC,
+              rates.gst_rate_id ASC
      LIMIT 1`,
     companyId ? [companyId, date] : [date]
   );
@@ -141,13 +188,14 @@ async function getNextScheduledGstRate(companyId = null, asOf = new Date()) {
 
 async function createGstRate(data, companyId = null, createdBy = "Admin") {
   await ensureGstRatesTable();
-  const rate = Number(data.ratePercentage ?? data.rate_percentage);
+  const rawRate = String(data.ratePercentage ?? data.rate_percentage ?? "").trim();
+  const rate = Number(rawRate);
   const effectiveFrom = toDateOnly(data.effectiveFrom ?? data.effective_from);
   const effectiveTo = toDateOnly(data.effectiveTo ?? data.effective_to);
   const taxName = String(data.taxName || data.tax_name || "GST").trim() || "GST";
 
-  if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
-    const error = new Error("GST rate must be between 0 and 100.");
+  if (!/^(?:\d{1,2}(?:\.\d{1,2})?|100(?:\.0{1,2})?)$/.test(rawRate) || !Number.isFinite(rate)) {
+    const error = new Error("GST rate must be between 0 and 100 with no more than two decimal places.");
     error.statusCode = 400;
     throw error;
   }
@@ -166,39 +214,56 @@ async function createGstRate(data, companyId = null, createdBy = "Admin") {
   previousEffectiveTo.setUTCDate(previousEffectiveTo.getUTCDate() - 1);
   const previousEffectiveToValue = previousEffectiveTo.toISOString().slice(0, 10);
 
-  await pool.query(
-    `UPDATE invoice_gst_rates
-     SET effective_to = ?
-     WHERE is_active = 1
-       AND ${companyId ? "company_id = ?" : "company_id IS NULL"}
-       AND effective_to IS NULL
-       AND effective_from < ?`,
-    companyId ? [previousEffectiveToValue, companyId, effectiveFrom] : [previousEffectiveToValue, effectiveFrom]
-  );
-
-  const [overlaps] = await pool.query(
-    `SELECT gst_rate_id FROM invoice_gst_rates
-     WHERE is_active = 1
-       AND ${companyId ? "company_id = ?" : "company_id IS NULL"}
-       AND effective_from <= COALESCE(?, '9999-12-31')
-       AND COALESCE(effective_to, '9999-12-31') >= ?
-     LIMIT 1`,
-    companyId ? [companyId, effectiveTo, effectiveFrom] : [effectiveTo, effectiveFrom]
-  );
-
-  if (overlaps.length > 0) {
-    const error = new Error("GST effective dates cannot overlap an existing GST rate.");
-    error.statusCode = 400;
-    throw error;
-  }
-
   const taxCode = taxCodeFor(rate);
-  await pool.query(
-    `INSERT INTO invoice_gst_rates
-      (company_id, tax_code, tax_name, rate_percentage, effective_from, effective_to, is_active, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
-    [companyId, taxCode, taxName, rate, effectiveFrom, effectiveTo, createdBy]
-  );
+  const createdByUserId = createdBy && typeof createdBy === "object"
+    ? createdBy.userId || null
+    : null;
+  const createdByLabel = createdBy && typeof createdBy === "object"
+    ? createdBy.displayName || createdBy.email || "Admin"
+    : createdBy;
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.query(
+      `UPDATE invoice_gst_rates
+       SET effective_to = ?
+       WHERE is_active = 1
+         AND ${companyId ? "company_id = ?" : "company_id IS NULL"}
+         AND effective_to IS NULL
+         AND effective_from < ?`,
+      companyId ? [previousEffectiveToValue, companyId, effectiveFrom] : [previousEffectiveToValue, effectiveFrom]
+    );
+
+    const [overlaps] = await connection.query(
+      `SELECT gst_rate_id FROM invoice_gst_rates
+       WHERE is_active = 1
+         AND ${companyId ? "company_id = ?" : "company_id IS NULL"}
+         AND effective_from <= COALESCE(?, '9999-12-31')
+         AND COALESCE(effective_to, '9999-12-31') >= ?
+       LIMIT 1`,
+      companyId ? [companyId, effectiveTo, effectiveFrom] : [effectiveTo, effectiveFrom]
+    );
+
+    if (overlaps.length > 0) {
+      const error = new Error("GST effective dates cannot overlap an existing GST rate.");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    await connection.query(
+      `INSERT INTO invoice_gst_rates
+        (company_id, tax_code, tax_name, rate_percentage, effective_from, effective_to, is_active, created_by_user_id, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      [companyId, taxCode, taxName, rate, effectiveFrom, effectiveTo, createdByUserId, createdByLabel]
+    );
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 
   return listGstRates(companyId);
 }

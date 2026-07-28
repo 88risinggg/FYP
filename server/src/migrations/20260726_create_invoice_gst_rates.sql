@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS invoice_gst_rates (
   effective_from DATE NOT NULL,
   effective_to DATE NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_by_user_id INT NULL,
   created_by VARCHAR(255) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

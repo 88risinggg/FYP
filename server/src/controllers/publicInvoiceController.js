@@ -53,7 +53,8 @@ async function viewInvoice(req, res) {
       [rows] = await pool.query(
         `SELECT
           i.invoice_id, i.invoiceId, i.status,
-          i.issue_date, i.due_date, i.total_amount,
+          i.issue_date, i.due_date, i.subtotal_amount, i.tax_name, i.tax_rate, i.tax_amount, i.total_amount,
+          i.company_id,
           i.payment_url, i.qr_code_url, i.stripe_session_id, i.payment_status, i.payment_date, i.created_at,
           c.name AS customer_name, c.email AS customer_email, c.address AS customer_address
         FROM invoice i
@@ -66,7 +67,8 @@ async function viewInvoice(req, res) {
       [rows] = await pool.query(
         `SELECT
           i.invoice_id, i.invoiceId, i.status,
-          i.issue_date, i.due_date, i.total_amount,
+          i.issue_date, i.due_date, NULL AS subtotal_amount, NULL AS tax_name,
+          NULL AS tax_rate, NULL AS tax_amount, i.total_amount, i.company_id,
           NULL AS payment_url, NULL AS qr_code_url, NULL AS stripe_session_id, NULL AS payment_status, NULL AS payment_date, i.created_at,
           c.name AS customer_name, c.email AS customer_email, c.address AS customer_address
         FROM invoice i
@@ -222,7 +224,7 @@ async function viewInvoice(req, res) {
     // Load invoice display settings for client-side rendering
     let invoiceSettings = {};
     try {
-      invoiceSettings = (await getInvoiceSettings()) || {};
+      invoiceSettings = (await getInvoiceSettings(invoice.company_id)) || {};
     } catch { /* non-critical — template will use defaults */ }
 
     res.json({
@@ -231,6 +233,10 @@ async function viewInvoice(req, res) {
         status: invoice.status,
         issue_date: invoice.issue_date,
         due_date: invoice.due_date,
+        subtotal_amount: invoice.subtotal_amount,
+        tax_name: invoice.tax_name,
+        tax_rate: invoice.tax_rate,
+        tax_amount: invoice.tax_amount,
         total_amount: invoice.total_amount,
         customer_name: invoice.customer_name,
         customer_email: invoice.customer_email,
