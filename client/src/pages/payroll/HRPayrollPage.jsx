@@ -1852,7 +1852,17 @@ function HRPayrollRunWorkflowView({ deliveryMode = false }) {
     setState(body);
   };
   useEffect(() => { let active = true; (async () => { try { setLoading(true); const id = await loadRuns(); if (active) await loadWorkflow(id); } catch (e) { if (active) setError(e.message); } finally { if (active) setLoading(false); } })(); return () => { active = false; }; }, []);
-  useEffect(() => { if (!selectedId) return undefined; sessionStorage.setItem(hrSelectedRunKey, selectedId); loadWorkflow(selectedId).catch((e) => setError(e.message)); const timer = window.setInterval(() => loadWorkflow(selectedId).catch(() => {}), sending ? 1000 : 4000); return () => window.clearInterval(timer); }, [selectedId, sending, hrSelectedRunKey]);
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    sessionStorage.setItem(hrSelectedRunKey, selectedId);
+    loadWorkflow(selectedId).catch((e) => setError(e.message));
+    // sendPending already waits for each workflow request before polling again.
+    // Do not start a second interval while delivery is active, especially when
+    // a hosted database is slow or has a small connection limit.
+    if (sending) return undefined;
+    const timer = window.setInterval(() => loadWorkflow(selectedId).catch(() => {}), 4000);
+    return () => window.clearInterval(timer);
+  }, [selectedId, sending, hrSelectedRunKey]);
   useEffect(() => () => { if (preview?.url) URL.revokeObjectURL(preview.url); }, [preview?.url]);
 
   const quickGenerate = async () => {
