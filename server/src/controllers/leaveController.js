@@ -3,6 +3,10 @@ const { pool } = require("../config/db");
 const { notifyRoles, notifyUser } = require("../services/payrollNotificationService");
 const { getActiveHolidaysInRange } = require("../models/publicHolidayModel");
 
+function normalizeRole(role) {
+  return String(role || "").trim().toLowerCase();
+}
+
 // ---------------------------------------------------------------------------
 // Leave data lives in claims_and_loans (type = 'leave') and the staff table
 // (leave_balance_json column). Leave types are defined in-memory and keyed by
@@ -35,7 +39,11 @@ async function readBalanceJson(staffId) {
     [staffId]
   );
   if (!rows.length) return {};
-  try { return JSON.parse(rows[0].leave_balance_json || "{}"); } catch { return {}; }
+  const raw = rows[0].leave_balance_json;
+  if (!raw) return {};
+  // mysql2 returns JSON columns as already-parsed objects
+  if (typeof raw === "object") return raw;
+  try { return JSON.parse(raw); } catch { return {}; }
 }
 
 async function writeBalanceJson(staffId, balanceJson) {
@@ -318,10 +326,9 @@ async function getMyBalance(req, res) {
 // ---------------------------------------------------------------------------
 async function getLeaveTypes(req, res) {
   try {
-    const role      = req.user.role;
-    const staffId   = req.user.staffId;
+    const staffId = req.user.staffId;
 
-    if (role === "Staff" && staffId) {
+    if (staffId) {
       const [staffRows] = await pool.query("SELECT gender FROM staff WHERE employee_id = ? LIMIT 1", [staffId]);
       const staffGender  = staffRows[0]?.gender || null;
       const filtered = staffGender
@@ -407,7 +414,11 @@ async function getAllBalances(req, res) {
     const result = [];
     for (const s of staffRows) {
       let bal = {};
-      try { bal = JSON.parse(s.leave_balance_json || "{}"); } catch { /* empty */ }
+      try {
+        const raw = s.leave_balance_json;
+        if (raw && typeof raw === "object") bal = raw;
+        else if (raw && typeof raw === "string") bal = JSON.parse(raw);
+      } catch { /* empty */ }
 
       const balances = LEAVE_TYPES.map(type => {
         const entry = bal[String(type.id)]?.[String(currentYear)] || { entitled: type.default_entitlement, used: 0, carried_forward: 0 };
@@ -473,7 +484,11 @@ async function runCarryForward(req, res) {
     let processed = 0;
     for (const s of staffRows) {
       let bal = {};
-      try { bal = JSON.parse(s.leave_balance_json || "{}"); } catch { /* empty */ }
+      try {
+        const raw = s.leave_balance_json;
+        if (raw && typeof raw === "object") bal = raw;
+        else if (raw && typeof raw === "string") bal = JSON.parse(raw);
+      } catch { /* empty */ }
 
       let changed = false;
       for (const type of LEAVE_TYPES.filter(t => t.carry_forward_allowed)) {

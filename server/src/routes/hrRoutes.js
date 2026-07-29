@@ -265,6 +265,7 @@ router.put("/staff/:id", authenticateToken, allowRoles("HR"), (req, res) => {
         user_user_id:  'user_user_id',
         race:          'race',
         religion:      'religion',
+        gender:        'gender',
         bank:          'bank',
         account_no:    'account_no'
       };
@@ -390,7 +391,7 @@ router.post("/staff", authenticateToken, allowRoles("HR"), (req, res) => {
         'company_id','employee_id','employee_code','name','date_of_birth','email','phone','address',
         'department_name','hire_date','base_salary','status',
         'created_at','updated_at','user_user_id',
-        'race','religion','bank','account_no'
+        'gender','race','religion','bank','account_no'
       ];
       const values = [
         req.user.companyId, employee_id,
@@ -407,6 +408,7 @@ router.post("/staff", authenticateToken, allowRoles("HR"), (req, res) => {
         now,
         now,
         body.user_user_id || null,
+        body.gender || null,
         body.race || null,
         body.religion || null,
         body.bank || null,
@@ -2013,7 +2015,7 @@ router.get("/staff/export/excel", authenticateToken, allowRoles("Admin", "HR"), 
     const ExcelJS = require("exceljs");
     const [rows] = await pool.query(
       `SELECT employee_id, name, email, phone, department_name, hire_date,
-              base_salary, status, race, religion, bank, account_no
+              gender, base_salary, status, race, religion, bank, account_no
        FROM staff WHERE company_id=? LIMIT 5000`, [req.user.companyId]
     );
 
@@ -2027,6 +2029,7 @@ router.get("/staff/export/excel", authenticateToken, allowRoles("Admin", "HR"), 
       { header: "Phone", key: "phone", width: 15 },
       { header: "Department", key: "department", width: 20 },
       { header: "Hire Date", key: "hire_date", width: 15 },
+      { header: "Gender", key: "gender", width: 12 },
       { header: "Base Salary", key: "base_salary", width: 15 },
       { header: "Status", key: "status", width: 12 },
       { header: "Race", key: "race", width: 15 },
@@ -2043,6 +2046,7 @@ router.get("/staff/export/excel", authenticateToken, allowRoles("Admin", "HR"), 
         phone: row.phone || "",
         department: row.department_name || "",
         hire_date: row.hire_date ? new Date(row.hire_date).toLocaleDateString("en-SG") : "",
+        gender: row.gender || "",
         base_salary: row.base_salary || "",
         status: row.status === 1 || row.status === "1" ? "Active" : "Inactive",
         race: row.race || "",

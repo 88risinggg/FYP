@@ -3,6 +3,10 @@
 const { pool } = require("../config/db");
 const { notifyUser } = require("../services/payrollNotificationService");
 
+function normalizeRole(role) {
+  return String(role || "").trim().toLowerCase();
+}
+
 async function getEmployeeIdFromUserId(userId) {
   const [rows] = await pool.query(
     "SELECT employee_id FROM staff WHERE user_user_id = ? LIMIT 1",
@@ -61,7 +65,7 @@ function toDeductionItems(value) {
 
 async function getPayslipsByUserId(req, res) {
   const { userId } = req.params;
-  if (req.user.role === "Staff" && String(req.user.userId) !== String(userId)) {
+  if (normalizeRole(req.user.role) === "staff" && String(req.user.userId) !== String(userId)) {
     return res.status(403).json({ message: "Access denied" });
   }
 
@@ -105,7 +109,7 @@ async function getPayslipsByUserId(req, res) {
       sql += " AND p.payroll_month = ?";
       params.push(Number(req.query.month));
     }
-    if (req.user.role === "Staff") {
+    if (normalizeRole(req.user.role) === "staff") {
       sql += " AND p.payslip_status IN ('Sent', 'sent_to_staff')";
     }
     sql += " ORDER BY p.payroll_year DESC, p.payroll_month DESC";
@@ -143,10 +147,10 @@ async function getPayslipById(req, res) {
     if (!rows.length) return res.status(404).json({ message: "Payslip not found" });
 
     const payslip = rows[0];
-    if (req.user.role === "Staff" && String(req.user.userId) !== String(payslip.user_user_id)) {
+    if (normalizeRole(req.user.role) === "staff" && String(req.user.userId) !== String(payslip.user_user_id)) {
       return res.status(403).json({ message: "Access denied" });
     }
-    if (req.user.role === "Staff" && !["Sent", "sent_to_staff"].includes(payslip.payslip_status)) {
+    if (normalizeRole(req.user.role) === "staff" && !["Sent", "sent_to_staff"].includes(payslip.payslip_status)) {
       return res.status(403).json({ message: "This payslip has not been sent to you yet" });
     }
     return res.json({
@@ -162,7 +166,7 @@ async function getPayslipById(req, res) {
 
 async function getPayrollSummary(req, res) {
   const { userId } = req.params;
-  if (req.user.role === "Staff" && String(req.user.userId) !== String(userId)) {
+  if (normalizeRole(req.user.role) === "staff" && String(req.user.userId) !== String(userId)) {
     return res.status(403).json({ message: "Access denied" });
   }
 
@@ -200,7 +204,7 @@ async function getPayrollSummary(req, res) {
 
 async function getUnreadPayslipCount(req, res) {
   const { userId } = req.params;
-  if (req.user.role === "Staff" && String(req.user.userId) !== String(userId)) {
+  if (normalizeRole(req.user.role) === "staff" && String(req.user.userId) !== String(userId)) {
     return res.status(403).json({ message: "Access denied" });
   }
   try {
@@ -231,10 +235,10 @@ async function markPayslipAsRead(req, res) {
       [payslipId]
     );
     if (!rows.length) return res.status(404).json({ message: "Payslip not found" });
-    if (req.user.role === "Staff" && String(req.user.userId) !== String(rows[0].user_user_id)) {
+    if (normalizeRole(req.user.role) === "staff" && String(req.user.userId) !== String(rows[0].user_user_id)) {
       return res.status(403).json({ message: "Access denied" });
     }
-    if (req.user.role === "Staff" && !["Sent", "sent_to_staff"].includes(rows[0].payslip_status)) {
+    if (normalizeRole(req.user.role) === "staff" && !["Sent", "sent_to_staff"].includes(rows[0].payslip_status)) {
       return res.status(403).json({ message: "This payslip has not been sent to you yet" });
     }
     await pool.query(
@@ -249,7 +253,7 @@ async function markPayslipAsRead(req, res) {
 }
 
 async function createPayslip(req, res) {
-  if (!["Admin", "HR", "Finance"].includes(req.user.role)) {
+  if (!["admin", "hr", "finance"].includes(normalizeRole(req.user.role))) {
     return res.status(403).json({ message: "Access denied" });
   }
   const { payroll_payroll_id, file_path } = req.body;

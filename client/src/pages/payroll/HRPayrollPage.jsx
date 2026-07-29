@@ -938,6 +938,7 @@ function StaffRecordsView({ onStartHire }) {
       date_of_birth: staff.date_of_birth ? new Date(staff.date_of_birth).toISOString().slice(0, 10) : "",
       race: staff.race || "",
       religion: staff.religion || "",
+      gender: staff.gender || "",
       staffRequestConfirmed: false
     });
     setIsEditModalOpen(true);
@@ -995,6 +996,7 @@ function StaffRecordsView({ onStartHire }) {
       if (editFormData.date_of_birth !== "") payload.date_of_birth = editFormData.date_of_birth || null;
       if (editFormData.race     !== "")  payload.race     = editFormData.race     || null;
       if (editFormData.religion !== "")  payload.religion = editFormData.religion || null;
+      if (editFormData.gender   !== "")  payload.gender   = editFormData.gender   || null;
 
       const response = await fetch(`${API_BASE_URL}/api/hr/staff/${getStaffActionId(editingStaff)}`, {
         method: "PUT",
@@ -1405,6 +1407,19 @@ function StaffRecordsView({ onStartHire }) {
                   placeholder="e.g. Buddhism, Islam, Christianity, Hinduism"
                   className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white/80 px-3 py-2 text-[#251E1F] placeholder-[#251E1F]/30"
                 />
+              </div>
+              <div>
+                <label htmlFor="staff-edit-gender" className="block text-sm font-medium text-[#7b6660]">Gender</label>
+                <select
+                  id="staff-edit-gender"
+                  value={editFormData.gender || ""}
+                  onChange={(e) => setEditFormData({ ...editFormData, gender: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2 text-[#251E1F]"
+                >
+                  <option value="">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
               </div>
               <div>
                 <label htmlFor="staff-edit-status" className="block text-sm font-medium text-[#7b6660]">Status</label>

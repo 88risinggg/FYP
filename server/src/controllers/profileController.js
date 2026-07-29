@@ -1,6 +1,10 @@
 const { pool } = require("../config/db");
 const { createNotificationInternal } = require("./notificationController");
 
+function normalizeRole(role) {
+  return String(role || "").trim().toLowerCase();
+}
+
 /* ─── CREATE ─── */
 
 /**
@@ -60,7 +64,7 @@ async function getProfileByUserId(req, res) {
   const { userId } = req.params;
 
   // Staff can only view their own profile
-  if (req.user.role === "Staff" && String(req.user.userId) !== String(userId)) {
+  if (normalizeRole(req.user.role) === "staff" && String(req.user.userId) !== String(userId)) {
     return res.status(403).json({ message: "Access denied" });
   }
 
@@ -78,6 +82,7 @@ async function getProfileByUserId(req, res) {
         s.status,
         s.race,
         s.religion,
+        s.gender,
         s.base_salary AS salary,
         s.bank,
         s.account_no,
@@ -125,6 +130,7 @@ async function getProfileByUserId(req, res) {
       status: staff.status,
       race: staff.race,
       religion: staff.religion,
+      gender: staff.gender,
       salary: staff.salary,
       department: staff.department,
       bank: staff.bank,
@@ -182,7 +188,7 @@ async function updateProfileByUserId(req, res) {
   const userRole = req.user.role;
 
   // Staff can only update their own profile
-  if (userRole === "Staff" && String(req.user.userId) !== String(userId)) {
+  if (normalizeRole(userRole) === "staff" && String(req.user.userId) !== String(userId)) {
     return res.status(403).json({ message: "Access denied" });
   }
 
@@ -219,7 +225,7 @@ async function updateProfileByUserId(req, res) {
 
     // Non-staff roles (HR, Finance, Admin) may not have a staff row — update user table directly
     if (existingRows.length === 0) {
-      if (userRole === "Staff") {
+      if (normalizeRole(userRole) === "staff") {
         return res.status(404).json({ message: "Staff profile not found" });
       }
       // HR/Finance/Admin: persist name and email on the user table.
@@ -269,7 +275,7 @@ async function updateProfileByUserId(req, res) {
     }
 
     // Notify Finance/HR when staff updates their bank details
-    if (userRole === "Staff") {
+    if (normalizeRole(userRole) === "staff") {
       try {
         const bankChanged = (typeof bank !== 'undefined' && bank !== (oldProfile.bank || '')) ||
                             (typeof account_no !== 'undefined' && account_no !== (oldProfile.account_no || ''));
@@ -378,12 +384,12 @@ async function getEmergencyContacts(req, res) {
   const role = req.user.role;
 
   // Finance cannot access
-  if (role === "Finance") {
+  if (normalizeRole(role) === "finance") {
     return res.status(403).json({ message: "Access denied" });
   }
 
   // Staff can only view their own
-  if (role === "Staff" && String(req.user.userId) !== String(userId)) {
+  if (normalizeRole(role) === "staff" && String(req.user.userId) !== String(userId)) {
     return res.status(403).json({ message: "Access denied" });
   }
 
@@ -414,7 +420,7 @@ async function addEmergencyContact(req, res) {
   const role = req.user.role;
 
   // Only Staff can add emergency contacts
-  if (role !== "Staff") {
+  if (normalizeRole(role) !== "staff") {
     return res.status(403).json({ message: "Access denied" });
   }
 
@@ -494,7 +500,7 @@ async function updateEmergencyContact(req, res) {
   const role = req.user.role;
 
   // Only Staff can update
-  if (role !== "Staff") {
+  if (normalizeRole(role) !== "staff") {
     return res.status(403).json({ message: "Access denied" });
   }
 
@@ -574,7 +580,7 @@ async function deleteEmergencyContact(req, res) {
   const role = req.user.role;
 
   // Only Staff can delete
-  if (role !== "Staff") {
+  if (normalizeRole(role) !== "staff") {
     return res.status(403).json({ message: "Access denied" });
   }
 

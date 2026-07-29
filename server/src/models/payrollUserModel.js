@@ -11,7 +11,7 @@ async function listManagedUsers() {
             u.must_change_password, u.failed_login_attempts, u.account_locked_at,
             u.account_lock_reason, u.created_at AS account_created_at,
             s.employee_id, s.employee_code, s.name AS staff_name, s.email AS staff_email,
-            s.phone, s.department_name, s.hire_date, s.date_of_birth, s.race, s.religion, s.base_salary,
+            s.phone, s.department_name, s.hire_date, s.date_of_birth, s.gender, s.race, s.religion, s.base_salary,
             s.status AS employment_status, s.bank, s.account_no,
             ar.request_id,
             CASE ar.status WHEN 'pending' THEN 'Pending' WHEN 'approved' THEN 'Approved'
@@ -38,7 +38,7 @@ async function listManagedUsers() {
   );
   const [unlinkedRows] = await pool.query(
     `SELECT s.employee_id, s.employee_code, s.name AS staff_name, s.email AS staff_email,
-            s.phone, s.department_name, s.hire_date, s.date_of_birth, s.race, s.religion, s.base_salary,
+            s.phone, s.department_name, s.hire_date, s.date_of_birth, s.gender, s.race, s.religion, s.base_salary,
             s.status AS employment_status, s.bank, s.account_no
      FROM staff s
      WHERE s.user_user_id IS NULL AND s.company_id=?`, [companyId]
@@ -105,10 +105,10 @@ async function createHireWithAccount({ staff, account, requestedBy, passwordHash
       }
       await connection.execute(
         `UPDATE staff SET employee_code = COALESCE(NULLIF(?, ''), employee_code), name = ?, email = ?,
-          phone = ?, department_name = ?, hire_date = ?, date_of_birth = ?, race = ?, religion = ?, base_salary = ?, status = ?, bank = ?,
+          phone = ?, department_name = ?, hire_date = ?, date_of_birth = ?, gender = ?, race = ?, religion = ?, base_salary = ?, status = ?, bank = ?,
           account_no = ?, updated_at = NOW() WHERE employee_id = ? AND company_id=?`,
         [staff.employeeCode, staff.name, staff.email, staff.phone || null, staff.departmentName || null,
-          staff.hireDate || null, staff.dateOfBirth || null, staff.race || null, staff.religion || null, Number(staff.baseSalary || 0), staff.status === 0 ? 0 : 1,
+          staff.hireDate || null, staff.dateOfBirth || null, staff.gender || null, staff.race || null, staff.religion || null, Number(staff.baseSalary || 0), staff.status === 0 ? 0 : 1,
           staff.bank || null, staff.accountNo || null, employeeId, companyId]
       );
     } else {
@@ -118,10 +118,10 @@ async function createHireWithAccount({ staff, account, requestedBy, passwordHash
       await connection.execute(
         `INSERT INTO staff
           (employee_id, company_id, employee_code, name, email, phone, department_name, hire_date,
-           date_of_birth, race, religion, base_salary, status, bank, account_no, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+           date_of_birth, gender, race, religion, base_salary, status, bank, account_no, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
         [employeeId, companyId, employeeCode, staff.name, staff.email, staff.phone || null,
-          staff.departmentName || null, staff.hireDate || null, staff.dateOfBirth || null, staff.race || null, staff.religion || null, Number(staff.baseSalary || 0),
+          staff.departmentName || null, staff.hireDate || null, staff.dateOfBirth || null, staff.gender || null, staff.race || null, staff.religion || null, Number(staff.baseSalary || 0),
           staff.status === 0 ? 0 : 1, staff.bank || null, staff.accountNo || null]
       );
     }
@@ -276,9 +276,9 @@ async function updatePendingRequest({ requestId, requestedBy, staff, account }) 
     );
     await connection.execute(
       `UPDATE staff SET name = ?, email = ?, employee_code = ?, phone = ?, department_name = ?, hire_date = ?,
-        date_of_birth = ?, race = ?, religion = ?, base_salary = ?, bank = ?, account_no = ?, updated_at = NOW() WHERE employee_id = ? AND company_id=?`,
+        date_of_birth = ?, gender = ?, race = ?, religion = ?, base_salary = ?, bank = ?, account_no = ?, updated_at = NOW() WHERE employee_id = ? AND company_id=?`,
       [staff.name, staff.email, staff.employeeCode || null, staff.phone || null, staff.departmentName || null,
-        staff.hireDate || null, staff.dateOfBirth || null, staff.race || null, staff.religion || null, Number(staff.baseSalary || 0), staff.bank || null,
+        staff.hireDate || null, staff.dateOfBirth || null, staff.gender || null, staff.race || null, staff.religion || null, Number(staff.baseSalary || 0), staff.bank || null,
         staff.accountNo || null, request.staff_employee_id, companyId]
     );
     await connection.execute(

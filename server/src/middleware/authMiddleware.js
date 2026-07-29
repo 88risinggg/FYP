@@ -4,27 +4,45 @@ const { findUserById } = require("../models/authModel");
 const { validateSupportContext } = require("./tenantMiddleware");
 const settingsModel = require("../models/settingsModel");
 
-/**
- * JWT authentication middleware.
- * Verifies the Bearer token and attaches user info to req.user.
- * Also validates user is still active in the database.
- */
+function debugLeave(req, stage, details = {}) {
+  if (process.env.DEBUG_LEAVE !== "true") return;
+  console.log("[LEAVE_DEBUG]", JSON.stringify({
+    stage,
+    method: req.method,
+    path: req.originalUrl || req.url || "unknown",
+    userId: req.user?.userId || null,
+    role: req.user?.role || null,
+    companyId: req.user?.companyId || null,
+    staffId: req.user?.staffId || null,
+    ...details
+  }));
+}
+
+function setLeaveDebugHeader(res, stage, details = {}) {
+  if (process.env.DEBUG_LEAVE !== "true") return;
+  try {
+    res.setHeader("X-Leave-Debug", Buffer.from(JSON.stringify({ stage, ...details })).toString("base64"));
+  } catch {
+    // Header debugging must never block a real response.
+  }
+}
+
 async function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
 
   if (!token) {
-    return res.status(401).json({
-      code: "AUTH_REQUIRED",
-      message: "Authentication required"
-    });
+    return res.status(401).json({ code: "AUTH_REQUIRED", message: "Authentication required" });
   }
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const user = await findUserById(payload.userId);
+    debugLeave(req, "jwt_verified", { tokenRole: payload.role || null, tokenCompanyId: payload.companyId || null });
 
     if (user?.account_locked_at) {
+      debugLeave(req, "account_locked");
+      setLeaveDebugHeader(res, "account_locked");
       return res.status(423).json({
         code: "ACCOUNT_LOCKED",
         message: "This account is locked. Contact an administrator to reactivate it."
@@ -32,6 +50,8 @@ async function authenticateToken(req, res, next) {
     }
 
     if (!user || !(user.status === 1 || user.status === "1" || (typeof user.status === "string" && user.status.toLowerCase() === "active"))) {
+      debugLeave(req, "account_disabled");
+      setLeaveDebugHeader(res, "account_disabled");
       return res.status(403).json({
         code: "ACCOUNT_DISABLED",
         message: "Account is disabled or no longer available"
@@ -39,6 +59,8 @@ async function authenticateToken(req, res, next) {
     }
 
     if (Number(user.must_change_password) === 1) {
+      debugLeave(req, "password_change_required");
+      setLeaveDebugHeader(res, "password_change_required");
       return res.status(403).json({
         code: "PASSWORD_CHANGE_REQUIRED",
         message: "Sign in with your temporary password and create a permanent password before continuing."
@@ -50,49 +72,61 @@ async function authenticateToken(req, res, next) {
       email: user.email,
       role: payload.supportGrantId ? payload.role : user.role_name,
       operatorRole: payload.supportGrantId ? user.role_name : null,
-      companyId: user.company_id || payload.companyId || null
-      ,supportGrantId: payload.supportGrantId || null
+      companyId: user.company_id || payload.companyId || null,
+      supportGrantId: payload.supportGrantId || null
     };
+    debugLeave(req, "user_attached", { dbRole: user.role_name || null, dbCompanyId: user.company_id || null });
 
-    // Tokens issued after session tracking was introduced are revocable.
-    // Legacy tokens without a sessionId remain valid until their normal expiry.
     if (payload.sessionId && user.company_id) {
       const activeSession = await settingsModel.loginSessionExists(user.user_id, payload.sessionId, user.company_id);
       if (!activeSession) {
+        debugLeave(req, "session_terminated", { sessionId: payload.sessionId });
+        setLeaveDebugHeader(res, "session_terminated", { sessionId: payload.sessionId });
         return res.status(401).json({ code: "SESSION_TERMINATED", message: "This login session has been terminated." });
       }
     }
 
-    // Resolve staffId (employee_id) for Staff users from the staff table
     try {
-      const [staffRows] = await pool.execute(
-        "SELECT employee_id FROM staff WHERE user_user_id = ? LIMIT 1",
-        [user.user_id]
+      let [staffRows] = await pool.execute(
+        "SELECT employee_id FROM staff WHERE user_user_id = ? AND company_id = ? LIMIT 1",
+        [user.user_id, user.company_id || payload.companyId || null]
       );
+
+      if (!staffRows.length && user.email) {
+        [staffRows] = await pool.execute(
+          "SELECT employee_id FROM staff WHERE LOWER(email) = LOWER(?) AND company_id = ? LIMIT 1",
+          [user.email, user.company_id || payload.companyId || null]
+        );
+      }
+
       if (staffRows.length > 0) {
         req.user.staffId = staffRows[0].employee_id;
         req.user.employeeId = staffRows[0].employee_id;
       }
+      debugLeave(req, "staff_resolved", { linkedStaffCount: staffRows.length });
     } catch (staffErr) {
-      // Non-blocking — staffId simply won't be set if staff record doesn't exist
+      debugLeave(req, "staff_lookup_failed", { error: staffErr.message });
     }
 
     return validateSupportContext(req, res, next);
   } catch (error) {
-    res.status(401).json({
+    debugLeave(req, "auth_failed", { error: error.message });
+    setLeaveDebugHeader(res, "auth_failed", { error: error.message });
+    return res.status(401).json({
       code: "AUTH_INVALID",
       message: "Invalid or expired token"
     });
   }
 }
 
-/**
- * Role-based access control middleware.
- * Restricts route access to specified roles.
- */
 function requireRole(...allowedRoles) {
+  const normalizedAllowed = allowedRoles.map((role) => String(role || "").trim().toLowerCase());
+
   return (req, res, next) => {
-    if (!allowedRoles.includes(req.user?.role)) {
+    const actualRole = String(req.user?.role || "").trim().toLowerCase();
+    if (!normalizedAllowed.includes(actualRole)) {
+      debugLeave(req, "require_role_denied", { allowedRoles, actualRole: req.user?.role || null });
+      setLeaveDebugHeader(res, "require_role_denied", { allowedRoles, actualRole: req.user?.role || null });
       return res.status(403).json({
         code: "ACCESS_DENIED",
         message: "Access denied: insufficient permissions"

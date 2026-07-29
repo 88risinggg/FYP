@@ -51,11 +51,30 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
 });
 
-// Staff endpoints
-router.post("/apply", authenticateToken, allowRoles("Staff"), upload.single("attachment"), applyLeave);
-router.get("/my-applications", authenticateToken, allowRoles("Staff"), getMyApplications);
-router.get("/my-balance", authenticateToken, allowRoles("Staff"), getMyBalance);
-router.put("/applications/:id/cancel", authenticateToken, allowRoles("Staff"), cancelLeave);
+function debugLeave(req, stage, details = {}) {
+  if (process.env.DEBUG_LEAVE !== "true") return;
+  console.log("[LEAVE_DEBUG]", JSON.stringify({
+    stage,
+    method: req.method,
+    path: req.originalUrl || req.url || "unknown",
+    userId: req.user?.userId || null,
+    role: req.user?.role || null,
+    companyId: req.user?.companyId || null,
+    staffId: req.user?.staffId || null,
+    ...details
+  }));
+}
+
+router.use((req, _res, next) => {
+  debugLeave(req, "route_enter");
+  next();
+});
+
+// Self-service endpoints for Staff and HR users
+router.post("/apply", authenticateToken, allowRoles("Staff", "HR"), upload.single("attachment"), applyLeave);
+router.get("/my-applications", authenticateToken, allowRoles("Staff", "HR"), getMyApplications);
+router.get("/my-balance", authenticateToken, allowRoles("Staff", "HR"), getMyBalance);
+router.put("/applications/:id/cancel", authenticateToken, allowRoles("Staff", "HR"), cancelLeave);
 
 // Shared endpoints (Staff and HR)
 router.get("/types", authenticateToken, allowRoles("Staff", "HR"), getLeaveTypes);

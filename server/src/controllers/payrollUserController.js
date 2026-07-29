@@ -33,6 +33,7 @@ function normalizedPayload(body = {}) {
       departmentName: String(staff.departmentName || staff.department_name || "").trim(),
       hireDate: staff.hireDate || staff.hire_date || null,
       dateOfBirth: staff.dateOfBirth || staff.date_of_birth || null,
+      gender: String(staff.gender || "").trim() || null,
       race: String(staff.race || "").trim(),
       religion: String(staff.religion || "").trim(),
       baseSalary: Number(staff.baseSalary ?? staff.base_salary ?? 0),
@@ -157,7 +158,7 @@ const importColumns = {
   name: ["name", "fullname", "staffname", "employeename", "employee", "legalname"], email: ["email", "employeeemail", "staffemail", "emailaddress", "personalemail", "personalemailaddress", "workemail"],
   employeeCode: ["employeecode", "employeeid", "staffid", "staffcode", "employeenumber"], phone: ["phone", "phonenumber", "contact", "contactnumber", "mobile", "mobilenumber"],
   departmentName: ["department", "departmentname", "jobdepartment", "division", "team"], hireDate: ["hiredate", "startdate", "datejoined", "joiningdate", "employmentdate"],
-  dateOfBirth: ["dateofbirth", "dob", "birthdate"], race: ["race"], religion: ["religion"],
+  dateOfBirth: ["dateofbirth", "dob", "birthdate"], gender: ["gender", "sex"], race: ["race"], religion: ["religion"],
   baseSalary: ["basesalary", "salary", "basicsalary", "monthlysalary", "monthlybasicsalary", "grosssalary"], bank: ["bank", "bankname"],
   accountNo: ["accountno", "accountnumber", "bankaccount", "bankaccountnumber", "bankaccountno"]
 };

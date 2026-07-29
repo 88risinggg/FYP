@@ -225,6 +225,7 @@ export default function StaffProfile({ onProfileSaved }) {
           <DisplayField label="Employee Code" value={profile?.employee_code || "-"} />
           <DisplayField label="Hire Date" value={profile?.hire_date ? new Date(profile.hire_date).toLocaleDateString() : "-"} />
           <DisplayField label="Date of Birth" value={profile?.date_of_birth ? new Date(profile.date_of_birth).toLocaleDateString() : "-"} />
+          <DisplayField label="Gender" value={profile?.gender || "-"} />
         </div>
         <p className="mt-3 text-xs text-[#7b6660]/60">Managed by HR. Contact HR to request changes to employment details.</p>
       </div>
