@@ -95,16 +95,51 @@ function getSandboxAchDetails(employee, index) {
   };
 }
 
+function recipientExternalId(employee) {
+  return `fyp-payroll-${employee.employeeId}`;
+}
+
+function recipientMapping(employee, counterparty, { reused = false } = {}) {
+  const externalAccount = Array.isArray(counterparty?.accounts) ? counterparty.accounts[0] : null;
+
+  if (!counterparty?.id || !externalAccount?.id) {
+    throw new Error(`Modern Treasury did not return an external account for ${employee.employeeName}`);
+  }
+
+  return {
+    employeeId: employee.employeeId,
+    employeeName: employee.employeeName,
+    modernTreasuryCounterpartyId: counterparty.id,
+    modernTreasuryReceivingAccountId: externalAccount.id,
+    ...(reused ? { reused: true } : {})
+  };
+}
+
+async function findModernTreasuryRecipient(employee) {
+  const externalId = recipientExternalId(employee);
+  const response = await modernTreasuryRequest(
+    `/counterparties?external_id=${encodeURIComponent(externalId)}&per_page=2`
+  );
+  const counterparties = Array.isArray(response) ? response : (response?.data || []);
+  return counterparties.find((counterparty) => counterparty.external_id === externalId) || null;
+}
+
 async function createModernTreasuryRecipient(employee, index) {
   const achDetails = getSandboxAchDetails(employee, index);
   const idempotencyKey = `finance-recipient-${employee.employeeId}`;
+  const existingCounterparty = await findModernTreasuryRecipient(employee);
+
+  if (existingCounterparty) {
+    return recipientMapping(employee, existingCounterparty, { reused: true });
+  }
+
   const counterparty = await modernTreasuryRequest("/counterparties", {
     method: "POST",
     idempotencyKey,
     body: {
       name: employee.employeeName,
       email: employee.email || undefined,
-      external_id: `fyp-payroll-${employee.employeeId}`,
+      external_id: recipientExternalId(employee),
       metadata: {
         source: "fyp_payroll_demo",
         employee_id: String(employee.employeeId)
@@ -132,17 +167,8 @@ async function createModernTreasuryRecipient(employee, index) {
       ]
     }
   });
-  const externalAccount = Array.isArray(counterparty.accounts) ? counterparty.accounts[0] : null;
-
-  if (!externalAccount?.id) {
-    throw new Error(`Modern Treasury did not return an external account for ${employee.employeeName}`);
-  }
-
   return {
-    employeeId: employee.employeeId,
-    employeeName: employee.employeeName,
-    modernTreasuryCounterpartyId: counterparty.id,
-    modernTreasuryReceivingAccountId: externalAccount.id,
+    ...recipientMapping(employee, counterparty),
     sandboxRoutingNumber: achDetails.routingNumber,
     sandboxAccountNumberSafe: achDetails.accountNumber.slice(-4)
   };
