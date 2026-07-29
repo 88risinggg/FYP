@@ -266,7 +266,7 @@ router.get(
 router.post(
   "/",
   authenticateToken,
-  allowRoles("Staff"),
+  allowRoles("Staff", "HR", "Finance"),
   evidenceUpload,
   async (req, res) => {
     const files = req.files || [];
