@@ -7,6 +7,12 @@
 
 import { apiRequest } from "./apiClient.js";
 
+// ─── Plan Templates (Admin-managed) ──────────────────────────────────────────
+
+export function fetchPlanTemplates() {
+  return apiRequest("/api/subscriptions/plan-templates");
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export function fetchSubscriptionDashboard() {

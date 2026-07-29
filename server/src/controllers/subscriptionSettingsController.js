@@ -118,7 +118,30 @@ async function putAdminSubscriptionSettings(req, res) {
   }
 }
 
+/**
+ * GET /api/subscriptions/plan-templates
+ * Returns only active plan templates for Finance use.
+ */
+async function getActivePlanTemplates(req, res) {
+  try {
+    const settings = await getSubscriptionSettings(getCompanyId(req));
+    const activePlans = (settings.plans || [])
+      .filter((plan) => plan.active)
+      .map((plan) => ({
+        id: plan.id,
+        name: plan.name,
+        description: plan.description || "",
+        billingFrequency: plan.billingFrequency
+      }));
+    res.json({ plans: activePlans });
+  } catch (error) {
+    console.error("[Plan templates] Failed to load:", error);
+    res.status(500).json({ message: "Unable to load plan templates." });
+  }
+}
+
 module.exports = {
+  getActivePlanTemplates,
   getAdminSubscriptionSettings,
   putAdminSubscriptionSettings
 };

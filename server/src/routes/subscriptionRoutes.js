@@ -24,11 +24,17 @@ const {
   deleteSubscriptionHandler,
   generateInvoiceNowHandler,
 } = require("../controllers/subscriptionController");
+const {
+  getActivePlanTemplates
+} = require("../controllers/subscriptionSettingsController");
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(authenticateToken);
+
+// ─── Plan Templates (Admin-created, Finance-readable) ─────────────────────────
+router.get("/plan-templates", allowRoles("Admin", "Finance"), getActivePlanTemplates);
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 router.get("/dashboard", allowRoles("Admin", "Finance"), getSubscriptionDashboard);

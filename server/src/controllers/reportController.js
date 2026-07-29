@@ -12,6 +12,7 @@
  */
 
 const { pool } = require("../config/db");
+const revenueService = require("../services/revenueService");
 
 function toCurrency(value) {
   const n = Number(value);
@@ -23,36 +24,12 @@ function toCurrency(value) {
  */
 async function getInvoiceReports(req, res) {
   try {
-    // Summary with commission breakdown
-    const [summaryRows] = await pool.query(`
-      SELECT
-        COALESCE(SUM(total_amount), 0) AS total_revenue,
-        COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS paid_revenue,
-        COALESCE(SUM(CASE WHEN status != 'Paid' THEN total_amount ELSE 0 END), 0) AS outstanding_revenue,
-        COALESCE(SUM(vaniday_share), 0) AS total_commission,
-        COALESCE(SUM(salon_share), 0) AS total_salon_payout,
-        COALESCE(SUM(CASE WHEN status = 'Paid' THEN vaniday_share ELSE 0 END), 0) AS collected_commission,
-        COALESCE(SUM(CASE WHEN status = 'Paid' THEN salon_share ELSE 0 END), 0) AS collected_salon_payout,
-        COALESCE(AVG(commission_rate), 0) AS avg_commission_rate,
-        COUNT(*) AS invoice_count
-      FROM invoice
-      WHERE invoiceId <> '__SETTINGS__'
-    `);
+    // Summary with commission breakdown (revenue = Paid invoices only)
+    const summaryData = await revenueService.getRevenueSummary();
+    const summaryRows = [summaryData];
 
-    // Monthly revenue with commission breakdown
-    const [monthlyRows] = await pool.query(`
-      SELECT
-        DATE_FORMAT(issue_date, '%Y-%m') AS month,
-        COALESCE(SUM(total_amount), 0) AS revenue,
-        COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS collected,
-        COALESCE(SUM(vaniday_share), 0) AS commission,
-        COALESCE(SUM(salon_share), 0) AS salon_payout,
-        COUNT(*) AS invoice_count
-      FROM invoice
-      WHERE invoiceId <> '__SETTINGS__'
-      GROUP BY DATE_FORMAT(issue_date, '%Y-%m')
-      ORDER BY month ASC
-    `);
+    // Monthly revenue with commission breakdown (revenue = Paid invoices only)
+    const monthlyRows = await revenueService.getMonthlyRevenue();
 
     // Status distribution
     const [statusRows] = await pool.query(`
@@ -100,15 +77,9 @@ async function getInvoiceReports(req, res) {
       FROM invoice WHERE status = 'Overdue' AND invoiceId <> '__SETTINGS__'
     `);
 
-    // This month / last month for growth
-    const [thisMonthRes] = await pool.query(`
-      SELECT COALESCE(SUM(total_amount), 0) AS revenue, COALESCE(SUM(vaniday_share), 0) AS commission
-      FROM invoice WHERE DATE_FORMAT(issue_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m') AND invoiceId <> '__SETTINGS__'
-    `);
-    const [lastMonthRes] = await pool.query(`
-      SELECT COALESCE(SUM(total_amount), 0) AS revenue, COALESCE(SUM(vaniday_share), 0) AS commission
-      FROM invoice WHERE DATE_FORMAT(issue_date, '%Y-%m') = DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m') AND invoiceId <> '__SETTINGS__'
-    `);
+    // This month / last month for growth (Paid invoices only)
+    const thisMonthData = await revenueService.getCurrentMonthRevenue();
+    const lastMonthData = await revenueService.getLastMonthRevenue();
 
     const [customerCount] = await pool.query("SELECT COUNT(*) AS count FROM customer");
 
@@ -199,21 +170,22 @@ async function getInvoiceReports(req, res) {
     const paid = paidStats[0] || {};
     const overdue = overdueStats[0] || {};
     const totalRev = Number(s.total_revenue || 0);
-    const paidRev = Number(s.paid_revenue || 0);
+    const paidRev = totalRev; // Revenue now only includes Paid invoices
     const totalCommission = Number(s.total_commission || 0);
     const totalSalonPayout = Number(s.total_salon_payout || 0);
     const collectedCommission = Number(s.collected_commission || 0);
     const collectedSalonPayout = Number(s.collected_salon_payout || 0);
-    const collectionRate = totalRev > 0 ? (paidRev / totalRev) * 100 : 0;
+    const invoicedTotal = totalRev + Number(s.outstanding_revenue || 0); // All invoices total for collection rate
+    const collectionRate = invoicedTotal > 0 ? (totalRev / invoicedTotal) * 100 : 0;
     const custCount = Number(customerCount[0]?.count || 1);
-    const thisMonth = Number(thisMonthRes[0]?.revenue || 0);
-    const lastMonth = Number(lastMonthRes[0]?.revenue || 0);
+    const thisMonth = Number(thisMonthData.revenue || 0);
+    const lastMonth = Number(lastMonthData.revenue || 0);
     const momGrowth = lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth) * 100 : 0;
 
     // When no commission data exists (standalone invoicing), use total_amount as revenue
     const hasCommissionData = totalCommission > 0 || totalSalonPayout > 0;
-    const effectiveGrossRevenue = hasCommissionData ? totalCommission : totalRev;
-    const effectiveCollected = hasCommissionData ? collectedCommission : paidRev;
+    const effectiveGrossRevenue = hasCommissionData ? collectedCommission : totalRev;
+    const effectiveCollected = hasCommissionData ? collectedCommission : totalRev;
     const effectiveOutstanding = hasCommissionData ? (totalCommission - collectedCommission) : Number(s.outstanding_revenue || 0);
     const effectiveSalonPayouts = hasCommissionData ? totalSalonPayout : 0;
     const effectiveCollectedSalonPayouts = hasCommissionData ? collectedSalonPayout : 0;
@@ -221,7 +193,7 @@ async function getInvoiceReports(req, res) {
     res.json({
       summary: {
         total_revenue: toCurrency(totalRev),
-        paid_revenue: toCurrency(paidRev),
+        paid_revenue: toCurrency(totalRev),
         outstanding_revenue: toCurrency(s.outstanding_revenue),
         invoice_count: Number(s.invoice_count || 0),
         total_commission: toCurrency(totalCommission),
@@ -257,7 +229,7 @@ async function getInvoiceReports(req, res) {
           netReceivable: toCurrency(effectiveOutstanding)
         },
         cashFlow: {
-          totalInflow: toCurrency(paidRev),
+          totalInflow: toCurrency(totalRev),
           salonPayouts: toCurrency(effectiveCollectedSalonPayouts),
           platformRevenue: toCurrency(effectiveCollected),
           pendingInflow: toCurrency(s.outstanding_revenue),
@@ -300,8 +272,7 @@ async function exportFinancialReport(req, res) {
 
     const [summary] = await pool.query(`
       SELECT
-        COALESCE(SUM(total_amount), 0) AS total_revenue,
-        COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS paid_revenue,
+        COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS total_revenue,
         COALESCE(SUM(vaniday_share), 0) AS total_commission,
         COALESCE(SUM(salon_share), 0) AS total_salon_payout,
         COALESCE(SUM(CASE WHEN status = 'Paid' THEN vaniday_share ELSE 0 END), 0) AS collected_commission,
@@ -312,13 +283,13 @@ async function exportFinancialReport(req, res) {
       FROM invoice
     `);
 
-    // Monthly revenue for chart
+    // Monthly revenue for chart (Paid invoices only)
     const [monthlyRows] = await pool.query(`
       SELECT
         DATE_FORMAT(issue_date, '%Y-%m') AS month,
         COALESCE(SUM(total_amount), 0) AS revenue
       FROM invoice
-      WHERE issue_date IS NOT NULL
+      WHERE status = 'Paid' AND issue_date IS NOT NULL
       GROUP BY DATE_FORMAT(issue_date, '%Y-%m')
       ORDER BY month ASC
       LIMIT 12
@@ -504,11 +475,11 @@ async function exportReportExcel(req, res) {
       subSheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF3E0" } };
     }
 
-    // ─── Sheet 4: Monthly Revenue ──────────────────────────────────────────
+    // ─── Sheet 4: Monthly Revenue (Paid invoices only) ─────────────────────
     const [monthlyData] = await pool.query(`
       SELECT DATE_FORMAT(issue_date, '%Y-%m') AS month,
              COUNT(*) AS invoice_count,
-             COALESCE(SUM(total_amount), 0) AS total_revenue,
+             COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS total_revenue,
              COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS collected,
              COALESCE(SUM(CASE WHEN status = 'Overdue' THEN total_amount ELSE 0 END), 0) AS overdue
       FROM invoice WHERE invoiceId <> '__SETTINGS__' AND issue_date IS NOT NULL

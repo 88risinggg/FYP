@@ -1630,8 +1630,8 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
   }, [invoices]);
 
   const totals = useMemo(() => {
-    const totalRevenue = invoices.reduce((s, i) => s + Number(i.total_amount || 0), 0);
-    const paidRevenue = invoices.filter((i) => i.status === "Paid").reduce((s, i) => s + Number(i.total_amount || 0), 0);
+    const totalRevenue = invoices.filter((i) => i.status === "Paid").reduce((s, i) => s + Number(i.total_amount || 0), 0);
+    const paidRevenue = totalRevenue;
     const overdueAmount = invoices.filter((i) => i.status === "Overdue").reduce((s, i) => s + getInvoiceAmountDue(i), 0);
     const pendingAmount = invoices.filter((i) => i.status === "Sent" || i.status === "Scheduled").reduce((s, i) => s + Number(i.total_amount || 0), 0);
     return { totalRevenue, paidRevenue, overdueAmount, pendingAmount };
@@ -1703,7 +1703,7 @@ function InvoicingDashboardView({ invoices, customers, isLoading, error, navigat
         <div className="app-panel rounded-2xl p-5">
           <p className="text-sm text-[#7b6660]">Total Revenue</p>
           <p className="mt-3 text-3xl font-semibold text-[#251E1F]">{formatCurrency(totals.totalRevenue)}</p>
-          <p className="mt-2 text-xs font-semibold text-[#7b6660]">{invoices.length} invoices</p>
+          <p className="mt-2 text-xs font-semibold text-[#7b6660]">{statusCounts.Paid} paid invoices</p>
         </div>
         <div className="app-panel rounded-2xl p-5">
           <p className="text-sm text-[#7b6660]">Collected</p>
@@ -2262,14 +2262,28 @@ function InvoiceExceptionPanel({ invoices, fraudSummary }) {
 }
 
 function InvoiceAccountingPanel({ invoices, totals, statusCounts }) {
-  const totalInvoiced = totals.totalRevenue;
-  const collected = totals.paidRevenue;
-  const outstanding = totals.pendingAmount + totals.overdueAmount;
+  // Revenue = sum of Paid invoices only (consistent with Dashboard and Reports)
+  const revenue = invoices
+    .filter((i) => i.status === "Paid")
+    .reduce((s, i) => s + Number(i.total_amount || 0), 0);
+
+  // Accounts Receivable = unpaid issued invoices (Sent, Viewed, Overdue, Scheduled)
+  const accountsReceivable = invoices
+    .filter((i) => ["Sent", "Viewed", "Overdue", "Scheduled"].includes(i.status))
+    .reduce((s, i) => s + Number(i.total_amount || 0), 0);
+
+  // Bank / Cash = amount collected (same as revenue for Paid invoices)
+  const collected = revenue;
+
+  // Net A/R Balance = outstanding receivables
+  const netARBalance = accountsReceivable;
+
   const posted = statusCounts.Paid;
   const pending = invoices.length - statusCounts.Paid;
 
+  // Double-entry journal entries
   const journalEntries = [
-    { accountDr: "Accounts Receivable", debit: totalInvoiced, accountCr: "Revenue / Sales", credit: totalInvoiced },
+    { accountDr: "Accounts Receivable", debit: accountsReceivable, accountCr: "Revenue / Sales", credit: revenue },
     { accountDr: "Bank / Cash", debit: collected, accountCr: "Accounts Receivable", credit: collected }
   ];
 
@@ -2278,7 +2292,7 @@ function InvoiceAccountingPanel({ invoices, totals, statusCounts }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[#251E1F]">Accounting Impact in Internal Ledger</h3>
-          <p className="mt-1 text-sm text-[#7b6660]">Journal totals based on current invoice portfolio.</p>
+          <p className="mt-1 text-sm text-[#7b6660]">Double-entry journal reflecting invoiced revenue and collections.</p>
         </div>
         <span className="rounded-full border border-[#f0d2ca] bg-[#FDD9CD]/20 px-3 py-1 text-xs font-semibold text-[#7b6660]">
           {posted}/{invoices.length} posted
@@ -2306,10 +2320,10 @@ function InvoiceAccountingPanel({ invoices, totals, statusCounts }) {
           </tbody>
           <tfoot className="border-t border-[#f0d2ca] bg-[#FDD9CD]/10">
             <tr>
-              <td className="px-4 py-3 font-semibold text-[#F38978]">Total Debit</td>
-              <td className="px-4 py-3 text-right font-semibold text-[#251E1F]">{formatCurrency(totalInvoiced + collected)}</td>
-              <td className="px-4 py-3 font-semibold text-[#F38978]">Total Credit</td>
-              <td className="px-4 py-3 text-right font-semibold text-[#251E1F]">{formatCurrency(totalInvoiced + collected)}</td>
+              <td className="px-4 py-3 font-semibold text-[#F38978]">Net A/R Balance</td>
+              <td className="px-4 py-3 text-right font-semibold text-[#D97706]">{formatCurrency(netARBalance)}</td>
+              <td className="px-4 py-3 font-semibold text-[#F38978]">Total Revenue</td>
+              <td className="px-4 py-3 text-right font-semibold text-[#251E1F]">{formatCurrency(revenue)}</td>
             </tr>
           </tfoot>
         </table>
@@ -2317,7 +2331,7 @@ function InvoiceAccountingPanel({ invoices, totals, statusCounts }) {
       <div className="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
         <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-3">
           <p className="text-[#7b6660]">Outstanding Receivable</p>
-          <p className="mt-1 font-semibold text-[#D97706]">{formatCurrency(outstanding)}</p>
+          <p className="mt-1 font-semibold text-[#D97706]">{formatCurrency(netARBalance)}</p>
         </div>
         <div className="rounded-xl border border-[#f0d2ca] bg-[#FDD9CD]/10 p-3">
           <p className="text-[#7b6660]">Revenue Collected</p>
@@ -2435,8 +2449,8 @@ function AccountingDashboardView({ invoices, isLoading, error }) {
   }, [invoices]);
 
   const totals = useMemo(() => {
-    const totalRevenue = invoices.reduce((s, i) => s + Number(i.total_amount || 0), 0);
-    const paidRevenue = invoices.filter((i) => i.status === "Paid").reduce((s, i) => s + Number(i.total_amount || 0), 0);
+    const totalRevenue = invoices.filter((i) => i.status === "Paid").reduce((s, i) => s + Number(i.total_amount || 0), 0);
+    const paidRevenue = totalRevenue;
     const overdueAmount = invoices.filter((i) => i.status === "Overdue").reduce((s, i) => s + getInvoiceAmountDue(i), 0);
     const pendingAmount = invoices.filter((i) => i.status === "Sent" || i.status === "Scheduled").reduce((s, i) => s + Number(i.total_amount || 0), 0);
     return { totalRevenue, paidRevenue, overdueAmount, pendingAmount };
@@ -3627,7 +3641,7 @@ function ReportsView() {
           y = addMetricRow(doc, "Total Invoices", String(data.summary.invoiceCount || 0), y);
           y = addMetricRow(doc, "Paid Invoices", String(data.summary.paidCount || 0), y, { valueColor: [4, 120, 87] });
           y = addMetricRow(doc, "Overdue Invoices", String(data.summary.overdueCount || 0), y, { valueColor: [190, 18, 60] });
-          y = addMetricRow(doc, "Total Revenue (Inflow)", `SGD ${Number(data.summary.totalInflow || 0).toLocaleString()}`, y);
+          y = addMetricRow(doc, "Total Revenue (Paid)", `SGD ${Number(data.summary.totalInflow || 0).toLocaleString()}`, y);
           y = addMetricRow(doc, "Outstanding Balance", `SGD ${Number(data.summary.outstandingRevenue || 0).toLocaleString()}`, y, { valueColor: [180, 83, 9] });
           y = addMetricRow(doc, "Gross Revenue (Commission)", `SGD ${Number(data.summary.grossRevenue || 0).toLocaleString()}`, y, { valueColor: [4, 120, 87] });
           y = addMetricRow(doc, "Collected Revenue", `SGD ${Number(data.summary.collectedRevenue || 0).toLocaleString()}`, y);
@@ -3868,7 +3882,7 @@ function ReportsView() {
 
       {/* Summary Metrics - Vaniday Commission Model */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Total Inflow" value={formatCurrency(reports?.summary?.total_revenue)} />
+        <MetricCard label="Total Revenue" value={formatCurrency(reports?.summary?.total_revenue)} />
         <MetricCard label="Gross Revenue" value={formatCurrency(reports?.summary?.gross_revenue)} accent="text-emerald-700" />
         <MetricCard label="Salon Payouts" value={formatCurrency(reports?.summary?.total_salon_payout)} accent="text-amber-700" />
         <MetricCard label="Outstanding" value={formatCurrency(reports?.summary?.outstanding_revenue)} accent="text-rose-700" />
@@ -3935,7 +3949,7 @@ function ReportsView() {
               <p className="mt-1 text-xs text-[#7b6660]">Gross Revenue = Inflow - Salon Payouts</p>
               <div className="mt-4 space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#7b6660]">Total Inflow</span>
+                  <span className="text-[#7b6660]">Total Revenue</span>
                   <span className="font-bold text-[#251E1F]">{formatCurrency(fs.incomeStatement.totalInflow)}</span>
                 </div>
                 <div className="flex justify-between text-sm">

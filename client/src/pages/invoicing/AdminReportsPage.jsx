@@ -182,7 +182,7 @@ function StatementView({ statement }) {
     {
       title: "Income Statement",
       rows: [
-        ["Total Inflow", formatCurrency(income.totalInflow)],
+        ["Total Revenue", formatCurrency(income.totalInflow)],
         ["Salon Payouts", `-${formatCurrency(income.salonPayouts)}`],
         ["Gross Revenue", formatCurrency(income.grossRevenue)],
         ["Collected Commission", formatCurrency(income.collections)],
@@ -277,7 +277,7 @@ export default function AdminReportsPage() {
   const monthlyColumns = [
     { key: "month", label: "Month" },
     { key: "invoice_count", label: "Invoices", align: "right" },
-    { key: "revenue", label: "Total Inflow", align: "right", render: (row) => formatCurrency(row.revenue) },
+    { key: "revenue", label: "Revenue", align: "right", render: (row) => formatCurrency(row.revenue) },
     { key: "collected", label: "Collected", align: "right", render: (row) => formatCurrency(row.collected) },
     { key: "commission", label: "Commission", align: "right", render: (row) => formatCurrency(row.commission) },
     { key: "salon_payout", label: "Salon Payout", align: "right", render: (row) => formatCurrency(row.salon_payout) }
@@ -330,7 +330,7 @@ export default function AdminReportsPage() {
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <MetricCard label="Total Inflow" value={formatCurrency(summary.total_revenue)} detail={`${summary.invoice_count || 0} invoices`} icon={ReceiptText} />
+            <MetricCard label="Total Revenue" value={formatCurrency(summary.total_revenue)} detail={`${summary.invoice_count || 0} invoices`} icon={ReceiptText} />
             <MetricCard label="Gross Revenue" value={formatCurrency(summary.gross_revenue)} detail="Platform commission" icon={TrendingUp} tone="text-emerald-700" />
             <MetricCard label="Salon Payouts" value={formatCurrency(summary.total_salon_payout)} detail="Partner share" icon={Landmark} tone="text-amber-700" />
             <MetricCard label="Outstanding" value={formatCurrency(summary.outstanding_revenue)} detail={`${formatPercent(collectionRate)} collected`} icon={BarChart3} tone="text-rose-700" />

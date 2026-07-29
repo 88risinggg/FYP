@@ -22,6 +22,7 @@ import {
   fetchSubscriptionById,
   fetchSubscriptionInvoices,
   fetchSubscriptionPayments,
+  fetchPlanTemplates,
   createSubscription,
   generateInvoiceNow,
   pauseSubscription,
@@ -335,6 +336,8 @@ function ThSort({ label, field, current, dir, onSort, align }) {
 function CreateSubscriptionPanel() {
   const navigate = useNavigate();
   const [customers, setCustomers] = useState([]);
+  const [planTemplates, setPlanTemplates] = useState([]);
+  const [plansLoading, setPlansLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -353,13 +356,27 @@ function CreateSubscriptionPanel() {
   });
 
   useEffect(() => {
-    fetchCustomers()
-      .then((data) => setCustomers(data.customers || []))
-      .catch(() => setCustomers([]));
+    Promise.all([
+      fetchCustomers().then((data) => setCustomers(data.customers || [])).catch(() => setCustomers([])),
+      fetchPlanTemplates().then((data) => setPlanTemplates(data.plans || [])).catch(() => setPlanTemplates([]))
+    ]).finally(() => setPlansLoading(false));
   }, []);
+
+  const selectedPlan = planTemplates.find((p) => p.name === form.plan_name) || null;
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+    setError("");
+  };
+
+  const handlePlanSelect = (planName) => {
+    const plan = planTemplates.find((p) => p.name === planName);
+    setForm((prev) => ({
+      ...prev,
+      plan_name: planName,
+      billing_frequency: plan ? plan.billingFrequency : prev.billing_frequency,
+      description: plan ? plan.description : prev.description,
+    }));
     setError("");
   };
 
@@ -399,7 +416,7 @@ function CreateSubscriptionPanel() {
         </button>
         <div>
           <h2 className="text-lg font-bold text-[#251E1F]">Create Subscription</h2>
-          <p className="text-sm text-[#6f4f47]">Set up a new recurring billing agreement</p>
+          <p className="text-sm text-[#6f4f47]">Set up a new recurring billing agreement using an Admin-defined plan</p>
         </div>
       </div>
 
@@ -425,36 +442,59 @@ function CreateSubscriptionPanel() {
           </select>
         </div>
 
-        {/* Plan Name + Amount */}
+        {/* Plan Selection (from Admin templates) */}
+        <div>
+          <label className="mb-1 block text-sm font-semibold text-[#6f4f47]">Subscription Plan *</label>
+          {plansLoading ? (
+            <div className="flex items-center gap-2 py-2 text-sm text-[#6f4f47]">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading plans...
+            </div>
+          ) : planTemplates.length === 0 ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <p className="font-semibold">No plan templates available</p>
+              <p className="mt-1 text-xs">An Admin must create plan templates in Subscription Settings before Finance can create subscriptions.</p>
+            </div>
+          ) : (
+            <select value={form.plan_name} onChange={(e) => handlePlanSelect(e.target.value)} required
+              className="w-full rounded-lg border border-[#f2d5cc] bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#F38978]/40">
+              <option value="">Select a plan</option>
+              {planTemplates.map((plan) => (
+                <option key={plan.id} value={plan.name}>{plan.name} ({plan.billingFrequency})</option>
+              ))}
+            </select>
+          )}
+          {selectedPlan && selectedPlan.description && (
+            <p className="mt-1.5 text-xs text-[#6f4f47]">{selectedPlan.description}</p>
+          )}
+        </div>
+
+        {/* Amount + Billing Frequency */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-[#6f4f47]">Plan Name *</label>
-            <input type="text" value={form.plan_name} onChange={(e) => handleChange("plan_name", e.target.value)} required placeholder="e.g. Premium Monthly"
-              className="w-full rounded-lg border border-[#f2d5cc] bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#F38978]/40" />
-          </div>
           <div>
             <label className="mb-1 block text-sm font-semibold text-[#6f4f47]">Amount (SGD) *</label>
             <input type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => handleChange("amount", e.target.value)} required placeholder="0.00"
               className="w-full rounded-lg border border-[#f2d5cc] bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#F38978]/40" />
+            <p className="mt-1 text-xs text-[#6f4f47]">Set the customer-specific price for this subscription.</p>
           </div>
-        </div>
-
-        {/* Description */}
-        <div>
-          <label className="mb-1 block text-sm font-semibold text-[#6f4f47]">Description</label>
-          <textarea value={form.description} onChange={(e) => handleChange("description", e.target.value)} rows={2} placeholder="Optional description of the subscription plan"
-            className="w-full rounded-lg border border-[#f2d5cc] bg-white px-3 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-[#F38978]/40" />
-        </div>
-
-        {/* Billing Frequency + Dates */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label className="mb-1 block text-sm font-semibold text-[#6f4f47]">Billing Frequency *</label>
             <select value={form.billing_frequency} onChange={(e) => handleChange("billing_frequency", e.target.value)} required
               className="w-full rounded-lg border border-[#f2d5cc] bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#F38978]/40">
               {FREQUENCY_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
             </select>
+            <p className="mt-1 text-xs text-[#6f4f47]">Pre-filled from plan. Adjust if needed for this customer.</p>
           </div>
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className="mb-1 block text-sm font-semibold text-[#6f4f47]">Description</label>
+          <textarea value={form.description} onChange={(e) => handleChange("description", e.target.value)} rows={2} placeholder="Optional — pre-filled from plan template"
+            className="w-full rounded-lg border border-[#f2d5cc] bg-white px-3 py-2.5 text-sm outline-none resize-none focus:ring-2 focus:ring-[#F38978]/40" />
+        </div>
+
+        {/* Dates */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-semibold text-[#6f4f47]">Start Date *</label>
             <input type="date" value={form.start_date} onChange={(e) => handleChange("start_date", e.target.value)} required
@@ -480,13 +520,14 @@ function CreateSubscriptionPanel() {
         </div>
 
         {/* Info note */}
-        <p className="text-xs text-[#6f4f47]">
-          The system will automatically calculate the initial Next Billing Date based on the Start Date and Billing Frequency.
-        </p>
+        <div className="rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3 text-xs text-blue-900">
+          <p className="font-semibold">How it works</p>
+          <p className="mt-1">Admin creates plan templates (name, frequency). Finance selects a plan, sets the customer price, billing dates, and creates the subscription. The system auto-calculates the next billing date.</p>
+        </div>
 
         {/* Submit */}
         <div className="flex items-center gap-3 pt-2">
-          <button type="submit" disabled={loading}
+          <button type="submit" disabled={loading || planTemplates.length === 0}
             className="flex items-center gap-2 rounded-lg bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-[#e0776a] disabled:opacity-50 transition">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             {loading ? "Creating..." : "Create Subscription"}

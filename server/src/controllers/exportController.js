@@ -78,24 +78,26 @@ async function exportInvoicesExcel(req, res) {
  */
 async function exportReportExcel(req, res) {
   try {
-    // Revenue summary
+    // Revenue summary (revenue = Paid invoices only)
     const [summaryRows] = await pool.query(`
       SELECT
-        COALESCE(SUM(total_amount), 0) AS total_revenue,
+        COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS total_revenue,
         COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS paid_revenue,
         COALESCE(SUM(CASE WHEN status <> 'Paid' THEN total_amount ELSE 0 END), 0) AS outstanding,
         COUNT(*) AS invoice_count
       FROM invoice
+      WHERE invoiceId <> '__SETTINGS__'
     `);
 
-    // Monthly breakdown
+    // Monthly breakdown (revenue = Paid invoices only)
     const [monthlyRows] = await pool.query(`
       SELECT
         DATE_FORMAT(issue_date, '%Y-%m') AS month,
-        COALESCE(SUM(total_amount), 0) AS revenue,
+        COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS revenue,
         COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS collected,
         COUNT(*) AS invoices
       FROM invoice
+      WHERE invoiceId <> '__SETTINGS__'
       GROUP BY DATE_FORMAT(issue_date, '%Y-%m')
       ORDER BY month ASC
     `);
@@ -119,10 +121,11 @@ async function exportReportExcel(req, res) {
       GROUP BY bucket
     `);
 
-    // Top customers
+    // Top customers (revenue = Paid invoices only)
     const [customerRows] = await pool.query(`
-      SELECT c.name, COUNT(i.invoice_id) AS invoices, COALESCE(SUM(i.total_amount), 0) AS revenue
-      FROM customer c LEFT JOIN invoice i ON i.customer_id = c.customer_id
+      SELECT c.name, COUNT(i.invoice_id) AS invoices,
+             COALESCE(SUM(CASE WHEN i.status = 'Paid' THEN i.total_amount ELSE 0 END), 0) AS revenue
+      FROM customer c LEFT JOIN invoice i ON i.customer_id = c.customer_id AND i.invoiceId <> '__SETTINGS__'
       GROUP BY c.customer_id, c.name ORDER BY revenue DESC LIMIT 10
     `);
 
@@ -136,8 +139,7 @@ async function exportReportExcel(req, res) {
     summarySheet.addRow(["Generated", new Date().toISOString()]);
     summarySheet.addRow([]);
     summarySheet.addRow(["Metric", "Value (SGD)"]);
-    summarySheet.addRow(["Total Revenue", Number(summary.total_revenue)]);
-    summarySheet.addRow(["Paid Revenue", Number(summary.paid_revenue)]);
+    summarySheet.addRow(["Total Revenue (Paid)", Number(summary.total_revenue)]);
     summarySheet.addRow(["Outstanding", Number(summary.outstanding)]);
     summarySheet.addRow(["Invoice Count", Number(summary.invoice_count)]);
     summarySheet.getRow(1).font = { bold: true, size: 14 };

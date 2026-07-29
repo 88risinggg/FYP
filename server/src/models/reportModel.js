@@ -7,35 +7,38 @@
 const { pool } = require("../config/db");
 
 /**
- * Fetch overall revenue summary (total, paid, outstanding, count).
+ * Fetch overall revenue summary.
+ * Revenue (total_revenue) = Paid invoices only.
  *
- * @returns {Object} { total_revenue, paid_revenue, outstanding_revenue, invoice_count }
+ * @returns {Object} { total_revenue, outstanding_revenue, invoice_count }
  */
 async function getRevenueSummary() {
   const [rows] = await pool.query(`
     SELECT
-      COALESCE(SUM(total_amount), 0) AS total_revenue,
-      COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS paid_revenue,
+      COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS total_revenue,
       COALESCE(SUM(CASE WHEN status <> 'Paid' THEN total_amount ELSE 0 END), 0) AS outstanding_revenue,
       COUNT(*) AS invoice_count
     FROM invoice
+    WHERE invoiceId <> '__SETTINGS__'
   `);
   return rows[0] || {};
 }
 
 /**
  * Fetch monthly revenue breakdown.
+ * Revenue = Paid invoices only per month.
  *
- * @returns {Object[]} Array of { month, revenue, collected, invoice_count }.
+ * @returns {Object[]} Array of { month, revenue, invoice_count }.
  */
 async function getMonthlyRevenue() {
   const [rows] = await pool.query(`
     SELECT
       DATE_FORMAT(issue_date, '%Y-%m') AS month,
-      COALESCE(SUM(total_amount), 0) AS revenue,
+      COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS revenue,
       COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) AS collected,
       COUNT(*) AS invoice_count
     FROM invoice
+    WHERE invoiceId <> '__SETTINGS__'
     GROUP BY DATE_FORMAT(issue_date, '%Y-%m')
     ORDER BY month ASC
   `);
@@ -122,27 +125,31 @@ async function getOverdueStats() {
 }
 
 /**
- * Fetch current month revenue.
+ * Fetch current month revenue (Paid invoices only).
  *
  * @returns {number} Revenue for the current month.
  */
 async function getCurrentMonthRevenue() {
   const [rows] = await pool.query(`
     SELECT COALESCE(SUM(total_amount), 0) AS revenue FROM invoice
-    WHERE DATE_FORMAT(issue_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')
+    WHERE status = 'Paid'
+      AND DATE_FORMAT(issue_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')
+      AND invoiceId <> '__SETTINGS__'
   `);
   return Number(rows[0]?.revenue || 0);
 }
 
 /**
- * Fetch previous month revenue.
+ * Fetch previous month revenue (Paid invoices only).
  *
  * @returns {number} Revenue for last month.
  */
 async function getLastMonthRevenue() {
   const [rows] = await pool.query(`
     SELECT COALESCE(SUM(total_amount), 0) AS revenue FROM invoice
-    WHERE DATE_FORMAT(issue_date, '%Y-%m') = DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m')
+    WHERE status = 'Paid'
+      AND DATE_FORMAT(issue_date, '%Y-%m') = DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m')
+      AND invoiceId <> '__SETTINGS__'
   `);
   return Number(rows[0]?.revenue || 0);
 }
