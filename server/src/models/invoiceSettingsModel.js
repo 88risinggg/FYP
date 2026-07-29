@@ -340,7 +340,6 @@ function calculateConfigurationStatus(settings) {
     email:
       hasValue(settings?.senderName) &&
       hasValue(settings?.replyToEmail) &&
-      hasValue(settings?.supportEmail) &&
       hasValue(settings?.emailSubjectTemplate) &&
       hasValue(settings?.emailBodyTemplate)
         ? "completed"

@@ -5,14 +5,13 @@
  * Only Admin users can access this page.
  *
  * Features:
- *   - Configure Twilio credentials (Account SID, Auth Token, WhatsApp Number)
+ *   - View the backend-managed WhatsApp connection
  *   - Enable/Disable toggle
  *   - Test Twilio Connection
  *   - Send Test Message
  *   - Message Template Management
  *   - Default Notification Rules
  *   - Integration Logs
- *   - Webhook Status
  */
 
 import { useEffect, useState } from "react";
@@ -20,22 +19,14 @@ import {
   AlertCircle,
   Bell,
   CheckCircle2,
-  Edit3,
   FileText,
-  Key,
   Loader2,
   MessageCircle,
-  Phone,
-  Plus,
-  Save,
   Send,
   Settings2,
   Shield,
   Star,
-  Trash2,
-  Wifi,
-  WifiOff,
-  X
+  Wifi
 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -64,10 +55,20 @@ function Toggle({ checked, onChange, disabled }) {
   );
 }
 
+function maskWhatsAppNumber(value) {
+  const text = String(value || "").trim();
+  if (!text) return "Not configured";
+
+  const prefix = text.startsWith("whatsapp:") ? "whatsapp:" : "";
+  const number = prefix ? text.slice(prefix.length) : text;
+  if (number.length <= 4) return `${prefix}••••`;
+
+  return `${prefix}${number.slice(0, 3)}••••${number.slice(-4)}`;
+}
+
 export default function AdminWhatsAppIntegrationPage() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testingMessage, setTestingMessage] = useState(false);
   const [testPhone, setTestPhone] = useState("");
@@ -78,15 +79,6 @@ export default function AdminWhatsAppIntegrationPage() {
   const [rules, setRules] = useState([]);
   const [logs, setLogs] = useState([]);
   const [logsTotal, setLogsTotal] = useState(0);
-
-  // Form state for credentials
-  const [form, setForm] = useState({
-    account_sid: "",
-    auth_token: "",
-    whatsapp_number: "",
-    webhook_url: "",
-    is_enabled: false
-  });
 
   useEffect(() => {
     loadConfig();
@@ -106,15 +98,6 @@ export default function AdminWhatsAppIntegrationPage() {
       if (res.ok) {
         const data = await res.json();
         setConfig(data);
-        if (data.configured) {
-          setForm({
-            account_sid: "",
-            auth_token: "",
-            whatsapp_number: data.whatsapp_number || "",
-            webhook_url: data.webhook_url || "",
-            is_enabled: data.is_enabled || false
-          });
-        }
       }
     } catch (err) {
       console.error("Failed to load config:", err);
@@ -155,46 +138,6 @@ export default function AdminWhatsAppIntegrationPage() {
     } catch { /* non-critical */ }
   }
 
-  async function handleSaveConfig() {
-    if (!form.account_sid && !config?.configured) {
-      showMessage("Account SID is required.", "error");
-      return;
-    }
-    if (!form.auth_token && !config?.configured) {
-      showMessage("Auth Token is required.", "error");
-      return;
-    }
-    if (!form.whatsapp_number) {
-      showMessage("WhatsApp Number is required.", "error");
-      return;
-    }
-    setSaving(true);
-    try {
-      const body = { ...form };
-      // If fields are empty and already configured, skip sending them
-      if (!body.account_sid && config?.configured) body.account_sid = "AC_UNCHANGED_PLACEHOLDER_SID_XX";
-      if (!body.auth_token && config?.configured) body.auth_token = "UNCHANGED_PLACEHOLDER_TOKEN_XX";
-
-      const res = await fetch(`${API_BASE}/api/whatsapp/admin/config`, {
-        method: "PUT",
-        headers: getHeaders(),
-        body: JSON.stringify(body)
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showMessage("Configuration saved successfully.");
-        setConfig(data.config);
-        loadLogs();
-      } else {
-        showMessage(data.message || "Failed to save.", "error");
-      }
-    } catch (err) {
-      showMessage(err.message, "error");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function handleToggle(enabled) {
     try {
       const res = await fetch(`${API_BASE}/api/whatsapp/admin/toggle`, {
@@ -205,7 +148,6 @@ export default function AdminWhatsAppIntegrationPage() {
       const data = await res.json();
       if (res.ok) {
         setConfig(data.config);
-        setForm((prev) => ({ ...prev, is_enabled: enabled }));
         showMessage(enabled ? "WhatsApp integration enabled." : "WhatsApp integration disabled.");
         loadLogs();
       } else {
@@ -281,7 +223,7 @@ export default function AdminWhatsAppIntegrationPage() {
   }
 
   const tabs = [
-    { key: "credentials", label: "Credentials", icon: Key },
+    { key: "credentials", label: "Overview", icon: Shield },
     { key: "templates", label: "Templates", icon: FileText },
     { key: "rules", label: "Notification Rules", icon: Bell },
     { key: "logs", label: "Integration Logs", icon: Settings2 }
@@ -350,54 +292,33 @@ export default function AdminWhatsAppIntegrationPage() {
         })}
       </div>
 
-      {/* Credentials Tab */}
+      {/* Overview Tab */}
       {activeTab === "credentials" && (
         <div className="space-y-6">
-          {/* Twilio Credentials Form */}
+          {/* Backend-managed connection */}
           <div className="rounded-xl border border-[#f0d2ca] bg-white p-6">
             <div className="flex items-center gap-3 mb-5">
               <Shield size={20} className="text-[#F38978]" />
               <div>
-                <h3 className="text-base font-bold text-[#251E1F]">Twilio Credentials</h3>
-                <p className="text-xs text-[#7b6660]">Credentials are encrypted before storage. Never exposed to Finance users.</p>
+                <h3 className="text-base font-bold text-[#251E1F]">Company WhatsApp Connection</h3>
+                <p className="text-xs text-[#7b6660]">Technical credentials are managed securely by the backend and are never exposed to Admin or Finance.</p>
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="text-sm font-medium text-[#7b6660]">Account SID</span>
-                <input type="text" value={form.account_sid}
-                  onChange={(e) => setForm((p) => ({ ...p, account_sid: e.target.value }))}
-                  placeholder={config?.configured ? config.account_sid_masked : "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}
-                  className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]" />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-[#7b6660]">Auth Token</span>
-                <input type="password" value={form.auth_token}
-                  onChange={(e) => setForm((p) => ({ ...p, auth_token: e.target.value }))}
-                  placeholder={config?.configured ? "••••••••••••" : "Enter auth token"}
-                  className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]" />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-[#7b6660]">WhatsApp Number</span>
-                <input type="text" value={form.whatsapp_number}
-                  onChange={(e) => setForm((p) => ({ ...p, whatsapp_number: e.target.value }))}
-                  placeholder="whatsapp:+14155238886"
-                  className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]" />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-[#7b6660]">Webhook URL (optional)</span>
-                <input type="text" value={form.webhook_url}
-                  onChange={(e) => setForm((p) => ({ ...p, webhook_url: e.target.value }))}
-                  placeholder="https://yourdomain.com/api/whatsapp/webhook/status"
-                  className="mt-1 w-full rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]" />
-              </label>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">Connection</p>
+                <p className="mt-1 text-sm font-semibold capitalize text-[#251E1F]">{config?.connection_status || "untested"}</p>
+              </div>
+              <div className="rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">Integration</p>
+                <p className="mt-1 text-sm font-semibold text-[#251E1F]">{config?.is_enabled ? "Enabled" : "Disabled"}</p>
+              </div>
+              <div className="rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">Sender Number</p>
+                <p className="mt-1 text-sm font-semibold text-[#251E1F]">{maskWhatsAppNumber(config?.whatsapp_number)}</p>
+              </div>
             </div>
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <button type="button" onClick={handleSaveConfig} disabled={saving}
-                className="inline-flex items-center gap-2 rounded-xl bg-[#F38978] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#F38978]/20 transition hover:bg-[#e87562] disabled:opacity-60">
-                {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                Save Credentials
-              </button>
               <button type="button" onClick={handleTestConnection} disabled={testing || !config?.configured}
                 className="inline-flex items-center gap-2 rounded-xl border border-[#f0d2ca] px-5 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/30 disabled:opacity-50">
                 {testing ? <Loader2 size={15} className="animate-spin" /> : <Wifi size={15} />}
@@ -427,29 +348,6 @@ export default function AdminWhatsAppIntegrationPage() {
             </div>
           </div>
 
-          {/* Webhook Status */}
-          <div className="rounded-xl border border-[#f0d2ca] bg-white p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <Settings2 size={20} className="text-[#F38978]" />
-              <h3 className="text-base font-bold text-[#251E1F]">Webhook Status</h3>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-3">
-                <div className={`h-2 w-2 rounded-full ${config?.webhook_url ? "bg-emerald-500" : "bg-amber-500"}`} />
-                <span className="text-[#251E1F]">Status Callback URL: {config?.webhook_url || "Not configured"}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className={`h-2 w-2 rounded-full ${config?.connection_status === "connected" ? "bg-emerald-500" : "bg-amber-500"}`} />
-                <span className="text-[#251E1F]">Connection: {config?.connection_status || "untested"}</span>
-              </div>
-              {config?.last_tested_at && (
-                <p className="text-xs text-[#7b6660]">Last tested: {new Date(config.last_tested_at).toLocaleString("en-SG")}</p>
-              )}
-              {config?.account_name && (
-                <p className="text-xs text-[#7b6660]">Account: {config.account_name}</p>
-              )}
-            </div>
-          </div>
         </div>
       )}
 

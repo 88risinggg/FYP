@@ -23,7 +23,10 @@ const {
   listGstRates
 } = require("../models/invoiceGstRateModel");
 const { getClientIp, logAuditEvent } = require("../models/auditLogModel");
-const { sendInvoiceSettingsTestEmail } = require("../services/invoiceDeliveryService");
+const {
+  sendInvoiceSettingsTestEmail,
+  validateInvoiceEmailTemplates
+} = require("../services/invoiceDeliveryService");
 const { generateInvoicePDF } = require("../services/pdfService");
 const { getCompanyId } = require("../utils/companyScope");
 
@@ -187,16 +190,11 @@ function validateSettings(settings, options) {
     .forEach((email) => {
       if (!emailPattern.test(email)) errors.push(`Invalid email address: ${email}`);
     });
-  const allowedPlaceholders = new Set([
-    "invoice_number", "customer_name", "amount_due", "due_date",
-    "company_name", "online_view_url", "payment_url"
-  ]);
-  [settings.emailSubjectTemplate, settings.emailBodyTemplate].forEach((template) => {
-    for (const match of String(template || "").matchAll(/\{\{([^}]+)\}\}/g)) {
-      if (!allowedPlaceholders.has(match[1])) errors.push(`Unsupported email placeholder: {{${match[1]}}}`);
-    }
-  });
-  return errors;
+  errors.push(...validateInvoiceEmailTemplates(
+    settings.emailSubjectTemplate,
+    settings.emailBodyTemplate
+  ));
+  return [...new Set(errors)];
 }
 
 const numberingActivityFields = [
@@ -242,6 +240,64 @@ function buildNumberingActivityRecords(previousSettings, nextSettings, savedSett
     .filter(Boolean);
 }
 
+const auditSectionFields = {
+  general: [
+    "general",
+    "companyName",
+    "companyRegistrationNumber",
+    "financeEmail",
+    "companyAddress",
+    "registeredOfficeAddress"
+  ],
+  numbering: [
+    "invoicePrefix",
+    "invoiceYear",
+    "separatorStyle",
+    "invoiceFormat",
+    "nextInvoiceNumber",
+    "sequenceRules"
+  ],
+  email: [
+    "senderName",
+    "replyToEmail",
+    "supportEmail",
+    "emailSubjectTemplate",
+    "emailBodyTemplate",
+    "attachPdfInvoice"
+  ],
+  payments: [
+    "bankAccountHolderName",
+    "bankName",
+    "bankAccountNumber",
+    "bicSwift",
+    "paynowIdentifier",
+    "paymentReferenceInstruction",
+    "payoutStatement",
+    "computerGeneratedStatement"
+  ]
+};
+
+function getChangedSettingsSections(previousSettings, nextSettings) {
+  return Object.entries(auditSectionFields)
+    .filter(([, fields]) => fields.some(
+      (field) => JSON.stringify(previousSettings?.[field]) !== JSON.stringify(nextSettings?.[field])
+    ))
+    .map(([section]) => section);
+}
+
+function settingsAuditDescription(changedSections) {
+  if (changedSections.length === 1) {
+    return `Updated invoice ${changedSections[0]} settings`;
+  }
+  if (changedSections.length > 1) {
+    const labels = changedSections.map(
+      (section) => section.charAt(0).toUpperCase() + section.slice(1)
+    );
+    return `Updated invoice settings: ${labels.join(", ")}`;
+  }
+  return "Saved invoice settings";
+}
+
 function handleSettingsError(error, res, fallbackMessage) {
   res.status(error.statusCode || 500).json({
     message: error.statusCode ? error.message : fallbackMessage
@@ -280,6 +336,7 @@ async function putSettings(req, res) {
     const saved = await saveInvoiceSettings(settings, companyId);
     const changedBy = req.user?.email || "Admin";
     const numberingActivity = buildNumberingActivityRecords(previousSettings, settings, saved, changedBy);
+    const changedSections = getChangedSettingsSections(previousSettings, settings);
 
     if (numberingActivity.length > 0) {
       await addNumberingActivity(numberingActivity, companyId);
@@ -289,7 +346,7 @@ async function putSettings(req, res) {
       userId: req.user?.userId,
       userName: req.user?.email || "Admin",
       activityType: "Invoice Settings",
-      actionDescription: "Updated invoice general settings",
+      actionDescription: settingsAuditDescription(changedSections),
       affectedRecord: String(saved.settingId),
       status: "Success",
       ipAddress: getClientIp(req)
@@ -366,7 +423,23 @@ async function postTestInvoiceEmail(req, res) {
   }
 
   try {
-    const result = await sendInvoiceSettingsTestEmail(recipient);
+    const companyId = getCompanyId(req);
+    const settings = req.body.settings
+      ? normalizeSettings(req.body.settings)
+      : await getInvoiceSettings(companyId);
+
+    if (req.body.settings) {
+      const options = await getInvoiceSettingsOptions(companyId);
+      const errors = validateSettings(settings, options);
+      if (errors.length > 0) {
+        return res.status(400).json({ message: errors[0], errors });
+      }
+    }
+
+    const result = await sendInvoiceSettingsTestEmail(recipient, {
+      companyId,
+      settings
+    });
     res.json({ message: `Test invoice email sent to ${recipient}.`, result });
   } catch (error) {
     handleSettingsError(error, res, "Unable to send the test invoice email.");

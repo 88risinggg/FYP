@@ -16,7 +16,7 @@ import {
   Send,
   Settings2
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import {
@@ -44,6 +44,26 @@ const emptyOptions = {
   separatorStyles: [],
   invoiceFormats: []
 };
+
+const emptyConfigurationStatus = {
+  categories: {
+    general: "incomplete",
+    numbering: "incomplete",
+    email: "incomplete",
+    payments: "incomplete"
+  },
+  completionPercentage: 0
+};
+
+const emailPlaceholders = [
+  { label: "Customer Name", token: "{{customer_name}}" },
+  { label: "Invoice Number", token: "{{invoice_number}}" },
+  { label: "Amount Due", token: "{{amount_due}}" },
+  { label: "Due Date", token: "{{due_date}}" },
+  { label: "Company Name", token: "{{company_name}}" },
+  { label: "Online Invoice", token: "{{online_view_url}}" },
+  { label: "Payment Link", token: "{{payment_url}}" }
+];
 
 const invoiceSectionRootFields = {
   general: [
@@ -106,6 +126,77 @@ function validEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
 }
 
+function validateEmailTemplatePlaceholders(subjectTemplate, bodyTemplate) {
+  const allowedPlaceholders = new Map(emailPlaceholders.map(({ label, token }) => [
+    token.slice(2, -2),
+    label
+  ]));
+  const placeholderNames = [...allowedPlaceholders.keys()].join("|");
+  const errors = [];
+
+  for (const { location, value } of [
+    { location: "Subject Template", value: subjectTemplate },
+    { location: "Email Body", value: bodyTemplate }
+  ]) {
+    const template = String(value || "");
+
+    for (const match of template.matchAll(/\{\{([^{}]+)\}\}/g)) {
+      const key = match[1];
+      if (!allowedPlaceholders.has(key)) {
+        errors.push(`Unsupported email placeholder "{{${key}}}" in ${location}.`);
+      }
+    }
+    for (const match of template.matchAll(/\{+([a-z_]+)\}+/g)) {
+      if (!allowedPlaceholders.has(match[1])) {
+        errors.push(`Unsupported email placeholder "${match[0]}" in ${location}.`);
+      }
+    }
+
+    const knownPlaceholderPattern = new RegExp(`\\b(${placeholderNames})\\b`, "g");
+    for (const match of template.matchAll(knownPlaceholderPattern)) {
+      const key = match[1];
+      const placeholderLabel = allowedPlaceholders.get(key);
+      let openingBraces = 0;
+      let closingBraces = 0;
+
+      for (let index = match.index - 1; index >= 0 && template[index] === "{"; index -= 1) {
+        openingBraces += 1;
+      }
+      for (
+        let index = match.index + key.length;
+        index < template.length && template[index] === "}";
+        index += 1
+      ) {
+        closingBraces += 1;
+      }
+
+      if (openingBraces < 2) {
+        const missingCount = 2 - openingBraces;
+        errors.push(
+          `The ${placeholderLabel} placeholder "{{${key}}}" in ${location} is missing ${
+            missingCount === 1 ? 'an opening "{" symbol' : 'two opening "{" symbols'
+          }.`
+        );
+      } else if (openingBraces > 2) {
+        errors.push(`The ${placeholderLabel} placeholder "{{${key}}}" in ${location} has an extra opening "{" symbol.`);
+      }
+
+      if (closingBraces < 2) {
+        const missingCount = 2 - closingBraces;
+        errors.push(
+          `The ${placeholderLabel} placeholder "{{${key}}}" in ${location} is missing ${
+            missingCount === 1 ? 'a closing "}" symbol' : 'two closing "}" symbols'
+          }.`
+        );
+      } else if (closingBraces > 2) {
+        errors.push(`The ${placeholderLabel} placeholder "{{${key}}}" in ${location} has an extra closing "}" symbol.`);
+      }
+    }
+  }
+
+  return [...new Set(errors)];
+}
+
 function validateInvoiceSection(section, form) {
   if (section === "general") {
     const required = [
@@ -118,11 +209,17 @@ function validateInvoiceSection(section, form) {
     const valid = required.every(hasText)
       && paymentTermsHasDueLength(form.general.paymentTerms)
       && form.general.lateFeeValue !== ""
-      && Number(form.general.lateFeeValue) >= 0;
+      && Number(form.general.lateFeeValue) >= 0
+      && (!hasText(form.financeEmail) || validEmail(form.financeEmail));
+    const configured = valid && hasText(form.companyName) && validEmail(form.financeEmail);
     return {
       valid,
-      configured: valid,
-      note: valid ? "Invoice defaults and exports are ready." : "Complete the required defaults and export fields."
+      configured,
+      note: configured
+        ? "Invoice defaults and company details are ready."
+        : valid
+          ? "Add the company name and a valid finance email."
+          : "Complete the required defaults and export fields."
     };
   }
 
@@ -141,23 +238,39 @@ function validateInvoiceSection(section, form) {
   }
 
   if (section === "email") {
-    const hasAny = hasText(form.senderName) || hasText(form.replyToEmail) || hasText(form.supportEmail);
-    if (!hasAny) return { valid: true, configured: false, note: "Configure invoice delivery when needed." };
-    const valid = hasText(form.senderName)
-      && validEmail(form.replyToEmail)
-      && hasText(form.emailSubjectTemplate)
+    const replyToIsValid = !hasText(form.replyToEmail) || validEmail(form.replyToEmail);
+    const supportIsValid = !hasText(form.supportEmail) || validEmail(form.supportEmail);
+    const templatesArePresent = hasText(form.emailSubjectTemplate)
       && hasText(form.emailBodyTemplate);
+    const placeholdersAreValid = validateEmailTemplatePlaceholders(
+      form.emailSubjectTemplate,
+      form.emailBodyTemplate
+    ).length === 0;
+    const valid = replyToIsValid && supportIsValid && templatesArePresent;
+    const configured = valid
+      && placeholdersAreValid
+      && hasText(form.senderName)
+      && validEmail(form.replyToEmail);
     return {
       valid,
-      configured: valid,
-      note: valid ? "Invoice email delivery is ready." : "Complete sender, reply-to, subject and email body."
+      configured,
+      note: configured
+        ? "Invoice email delivery is ready."
+        : valid
+          ? "Add the sender and a valid reply-to email. Support email is optional."
+          : "Correct the email addresses or template placeholders."
     };
   }
 
   const hasBankDetails = hasText(form.bankName) || hasText(form.bankAccountNumber);
   const hasPayNow = hasText(form.paynowIdentifier);
   const validBankDetails = !hasBankDetails || (hasText(form.bankName) && hasText(form.bankAccountNumber));
-  const configured = (hasBankDetails && validBankDetails) || hasPayNow;
+  const configured = hasText(form.bankAccountHolderName)
+    && hasText(form.bankName)
+    && hasText(form.bankAccountNumber)
+    && hasText(form.bicSwift)
+    && hasPayNow
+    && hasText(form.paymentReferenceInstruction);
   return {
     valid: validBankDetails,
     configured,
@@ -334,6 +447,28 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function formatEmailPreviewDate(value) {
+  const source = String(value || "").trim();
+  const dateOnly = source.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const date = dateOnly
+    ? new Date(Date.UTC(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3])))
+    : new Date(source);
+
+  if (Number.isNaN(date.getTime())) return "19 Aug 2026";
+  return new Intl.DateTimeFormat("en-SG", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC"
+  }).format(date);
+}
+
+function renderEmailPreview(template, values) {
+  return String(template || "").replace(/\{\{([a-z_]+)\}\}/g, (match, key) => (
+    Object.prototype.hasOwnProperty.call(values, key) ? values[key] : match
+  ));
+}
+
 function paymentTermsHasDueLength(value) {
   const text = String(value || "").trim();
   if (!text) return false;
@@ -353,6 +488,47 @@ function Field({ label, children, note }) {
 
 function MessageBanner({ type, children }) {
   return <div className={bannerClasses[type]}>{children}</div>;
+}
+
+function PlaceholderValidationDialog({ errors, onClose }) {
+  if (errors.length === 0) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#251E1F]/45 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="placeholder-validation-title"
+    >
+      <div className="w-full max-w-lg rounded-2xl border border-[#f0d2ca] bg-white p-6 shadow-2xl">
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+            <AlertTriangle size={21} />
+          </span>
+          <div>
+            <h3 id="placeholder-validation-title" className="text-lg font-bold text-[#251E1F]">
+              Check Email Placeholder
+            </h3>
+            <p className="mt-1 text-sm text-[#6f5b55]">
+              Correct the placeholder symbol before saving the invoice email settings.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 space-y-2 rounded-xl border border-rose-200 bg-rose-50 p-4">
+          {errors.map((error) => (
+            <p key={error} className="text-sm font-semibold text-rose-700">{error}</p>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-[#F38978] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#e87562]"
+        >
+          Return to Email Settings
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function SelectField({ value, onChange, options, placeholder = "Select option" }) {
@@ -844,16 +1020,20 @@ function SettingsCard({ title, icon: Icon, children }) {
   );
 }
 
-function ConfigurationStatusPanel({ sections, currentTab, routePrefix }) {
-  const completedCount = sections.filter((section) => section.status === "complete").length;
-  const percentage = Math.round((completedCount / sections.length) * 100);
+function ConfigurationStatusPanel({ sections, currentTab, routePrefix, configurationStatus }) {
+  const completedCount = sections.filter(
+    (section) => configurationStatus?.categories?.[section.slug] === "completed"
+  ).length;
+  const percentage = Number.isFinite(Number(configurationStatus?.completionPercentage))
+    ? Number(configurationStatus.completionPercentage)
+    : Math.round((completedCount / sections.length) * 100);
 
   return (
     <SettingsCard title="Configuration Status" icon={Settings2}>
       <div className="flex items-end justify-between gap-3">
         <div>
           <p className="text-2xl font-bold text-[#251E1F]">{completedCount} of {sections.length}</p>
-          <p className="text-xs font-semibold text-[#7b6660]">steps completed</p>
+          <p className="text-xs font-semibold text-[#7b6660]">saved steps completed</p>
         </div>
         <span className="text-sm font-bold text-[#F38978]">{percentage}%</span>
       </div>
@@ -1096,12 +1276,48 @@ function EmailSettingsTab({ form, onChange }) {
   const [recipient, setRecipient] = useState(form.replyToEmail || form.financeEmail || "");
   const [testing, setTesting] = useState(false);
   const [testMessage, setTestMessage] = useState("");
+  const [placeholderTarget, setPlaceholderTarget] = useState("emailBodyTemplate");
+  const subjectTemplateRef = useRef(null);
+  const bodyTemplateRef = useRef(null);
+  const previewValues = {
+    invoice_number: "TEST-INVOICE",
+    customer_name: "Test Recipient",
+    amount_due: `${form.general?.defaultCurrency || form.defaultCurrency || "SGD"} 100.00`,
+    due_date: formatEmailPreviewDate(form.sampleDueDate || "2026-08-19"),
+    company_name: form.companyName || "Your Company",
+    online_view_url: "https://secure.paynivo.com/invoice/TEST-INVOICE",
+    payment_url: "https://secure.paynivo.com/pay/TEST-INVOICE"
+  };
+  const previewSubject = renderEmailPreview(form.emailSubjectTemplate, previewValues);
+  const previewBody = renderEmailPreview(form.emailBodyTemplate, previewValues);
+
+  function selectPlaceholderTarget(field) {
+    setPlaceholderTarget(field);
+    const fieldRef = field === "emailSubjectTemplate" ? subjectTemplateRef : bodyTemplateRef;
+    window.requestAnimationFrame(() => fieldRef.current?.focus());
+  }
+
+  function insertPlaceholder(token) {
+    const fieldRef = placeholderTarget === "emailSubjectTemplate" ? subjectTemplateRef : bodyTemplateRef;
+    const element = fieldRef.current;
+    const currentValue = String(form[placeholderTarget] || "");
+    const selectionStart = element?.selectionStart ?? currentValue.length;
+    const selectionEnd = element?.selectionEnd ?? selectionStart;
+    const nextValue = `${currentValue.slice(0, selectionStart)}${token}${currentValue.slice(selectionEnd)}`;
+    const nextCursorPosition = selectionStart + token.length;
+
+    onChange(placeholderTarget, nextValue);
+    window.requestAnimationFrame(() => {
+      fieldRef.current?.focus();
+      fieldRef.current?.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    });
+  }
 
   async function sendTest() {
     setTesting(true);
     setTestMessage("");
     try {
-      const response = await sendInvoiceSettingsTestEmail(recipient);
+      const response = await sendInvoiceSettingsTestEmail(recipient, form);
       setTestMessage(response.message || "Test email sent.");
     } catch (error) {
       setTestMessage(error.message);
@@ -1114,11 +1330,74 @@ function EmailSettingsTab({ form, onChange }) {
     <div className="space-y-5">
       <SettingsCard title="Invoice Email" icon={Mail}>
         <div className="grid gap-4 lg:grid-cols-2">
-          <TextSetting label="Sender Name" field="senderName" form={form} onChange={onChange} />
+          <TextSetting label="Sender Name" field="senderName" form={form} onChange={onChange} note="This changes the display name. The sending address comes from the secured email connection." />
           <TextSetting label="Reply-to Email" field="replyToEmail" form={form} onChange={onChange} type="email" />
-          <TextSetting label="Support Email" field="supportEmail" form={form} onChange={onChange} type="email" />
-          <TextSetting label="Subject Template" field="emailSubjectTemplate" form={form} onChange={onChange} />
-          <div className="lg:col-span-2"><TextSetting label="Email Body" field="emailBodyTemplate" form={form} onChange={onChange} multiline note="Supported placeholders: {{invoice_number}}, {{customer_name}}, {{amount_due}}, {{due_date}}, {{company_name}}, {{online_view_url}}, {{payment_url}}" /></div>
+          <TextSetting label="Support Email (Optional)" field="supportEmail" form={form} onChange={onChange} type="email" note="If empty, the Finance Email appears in the email footer." />
+          <Field label="Subject Template">
+            <input
+              ref={subjectTemplateRef}
+              type="text"
+              value={form.emailSubjectTemplate || ""}
+              onChange={(event) => onChange("emailSubjectTemplate", event.target.value)}
+              onFocus={() => setPlaceholderTarget("emailSubjectTemplate")}
+              className="w-full rounded-lg border border-[#ead3cc] bg-white px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/20"
+            />
+          </Field>
+          <div className="lg:col-span-2 rounded-xl border border-[#ead3cc] bg-[#fff8f5] p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-bold text-[#251E1F]">Insert Placeholder</p>
+                <p className="mt-1 text-xs text-[#806b64]">Choose where to insert, then click a field below.</p>
+              </div>
+              <div className="inline-flex w-fit rounded-lg border border-[#ead3cc] bg-white p-1">
+                {[
+                  { label: "Subject", field: "emailSubjectTemplate" },
+                  { label: "Email body", field: "emailBodyTemplate" }
+                ].map((target) => {
+                  const selected = placeholderTarget === target.field;
+                  return (
+                    <button
+                      key={target.field}
+                      type="button"
+                      onClick={() => selectPlaceholderTarget(target.field)}
+                      className={`rounded-md px-3 py-1.5 text-xs font-bold transition ${
+                        selected ? "bg-[#F38978] text-white" : "text-[#6f5b55] hover:bg-[#fff1ec]"
+                      }`}
+                      aria-pressed={selected}
+                    >
+                      {target.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {emailPlaceholders.map((placeholder) => (
+                <button
+                  key={placeholder.token}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => insertPlaceholder(placeholder.token)}
+                  title={`Insert ${placeholder.token}`}
+                  className="rounded-full border border-[#efb8aa] bg-white px-3 py-1.5 text-xs font-bold text-[#b44f3e] transition hover:border-[#F38978] hover:bg-[#fff1ec] focus:outline-none focus:ring-2 focus:ring-[#F38978]/30"
+                >
+                  + {placeholder.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="lg:col-span-2">
+            <Field label="Email Body" note="Click a placeholder above to insert customer and invoice information automatically.">
+              <textarea
+                ref={bodyTemplateRef}
+                rows={6}
+                value={form.emailBodyTemplate || ""}
+                onChange={(event) => onChange("emailBodyTemplate", event.target.value)}
+                onFocus={() => setPlaceholderTarget("emailBodyTemplate")}
+                className="w-full rounded-lg border border-[#ead3cc] bg-white px-3 py-2.5 text-sm font-semibold text-[#251E1F] outline-none focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/20"
+              />
+            </Field>
+          </div>
           <Toggle label="Attach PDF Invoice" note="Attach the fixed approved invoice PDF to outgoing invoice emails." checked={form.attachPdfInvoice !== false} onChange={(value) => onChange("attachPdfInvoice", value)} />
         </div>
         <div className="mt-5 rounded-xl border border-[#ead3cc] bg-[#fff8f5] p-4">
@@ -1130,6 +1409,44 @@ function EmailSettingsTab({ form, onChange }) {
             </button>
           </div>
           {testMessage ? <p className="mt-2 text-xs text-[#6f5b55]">{testMessage}</p> : null}
+        </div>
+      </SettingsCard>
+      <SettingsCard title="Email Preview" icon={Mail}>
+        <p className="mb-4 text-xs text-[#7b6660]">
+          Live preview using sample customer and invoice information. Nothing is sent from this preview.
+        </p>
+        <div className="overflow-hidden rounded-xl border border-[#ead3cc] bg-white">
+          <div className="border-b border-[#ead3cc] bg-[#fff8f5] px-5 py-4">
+            <div className="grid gap-2 text-xs sm:grid-cols-[90px_minmax(0,1fr)]">
+              <span className="font-bold uppercase tracking-wide text-[#7b6660]">From</span>
+              <span className="font-semibold text-[#251E1F]">{form.senderName || "Sender name not set"}</span>
+              <span className="font-bold uppercase tracking-wide text-[#7b6660]">Reply-to</span>
+              <span className="font-semibold text-[#251E1F]">{form.replyToEmail || "Reply-to email not set"}</span>
+              <span className="font-bold uppercase tracking-wide text-[#7b6660]">Subject</span>
+              <span className="font-bold text-[#251E1F]">{previewSubject || "Subject template is empty"}</span>
+            </div>
+          </div>
+          <div className="px-5 py-6">
+            <h4 className="text-xl font-bold text-[#251E1F]">{previewValues.company_name}</h4>
+            <div className="mt-2 h-1 w-10 rounded-full bg-[#F38978]" />
+            <p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-[#514440]">
+              {previewBody || "Email body template is empty"}
+            </p>
+            <div className="mt-6 inline-flex rounded-lg bg-[#F38978] px-4 py-2.5 text-sm font-bold text-white">
+              View &amp; Pay Invoice
+            </div>
+            <div className="mt-6 border-t border-[#ead3cc] pt-4 text-xs text-[#7b6660]">
+              {form.supportEmail || form.financeEmail || "Support contact not set"}
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-[#6f5b55]">
+          <span className="rounded-full bg-[#fff1ec] px-3 py-1.5">
+            PDF attachment: {form.attachPdfInvoice !== false ? "Included" : "Not included"}
+          </span>
+          <span className="rounded-full bg-[#fff1ec] px-3 py-1.5">
+            Sample due date: {previewValues.due_date}
+          </span>
         </div>
       </SettingsCard>
     </div>
@@ -1158,6 +1475,7 @@ function SettingsTabLayout({
   sectionStates,
   currentTab,
   routePrefix,
+  configurationStatus,
   saving,
   dirty,
   invalid,
@@ -1171,7 +1489,12 @@ function SettingsTabLayout({
         {children}
       </div>
       <aside className="space-y-5">
-        <ConfigurationStatusPanel sections={sectionStates} currentTab={currentTab} routePrefix={routePrefix} />
+        <ConfigurationStatusPanel
+          sections={sectionStates}
+          currentTab={currentTab}
+          routePrefix={routePrefix}
+          configurationStatus={configurationStatus}
+        />
         <ActionPanel saving={saving} dirty={dirty} invalid={invalid} canSave={canSave} onDiscard={onDiscard} />
         {asideExtra}
       </aside>
@@ -1184,11 +1507,13 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
   const [form, setForm] = useState(defaultForm);
   const [savedForm, setSavedForm] = useState(defaultForm);
   const [options, setOptions] = useState(emptyOptions);
+  const [configurationStatus, setConfigurationStatus] = useState(emptyConfigurationStatus);
   const [numberingActivity, setNumberingActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState([]);
+  const [placeholderAlertErrors, setPlaceholderAlertErrors] = useState([]);
 
   const currentTab = tabs.some((tab) => tab.slug === activeTab) ? activeTab : "general";
   const routePrefix = location.pathname.startsWith("/admin")
@@ -1200,11 +1525,12 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
       invoiceSectionSnapshot(form, tab.slug),
       invoiceSectionSnapshot(savedForm, tab.slug)
     );
+    const savedStatus = configurationStatus.categories?.[tab.slug];
     const status = !validation.valid
       ? "needs-attention"
       : dirty
         ? "unsaved"
-        : savedForm.updatedAt && validation.configured
+        : savedStatus === "completed"
           ? "complete"
           : "not-started";
     return { ...tab, ...validation, dirty, status };
@@ -1216,6 +1542,7 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
     sectionStates,
     currentTab,
     routePrefix,
+    configurationStatus,
     saving,
     dirty: hasUnsavedChanges,
     invalid: hasInvalidChanges,
@@ -1246,6 +1573,7 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
       setForm(cloneSettings(nextSettings));
       setSavedForm(cloneSettings(nextSettings));
       setOptions({ ...emptyOptions, ...(data.options || {}) });
+      setConfigurationStatus(data.configurationStatus || emptyConfigurationStatus);
       setNumberingActivity(data.numberingActivity || []);
     } catch (error) {
       setErrors([error.message]);
@@ -1332,6 +1660,10 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
     if (!Number.isInteger(Number(form.nextInvoiceNumber)) || Number(form.nextInvoiceNumber) < 1) {
       nextErrors.push("Next invoice number must be 1 or higher.");
     }
+    nextErrors.push(...validateEmailTemplatePlaceholders(
+      form.emailSubjectTemplate,
+      form.emailBodyTemplate
+    ));
     for (const section of sectionStates.filter((item) => !item.valid)) {
       if (!nextErrors.includes(section.note)) nextErrors.push(section.note);
     }
@@ -1342,7 +1674,12 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
     event.preventDefault();
     setMessage("");
     const nextErrors = validateForm();
-    setErrors(nextErrors);
+    const nextPlaceholderErrors = validateEmailTemplatePlaceholders(
+      form.emailSubjectTemplate,
+      form.emailBodyTemplate
+    );
+    setErrors(nextErrors.filter((error) => !nextPlaceholderErrors.includes(error)));
+    setPlaceholderAlertErrors(nextPlaceholderErrors);
     if (nextErrors.length > 0) return;
 
     setSaving(true);
@@ -1358,6 +1695,8 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
       setForm(cloneSettings(savedSettings));
       setSavedForm(cloneSettings(savedSettings));
       setNumberingActivity(data.numberingActivity || []);
+      setConfigurationStatus(data.configurationStatus || emptyConfigurationStatus);
+      setPlaceholderAlertErrors([]);
       setMessage(data.message || "Invoice settings saved.");
     } catch (error) {
       setErrors([error.message]);
@@ -1369,6 +1708,7 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
   function handleCancel() {
     setForm(cloneSettings(savedForm));
     setErrors([]);
+    setPlaceholderAlertErrors([]);
     setMessage("Unsaved changes have been reset.");
   }
 
@@ -1391,6 +1731,10 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
       }}
     >
       <form onSubmit={handleSave} className="mx-auto max-w-[1600px] space-y-5">
+        <PlaceholderValidationDialog
+          errors={placeholderAlertErrors}
+          onClose={() => setPlaceholderAlertErrors([])}
+        />
         <header>
           <h2 className="text-2xl font-bold tracking-tight text-[#251E1F]">Invoice Settings</h2>
           <p className="mt-2 text-sm font-medium text-[#6f5b55]">

@@ -8,6 +8,124 @@ const {
   isDuplicateEmail
 } = require("./integrationLogService");
 
+const invoiceEmailPlaceholders = new Map([
+  ["invoice_number", "Invoice Number"],
+  ["customer_name", "Customer Name"],
+  ["amount_due", "Amount Due"],
+  ["due_date", "Due Date"],
+  ["company_name", "Company Name"],
+  ["online_view_url", "Online Invoice"],
+  ["payment_url", "Payment Link"]
+]);
+
+function formatEmailDate(value) {
+  const source = String(value || "").trim();
+  if (!source) return "N/A";
+
+  const dateOnly = source.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const date = dateOnly
+    ? new Date(Date.UTC(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3])))
+    : new Date(source);
+
+  if (Number.isNaN(date.getTime())) return source;
+  return new Intl.DateTimeFormat("en-SG", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC"
+  }).format(date);
+}
+
+function validateInvoiceEmailTemplates(subjectTemplate, bodyTemplate) {
+  const allowedPlaceholders = new Set(invoiceEmailPlaceholders.keys());
+  const placeholderNames = [...allowedPlaceholders].join("|");
+  const errors = [];
+
+  if (!String(subjectTemplate || "").trim()) {
+    errors.push("Subject Template is required.");
+  }
+  if (!String(bodyTemplate || "").trim()) {
+    errors.push("Email Body is required.");
+  }
+
+  for (const { location, value } of [
+    { location: "Subject Template", value: subjectTemplate },
+    { location: "Email Body", value: bodyTemplate }
+  ]) {
+    const template = String(value || "");
+
+    for (const match of template.matchAll(/\{\{([^{}]+)\}\}/g)) {
+      if (!allowedPlaceholders.has(match[1])) {
+        errors.push(`Unsupported email placeholder "{{${match[1]}}}" in ${location}.`);
+      }
+    }
+    for (const match of template.matchAll(/\{+([a-z_]+)\}+/g)) {
+      if (!allowedPlaceholders.has(match[1])) {
+        errors.push(`Unsupported email placeholder "${match[0]}" in ${location}.`);
+      }
+    }
+
+    const knownPlaceholderPattern = new RegExp(`\\b(${placeholderNames})\\b`, "g");
+    for (const match of template.matchAll(knownPlaceholderPattern)) {
+      const key = match[1];
+      const placeholderLabel = invoiceEmailPlaceholders.get(key);
+      let openingBraces = 0;
+      let closingBraces = 0;
+
+      for (let index = match.index - 1; index >= 0 && template[index] === "{"; index -= 1) {
+        openingBraces += 1;
+      }
+      for (
+        let index = match.index + key.length;
+        index < template.length && template[index] === "}";
+        index += 1
+      ) {
+        closingBraces += 1;
+      }
+
+      if (openingBraces < 2) {
+        const missingCount = 2 - openingBraces;
+        errors.push(
+          `The ${placeholderLabel} placeholder "{{${key}}}" in ${location} is missing ${
+            missingCount === 1 ? 'an opening "{" symbol' : 'two opening "{" symbols'
+          }.`
+        );
+      } else if (openingBraces > 2) {
+        errors.push(`The ${placeholderLabel} placeholder "{{${key}}}" in ${location} has an extra opening "{" symbol.`);
+      }
+
+      if (closingBraces < 2) {
+        const missingCount = 2 - closingBraces;
+        errors.push(
+          `The ${placeholderLabel} placeholder "{{${key}}}" in ${location} is missing ${
+            missingCount === 1 ? 'a closing "}" symbol' : 'two closing "}" symbols'
+          }.`
+        );
+      } else if (closingBraces > 2) {
+        errors.push(`The ${placeholderLabel} placeholder "{{${key}}}" in ${location} has an extra closing "}" symbol.`);
+      }
+    }
+  }
+
+  return [...new Set(errors)];
+}
+
+function assertInvoiceEmailTemplatesValid(settings) {
+  const errors = validateInvoiceEmailTemplates(
+    settings?.emailSubjectTemplate,
+    settings?.emailBodyTemplate
+  );
+  if (errors.length === 0) return;
+
+  const error = new Error(
+    `Invoice email cannot be sent. ${errors[0]} Please ask Admin to correct the Invoice Email Settings before trying again.`
+  );
+  error.code = "INVALID_INVOICE_EMAIL_TEMPLATE";
+  error.statusCode = 400;
+  error.validationErrors = errors;
+  throw error;
+}
+
 function templateValues(invoice, settings, options = {}) {
   const viewUrl = `${publicClientUrl()}/invoice/view/${invoice.invoiceId}`;
   const currency = settings.defaultCurrency || settings.general?.defaultCurrency || "SGD";
@@ -15,7 +133,7 @@ function templateValues(invoice, settings, options = {}) {
     invoice_number: invoice.invoiceId || "",
     customer_name: invoice.customer_name || "Customer",
     amount_due: `${currency} ${Number(invoice.total_amount || 0).toFixed(2)}`,
-    due_date: invoice.due_date || "N/A",
+    due_date: formatEmailDate(invoice.due_date),
     company_name: settings.companyName || "",
     online_view_url: viewUrl,
     payment_url: options.paymentUrl || viewUrl
@@ -89,7 +207,14 @@ function buildInvoiceEmailHtml(invoice, settings, options = {}) {
 }
 
 async function sendInvoiceEmail(invoice, options = {}) {
-  const settings = { ...defaultSettings, ...((await getInvoiceSettings(invoice.company_id || invoice.companyId || null)) || {}) };
+  const companyId = options.companyId || invoice.company_id || invoice.companyId || null;
+  const savedSettings = (await getInvoiceSettings(companyId)) || {};
+  const settings = {
+    ...defaultSettings,
+    ...savedSettings,
+    ...(options.settingsOverride || {})
+  };
+  assertInvoiceEmailTemplatesValid(settings);
   const hydratedInvoice = await hydrateInvoice(invoice);
   const transporter = createEmailTransport();
   let pdfBuffer = options.pdfBuffer || null;
@@ -141,12 +266,13 @@ async function sendInvoiceEmail(invoice, options = {}) {
   };
 }
 
-async function sendInvoiceSettingsTestEmail(recipient) {
+async function sendInvoiceSettingsTestEmail(recipient, options = {}) {
   const issueDate = new Date();
   const dueDate = new Date(issueDate);
   dueDate.setDate(dueDate.getDate() + 30);
   return sendInvoiceEmail({
     invoiceId: "TEST-INVOICE",
+    company_id: options.companyId || null,
     status: "Draft",
     issue_date: issueDate.toISOString().slice(0, 10),
     due_date: dueDate.toISOString().slice(0, 10),
@@ -155,6 +281,9 @@ async function sendInvoiceSettingsTestEmail(recipient) {
     customer_email: recipient,
     customer_address: "",
     items: [{ description: "Invoice email configuration test", quantity: 1, unit_price: 100, amount: 100 }]
+  }, {
+    companyId: options.companyId || null,
+    settingsOverride: options.settings || null
   });
 }
 
@@ -258,9 +387,12 @@ async function logPaymentReceiptDelivery(invoice, transactionId, deliveryStatus,
 }
 
 module.exports = {
+  assertInvoiceEmailTemplatesValid,
   buildInvoiceEmailHtml,
+  formatEmailDate,
   renderTemplate,
   sendInvoiceEmail,
   sendInvoiceSettingsTestEmail,
-  sendPaymentReceiptEmail
+  sendPaymentReceiptEmail,
+  validateInvoiceEmailTemplates
 };

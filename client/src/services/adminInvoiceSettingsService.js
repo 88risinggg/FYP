@@ -64,11 +64,11 @@ export function uploadInvoiceLogo(payload) {
   });
 }
 
-export function sendInvoiceSettingsTestEmail(recipient) {
+export function sendInvoiceSettingsTestEmail(recipient, settings) {
   return apiRequest("/api/admin/invoicing/invoice-settings/test-email", {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ recipient })
+    body: JSON.stringify({ recipient, settings })
   });
 }
 

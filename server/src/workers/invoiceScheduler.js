@@ -11,7 +11,9 @@ async function loadDueScheduledInvoices(limit = DEFAULT_BATCH_SIZE) {
       SELECT
         i.invoice_id,
         i.invoiceId,
+        i.company_id,
         i.total_amount,
+        i.due_date,
         i.scheduled_at,
         c.name AS customer_name,
         c.email AS customer_email

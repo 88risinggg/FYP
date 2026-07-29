@@ -96,8 +96,8 @@ export default function FinanceInvoiceSettingsPage() {
 
   useEffect(() => {
     let active = true;
-    async function loadSettings() {
-      setLoading(true);
+    async function loadSettings(showLoading = false) {
+      if (showLoading) setLoading(true);
       setError("");
       try {
         const token = sessionStorage.getItem("authToken");
@@ -115,11 +115,20 @@ export default function FinanceInvoiceSettingsPage() {
       } catch (err) {
         if (active) setError(err.message);
       } finally {
-        if (active) setLoading(false);
+        if (active && showLoading) setLoading(false);
       }
     }
-    loadSettings();
-    return () => { active = false; };
+    const refreshWhenFocused = () => loadSettings(false);
+    const refreshTimer = window.setInterval(() => loadSettings(false), 30000);
+
+    loadSettings(true);
+    window.addEventListener("focus", refreshWhenFocused);
+
+    return () => {
+      active = false;
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", refreshWhenFocused);
+    };
   }, []);
 
   if (loading) {
@@ -266,7 +275,7 @@ export default function FinanceInvoiceSettingsPage() {
                 <ReadOnlyField label="Sender Name" value={s.senderName} />
                 <ReadOnlyField label="Reply-To Email" value={s.replyToEmail} />
                 <ReadOnlyField label="Finance Email" value={s.financeEmail} />
-                <ReadOnlyField label="Support Email" value={s.supportEmail} />
+                <ReadOnlyField label="Support Email (Optional)" value={s.supportEmail} note="Finance Email is used when this is empty." />
                 <ReadOnlyField label="Attach PDF Invoice" value={s.attachPdfInvoice !== false ? "Yes" : "No"} />
               </div>
             </SettingsCard>

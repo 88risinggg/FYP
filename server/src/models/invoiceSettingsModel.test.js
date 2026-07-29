@@ -5,6 +5,7 @@ jest.mock("../config/db", () => ({
 const { pool } = require("../config/db");
 const {
   buildInvoiceNumber,
+  calculateConfigurationStatus,
   calculateDueDate,
   calculateInvoiceLateFee,
   listNumberingActivityPage,
@@ -26,6 +27,18 @@ test("saved prefix and sequence produce a four-digit invoice number", () => {
 
 test("due date follows the configured due days", () => {
   expect(calculateDueDate({ dueDays: 30 }, new Date("2026-07-20T00:00:00Z"))).toBe("2026-08-19");
+});
+
+test("email configuration is complete without an optional support email", () => {
+  const result = calculateConfigurationStatus({
+    senderName: "Vaniday Finance",
+    replyToEmail: "finance@vaniday.com",
+    supportEmail: "",
+    emailSubjectTemplate: "Invoice {{invoice_number}}",
+    emailBodyTemplate: "Dear {{customer_name}}"
+  });
+
+  expect(result.categories.email).toBe("completed");
 });
 
 test("late reminder amount includes the configured one-time late fee", () => {

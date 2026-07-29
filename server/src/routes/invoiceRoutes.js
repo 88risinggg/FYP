@@ -24,7 +24,7 @@ router.use(authenticateToken);
 
 router.get("/", getInvoices);
 router.get("/customers", getCustomers);
-router.get("/settings", async (req, res) => {
+router.get("/settings", allowRoles("Admin", "Finance"), async (req, res) => {
   try {
     const companyId = getCompanyId(req);
     const settings = await getInvoiceSettings(companyId);

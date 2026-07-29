@@ -9,7 +9,10 @@
 
 const { pool } = require("../config/db");
 const { assessInvoiceRisk } = require("../services/fraudDetectionService");
-const { sendInvoiceEmail } = require("../services/invoiceDeliveryService");
+const {
+  assertInvoiceEmailTemplatesValid,
+  sendInvoiceEmail
+} = require("../services/invoiceDeliveryService");
 const { getCompanyId } = require("../utils/companyScope");
 const {
   calculateInvoiceLateFee,
@@ -683,6 +686,7 @@ async function sendInvoice(req, res) {
     // Load Admin settings to determine which payment methods to enable
     const { getInvoiceSettings, defaultSettings: invoiceDefaults } = require("../models/invoiceSettingsModel");
     const adminSettings = (await getInvoiceSettings(companyId)) || invoiceDefaults;
+    assertInvoiceEmailTemplatesValid(adminSettings);
 
     // Create Stripe Checkout Session (only if online payments enabled)
     const { createCheckoutSession } = require("../services/stripeService");
@@ -760,6 +764,13 @@ async function sendInvoice(req, res) {
         newValue: JSON.stringify({ emailType: "Invoice Issued", message: error.message, errorCode: error.code, triggerSource: "Finance" })
       });
     } catch { /* non-critical */ }
+    if (error.code === "INVALID_INVOICE_EMAIL_TEMPLATE") {
+      return res.status(400).json({
+        code: error.code,
+        message: error.message,
+        errors: error.validationErrors || []
+      });
+    }
     res.status(500).json({
       message: "Failed to send invoice.",
       detail: error.message
