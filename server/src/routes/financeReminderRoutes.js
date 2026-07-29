@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - FINANCE
+ * PURPOSE: Defines the available finance Reminder Routes API endpoints and connects them to handlers.
+ * LAYER: Backend route - maps HTTP methods and URLs to middleware and controller functions.
+ * FIND RELATED CODE: Follow the imported controller function to find request handling.
+ */
+/**
  * Finance Reminder Routes
  *
  * Unified reminder endpoints for Finance users to manage all invoice

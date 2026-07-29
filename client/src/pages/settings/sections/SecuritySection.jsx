@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SETTINGS - SHARED
+ * PURPOSE: Implements the Security Section screen and its page-level interactions.
+ * LAYER: Frontend page - renders a complete screen and coordinates its user interactions.
+ * FIND RELATED CODE: Trace its imports for UI components and frontend services used by this screen.
+ */
 import { useEffect, useState } from "react";
 import { Check, Eye, EyeOff, Key, Loader2, Mail, Shield, X } from "lucide-react";
 import { changePassword, fetch2FA, update2FA } from "../../../services/settingsService.js";

@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SHARED / APPLICATION CORE
+ * PURPOSE: Provides reusable data business or integration operations.
+ * LAYER: Backend service - contains reusable business rules or external integrations.
+ * FIND RELATED CODE: Use Find All References to locate controllers, workers, or services that call it.
+ */
 const staffProfiles = [];
 
 const payrollRuns = [];

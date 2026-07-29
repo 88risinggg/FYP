@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - FINANCE
+ * PURPOSE: Implements the Finance Reminders Page screen and its page-level interactions.
+ * LAYER: Frontend page - renders a complete screen and coordinates its user interactions.
+ * FIND RELATED CODE: Trace its imports for UI components and frontend services used by this screen.
+ */
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {

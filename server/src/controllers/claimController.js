@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - SHARED
+ * PURPOSE: Handles claim Controller API requests, validation, status codes, and responses.
+ * LAYER: Backend controller - validates HTTP input and returns the API response.
+ * FIND RELATED CODE: Follow service/model calls to find business rules and database work.
+ */
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");

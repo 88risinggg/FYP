@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - ADMIN
+ * PURPOSE: Implements the reusable Admin Invoicing Full View interface component.
+ * LAYER: Frontend component - provides reusable interface and interaction logic.
+ * FIND RELATED CODE: Use Find All References to locate the pages that render this component.
+ */
 import { ArrowLeft, Loader2, RefreshCw, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";

@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - SHARED
+ * PURPOSE: Handles bulk Subscription Controller API requests, validation, status codes, and responses.
+ * LAYER: Backend controller - validates HTTP input and returns the API response.
+ * FIND RELATED CODE: Follow service/model calls to find business rules and database work.
+ */
+/**
  * Bulk Subscription Controller
  *
  * Handles mass subscription import from Excel/CSV files.

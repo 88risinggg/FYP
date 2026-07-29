@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SECURITY / ACCESS
+ * PURPOSE: Implements the reusable Auth Layout interface component.
+ * LAYER: Frontend component - provides reusable interface and interaction logic.
+ * FIND RELATED CODE: Use Find All References to locate the pages that render this component.
+ */
 import { Link } from "react-router-dom";
 import PayNivoLogo from "../branding/PayNivoLogo.jsx";
 

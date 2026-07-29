@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SECURITY / ACCESS
+ * PURPOSE: Implements the Auth Login Page screen and its page-level interactions.
+ * LAYER: Frontend page - renders a complete screen and coordinates its user interactions.
+ * FIND RELATED CODE: Trace its imports for UI components and frontend services used by this screen.
+ */
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";

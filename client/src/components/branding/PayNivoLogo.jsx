@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SHARED / APPLICATION CORE
+ * PURPOSE: Implements the reusable Pay Nivo Logo interface component.
+ * LAYER: Frontend component - provides reusable interface and interaction logic.
+ * FIND RELATED CODE: Use Find All References to locate the pages that render this component.
+ */
 import payNivoLogo from "../../assets/paynivo-logo.png";
 import payNivoLogoWhite from "../../assets/paynivo-logo-report-white.png";
 

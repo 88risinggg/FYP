@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - SHARED
+ * PURPOSE: Reads and writes bulk Invoice Model data in the database.
+ * LAYER: Backend model - contains database queries and persistence operations.
+ * FIND RELATED CODE: Use Find All References to locate the controller/service that requests this data.
+ */
+/**
  * Bulk Invoice Model
  *
  * Database queries for bulk invoice import validation and processing.

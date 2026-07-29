@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: SHARED / APPLICATION CORE
+ * PURPOSE: Provides reusable audit Log Service business or integration operations.
+ * LAYER: Frontend service - calls backend APIs or manages browser-side application state.
+ * FIND RELATED CODE: Search the API path in server/src/routes to continue into the backend.
+ */
+/**
  * auditLogService.js
  * Unified frontend service for module-filtered audit logs.
  * Uses GET /api/audit-logs?module=Invoice|Payroll|HR...

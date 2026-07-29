@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - SHARED
+ * PURPOSE: Provides reusable test Customer Service business or integration operations.
+ * LAYER: Backend service - contains reusable business rules or external integrations.
+ * FIND RELATED CODE: Use Find All References to locate controllers, workers, or services that call it.
+ */
+/**
  * Test Customer Service
  *
  * Provides a reusable method for retrieving the "Test Customer" from the database.

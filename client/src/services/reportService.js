@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SHARED / APPLICATION CORE
+ * PURPOSE: Provides reusable report Service business or integration operations.
+ * LAYER: Frontend service - calls backend APIs or manages browser-side application state.
+ * FIND RELATED CODE: Search the API path in server/src/routes to continue into the backend.
+ */
 import { apiRequest, downloadBlob } from "./apiClient.js";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";

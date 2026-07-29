@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SECURITY / ACCESS
+ * PURPOSE: Provides reusable session Service business or integration operations.
+ * LAYER: Frontend service - calls backend APIs or manages browser-side application state.
+ * FIND RELATED CODE: Search the API path in server/src/routes to continue into the backend.
+ */
 const TOKEN_KEY = "authToken";
 const USER_KEY = "authUser";
 

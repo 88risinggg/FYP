@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - STAFF
+ * PURPOSE: Implements the Staff Claims Page screen and its page-level interactions.
+ * LAYER: Frontend page - renders a complete screen and coordinates its user interactions.
+ * FIND RELATED CODE: Trace its imports for UI components and frontend services used by this screen.
+ */
 import { useEffect, useState } from "react";
 import { FileCheck2, Loader2, Paperclip, ReceiptText, Upload } from "lucide-react";
 import { listPayrollRequests, openPayrollRequestAttachment, submitPayrollRequest } from "../../services/payrollRequestService.js";

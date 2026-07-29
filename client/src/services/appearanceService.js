@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SETTINGS - SHARED
+ * PURPOSE: Provides reusable appearance Service business or integration operations.
+ * LAYER: Frontend service - calls backend APIs or manages browser-side application state.
+ * FIND RELATED CODE: Search the API path in server/src/routes to continue into the backend.
+ */
 export const DEFAULT_APPEARANCE = {
   theme: "light",
   accent_color: "#F38978",

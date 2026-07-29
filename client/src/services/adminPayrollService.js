@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - ADMIN
+ * PURPOSE: Provides reusable admin Payroll Service business or integration operations.
+ * LAYER: Frontend service - calls backend APIs or manages browser-side application state.
+ * FIND RELATED CODE: Search the API path in server/src/routes to continue into the backend.
+ */
 import { apiRequest } from "./apiClient.js";
 import { downloadBlob } from "./apiClient.js";
 

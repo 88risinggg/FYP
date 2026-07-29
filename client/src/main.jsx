@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SHARED / APPLICATION CORE
+ * PURPOSE: Implements the application's main responsibilities.
+ * LAYER: Frontend entry point - starts React and mounts the application.
+ * FIND RELATED CODE: Use Find All References on its exports to locate connected features.
+ */
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";

@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SECURITY / ACCESS
+ * PURPOSE: Applies tenant Middleware checks or context to incoming backend requests.
+ * LAYER: Backend middleware - performs checks or adds request context before controllers run.
+ * FIND RELATED CODE: Search route files for this middleware to see which endpoints it protects.
+ */
 const { pool } = require("../config/db");
 const { runWithTenant } = require("../services/tenantContext");
 

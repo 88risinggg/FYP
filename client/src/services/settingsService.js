@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: SETTINGS - SHARED
+ * PURPOSE: Provides reusable settings Service business or integration operations.
+ * LAYER: Frontend service - calls backend APIs or manages browser-side application state.
+ * FIND RELATED CODE: Search the API path in server/src/routes to continue into the backend.
+ */
+/**
  * Settings Service
  *
  * Client-side API wrapper for all settings endpoints.

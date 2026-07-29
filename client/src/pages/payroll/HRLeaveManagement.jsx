@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - HR
+ * PURPOSE: Implements the HRLeave Management screen and its page-level interactions.
+ * LAYER: Frontend page - renders a complete screen and coordinates its user interactions.
+ * FIND RELATED CODE: Trace its imports for UI components and frontend services used by this screen.
+ */
 import { useEffect, useState } from "react";
 import { Calendar, Check, X, Search, Settings, Clock, Filter, RefreshCw } from "lucide-react";
 import {

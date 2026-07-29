@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - FINANCE
+ * PURPOSE: Provides reusable finance Payroll Data helper functions.
+ * LAYER: Frontend utility - provides reusable data transformation or helper logic.
+ * FIND RELATED CODE: Use Find All References on its exports to locate connected features.
+ */
 const asMoney = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
 
 export function normalizePayrollItem(item, fallbackLabel = "Payroll item") {

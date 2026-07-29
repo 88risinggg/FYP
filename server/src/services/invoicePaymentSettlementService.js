@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - SHARED
+ * PURPOSE: Provides reusable invoice Payment Settlement Service business or integration operations.
+ * LAYER: Backend service - contains reusable business rules or external integrations.
+ * FIND RELATED CODE: Use Find All References to locate controllers, workers, or services that call it.
+ */
 const SUCCESSFUL_PAYMENT_STATUSES = ["paid", "completed", "success", "successful", "verified"];
 const REFUNDED_PAYMENT_STATUSES = ["refunded", "refund", "reversed", "reversal", "chargeback"];
 

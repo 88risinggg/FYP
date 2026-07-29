@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: SHARED / APPLICATION CORE
+ * PURPOSE: Handles finance Dashboard Controller API requests, validation, status codes, and responses.
+ * LAYER: Backend controller - validates HTTP input and returns the API response.
+ * FIND RELATED CODE: Follow service/model calls to find business rules and database work.
+ */
+/**
  * Finance Dashboard Controller
  *
  * Provides invoice-related metrics and activity data for the Finance dashboard.

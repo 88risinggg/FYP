@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - SHARED
+ * PURPOSE: Provides reusable claim Workflow business or integration operations.
+ * LAYER: Backend service - contains reusable business rules or external integrations.
+ * FIND RELATED CODE: Use Find All References to locate controllers, workers, or services that call it.
+ */
 const CLAIM_STATUSES = Object.freeze({
   PENDING_HR: "pending_hr",
   HR_APPROVED: "hr_approved",

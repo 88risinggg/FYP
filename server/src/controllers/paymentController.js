@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - SHARED
+ * PURPOSE: Handles payment Controller API requests, validation, status codes, and responses.
+ * LAYER: Backend controller - validates HTTP input and returns the API response.
+ * FIND RELATED CODE: Follow service/model calls to find business rules and database work.
+ */
+/**
  * Payment Controller
  *
  * Uses payment_method_name column (no separate payment_method table).

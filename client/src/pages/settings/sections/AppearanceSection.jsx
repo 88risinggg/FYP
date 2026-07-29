@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SETTINGS - SHARED
+ * PURPOSE: Implements the Appearance Section screen and its page-level interactions.
+ * LAYER: Frontend page - renders a complete screen and coordinates its user interactions.
+ * FIND RELATED CODE: Trace its imports for UI components and frontend services used by this screen.
+ */
 import { useEffect, useState } from "react";
 import { Check, Monitor, Moon, Palette, Sun, X } from "lucide-react";
 import { applyAppearance, DEFAULT_APPEARANCE, normalizeAppearance } from "../../../services/appearanceService.js";

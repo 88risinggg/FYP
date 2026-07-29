@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SHARED / APPLICATION CORE
+ * PURPOSE: Implements the application's db responsibilities.
+ * LAYER: Backend configuration - initializes shared infrastructure or environment settings.
+ * FIND RELATED CODE: Use Find All References on its exports to locate connected features.
+ */
 const mysql = require("mysql2/promise");
 require("dotenv").config();
 const { DATABASE_TIMEZONE } = require("./timezone");

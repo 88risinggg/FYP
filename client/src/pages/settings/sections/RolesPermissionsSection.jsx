@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SETTINGS - SHARED
+ * PURPOSE: Implements the Roles Permissions Section screen and its page-level interactions.
+ * LAYER: Frontend page - renders a complete screen and coordinates its user interactions.
+ * FIND RELATED CODE: Trace its imports for UI components and frontend services used by this screen.
+ */
 import { Check, Shield, X as XIcon } from "lucide-react";
 
 const roles = ["Finance Admin", "Finance Manager", "Finance Staff", "HR", "Auditor"];

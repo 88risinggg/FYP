@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - HR
+ * PURPOSE: Defines the available public Holiday Routes API endpoints and connects them to handlers.
+ * LAYER: Backend route - maps HTTP methods and URLs to middleware and controller functions.
+ * FIND RELATED CODE: Follow the imported controller function to find request handling.
+ */
+/**
  * Public Holiday Routes
  *
  * RESTful API routes for managing public holidays.

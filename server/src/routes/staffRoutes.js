@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - STAFF
+ * PURPOSE: Defines the available staff Routes API endpoints and connects them to handlers.
+ * LAYER: Backend route - maps HTTP methods and URLs to middleware and controller functions.
+ * FIND RELATED CODE: Follow the imported controller function to find request handling.
+ */
 const express = require("express");
 const { createStaff, getStaffList, getStaffById, updateStaff, deleteStaff, importProfiles } = require("../controllers/staffController");
 const { authenticateToken } = require("../middleware/authMiddleware");

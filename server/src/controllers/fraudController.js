@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - SHARED
+ * PURPOSE: Handles fraud Controller API requests, validation, status codes, and responses.
+ * LAYER: Backend controller - validates HTTP input and returns the API response.
+ * FIND RELATED CODE: Follow service/model calls to find business rules and database work.
+ */
+/**
  * Fraud Detection Controller
  *
  * Uses invoice table columns (risk_score, risk_level, review_status,

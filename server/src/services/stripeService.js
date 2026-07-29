@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: SHARED / APPLICATION CORE
+ * PURPOSE: Provides reusable stripe Service business or integration operations.
+ * LAYER: Backend service - contains reusable business rules or external integrations.
+ * FIND RELATED CODE: Use Find All References to locate controllers, workers, or services that call it.
+ */
+/**
  * Stripe Payment Service
  *
  * Handles Stripe Checkout Session creation, Stripe Customer management,

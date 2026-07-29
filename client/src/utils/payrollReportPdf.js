@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - SHARED
+ * PURPOSE: Provides reusable payroll Report PDF helper functions.
+ * LAYER: Frontend utility - provides reusable data transformation or helper logic.
+ * FIND RELATED CODE: Use Find All References on its exports to locate connected features.
+ */
 import payNivoReportLogo from "../assets/paynivo-logo-report-dark.jpg?inline";
 
 const COLORS = {

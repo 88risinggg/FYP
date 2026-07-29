@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - SHARED
+ * PURPOSE: Provides reusable claim Workflow helper functions.
+ * LAYER: Frontend utility - provides reusable data transformation or helper logic.
+ * FIND RELATED CODE: Use Find All References on its exports to locate connected features.
+ */
 export const CLAIM_STATUS_LABELS = Object.freeze({
   pending_hr: "Pending HR review",
   hr_approved: "Awaiting Finance approval",

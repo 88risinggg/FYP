@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - ADMIN
+ * PURPOSE: Implements the Admin Template Preview Page screen and its page-level interactions.
+ * LAYER: Frontend page - renders a complete screen and coordinates its user interactions.
+ * FIND RELATED CODE: Trace its imports for UI components and frontend services used by this screen.
+ */
 import { useEffect, useRef, useState } from "react";
 import {
   Eye, RefreshCw, AlertCircle

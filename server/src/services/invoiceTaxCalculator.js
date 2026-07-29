@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - SHARED
+ * PURPOSE: Provides reusable invoice Tax Calculator business or integration operations.
+ * LAYER: Backend service - contains reusable business rules or external integrations.
+ * FIND RELATED CODE: Use Find All References to locate controllers, workers, or services that call it.
+ */
 function currency(value) {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 }

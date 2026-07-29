@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - SHARED
+ * PURPOSE: Implements the reusable Payroll User Management interface component.
+ * LAYER: Frontend component - provides reusable interface and interaction logic.
+ * FIND RELATED CODE: Use Find All References to locate the pages that render this component.
+ */
 import {
   BriefcaseBusiness, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Download, Eye, FileSpreadsheet, KeyRound,
   Loader2, Mail, Pencil, Plus, RefreshCw, Search, ShieldCheck, Trash2, Upload, UserCheck, Users, UserX, WalletCards, X

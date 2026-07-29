@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - SHARED
+ * PURPOSE: Runs scheduled invoice Scheduler background processing.
+ * LAYER: Background worker - performs scheduled processing outside a user request.
+ * FIND RELATED CODE: Trace its imports to find the scheduler registration and services it runs.
+ */
 const { pool } = require("../config/db");
 const { sendInvoiceEmail } = require("../services/invoiceDeliveryService");
 const { writeAuditLog, STATUS_AUDIT_PREFIX } = require("../controllers/invoiceController");

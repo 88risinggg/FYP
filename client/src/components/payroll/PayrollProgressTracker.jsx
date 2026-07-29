@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - SHARED
+ * PURPOSE: Implements the reusable Payroll Progress Tracker interface component.
+ * LAYER: Frontend component - provides reusable interface and interaction logic.
+ * FIND RELATED CODE: Use Find All References to locate the pages that render this component.
+ */
 function getStageTone(status) {
   if (status === "completed") return { card: "border-emerald-200 bg-emerald-50", marker: "bg-emerald-600 text-white", detail: "text-emerald-700" };
   if (status === "failed" || status === "blocked") return { card: "border-red-300 bg-red-50", marker: "bg-red-500 text-white", detail: "text-red-700" };

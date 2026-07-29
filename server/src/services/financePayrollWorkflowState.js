@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - FINANCE
+ * PURPOSE: Provides reusable finance Payroll Workflow State business or integration operations.
+ * LAYER: Backend service - contains reusable business rules or external integrations.
+ * FIND RELATED CODE: Use Find All References to locate controllers, workers, or services that call it.
+ */
 const STAGES = [
   ["claims", "Claim Requests"],
   ["review", "Payroll Run Review"],

@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SHARED / APPLICATION CORE
+ * PURPOSE: Reads and writes registration Model data in the database.
+ * LAYER: Backend model - contains database queries and persistence operations.
+ * FIND RELATED CODE: Use Find All References to locate the controller/service that requests this data.
+ */
 const crypto = require("crypto");
 const { pool } = require("../config/db");
 

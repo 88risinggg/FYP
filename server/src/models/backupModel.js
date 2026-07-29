@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: SHARED / APPLICATION CORE
+ * PURPOSE: Reads and writes backup Model data in the database.
+ * LAYER: Backend model - contains database queries and persistence operations.
+ * FIND RELATED CODE: Use Find All References to locate the controller/service that requests this data.
+ */
+/**
  * Backup Model
  *
  * Interacts with the `backup` table to log and manage backup records.

@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: SHARED / APPLICATION CORE
+ * PURPOSE: Defines the available finance Dashboard Routes API endpoints and connects them to handlers.
+ * LAYER: Backend route - maps HTTP methods and URLs to middleware and controller functions.
+ * FIND RELATED CODE: Follow the imported controller function to find request handling.
+ */
+/**
  * Finance Dashboard Routes
  *
  * Provides invoice-related dashboard, notifications, and metrics for Finance users.

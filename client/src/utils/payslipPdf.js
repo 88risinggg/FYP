@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - SHARED
+ * PURPOSE: Provides reusable payslip PDF helper functions.
+ * LAYER: Frontend utility - provides reusable data transformation or helper logic.
+ * FIND RELATED CODE: Use Find All References on its exports to locate connected features.
+ */
 import { getStoredSession } from "../services/sessionService.js";
 
 function payslipId(payslip) {

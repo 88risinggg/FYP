@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - SHARED
+ * PURPOSE: Handles payslip Controller API requests, validation, status codes, and responses.
+ * LAYER: Backend controller - validates HTTP input and returns the API response.
+ * FIND RELATED CODE: Follow service/model calls to find business rules and database work.
+ */
 // Payslips are stored directly in `payroll`; payroll_id is the payslip ID.
 // This avoids separate payslip, allowance and deduction tables.
 const { pool } = require("../config/db");

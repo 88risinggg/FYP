@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SETTINGS - SHARED
+ * PURPOSE: Implements the Role Settings Page screen and its page-level interactions.
+ * LAYER: Frontend page - renders a complete screen and coordinates its user interactions.
+ * FIND RELATED CODE: Trace its imports for UI components and frontend services used by this screen.
+ */
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Bell, Globe, LayoutGrid, Lock, Palette, Save, Shield, User, X } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";

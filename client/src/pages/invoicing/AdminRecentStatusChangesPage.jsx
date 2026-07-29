@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - ADMIN
+ * PURPOSE: Implements the Admin Recent Status Changes Page screen and its page-level interactions.
+ * LAYER: Frontend page - renders a complete screen and coordinates its user interactions.
+ * FIND RELATED CODE: Trace its imports for UI components and frontend services used by this screen.
+ */
 import { Activity, AlertCircle, ArrowRight, ChevronLeft, ChevronRight, Loader2, RefreshCw, Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";

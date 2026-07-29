@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - HR
+ * PURPOSE: Defines the available HR Routes API endpoints and connects them to handlers.
+ * LAYER: Backend route - maps HTTP methods and URLs to middleware and controller functions.
+ * FIND RELATED CODE: Follow the imported controller function to find request handling.
+ */
 // [HR BRANCH - Steven] HR module routes. Shared with payslipRoutes.js for cross-role payslip actions.
 // Payslip approval workflow: HR generates (draft) → Finance approves → HR sends to staff
 // Status flow: draft → finance_pending → finance_approved → sent_to_staff → rejected

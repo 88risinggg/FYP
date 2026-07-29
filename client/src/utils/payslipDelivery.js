@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - SHARED
+ * PURPOSE: Provides reusable payslip Delivery helper functions.
+ * LAYER: Frontend utility - provides reusable data transformation or helper logic.
+ * FIND RELATED CODE: Use Find All References on its exports to locate connected features.
+ */
 export async function readPayslipDeliveryResponse(response) {
   const contentType = response.headers.get("content-type") || "";
   if (contentType.includes("application/json")) return response.json();

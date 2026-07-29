@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SECURITY / ACCESS
+ * PURPOSE: Provides reusable upload Session Store business or integration operations.
+ * LAYER: Backend service - contains reusable business rules or external integrations.
+ * FIND RELATED CODE: Use Find All References to locate controllers, workers, or services that call it.
+ */
 const crypto = require("crypto");
 const { currentCompanyId } = require("./tenantContext");
 

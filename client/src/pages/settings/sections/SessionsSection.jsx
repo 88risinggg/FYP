@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SETTINGS - SHARED
+ * PURPOSE: Implements the Sessions Section screen and its page-level interactions.
+ * LAYER: Frontend page - renders a complete screen and coordinates its user interactions.
+ * FIND RELATED CODE: Trace its imports for UI components and frontend services used by this screen.
+ */
 import { useEffect, useState } from "react";
 import { Check, Loader2, LogOut, Monitor, Smartphone, X } from "lucide-react";
 import { fetchSessions, terminateSession, logoutAllSessions } from "../../../services/settingsService.js";

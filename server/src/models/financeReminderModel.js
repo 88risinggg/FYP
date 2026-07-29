@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - FINANCE
+ * PURPOSE: Reads and writes finance Reminder Model data in the database.
+ * LAYER: Backend model - contains database queries and persistence operations.
+ * FIND RELATED CODE: Use Find All References to locate the controller/service that requests this data.
+ */
+/**
  * Finance Reminder Model
  *
  * Data-access layer for the unified finance_reminders table.

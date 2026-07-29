@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SECURITY / ACCESS
+ * PURPOSE: Applies roles Middleware checks or context to incoming backend requests.
+ * LAYER: Backend middleware - performs checks or adds request context before controllers run.
+ * FIND RELATED CODE: Search route files for this middleware to see which endpoints it protects.
+ */
 function normalizeRole(role) {
   return String(role || "").trim().toLowerCase();
 }

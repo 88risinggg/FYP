@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - HR
+ * PURPOSE: Reads and writes public Holiday Model data in the database.
+ * LAYER: Backend model - contains database queries and persistence operations.
+ * FIND RELATED CODE: Use Find All References to locate the controller/service that requests this data.
+ */
+/**
  * Public Holiday Model
  *
  * Database initialization and queries for the Public Holiday Management module.

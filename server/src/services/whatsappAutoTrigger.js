@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - SHARED
+ * PURPOSE: Provides reusable whatsapp Auto Trigger business or integration operations.
+ * LAYER: Backend service - contains reusable business rules or external integrations.
+ * FIND RELATED CODE: Use Find All References to locate controllers, workers, or services that call it.
+ */
+/**
  * WhatsApp Auto-Trigger Service (Refactored)
  *
  * Non-blocking lifecycle hooks for automatic WhatsApp notifications.

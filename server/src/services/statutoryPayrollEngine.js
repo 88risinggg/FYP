@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - SHARED
+ * PURPOSE: Provides reusable statutory Payroll Engine business or integration operations.
+ * LAYER: Backend service - contains reusable business rules or external integrations.
+ * FIND RELATED CODE: Use Find All References to locate controllers, workers, or services that call it.
+ */
 const DEFAULT_PAYROLL_RULES_2026 = Object.freeze({
   cpfOrdinaryWageCeiling: 8000,
   cpfScheme: "FULL_RATE_SC_SPR3",

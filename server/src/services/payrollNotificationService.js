@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - SHARED
+ * PURPOSE: Provides reusable payroll Notification Service business or integration operations.
+ * LAYER: Backend service - contains reusable business rules or external integrations.
+ * FIND RELATED CODE: Use Find All References to locate controllers, workers, or services that call it.
+ */
 const { pool } = require("../config/db");
 const { currentCompanyId } = require("./tenantContext");
 const { createEmailTransport, emailFrom, publicClientUrl } = require("./emailTransportService");

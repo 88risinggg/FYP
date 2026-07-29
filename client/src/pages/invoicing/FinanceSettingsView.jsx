@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - FINANCE
+ * PURPOSE: Implements the Finance Settings View screen and its page-level interactions.
+ * LAYER: Frontend page - renders a complete screen and coordinates its user interactions.
+ * FIND RELATED CODE: Trace its imports for UI components and frontend services used by this screen.
+ */
+/**
  * Finance Settings View
  *
  * Embedded settings view for Finance users within the Invoice Module.

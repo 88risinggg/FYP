@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SHARED / APPLICATION CORE
+ * PURPOSE: Implements the application's server responsibilities.
+ * LAYER: Backend entry point - starts the HTTP server and background jobs.
+ * FIND RELATED CODE: Use Find All References on its exports to locate connected features.
+ */
 require("dotenv").config();
 const { APPLICATION_TIMEZONE } = require("./config/timezone");
 

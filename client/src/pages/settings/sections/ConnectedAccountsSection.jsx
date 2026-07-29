@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SETTINGS - SHARED
+ * PURPOSE: Implements the Connected Accounts Section screen and its page-level interactions.
+ * LAYER: Frontend page - renders a complete screen and coordinates its user interactions.
+ * FIND RELATED CODE: Trace its imports for UI components and frontend services used by this screen.
+ */
 import { useEffect, useState } from "react";
 import { Check, Link2, Loader2, RefreshCw, Unlink, X } from "lucide-react";
 import { fetchConnectedAccounts, connectAccount, disconnectAccount } from "../../../services/settingsService.js";

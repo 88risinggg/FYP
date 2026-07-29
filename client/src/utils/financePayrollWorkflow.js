@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - FINANCE
+ * PURPOSE: Provides reusable finance Payroll Workflow helper functions.
+ * LAYER: Frontend utility - provides reusable data transformation or helper logic.
+ * FIND RELATED CODE: Use Find All References on its exports to locate connected features.
+ */
 export function getFinanceWorkflowState(run) {
   return {
     reviewed: Boolean(run?.reviewedAt || run?.approvedAt || run?.paidAt),

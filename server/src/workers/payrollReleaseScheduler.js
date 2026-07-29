@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - FINANCE
+ * PURPOSE: Runs scheduled payroll Release Scheduler background processing.
+ * LAYER: Background worker - performs scheduled processing outside a user request.
+ * FIND RELATED CODE: Trace its imports to find the scheduler registration and services it runs.
+ */
 const { processDueScheduledReleases } = require("../services/financePayrollScheduleService");
 
 const INTERVAL_MS = Number(process.env.PAYROLL_RELEASE_SCHEDULER_INTERVAL_MS || 60000);

@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - FINANCE
+ * PURPOSE: Provides reusable finance Payroll Navigation helper functions.
+ * LAYER: Frontend utility - provides reusable data transformation or helper logic.
+ * FIND RELATED CODE: Use Find All References on its exports to locate connected features.
+ */
 export const FINANCE_WORKFLOW_TRACKER_PATHS = Object.freeze([
   "/dashboard/payroll/finance",
   "/dashboard/payroll/finance/employee-requests",

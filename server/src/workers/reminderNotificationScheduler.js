@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: SHARED / APPLICATION CORE
+ * PURPOSE: Runs scheduled reminder Notification Scheduler background processing.
+ * LAYER: Background worker - performs scheduled processing outside a user request.
+ * FIND RELATED CODE: Trace its imports to find the scheduler registration and services it runs.
+ */
+/**
  * Reminder Notification Scheduler
  *
  * Runs at regular intervals to process automatic invoice payment reminders.

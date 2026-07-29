@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - SHARED
+ * PURPOSE: Defines the available payroll Workflow Routes API endpoints and connects them to handlers.
+ * LAYER: Backend route - maps HTTP methods and URLs to middleware and controller functions.
+ * FIND RELATED CODE: Follow the imported controller function to find request handling.
+ */
 const express = require("express");
 const { authenticateToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/rolesMiddleware");

@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - FINANCE
+ * PURPOSE: Reads and writes finance Payroll Model data in the database.
+ * LAYER: Backend model - contains database queries and persistence operations.
+ * FIND RELATED CODE: Use Find All References to locate the controller/service that requests this data.
+ */
+/**
  * Finance Payroll Model
  *
  * payroll_run is the run header and payroll contains one employee result per run.

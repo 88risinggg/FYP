@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PLATFORM / COMPANY
+ * PURPOSE: Provides reusable company Logo Storage Service business or integration operations.
+ * LAYER: Backend service - contains reusable business rules or external integrations.
+ * FIND RELATED CODE: Use Find All References to locate controllers, workers, or services that call it.
+ */
 const { pool } = require("../config/db");
 
 async function ensureCompanyLogoStorage(connection = pool) {

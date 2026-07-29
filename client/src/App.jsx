@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: SHARED / APPLICATION CORE
+ * PURPOSE: Implements the application's App responsibilities.
+ * LAYER: Frontend router - maps browser URLs and access rules to page components.
+ * FIND RELATED CODE: Use Find All References on its exports to locate connected features.
+ */
 import { useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
@@ -31,6 +38,13 @@ import { fetchAppearance } from "./services/settingsService.js";
 import { getPostAuthDestination, getStoredSession } from "./services/sessionService.js";
 import PlatformCompaniesPage from "./pages/platform/PlatformCompaniesPage.jsx";
 
+// EVALUATION GUIDE: Search this file for "FEATURE:" to find the frontend entry
+// point for each major feature. Routes map browser URLs to their page components.
+// Backend API entry points are grouped in server/src/app.js.
+
+// FEATURE: Route protection
+// These guards display a page only when the saved session has the required login,
+// role, and module access; otherwise, they redirect to a safe page.
 function ProtectedRoute({ children }) {
   const session = getStoredSession();
 
@@ -196,6 +210,9 @@ function StaffOrHRPayrollRoute({ children }) {
 }
 
 export default function App() {
+  // FEATURE: Appearance and server health monitoring
+  // Runs when the app starts: applies the theme, refreshes logged-in settings,
+  // watches system-theme changes, and starts/stops the API health check.
   useEffect(() => {
     const session = getStoredSession();
     let active = true;
@@ -228,6 +245,7 @@ export default function App() {
 
   return (
     <Routes>
+      {/* FEATURE: Public authentication, invoice viewing, and payment result pages */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LandingPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -236,6 +254,7 @@ export default function App() {
       <Route path="/invoice/view/:invoiceId" element={<PublicInvoiceViewPage />} />
       <Route path="/payment/success" element={<PaymentSuccessPage />} />
       <Route path="/payment/cancelled" element={<PaymentCancelledPage />} />
+      {/* FEATURE: Post-login module selection */}
       <Route
         path="/module-selection"
         element={
@@ -243,6 +262,7 @@ export default function App() {
         }
       />
       <Route path="/platform/companies" element={<PlatformOperatorRoute><PlatformCompaniesPage /></PlatformOperatorRoute>} />
+      {/* FEATURE: INVOICE - ADMIN: reports, records, validation, and settings */}
       <Route
         path="/dashboard/invoicing/admin/reminder-summary/:category"
         element={
@@ -347,6 +367,7 @@ export default function App() {
           </AdminInvoicingRoute>
         }
       />
+      {/* FEATURE: INVOICE - FINANCE */}
       <Route
         path="/dashboard/invoicing/finance/*"
         element={
@@ -355,6 +376,7 @@ export default function App() {
           </FinanceInvoicingRoute>
         }
       />
+      {/* FEATURE: PAYROLL - ADMIN */}
       <Route
         path="/dashboard/payroll/admin/*"
         element={
@@ -363,6 +385,7 @@ export default function App() {
           </AdminPayrollRoute>
         }
       />
+      {/* FEATURE: PAYROLL - FINANCE */}
       <Route
         path="/dashboard/payroll/finance/*"
         element={
@@ -371,6 +394,7 @@ export default function App() {
           </FinancePayrollRoute>
         }
       />
+      {/* FEATURE: PAYROLL - HR */}
       <Route
         path="/dashboard/payroll/hr/*"
         element={
@@ -379,6 +403,7 @@ export default function App() {
           </HRPayrollRoute>
         }
       />
+      {/* FEATURE: PAYROLL - STAFF */}
       <Route
         path="/dashboard/payroll/staff/*"
         element={

@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - SHARED
+ * PURPOSE: Implements the reusable Whats App Actions interface component.
+ * LAYER: Frontend component - provides reusable interface and interaction logic.
+ * FIND RELATED CODE: Use Find All References to locate the pages that render this component.
+ */
+/**
  * WhatsApp Actions Component (Finance)
  *
  * Provides WhatsApp action buttons for the Invoice module:

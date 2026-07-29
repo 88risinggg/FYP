@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - SHARED
+ * PURPOSE: Provides reusable payroll Run Payslip Service business or integration operations.
+ * LAYER: Backend service - contains reusable business rules or external integrations.
+ * FIND RELATED CODE: Use Find All References to locate controllers, workers, or services that call it.
+ */
 const { listFinancePayrollRuns, applyFinancePayrollWorkflowAction } = require("../models/financePayrollModel");
 const { generateAndSendPayslip } = require("./payslipDeliveryService");
 const { launchPayslipBrowser } = require("./payslipPdfService");

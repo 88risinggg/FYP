@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - SHARED
+ * PURPOSE: Runs scheduled overdue Scheduler background processing.
+ * LAYER: Background worker - performs scheduled processing outside a user request.
+ * FIND RELATED CODE: Trace its imports to find the scheduler registration and services it runs.
+ */
+/**
  * Overdue Invoice Scheduler
  *
  * Runs a daily interval to detect and mark overdue invoices.

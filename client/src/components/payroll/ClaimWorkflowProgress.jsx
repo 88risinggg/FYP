@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - SHARED
+ * PURPOSE: Implements the reusable Claim Workflow Progress interface component.
+ * LAYER: Frontend component - provides reusable interface and interaction logic.
+ * FIND RELATED CODE: Use Find All References to locate the pages that render this component.
+ */
 import { CheckCircle2, Circle, Clock3, XCircle } from "lucide-react";
 import { getClaimWorkflowSteps } from "../../utils/claimWorkflow.js";
 

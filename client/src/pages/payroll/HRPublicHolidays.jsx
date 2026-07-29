@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - HR
+ * PURPOSE: Implements the HRPublic Holidays screen and its page-level interactions.
+ * LAYER: Frontend page - renders a complete screen and coordinates its user interactions.
+ * FIND RELATED CODE: Trace its imports for UI components and frontend services used by this screen.
+ */
 import { useEffect, useState } from "react";
 import { Calendar, Plus, Search, Edit2, Trash2, Check, X, ToggleLeft, ToggleRight } from "lucide-react";
 import {

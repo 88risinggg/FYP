@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - FINANCE
+ * PURPOSE: Provides reusable payroll Recovery Posting Service business or integration operations.
+ * LAYER: Backend service - contains reusable business rules or external integrations.
+ * FIND RELATED CODE: Use Find All References to locate controllers, workers, or services that call it.
+ */
 const money = (value) => Math.round(Number(value || 0) * 100) / 100;
 const { currentCompanyId } = require("./tenantContext");
 const parseJson = (value, fallback = {}) => {

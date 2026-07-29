@@ -1,4 +1,11 @@
 /**
+ * EVALUATION HEADER
+ * FEATURE: PAYROLL - HR
+ * PURPOSE: Provides reusable HR Report Export Service business or integration operations.
+ * LAYER: Backend service - contains reusable business rules or external integrations.
+ * FIND RELATED CODE: Use Find All References to locate controllers, workers, or services that call it.
+ */
+/**
  * HR Report Export Service
  *
  * Generates Excel (.xlsx) and CSV file exports from report data arrays.

@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - SHARED
+ * PURPOSE: Implements the reusable Invoice Template interface component.
+ * LAYER: Frontend component - provides reusable interface and interaction logic.
+ * FIND RELATED CODE: Use Find All References to locate the pages that render this component.
+ */
 
 import { useMemo } from "react";
 import payNivoLogoDataUrl from "../../assets/paynivo-logo.png?inline";

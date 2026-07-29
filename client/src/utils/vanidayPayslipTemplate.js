@@ -1,3 +1,10 @@
+/**
+ * EVALUATION HEADER
+ * FEATURE: INVOICE - FINANCE
+ * PURPOSE: Provides reusable vaniday Payslip Template helper functions.
+ * LAYER: Frontend utility - provides reusable data transformation or helper logic.
+ * FIND RELATED CODE: Use Find All References on its exports to locate connected features.
+ */
 import payNivoLogoDataUrl from "../assets/paynivo-logo.png?inline";
 
 function escapeHtml(value) {
