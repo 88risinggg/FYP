@@ -77,7 +77,11 @@ async function sendScheduledInvoice(invoice) {
       `${STATUS_AUDIT_PREFIX}Sent`,
       "invoice",
       invoice.invoice_id,
-      null
+      null,
+      {
+        previousValue: lockedInvoice.status,
+        newValue: "Sent"
+      }
     );
     await writeAuditLog(
       connection,
@@ -130,7 +134,7 @@ async function markOverdueInvoices() {
 
     const [rows] = await connection.query(
       `
-        SELECT invoice_id
+        SELECT invoice_id, status
         FROM invoice
         WHERE status IN ('Sent', 'Viewed')
           AND due_date < CURDATE()
@@ -150,7 +154,11 @@ async function markOverdueInvoices() {
     );
 
     for (const invoiceId of invoiceIds) {
-      await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}Overdue`, "invoice", invoiceId, null);
+      const previousStatus = rows.find((row) => Number(row.invoice_id) === Number(invoiceId))?.status || "Sent";
+      await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}Overdue`, "invoice", invoiceId, null, {
+        previousValue: previousStatus,
+        newValue: "Overdue"
+      });
       await writeAuditLog(connection, "invoice_marked_overdue", "invoice", invoiceId, null);
     }
 

@@ -103,7 +103,10 @@ async function submitManualPayment(req, res) {
       newValue: JSON.stringify({ amount: parsedAmount, reference: reference_number, method: payment_method }),
       ipAddress: req.headers["x-forwarded-for"] || req.socket?.remoteAddress || null
     });
-    await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}Pending Review`, "invoice", invoice.invoice_id, null);
+    await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}Pending Review`, "invoice", invoice.invoice_id, null, {
+      previousValue: invoice.status,
+      newValue: "Pending Review"
+    });
 
     await connection.commit();
 
@@ -250,7 +253,10 @@ async function reviewPaymentSubmission(req, res) {
         [submission.payment_date_input, transactionId, submission.payment_method_name, submission.invoice_invoice_id]
       );
 
-      await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}${settlement.status}`, "invoice", submission.invoice_invoice_id, userId);
+      await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}${settlement.status}`, "invoice", submission.invoice_invoice_id, userId, {
+        previousValue: submission.invoice_status || "Pending Review",
+        newValue: settlement.status
+      });
       await writeAuditLog(connection, "payment_approved", "invoice", submission.invoice_invoice_id, userId, {
         previousValue: "Pending Review",
         newValue: JSON.stringify({
@@ -280,7 +286,10 @@ async function reviewPaymentSubmission(req, res) {
         previousValue: "Pending Review",
         newValue: JSON.stringify({ reason: notes || "No reason provided" })
       });
-      await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}${newStatus}`, "invoice", submission.invoice_invoice_id, userId);
+      await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}${newStatus}`, "invoice", submission.invoice_invoice_id, userId, {
+        previousValue: submission.invoice_status || "Pending Review",
+        newValue: newStatus
+      });
     }
 
     await connection.commit();

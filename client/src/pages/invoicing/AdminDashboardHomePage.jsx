@@ -9,22 +9,15 @@ import {
   AlertTriangle,
   Ban,
   Banknote,
-  CheckCircle2,
   Clock3,
   CreditCard,
   FileText,
   ShieldAlert
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 
 import { fetchAdminInvoicingDashboard } from "../../services/adminDashboardService.js";
 import { getStoredSession } from "../../services/sessionService.js";
-
-const basePath = "/dashboard/invoicing/admin";
-const focusDestinations = {
-  "validation-errors": `${basePath}/dashboard/validation-errors`
-};
 
 const statusConfig = [
   { key: "draft", label: "Draft", color: "#7B6660" },
@@ -33,13 +26,6 @@ const statusConfig = [
   { key: "paid", label: "Paid", color: "#2F8758" },
   { key: "overdue", label: "Overdue", color: "#c94c3a" }
 ];
-
-const severityStyles = {
-  Critical: "bg-[#FDD9CD] text-[#C55245]",
-  High: "bg-[#FFF0EB] text-[#C55245]",
-  Medium: "bg-[#eaf2ff] text-[#3269a8]",
-  Low: "bg-[#f2eee9] text-[#6f5b55]"
-};
 
 const kpiGridStyles = `
   .admin-overview-kpi-container {
@@ -137,10 +123,7 @@ function DashboardSkeleton() {
         ))}
         </div>
       </div>
-      <div className="grid gap-4 xl:grid-cols-5">
-        <div className="h-80 animate-pulse rounded-lg border border-[#f0d2ca] bg-white/80 xl:col-span-2" />
-        <div className="h-80 animate-pulse rounded-lg border border-[#f0d2ca] bg-white/80 xl:col-span-3" />
-      </div>
+      <div className="h-80 animate-pulse rounded-lg border border-[#f0d2ca] bg-white/80" />
     </div>
   );
 }
@@ -189,34 +172,6 @@ function InvoiceStatusOverview({ invoiceStatus, hasInvoices }) {
   );
 }
 
-function FocusItem({ item }) {
-  const destination = focusDestinations[item.destination];
-
-  return (
-    <article className="flex flex-col gap-3 border-b border-[#f4ded7] py-4 first:pt-0 last:border-b-0 last:pb-0 sm:flex-row sm:items-center">
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <h4 className="text-sm font-bold text-[#251E1F]">{item.title}</h4>
-          <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${severityStyles[item.severity] || severityStyles.Low}`}>
-            {item.severity}
-          </span>
-        </div>
-        <p className="mt-1 text-sm font-semibold text-[#514440]">{formatCount(item.count)} affected record{Number(item.count) === 1 ? "" : "s"}</p>
-        <p className="mt-1 text-xs text-[#7b6660]">{item.description}</p>
-      </div>
-      {destination ? (
-        <Link
-          to={destination}
-          className="inline-flex min-h-10 items-center justify-center self-start rounded-lg border border-[#ead3cc] bg-white px-4 py-2 text-sm font-bold text-[#251E1F] transition hover:border-[#F38978] hover:text-[#b64d3b] focus:outline-none focus:ring-2 focus:ring-[#F38978]/40 md:self-auto"
-          aria-label={`Review ${item.title}`}
-        >
-          Review
-        </Link>
-      ) : null}
-    </article>
-  );
-}
-
 export default function AdminDashboardHomePage() {
   const session = getStoredSession();
   const requestInFlightRef = useRef(false);
@@ -252,12 +207,6 @@ export default function AdminDashboardHomePage() {
   const summary = dashboard?.summary || {};
   const availability = dashboard?.availability || {};
   const hasInvoices = availability.invoices !== false && Number(summary.totalInvoices || 0) > 0;
-  const todayFocus = useMemo(
-    () => [...(dashboard?.todayFocus || [])]
-      .filter((item) => Number(item.count) > 0)
-      .sort((left, right) => Number(left.priority || 99) - Number(right.priority || 99)),
-    [dashboard?.todayFocus]
-  );
   const kpiCards = [
     { title: "Total Invoices", value: formatCount(summary.totalInvoices), icon: FileText, accent: "#F38978", available: availability.invoices !== false },
     { title: "Paid Revenue", value: formatCurrency(summary.paidRevenue), icon: Banknote, accent: "#2F8758", available: availability.payments !== false },
@@ -306,23 +255,9 @@ export default function AdminDashboardHomePage() {
                   </div>
                 </section>
 
-                <div className="grid grid-cols-1 gap-4 xl:grid-cols-5 xl:items-stretch">
-                  <div className="xl:col-span-2 [&>section]:h-full">
-                    <Section title="Today's Focus" description="Priority invoicing issues that need attention today.">
-                      {todayFocus.length ? todayFocus.map((item) => <FocusItem key={item.type} item={item} />) : (
-                        <div className="rounded-lg border border-dashed border-[#FDD9CD] bg-[#FFF6F2] px-5 py-8 text-center">
-                          <CheckCircle2 size={24} className="mx-auto text-[#2F8758]" aria-hidden="true" />
-                          <p className="mt-2 text-sm font-semibold text-[#2F8758]">No urgent invoicing issues require attention.</p>
-                        </div>
-                      )}
-                    </Section>
-                  </div>
-                  <div className="xl:col-span-3 [&>section]:h-full">
-                    <Section title="Invoice Status Overview" description="Current invoice counts by processing status.">
-                      <InvoiceStatusOverview invoiceStatus={dashboard.invoiceStatus} hasInvoices={hasInvoices} />
-                    </Section>
-                  </div>
-                </div>
+                <Section title="Invoice Status Overview" description="Current invoice counts by processing status.">
+                  <InvoiceStatusOverview invoiceStatus={dashboard.invoiceStatus} hasInvoices={hasInvoices} />
+                </Section>
               </>
             ) : null}
           </>

@@ -17,7 +17,7 @@ import {
   ShieldCheck,
   XCircle
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   createReminderSetting,
@@ -121,6 +121,7 @@ function ReminderStage({ number, title, field, value, onChange, minimum }) {
 }
 
 export default function AdminReminderSettingsPage() {
+  const emailBodyRef = useRef(null);
   const [form, setForm] = useState(defaultForm);
   const [summary, setSummary] = useState({
     remindersSentToday: 0,
@@ -163,6 +164,26 @@ export default function AdminReminderSettingsPage() {
     setForm((current) => ({ ...current, [field]: value }));
     setErrors([]);
     setMessage("");
+  }
+
+  function insertEmailPlaceholder(placeholder) {
+    const textarea = emailBodyRef.current;
+    if (!textarea) {
+      setField("emailBody", `${form.emailBody} ${placeholder}`);
+      return;
+    }
+
+    const currentValue = textarea.value;
+    const selectionStart = textarea.selectionStart ?? currentValue.length;
+    const selectionEnd = textarea.selectionEnd ?? selectionStart;
+    const nextValue = `${currentValue.slice(0, selectionStart)}${placeholder}${currentValue.slice(selectionEnd)}`;
+    const nextCaretPosition = selectionStart + placeholder.length;
+
+    setField("emailBody", nextValue);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(nextCaretPosition, nextCaretPosition);
+    });
   }
 
   function validateForm(requireTestEmail = false) {
@@ -419,6 +440,7 @@ export default function AdminReminderSettingsPage() {
             <label className="block">
               <span className="text-sm font-bold text-[#514440]">Email message</span>
               <textarea
+                ref={emailBodyRef}
                 rows={10}
                 value={form.emailBody}
                 onChange={(event) => setField("emailBody", event.target.value)}
@@ -434,7 +456,7 @@ export default function AdminReminderSettingsPage() {
                   <button
                     key={placeholder}
                     type="button"
-                    onClick={() => setField("emailBody", `${form.emailBody} ${placeholder}`)}
+                    onClick={() => insertEmailPlaceholder(placeholder)}
                     className="rounded-full border border-[#f0d2ca] bg-[#fff8f5] px-3 py-1 text-xs font-bold text-[#7b6660] hover:border-[#F38978]"
                   >
                     {placeholder}

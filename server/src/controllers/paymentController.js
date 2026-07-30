@@ -15,6 +15,7 @@
 const { pool } = require("../config/db");
 const { settleInvoiceFromConfirmedPayments } = require("../services/invoicePaymentSettlementService");
 const { calculateInvoiceLateFee, getInvoiceSettings } = require("../models/invoiceSettingsModel");
+const { writeAuditLog, STATUS_AUDIT_PREFIX } = require("./invoiceController");
 
 function toCurrencyNumber(value) {
   const n = Number(value);
@@ -100,7 +101,7 @@ async function recordManualPayment(req, res) {
     await connection.beginTransaction();
 
     const [invoiceRows] = await connection.query(
-      "SELECT invoice_id, total_amount FROM invoice WHERE invoice_id = ? LIMIT 1 FOR UPDATE",
+      "SELECT invoice_id, total_amount, status FROM invoice WHERE invoice_id = ? LIMIT 1 FOR UPDATE",
       [invoiceId]
     );
     if (invoiceRows.length === 0) { await connection.rollback(); return res.status(404).json({ message: "Invoice not found." }); }
@@ -115,6 +116,12 @@ async function recordManualPayment(req, res) {
     );
 
     const settlement = await settleInvoiceFromConfirmedPayments(connection, invoiceId, "Sent");
+    if (settlement?.status && settlement.status !== invoiceRows[0].status) {
+      await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}${settlement.status}`, "invoice", invoiceId, req.user?.userId, {
+        previousValue: invoiceRows[0].status,
+        newValue: settlement.status
+      });
+    }
     await connection.query(
       "UPDATE invoice SET payment_date = NOW(), transaction_id = ? WHERE invoice_id = ?",
       [transactionId, invoiceId]
@@ -771,6 +778,12 @@ async function confirmPayNowPayment(req, res) {
 
     const { settleInvoiceFromConfirmedPayments } = require("../services/invoicePaymentSettlementService");
     const settlement = await settleInvoiceFromConfirmedPayments(connection, invoiceId, invoice.status);
+    if (settlement?.status && settlement.status !== invoice.status) {
+      await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}${settlement.status}`, "invoice", invoiceId, req.user?.userId, {
+        previousValue: invoice.status,
+        newValue: settlement.status
+      });
+    }
 
     await connection.query(
       "UPDATE invoice SET payment_date = NOW(), transaction_id = ?, payment_method = 'PayNow' WHERE invoice_id = ?",

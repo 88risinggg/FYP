@@ -740,7 +740,10 @@ async function sendInvoice(req, res) {
       "UPDATE invoice SET status = 'Sent', scheduled_at = NULL WHERE invoice_id = ?",
       [invoiceId]
     );
-    await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}Sent`, "invoice", invoiceId, req.user?.userId);
+    await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}Sent`, "invoice", invoiceId, req.user?.userId, {
+      previousValue: invoice.status,
+      newValue: "Sent"
+    });
     await writeAuditLog(connection, "invoice_sent", "invoice", invoiceId, req.user?.userId, {
       newValue: JSON.stringify({ ...delivery, emailType: "Invoice Issued", triggerSource: "Finance" })
     });
@@ -913,13 +916,18 @@ async function scheduleInvoices(req, res) {
     );
 
     // Write audit logs for each scheduled invoice
+    const statusByInvoiceId = new Map(existingInvoices.map((invoice) => [Number(invoice.invoice_id), invoice.status]));
     for (const invoiceId of invoiceIds) {
       await writeAuditLog(
         connection,
         `${STATUS_AUDIT_PREFIX}Scheduled`,
         "invoice",
         invoiceId,
-        req.user?.userId
+        req.user?.userId,
+        {
+          previousValue: statusByInvoiceId.get(Number(invoiceId)) || "Draft",
+          newValue: "Scheduled"
+        }
       );
       await writeAuditLog(
         connection,

@@ -1210,41 +1210,6 @@ async function getInvoicePerformanceContext(missingTables) {
   };
 }
 
-async function getFailedInvoiceEmailCount(missingTables) {
-  const columns = await getTableColumns("audit_logs");
-  const actionColumn = pickColumn(columns, ["action_description", "action"]);
-  if (!actionColumn) {
-    missingTables.add("invoice email audit");
-    return { count: 0, available: false };
-  }
-  const result = await safeQuery(
-    `SELECT COUNT(*) AS count FROM audit_logs
-     WHERE LOWER(${columnExpression("audit_logs", actionColumn)}) = 'invoice_email_failed'`,
-    [],
-    [{ count: 0 }]
-  );
-  return { count: Number(result.rows[0]?.count || 0), available: !result.missing };
-}
-
-async function getRemindersDueTodayCount(missingTables) {
-  const invoiceColumns = await getTableColumns("invoice");
-  if (!invoiceColumns) {
-    missingTables.add("invoice");
-    return { count: 0, available: false };
-  }
-  const dueDateColumn = pickColumn(invoiceColumns, ["due_date", "dueDate"]);
-  const statusColumn = pickColumn(invoiceColumns, ["status", "invoice_status"]);
-  if (!dueDateColumn || !statusColumn) return { count: 0, available: false };
-  const result = await safeQuery(
-    `SELECT COUNT(*) AS count FROM invoice
-     WHERE DATE(${quoteIdentifier(dueDateColumn)}) = CURDATE()
-       AND LOWER(${quoteIdentifier(statusColumn)}) NOT IN ('draft', 'scheduled', 'paid', 'void', 'cancelled', 'canceled', 'refunded')`,
-    [],
-    [{ count: 0 }]
-  );
-  return { count: Number(result.rows[0]?.count || 0), available: !result.missing };
-}
-
 function invoicePerformanceSubquery(context) {
   return `SELECT
       ${context.idExpr} AS invoiceId,
@@ -1746,6 +1711,48 @@ function parseStatusMovement(text) {
   return null;
 }
 
+function parseJsonMaybe(value) {
+  if (!value || typeof value !== "string") return value;
+  try { return JSON.parse(value); } catch { return value; }
+}
+
+function statusFromAuditValue(value) {
+  const parsed = parseJsonMaybe(value);
+  if (typeof parsed === "string") return parsed;
+  if (parsed && typeof parsed === "object") {
+    return parsed.status || parsed.invoiceStatus || parsed.toStatus || parsed.newStatus || null;
+  }
+  return null;
+}
+
+function normalizeStatusChangeStatus(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  return [
+    "Draft",
+    "Scheduled",
+    "Sent",
+    "Viewed",
+    "Paid",
+    "Overdue",
+    "Pending Review",
+    "Void",
+    "Cancelled",
+    "Refunded"
+  ].find((item) => item.toLowerCase() === normalized) || null;
+}
+
+function parseAuditStatusMovement(row = {}) {
+  const action = String(row.actionDescription || "");
+  const directMatch = action.match(/^invoice_status:(.+)$/i);
+  const toStatus = normalizeStatusChangeStatus(
+    directMatch ? directMatch[1] : statusFromAuditValue(row.newValue)
+  );
+  const fromStatus = normalizeStatusChangeStatus(statusFromAuditValue(row.previousValue));
+
+  if (!fromStatus || !toStatus || fromStatus === toStatus) return null;
+  return { from: fromStatus, to: toStatus };
+}
+
 async function getInvoiceLookup(context, invoiceIds) {
   const ids = [...new Set(invoiceIds.map((id) => Number(id)).filter((id) => Number.isFinite(id)))];
   if (!ids.length) return {};
@@ -1958,6 +1965,8 @@ async function getAuditStatusChanges(context, rangeConfig, missingTables, notes,
   const recordColumn = pickColumn(columns, isModern ? ["affected_record", "entity_id"] : ["entity_id"]);
   const userNameColumn = pickColumn(columns, isModern ? ["user_name"] : []);
   const userIdColumn = pickColumn(columns, isModern ? ["user_id"] : ["user_user_id"]);
+  const previousValueColumn = pickColumn(columns, ["previous_value", "old_value", "from_value"]);
+  const newValueColumn = pickColumn(columns, ["new_value", "newValue", "to_value"]);
   const createdAtColumn = pickColumn(columns, ["created_at", "createdAt"]);
 
   if (!actionColumn || !createdAtColumn) {
@@ -1999,6 +2008,8 @@ async function getAuditStatusChanges(context, rangeConfig, missingTables, notes,
       ${idColumn ? columnExpression(auditAlias, idColumn) : "0"} AS id,
       ${columnExpression(auditAlias, actionColumn)} AS actionDescription,
       ${recordColumn ? columnExpression(auditAlias, recordColumn) : "NULL"} AS affectedRecord,
+      ${previousValueColumn ? columnExpression(auditAlias, previousValueColumn) : "NULL"} AS previousValue,
+      ${newValueColumn ? columnExpression(auditAlias, newValueColumn) : "NULL"} AS newValue,
       ${changedByExpr} AS changedBy,
       ${createdAtExpr} AS changedOn
      FROM ${quoteIdentifier(table)} AS ${auditAlias}
@@ -2014,7 +2025,7 @@ async function getAuditStatusChanges(context, rangeConfig, missingTables, notes,
 
   const parsedRows = result.rows
     .map((row) => {
-      const movement = parseStatusMovement(row.actionDescription);
+      const movement = parseAuditStatusMovement(row) || parseStatusMovement(row.actionDescription);
       if (!movement) return null;
 
       return {
@@ -2082,7 +2093,7 @@ async function getAuditStatusChanges(context, rangeConfig, missingTables, notes,
 
 async function getStatusChanges(context, rangeConfig, missingTables, notes, options = {}) {
   const historyChanges = await getStatusHistoryChanges(context, rangeConfig, missingTables, options);
-  if (historyChanges) return historyChanges;
+  if (historyChanges && Number(historyChanges.pagination?.total || 0) > 0) return historyChanges;
 
   return getAuditStatusChanges(context, rangeConfig, missingTables, notes, options);
 }
@@ -2144,88 +2155,9 @@ async function getAdminDashboardData(userId) {
   const admin = await getAdminProfile(userId, missingTables);
   const invoiceOverview = await getInvoiceOverview(missingTables);
   const reminderFailures = await getReminderFailedCount(missingTables);
-  const failedInvoiceEmails = await getFailedInvoiceEmailCount(missingTables);
-  const remindersDueToday = await getRemindersDueTodayCount(missingTables);
   const paymentsToVerify = await getPaymentsToVerifyCount(missingTables);
   const validationErrors = await getValidationErrorsCount(missingTables);
   const counts = invoiceOverview.counts;
-  const todayFocus = [
-    validationErrors.count > 0 && {
-      type: "validation-errors",
-      title: "Validation Errors",
-      count: validationErrors.count,
-      description: `${validationErrors.count} unresolved invoice upload issue${validationErrors.count === 1 ? "" : "s"} require review.`,
-      severity: "Critical",
-      priority: 1,
-      destination: "validation-errors"
-    },
-    reminderFailures.count > 0 && {
-      type: "reminder-failures",
-      title: "Reminder Failed",
-      count: reminderFailures.count,
-      description: `${reminderFailures.count} reminder${reminderFailures.count === 1 ? "" : "s"} failed to send.`,
-      severity: "High",
-      priority: 2,
-      destination: "payment-reminder-summary"
-    },
-    paymentsToVerify.count > 0 && {
-      type: "payments-to-verify",
-      title: "Payments to Verify",
-      count: paymentsToVerify.count,
-      description: paymentsToVerify.oldestPendingDays === null
-        ? "Manual payment proofs are waiting for verification."
-        : `Oldest pending proof: ${paymentsToVerify.oldestPendingDays} day${paymentsToVerify.oldestPendingDays === 1 ? "" : "s"}.`,
-      severity: "Medium",
-      priority: 3,
-      destination: "payment-reminder-summary"
-    },
-    paymentsToVerify.mismatchCount > 0 && {
-      type: "payment-mismatch",
-      title: "Payment Mismatch",
-      count: paymentsToVerify.mismatchCount,
-      description: `${paymentsToVerify.mismatchCount} pending payment${paymentsToVerify.mismatchCount === 1 ? " does" : "s do"} not match the remaining invoice balance.`,
-      severity: "High",
-      priority: 3.5,
-      destination: "payment-reminder-summary"
-    },
-    counts.overdue > 0 && {
-      type: "overdue-invoices",
-      title: "Overdue Invoices",
-      count: counts.overdue,
-      amount: counts.overdueOutstandingAmount,
-      description: `${counts.overdue} invoice${counts.overdue === 1 ? "" : "s"} are past due with an unpaid balance.`,
-      severity: "Medium",
-      priority: 4,
-      destination: "invoice-performance"
-    },
-    counts.draft > 0 && {
-      type: "draft-invoices",
-      title: "Draft Invoices Not Sent",
-      count: counts.draft,
-      description: `${counts.draft} draft invoice${counts.draft === 1 ? " has" : "s have"} not been sent.`,
-      severity: "Low",
-      priority: 5,
-      destination: "invoice-performance"
-    },
-    failedInvoiceEmails.count > 0 && {
-      type: "failed-email-deliveries",
-      title: "Failed Email Deliveries",
-      count: failedInvoiceEmails.count,
-      description: `${failedInvoiceEmails.count} invoice email${failedInvoiceEmails.count === 1 ? "" : "s"} failed to send.`,
-      severity: "High",
-      priority: 6,
-      destination: "invoice-performance"
-    },
-    remindersDueToday.count > 0 && {
-      type: "reminders-due-today",
-      title: "Reminders Due Today",
-      count: remindersDueToday.count,
-      description: `${remindersDueToday.count} unpaid invoice${remindersDueToday.count === 1 ? " has" : "s have"} a payment reminder due today.`,
-      severity: "Low",
-      priority: 7,
-      destination: "payment-reminder-summary"
-    }
-  ].filter(Boolean).sort((left, right) => left.priority - right.priority);
 
   return {
     admin,
@@ -2246,7 +2178,6 @@ async function getAdminDashboardData(userId) {
       overdue: counts.overdue,
       void: counts.void
     },
-    todayFocus,
     availability: {
       invoices: invoiceOverview.invoiceAvailable,
       payments: invoiceOverview.paymentAvailable && paymentsToVerify.available,

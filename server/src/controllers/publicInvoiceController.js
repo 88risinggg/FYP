@@ -209,8 +209,8 @@ async function viewInvoice(req, res) {
 
       try {
         await pool.query(
-          `INSERT INTO audit_logs (user_id, module, activity_type, action_description, affected_record, status, created_at, ip_address, device_info)
-           VALUES (NULL, 'Invoice', 'invoice', 'invoice_status:Viewed', ?, 'Success', NOW(), ?, ?)`,
+          `INSERT INTO audit_logs (user_id, module, activity_type, action_description, affected_record, status, created_at, previous_value, new_value, ip_address, device_info)
+           VALUES (NULL, 'Invoice', 'invoice', 'invoice_status:Viewed', ?, 'Success', NOW(), 'Sent', 'Viewed', ?, ?)`,
           [String(invoice.invoice_id), ipAddress, deviceInfo]
         );
       } catch { /* non-critical */ }

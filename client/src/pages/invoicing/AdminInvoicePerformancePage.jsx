@@ -7,13 +7,12 @@
  */
 import { AlertCircle, ArrowRight, ChevronRight, Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import { fetchInvoicePerformance } from "../../services/adminDashboardService.js";
 
 const basePath = "/dashboard/invoicing/admin";
 const performancePath = `${basePath}/dashboard/invoice-performance`;
-const invoiceListPath = `${basePath}/invoices`;
 const statuses = ["Draft", "Sent", "Viewed", "Paid", "Overdue"];
 const statusColors = {
   Draft: "#7B6660",
@@ -177,7 +176,7 @@ function SectionState({ state, children, emptyMessage }) {
   return <div className="relative">{state.loading ? <Loader2 className="absolute right-0 top-0 animate-spin text-[#F38978]" size={17} /> : null}{children}</div>;
 }
 
-function DonutChart({ data, onSelect }) {
+function DonutChart({ data }) {
   const sourceValues = statuses.map((status, originalIndex) => ({
     status,
     count: Number(data?.statuses?.find((item) => item.status === status)?.count || 0),
@@ -237,13 +236,12 @@ function DonutChart({ data, onSelect }) {
       </div>
       <div className="space-y-1">
         {values.map((item) => (
-          <button key={item.status} type="button" onClick={() => onSelect(item.status)}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-[#fff8f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]">
+          <div key={item.status} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left">
             <span className="h-3 w-3 rounded-full" style={{ background: statusColors[item.status] }} />
             <span className="flex-1 text-sm font-semibold">{item.status}</span>
             <strong className="text-sm">{formatCount(item.count)}</strong>
             <span className="w-14 text-right text-xs text-[#7b6660]">{item.percentage.toFixed(1)}%</span>
-          </button>
+          </div>
         ))}
       </div>
     </div>
@@ -254,22 +252,58 @@ function ErrorAwareLink({ to, children }) {
   return <Link to={to} className="inline-flex items-center gap-2 text-sm font-bold text-[#F38978] hover:text-[#d86150] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]">{children}<ChevronRight size={15} /></Link>;
 }
 
+function StatusChangeChart({ summary = [], changes = [] }) {
+  const fallbackSummary = changes.reduce((items, change) => {
+    const key = `${change.fromStatus} -> ${change.toStatus}`;
+    const existing = items.find((item) => `${item.from} -> ${item.to}` === key);
+    if (existing) existing.count += 1;
+    else items.push({ from: change.fromStatus, to: change.toStatus, count: 1 });
+    return items;
+  }, []);
+  const rows = (summary.length ? summary : fallbackSummary)
+    .filter((item) => item.from && item.to && Number(item.count || 0) > 0)
+    .slice(0, 5);
+  const maxCount = Math.max(...rows.map((item) => Number(item.count || 0)), 1);
+
+  if (!rows.length) return null;
+
+  return (
+    <div className="mb-4 space-y-3 rounded-xl border border-[#f0d2ca] bg-[#fff8f5] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-bold text-[#251E1F]">Finance Status Movement</p>
+        <span className="text-xs font-semibold text-[#7b6660]">Based on Finance invoice actions</span>
+      </div>
+      <div className="space-y-3">
+        {rows.map((item) => {
+          const count = Number(item.count || 0);
+          const width = Math.max(8, Math.round((count / maxCount) * 100));
+          return (
+            <div key={`${item.from}-${item.to}`} className="grid gap-1">
+              <div className="flex items-center justify-between gap-3 text-xs">
+                <span className="inline-flex items-center gap-1 font-bold text-[#514440]">
+                  {item.from}<ArrowRight size={12} className="text-[#F38978]" />{item.to}
+                </span>
+                <span className="font-bold text-[#251E1F]">{formatCount(count)}</span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-white">
+                <div className="h-full rounded-full bg-[#F38978]" style={{ width: `${width}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminInvoicePerformancePage() {
-  const navigate = useNavigate();
   const statusState = usePerformanceSection("status", "all-time");
   const overdueState = usePerformanceSection("paid-vs-overdue", "all-time");
   const changesState = usePerformanceSection("status-changes", "all-time");
 
-  const invoiceTarget = useCallback((status, sourceState) => {
-    const params = new URLSearchParams({ status: status.toLowerCase(), range: sourceState.range });
-    if (sourceState.range === "custom") {
-      params.set("startDate", sourceState.custom.startDate);
-      params.set("endDate", sourceState.custom.endDate);
-    }
-    return `${invoiceListPath}?${params}`;
-  }, []);
   const overdueSummary = overdueState.data?.paidVsOverdue || { overdueAmount: 0 };
   const recentChanges = (changesState.data?.recentStatusChanges || []).slice(0, 5);
+  const statusChangeSummary = changesState.data?.recentStatusChangeSummary || [];
 
   return (
     <div className="space-y-5">
@@ -281,7 +315,7 @@ export default function AdminInvoicePerformancePage() {
       <div className="grid gap-5">
         <Card title="Invoice Status" controls={<RangeControl state={statusState} label="Invoice Status" />}>
           <SectionState state={statusState} emptyMessage="No invoices found for this range.">
-            <DonutChart data={statusState.data?.invoiceStatus} onSelect={(status) => navigate(invoiceTarget(status, statusState))} />
+            <DonutChart data={statusState.data?.invoiceStatus} />
           </SectionState>
         </Card>
       </div>
@@ -289,21 +323,22 @@ export default function AdminInvoicePerformancePage() {
       <div className="grid gap-5 xl:grid-cols-[38fr_62fr]">
         <Card title="Overdue Amount" controls={<RangeControl state={overdueState} label="Overdue Amount" />}>
           <SectionState state={overdueState} emptyMessage="No overdue amounts found for this range.">
-            <button type="button" onClick={() => navigate(invoiceTarget("overdue", overdueState))} className="block w-full rounded-xl p-2 text-left transition hover:bg-[#fff8f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F38978]">
+            <div className="block w-full rounded-xl p-2 text-left">
               <div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold">Outstanding overdue invoices</span><strong>{formatCurrency(overdueSummary.overdueAmount)}</strong></div>
               <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-[#FFF3EE]"><div className="h-full w-full rounded-full bg-[#F38978]" /></div>
-            </button>
+            </div>
           </SectionState>
         </Card>
 
         <Card title="Recent Status Changes" controls={<RangeControl state={changesState} label="Recent Status Changes" />}>
           <SectionState state={changesState} emptyMessage="No status changes found for this range.">
-            <p className="mb-3 text-xs text-[#7b6660]">Latest 5 invoice status changes, newest first.</p>
+            <StatusChangeChart summary={statusChangeSummary} changes={recentChanges} />
+            <p className="mb-3 text-xs text-[#7b6660]">Latest 5 invoice status changes from Finance actions, newest first.</p>
             {recentChanges.length ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
                   <thead><tr className="border-y border-[#f0d2ca] bg-[#fff8f5] text-xs uppercase text-[#7b6660]"><th className="px-3 py-3">Invoice #</th><th className="px-3 py-3">Status Change</th><th className="px-3 py-3">Changed On</th><th className="px-3 py-3 text-right">Amount</th></tr></thead>
-                  <tbody>{recentChanges.map((change) => <tr key={change.id} className="border-b border-[#FFF3EE]"><td className="px-3 py-3">{change.invoiceId ? <Link to={`${invoiceListPath}?invoiceId=${encodeURIComponent(change.invoiceId)}`} className="font-bold text-[#F38978] hover:underline">{change.invoiceNo || "-"}</Link> : <span className="font-bold">{change.invoiceNo || "-"}</span>}</td><td className="px-3 py-3"><span className="inline-flex items-center gap-2"><span>{change.fromStatus}</span><ArrowRight size={14} className="text-[#F38978]" /><strong>{change.toStatus}</strong></span></td><td className="whitespace-nowrap px-3 py-3 text-[#7b6660]">{formatDateTime(change.changedOn)}</td><td className="whitespace-nowrap px-3 py-3 text-right font-semibold">{formatCurrency(change.amount)}</td></tr>)}</tbody>
+                  <tbody>{recentChanges.map((change) => <tr key={change.id} className="border-b border-[#FFF3EE]"><td className="px-3 py-3 font-bold">{change.invoiceNo || "-"}</td><td className="px-3 py-3"><span className="inline-flex items-center gap-2"><span>{change.fromStatus}</span><ArrowRight size={14} className="text-[#F38978]" /><strong>{change.toStatus}</strong></span></td><td className="whitespace-nowrap px-3 py-3 text-[#7b6660]">{formatDateTime(change.changedOn)}</td><td className="whitespace-nowrap px-3 py-3 text-right font-semibold">{formatCurrency(change.amount)}</td></tr>)}</tbody>
                 </table>
               </div>
             ) : <p className="rounded-xl border border-dashed border-[#f0c9bf] bg-[#fff8f5] p-8 text-center text-sm text-[#7b6660]">No status changes found for this range.</p>}
