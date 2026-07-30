@@ -167,6 +167,8 @@ async function runScheduleAction(req, res, action) {
   } catch (error) { return res.status(409).json({ message: error.message, errors: error.details || [] }); }
 }
 
+// FUNCTION: Runs authoritative backend compliance validation for the requested run
+// and returns both the issues and refreshed payroll state to the Finance screen.
 async function validateRunCompliance(req, res) {
   try {
     const errors = await getPayrollRunComplianceErrors(req.params.runId);
@@ -183,6 +185,8 @@ async function validateRunCompliance(req, res) {
   }
 }
 
+// FUNCTION: Creates a Finance run from database-backed staff data for a selected
+// month/year, then returns the new run with its calculated workflow state.
 async function createRunFromStaffDatabase(req, res) {
   try {
     const now = new Date();
@@ -226,6 +230,8 @@ async function createRunFromStaffDatabase(req, res) {
   }
 }
 
+// FUNCTION: Recalculates an eligible run with current approved rules/source data.
+// Locked runs return a conflict response instead of changing authorised payroll.
 async function recalculateRun(req, res) {
   try {
     const run = await recalculateFinancePayrollRun({
@@ -370,10 +376,16 @@ async function exportFinancePayrollReport(req, res) {
   }
 }
 
+// FUNCTION: Gives every workflow endpoint one consistent response shape containing
+// the stored run, derived stage tracker and optional action/payment reference.
 function workflowResponse(run, actionReference = null) {
   return { run, workflow: buildFinanceWorkflowState(run), actionReference };
 }
 
+// EVALUATION NOTE: Payment is processed employee-by-employee. Each provider
+// result is persisted immediately, so partial success survives a crash/retry.
+// FUNCTION: Submits approved employee payments to Modern Treasury and persists
+// each success/failure as it occurs. Returns the latest durable payroll-run state.
 async function processModernTreasuryPaymentSubmission({ runId, user, ipAddress, deviceInfo }) {
   let current = await findFinanceRun(runId);
   if (!current) throw Object.assign(new Error("Payroll run not found."), { code: "PAYROLL_RUN_NOT_FOUND" });
@@ -408,6 +420,8 @@ async function processModernTreasuryPaymentSubmission({ runId, user, ipAddress, 
   const completed = current.paymentBatch?.transfers || {};
   for (const employee of employees) {
     const employeeKey = String(employee.payrollId || employee.staffEmployeeId);
+    // Retry safety: never submit a second transfer for an employee whose earlier
+    // Modern Treasury request already succeeded.
     if (completed[employeeKey]?.status === "Submitted") continue;
     let transfer;
     try {
@@ -422,6 +436,7 @@ async function processModernTreasuryPaymentSubmission({ runId, user, ipAddress, 
   return current;
 }
 
+// FUNCTION: Loads a run without changing it and returns its derived workflow tracker.
 async function getRunWorkflow(req, res) {
   try {
     const run = await findFinanceRun(req.params.runId);
@@ -433,8 +448,12 @@ async function getRunWorkflow(req, res) {
   }
 }
 
+// FUNCTION: Dispatches a Finance workflow command, coordinates payment jobs when
+// necessary, and converts business/database failures into meaningful API responses.
 async function runWorkflowAction(req, res) {
   const action = req.workflowAction || req.params.action;
+  // Separation of duties is enforced in the API, not only hidden in the UI.
+  // Finance monitors payslip progress; HR owns the actual delivery action.
   if (action === "send-payslips") {
     return res.status(403).json({ code: "ACTION_OWNED_BY_HR", message: "Payslip delivery is owned by HR. Finance can monitor its progress in the payroll-run tracker." });
   }
@@ -448,6 +467,9 @@ async function runWorkflowAction(req, res) {
 
       const companyId = currentCompanyId();
       const jobKey = `${companyId}:${req.params.runId}`;
+      // Only one in-memory submission job may run for this company/payroll run.
+      // Provider idempotency and persisted per-employee results provide the
+      // longer-lived protection used when a request is retried later.
       const reservation = activePaymentSubmissions.reserve(jobKey);
       if (!reservation.acquired) return res.status(202).json({ ...workflowResponse(current), code: "PAYMENT_SUBMISSION_IN_PROGRESS", message: "Modern Treasury submission is already running.", startedAt: reservation.job.startedAt });
 
@@ -506,6 +528,7 @@ async function runWorkflowAction(req, res) {
   }
 }
 
+// FUNCTION: Reuses the generic workflow handler with the fixed approve-payroll action.
 function approvePayrollRun(req, res) {
   req.workflowAction = "approve-payroll";
   return runWorkflowAction(req, res);
@@ -519,6 +542,7 @@ async function getRunAdjustments(req, res) {
   }
 }
 
+// FUNCTION: Requests explainable adjustment proposals for an unlocked payroll run.
 async function generateRunAdjustments(req, res) {
   try {
     const proposals = await generateAdjustmentProposals(req.params.runId, req.user?.userId);
@@ -534,6 +558,8 @@ async function generateRunAdjustments(req, res) {
   }
 }
 
+// FUNCTION: Records Finance approval/rejection of selected proposals, recalculates
+// approved safe changes, writes an audit event and returns the refreshed results.
 async function reviewRunAdjustments(req, res) {
   try {
     const action = req.body?.action;

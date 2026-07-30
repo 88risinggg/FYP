@@ -24,6 +24,7 @@ function localNowString(now = new Date()) { return new Date(now.getTime() + SING
 function nextPeriod(year, month) { return month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 }; }
 function targetPeriodForCutoff(year, month, nowString, cutoffAt) { return cutoffAt && nowString > cutoffAt ? nextPeriod(year, month) : { year, month }; }
 
+// FUNCTION: Moves a requested date backward around weekends/public holidays.
 function previousBusinessDate(year, month, requestedDay, holidayDates = []) {
   const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
   let day = Math.min(Number(requestedDay), lastDay);
@@ -37,6 +38,7 @@ function previousBusinessDate(year, month, requestedDay, holidayDates = []) {
   return `${year}-${pad(month)}-${pad(day)}`;
 }
 
+// FUNCTION: Calculates effective claim cut-off and salary-release timestamps.
 function calculatePeriodSchedule(config, year, month, holidayDates = []) {
   const releaseDay = validDay(config.salaryReleaseDay);
   const cutoffDay = validDay(config.claimCutoffDay);
@@ -49,6 +51,7 @@ function calculatePeriodSchedule(config, year, month, holidayDates = []) {
   };
 }
 
+// FUNCTION: Loads the company's Finance payroll schedule configuration.
 async function getFinanceScheduleConfig(connection = pool) {
   const companyId = currentCompanyId();
   const [rows] = await connection.query(
@@ -69,6 +72,7 @@ async function getFinanceScheduleConfig(connection = pool) {
   };
 }
 
+// FUNCTION: Validates and persists company cut-off/release schedule settings.
 async function saveFinanceScheduleConfig(input, userId) {
   const companyId = currentCompanyId();
   const enabled = Boolean(input.enabled);
@@ -106,6 +110,7 @@ async function getHolidayDates(connection, year, month) {
   return rows.map((row) => String(row.holiday_date).slice(0, 10));
 }
 
+// FUNCTION: Calculates a schedule preview without saving changes.
 async function previewFinanceSchedule(year, month, input = {}) {
   const config = { ...(await getFinanceScheduleConfig()), ...input };
   if (input.enabled !== undefined) config.enabled = parseBoolean(input.enabled);
@@ -113,6 +118,7 @@ async function previewFinanceSchedule(year, month, input = {}) {
   return { ...calculatePeriodSchedule(config, year, month, holidays), holidays, timezone: TIMEZONE };
 }
 
+// FUNCTION: Copies calculated schedule dates onto an eligible payroll run.
 async function applyScheduleDefaultsToRun(runId, connection = pool) {
   const [month, year] = String(runId).split("_").map(Number);
   const config = await getFinanceScheduleConfig(connection);
@@ -128,6 +134,7 @@ async function applyScheduleDefaultsToRun(runId, connection = pool) {
   return dates;
 }
 
+// FUNCTION: Changes one unlocked run's cut-off/release timestamps.
 async function updateRunSchedule(runId, input, userId) {
   const [month, year] = String(runId).split("_").map(Number);
   const [[run]] = await pool.query(`SELECT * FROM payroll_run WHERE payroll_month = ? AND payroll_year = ? AND company_id = ? LIMIT 1`, [month, year, currentCompanyId()]);
@@ -146,6 +153,7 @@ async function updateRunSchedule(runId, input, userId) {
   await writeAuditLog({ module: MODULE.PAYROLL, activityType: "Payroll Schedule", action: `Updated release schedule for ${runId}`, entityId: runId, entityType: "payroll_run", userId });
 }
 
+// FUNCTION: Validates and confirms an approved run for automatic release.
 async function confirmRunSchedule(runId, userId) {
   const [month, year] = String(runId).split("_").map(Number);
   const [[run]] = await pool.query(`SELECT * FROM payroll_run WHERE payroll_month = ? AND payroll_year = ? AND company_id = ? LIMIT 1`, [month, year, currentCompanyId()]);
@@ -162,6 +170,7 @@ async function confirmRunSchedule(runId, userId) {
   await writeAuditLog({ module: MODULE.PAYROLL, activityType: "Payroll Schedule", action: `Confirmed scheduled release for ${runId}`, entityId: runId, entityType: "payroll_run", userId });
 }
 
+// FUNCTION: Cancels an unreleased confirmed payroll schedule.
 async function cancelRunSchedule(runId, userId) {
   const [month, year] = String(runId).split("_").map(Number);
   const [result] = await pool.query(
@@ -173,6 +182,7 @@ async function cancelRunSchedule(runId, userId) {
   await writeAuditLog({ module: MODULE.PAYROLL, activityType: "Payroll Schedule", action: `Cancelled scheduled release for ${runId}`, entityId: runId, entityType: "payroll_run", userId });
 }
 
+// FUNCTION: Resets a failed unreleased schedule for another processing attempt.
 async function markRunForManualRetry(runId, userId) {
   const [month, year] = String(runId).split("_").map(Number);
   const [result] = await pool.query(
@@ -184,6 +194,7 @@ async function markRunForManualRetry(runId, userId) {
   if (!result.affectedRows) throw new Error("Only a failed unreleased run can be retried.");
 }
 
+// FUNCTION: Chooses the payroll period that should receive an approved claim.
 async function claimTargetForApproval(connection, now = new Date()) {
   const local = new Date(now.getTime() + SINGAPORE_OFFSET_MS);
   let month = local.getUTCMonth() + 1;
@@ -201,6 +212,7 @@ async function claimTargetForApproval(connection, now = new Date()) {
   return { month, year, cutoffAt: schedule.claimCutoffAt };
 }
 
+// FUNCTION: Claims a due run, processes payment and records success/failure safely.
 async function executeScheduledRelease(payrollRunId) {
   const connection = await pool.getConnection();
   let run;
@@ -253,6 +265,7 @@ async function executeScheduledRelease(payrollRunId) {
   });
 }
 
+// FUNCTION: Finds due confirmed runs and processes a bounded batch.
 async function processDueScheduledReleases() {
   const [rows] = await pool.query(
     `SELECT payroll_run_id, company_id FROM payroll_run WHERE release_schedule_status = 'Confirmed'

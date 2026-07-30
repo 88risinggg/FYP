@@ -35,6 +35,7 @@ function isReportableStatutorySetting(setting = {}) {
   return statutoryPrefix && !operationalOrBankingReference;
 }
 
+// FUNCTION: Loads database datasets used to build Admin governance reports.
 async function getAdminPayrollReportData() {
   const companyId = currentCompanyId();
   const [[[userStats]], [payrollRuns], [roleSummary], [users], [auditLogs]] = await Promise.all([
@@ -112,6 +113,7 @@ async function logAdminAction({ action, entityType, entityId, userId }) {
   await writeAuditLog({ module: "Payroll", activityType: entityType, action, entityId, entityType, userId, status: "Success" });
 }
 
+// FUNCTION: Calculates Admin dashboard totals for users, rules, runs and activity.
 async function getDashboardStats() {
   const companyId = currentCompanyId();
   await ensurePayrollConfigurationTable(pool);
@@ -134,6 +136,7 @@ async function getDashboardStats() {
   };
 }
 
+// FUNCTION: Reads company payslip-template records from the database.
 async function listPayslipLayouts() {
   await ensurePayrollConfigurationTable(pool);
   const [rows] = await pool.execute(
@@ -161,6 +164,7 @@ async function listPayslipLayouts() {
   });
 }
 
+// FUNCTION: Inserts metadata for an uploaded payslip layout.
 async function createPayslipLayout({ layoutName, filePath, fileType, originalFileName, fileSize, createdBy }) {
   await ensurePayrollConfigurationTable(pool);
   const [[countRow]] = await pool.execute(
@@ -190,6 +194,7 @@ async function createPayslipLayout({ layoutName, filePath, fileType, originalFil
   return result.insertId;
 }
 
+// FUNCTION: Atomically clears the old default and selects a new layout.
 async function setDefaultPayslipLayout(layoutId) {
   await ensurePayrollConfigurationTable(pool);
   const connection = await pool.getConnection();
@@ -226,10 +231,12 @@ async function setDefaultPayslipLayout(layoutId) {
   }
 }
 
+// FUNCTION: Returns current company payroll configuration rows.
 async function listPayrollSettings() {
   return listStoredPayrollSettings();
 }
 
+// FUNCTION: Summarises which staff records meet configured MBMF eligibility.
 async function listMbmfEligibilitySummary() {
   const companyId = currentCompanyId();
   const [[staffCount]] = await pool.execute(
@@ -269,6 +276,7 @@ async function listMbmfEligibilitySummary() {
   };
 }
 
+// FUNCTION: Inserts/updates a company payroll setting and records its audit evidence.
 async function upsertPayrollSetting({ settingKey, settingValue, description, effectiveFrom, ruleCategory, usageType, isActive, updatedBy, ipAddress, deviceInfo }) {
   const previous = (await listStoredPayrollSettings()).find((setting) => setting.setting_key === settingKey);
   await upsertStoredPayrollSetting({ settingKey, settingValue, description, effectiveFrom, ruleCategory, usageType, isActive, updatedBy });
@@ -281,6 +289,7 @@ async function upsertPayrollSetting({ settingKey, settingValue, description, eff
   });
 }
 
+// FUNCTION: Returns payroll runs for Admin monitoring without approval mutation.
 async function listPayrollRuns() {
   const companyId = currentCompanyId();
   const [rows] = await pool.execute(
@@ -305,6 +314,7 @@ async function listPayrollRuns() {
   return rows;
 }
 
+// FUNCTION: Loads recent Payroll Admin audit events.
 async function listAuditLogs() {
   const companyId = currentCompanyId();
   const [rows] = await pool.execute(
@@ -325,6 +335,7 @@ async function listAuditLogs() {
   return rows;
 }
 
+// FUNCTION: Aggregates recent Admin activity for dashboard trends.
 async function listAdminActivityTrends() {
   const companyId = currentCompanyId();
   const [rows] = await pool.execute(
@@ -341,6 +352,7 @@ async function listAdminActivityTrends() {
   return rows;
 }
 
+// FUNCTION: Groups audit events into requested date buckets.
 async function listAuditActivityInsight({ from, to, granularity }) {
   const companyId = currentCompanyId();
   const bucketSql = {
@@ -360,6 +372,7 @@ async function listAuditActivityInsight({ from, to, granularity }) {
   return rows;
 }
 
+// FUNCTION: Counts payroll users by role for access-governance reporting.
 async function listUserRoleInsight({ accountStatus = "all" } = {}) {
   const companyId = currentCompanyId();
   const statusClauses = {
@@ -386,6 +399,7 @@ async function listUserRoleInsight({ accountStatus = "all" } = {}) {
   return rows;
 }
 
+// FUNCTION: Counts active/inactive users, optionally filtered by role.
 async function listAccountStatusInsight({ role = "all" } = {}) {
   const companyId = currentCompanyId();
   const params = [companyId];
@@ -431,6 +445,7 @@ function payrollRunHealth(run, now = Date.now()) {
   return "In Progress";
 }
 
+// FUNCTION: Classifies payroll runs as healthy, attention-required or delayed.
 async function listRunHealthInsight({ from, to }) {
   const runs = await listPayrollRuns();
   const start = new Date(`${from}T00:00:00`);
@@ -447,6 +462,7 @@ async function listRunHealthInsight({ from, to }) {
   return [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([bucket, counts]) => ({ bucket, ...counts }));
 }
 
+// FUNCTION: Returns payroll users with their assigned role/permission details.
 async function listUsersWithRoles() {
   const companyId = currentCompanyId();
   const [counts] = await pool.execute(
@@ -463,6 +479,7 @@ async function listUsersWithRoles() {
   }));
 }
 
+// FUNCTION: Finds staff profiles not yet linked to a user account.
 async function listAvailableStaffForUserCreation() {
   const companyId = currentCompanyId();
   const [rows] = await pool.execute(
@@ -510,6 +527,7 @@ async function listUsers() {
   return rows;
 }
 
+// FUNCTION: Creates and optionally links a company-scoped payroll user transactionally.
 async function createUserAccount({ email, name, passwordHash, roleId, status, staffEmployeeId, adminUserId }) {
   const companyId = currentCompanyId();
   const connection = await pool.getConnection();
@@ -617,6 +635,7 @@ async function getUserById(userId) {
   return rows[0] || null;
 }
 
+// FUNCTION: Persists an Admin-authorised account status change.
 async function updateUserStatus({ userId, status, adminUserId }) {
   const companyId = currentCompanyId();
   const [result] = await pool.execute(
@@ -640,6 +659,7 @@ async function updateUserStatus({ userId, status, adminUserId }) {
   return result.affectedRows > 0;
 }
 
+// FUNCTION: Persists an Admin-authorised role change.
 async function updateUserRole({ userId, roleId, adminUserId }) {
   const companyId = currentCompanyId();
   const roleName = ROLE_NAMES[roleId];
@@ -661,6 +681,7 @@ async function updateUserRole({ userId, roleId, adminUserId }) {
   return result.affectedRows > 0;
 }
 
+// FUNCTION: Stores the new password hash for an Admin reset operation.
 async function updateUserPassword({ userId, passwordHash, adminUserId }) {
   const companyId = currentCompanyId();
   const [result] = await pool.execute(

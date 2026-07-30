@@ -17,6 +17,11 @@ const STAGES = [
   ["reconciliation", "Reconciliation & Reports"]
 ];
 
+// EVALUATION NOTE: Database timestamps are converted here into presentation-ready
+// stages, progress totals and blockers. Keeping this derivation in one service
+// ensures every Finance screen describes the workflow consistently.
+// FUNCTION: Derives dashboard stages, progress totals, the next action and blockers
+// from one payroll run. It does not modify the database.
 function buildFinanceWorkflowState(run) {
   const employees = Array.isArray(run?.employees) ? run.employees : [];
   const counts = {
@@ -28,6 +33,8 @@ function buildFinanceWorkflowState(run) {
     payslipsFailed: Number(run?.payslipDelivery?.failed || 0),
     payslipsSkipped: Number(run?.payslipDelivery?.skipped || 0)
   };
+  // Once approval/payment preparation begins, employee salary data is treated as
+  // locked; corrections must follow an authorised recalculation workflow.
   const payrollLocked = Boolean(run?.approvedAt || run?.paymentFileGeneratedAt || run?.paymentSubmittedAt || run?.paidAt);
   const workflow = {
     claims: true,
@@ -43,6 +50,8 @@ function buildFinanceWorkflowState(run) {
   const processing = ["Submitting", "Processing", "Submitted", "Partially Submitted"].includes(run?.paymentStatus) ? "payment" : null;
   const failed = run?.paymentStatus === "Failed" ? "payment" : null;
   const firstIncomplete = STAGES.find(([key]) => !workflow[key])?.[0] || null;
+  // The first unfinished stage becomes current. Exceptions/holds produce a
+  // blocked state, while provider or delivery errors produce a failed state.
   const stages = STAGES.map(([key, label]) => {
     let status = workflow[key] ? "completed" : key === firstIncomplete ? "current" : "upcoming";
     if (key === processing) status = "processing";

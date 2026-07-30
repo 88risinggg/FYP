@@ -50,6 +50,8 @@ export function acknowledgeFinancePayrollRules() {
   return apiRequest("/api/payroll/finance/rule-acknowledgement", { method: "POST" });
 }
 
+// FUNCTION: Sends one named Finance workflow command to the backend. Approval uses
+// its dedicated endpoint; all other transitions use the generic action endpoint.
 export function performFinancePayrollWorkflowAction(runId, action, payload = {}) {
   const path = action === "approve-payroll"
     ? `/api/payroll/finance/runs/${runId}/approve`
@@ -60,6 +62,7 @@ export function performFinancePayrollWorkflowAction(runId, action, payload = {})
   });
 }
 
+// FUNCTION: Requests a fresh calculation for an unlocked run after rule/data changes.
 export function recalculateFinancePayrollRun(runId) {
   return apiRequest(`/api/payroll/finance/runs/${runId}/recalculate`, { method: "POST" });
 }
@@ -68,10 +71,12 @@ export function getFinancePayrollAdjustments(runId) {
   return apiRequest(`/api/payroll/finance/runs/${runId}/adjustments`);
 }
 
+// FUNCTION: Requests explainable adjustment suggestions for a Finance payroll run.
 export function generateFinancePayrollAdjustments(runId) {
   return apiRequest(`/api/payroll/finance/runs/${runId}/adjustments/generate`, { method: "POST" });
 }
 
+// FUNCTION: Sends selected proposal IDs plus an approve/reject decision and reason.
 export function reviewFinancePayrollAdjustments(runId, payload) {
   return apiRequest(`/api/payroll/finance/runs/${runId}/adjustments/review`, {
     method: "POST", body: JSON.stringify(payload)

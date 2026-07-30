@@ -5,6 +5,7 @@
  * LAYER: Frontend utility - provides reusable data transformation or helper logic.
  * FIND RELATED CODE: Use Find All References on its exports to locate connected features.
  */
+// FUNCTION: Derives simple completed steps used by frontend buttons and trackers.
 export function getFinanceWorkflowState(run) {
   return {
     reviewed: Boolean(run?.reviewedAt || run?.approvedAt || run?.paidAt),
@@ -19,6 +20,7 @@ export function getFinanceWorkflowState(run) {
   };
 }
 
+// FUNCTION: Explains whether a requested Finance step may proceed.
 export function canAdvanceFinancePayrollRun(run, step, options = {}) {
   const state = getFinanceWorkflowState(run);
   const allEmployeesApproved = Boolean(options.allEmployeesApproved);
@@ -42,6 +44,7 @@ export function canAdvanceFinancePayrollRun(run, step, options = {}) {
   return rules[step] === true;
 }
 
+// FUNCTION: Selects the next route after a successful workflow action.
 export function getFinanceAutoAdvance(action, run = {}) {
   if (["payment-document", "save-recipients"].includes(action)) {
     return run.paymentFileGeneratedAt && Number(run.paymentRecipientsConfigured || 0) >= (run.employees?.length || 0)

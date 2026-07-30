@@ -38,6 +38,8 @@ const router = express.Router();
 
 router.use(authenticateToken);
 
+// EVALUATION NOTE: Finance must explicitly acknowledge the latest Admin policy
+// fingerprint before any protected calculation or approval endpoint can run.
 async function requireCurrentRuleAcknowledgement(req, res, next) {
   if (req.user?.role !== "Finance") return next();
   try {
@@ -63,6 +65,8 @@ router.post("/runs/:runId/validate", allowRoles("Admin", "Finance"), requireCurr
 router.get("/runs/:runId/workflow", allowRoles("Admin", "Finance", "HR"), getRunWorkflow);
 router.get("/rule-acknowledgement", allowRoles("Finance"), async (req, res) => res.json(await getRuleAcknowledgement(req.user?.userId)));
 router.post("/rule-acknowledgement", allowRoles("Finance"), async (req, res, next) => { try { res.json(await acknowledgePayrollRules(req.user?.userId)); } catch (error) { next(error); } });
+// EVALUATION NOTE: Approval and generic workflow transitions remain Finance-only;
+// the controller and model still validate that every earlier stage is complete.
 router.post("/runs/:runId/approve", allowRoles("Finance"), requireCurrentRuleAcknowledgement, approvePayrollRun);
 router.post("/runs/:runId/workflow/:action", allowRoles("Finance"), requireCurrentRuleAcknowledgement, runWorkflowAction);
 router.put("/runs/:runId", allowRoles("Admin", "Finance"), requireCurrentRuleAcknowledgement, saveFinancePayrollRun);

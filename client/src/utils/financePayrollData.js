@@ -7,6 +7,7 @@
  */
 const asMoney = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
 
+// FUNCTION: Normalizes a payroll line item into a safe label/rate/amount shape.
 export function normalizePayrollItem(item, fallbackLabel = "Payroll item") {
   const source = item && typeof item === "object" ? item : {};
   return {
@@ -17,6 +18,7 @@ export function normalizePayrollItem(item, fallbackLabel = "Payroll item") {
   };
 }
 
+// FUNCTION: Normalizes backend employee payroll fields for Finance UI components.
 export function normalizeFinanceEmployee(employee, index = 0) {
   const source = employee && typeof employee === "object" ? employee : {};
   const id = source.id || source.employeeId || source.employee_code || source.staffEmployeeId || `EMP-${index + 1}`;
@@ -38,6 +40,7 @@ export function normalizeFinanceEmployee(employee, index = 0) {
   };
 }
 
+// FUNCTION: Normalizes one backend/demo run into the Finance page's canonical shape.
 export function normalizeFinancePayrollRun(run, index = 0) {
   const source = run && typeof run === "object" ? run : {};
   const month = Math.min(12, Math.max(1, Number(source.month) || new Date().getMonth() + 1));
@@ -53,6 +56,7 @@ export function normalizeFinancePayrollRun(run, index = 0) {
   };
 }
 
+// FUNCTION: Normalizes a run collection and applies a safe fallback.
 export function normalizeFinancePayrollRuns(runs, fallback = []) {
   if (!Array.isArray(runs)) return fallback.map(normalizeFinancePayrollRun);
   const normalized = runs.filter((run) => run && typeof run === "object").map(normalizeFinancePayrollRun);

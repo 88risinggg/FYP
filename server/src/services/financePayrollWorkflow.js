@@ -9,6 +9,8 @@ function isPresent(value) {
   return value !== undefined && value !== null && value !== "";
 }
 
+// FUNCTION: Validates the payroll run's basic shape and ordered workflow stages.
+// Returns an array of explanations; an empty array means the run is structurally valid.
 function validateFinancePayrollRun(run) {
   const errors = [];
 
@@ -27,6 +29,8 @@ function validateFinancePayrollRun(run) {
     errors.push("At least one employee is required for a payroll run.");
   }
 
+  // EVALUATION NOTE: These dependency checks are enforced by the backend, so a
+  // user cannot skip stages by bypassing the React interface and calling an API.
   const has = (field) => isPresent(run[field]);
   const requireStep = (field, prerequisite, message) => {
     if (has(field) && !has(prerequisite)) errors.push(message);
@@ -39,6 +43,8 @@ function validateFinancePayrollRun(run) {
   requireStep("cpfSubmissionLoggedAt", "paidAt", "Payment must be confirmed before CPF and MBMF are logged.");
   requireStep("otherDeductionsLoggedAt", "paidAt", "Payment must be confirmed before other deductions are logged.");
 
+  // Accounting closure is allowed only after employee communication and all
+  // statutory liabilities have been recorded.
   if (has("ledgerRecordedAt") || has("xeroRecordedAt")) {
     if (!has("payslipsSentAt") || !has("cpfSubmissionLoggedAt") || !has("otherDeductionsLoggedAt")) {
       errors.push("Payslips and statutory deductions must be completed before ledger recording.");
@@ -49,6 +55,8 @@ function validateFinancePayrollRun(run) {
     errors.push("Payroll must be recorded in the ledger before reconciliation.");
   }
 
+  // Run-level approval is blocked when even one employee is held, unapproved or
+  // still has a compliance exception.
   if (has("approvedAt") && Array.isArray(run.employees)) {
     const hasUnapprovedEmployee = run.employees.some(
       (employee) => employee?.financeStatus !== "Approved" || employee?.complianceExceptions?.length

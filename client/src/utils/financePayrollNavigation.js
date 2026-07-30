@@ -21,10 +21,12 @@ export const FINANCE_WORKFLOW_TRACKER_PATHS = Object.freeze([
   "/dashboard/payroll/finance/payroll-summaries"
 ]);
 
+// FUNCTION: Determines whether the workflow tracker belongs on the current Finance route.
 export function shouldShowFinanceTracker(pathname) {
   return FINANCE_WORKFLOW_TRACKER_PATHS.includes(pathname);
 }
 
+// FUNCTION: Returns required schedule fields that Finance has not configured.
 export function getMissingScheduleFields(schedule = {}) {
   if (!schedule.enabled) return [];
   return [

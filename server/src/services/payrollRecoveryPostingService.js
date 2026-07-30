@@ -19,6 +19,7 @@ function sourceRecordId(item = {}) {
   return String(item.label || "").match(/(?:repayment|advance)\s+([a-z0-9_-]+)$/i)?.[1] || null;
 }
 
+// FUNCTION: Posts paid payroll loan/advance deductions against outstanding balances once.
 async function postPayrollRecoveries({ connection, payrollRunId, userId }) {
   const companyId = currentCompanyId();
   const [payrollRows] = await connection.execute(

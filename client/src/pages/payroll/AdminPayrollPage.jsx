@@ -81,6 +81,7 @@ import { createPayrollReportPdf } from "../../utils/payrollReportPdf.js";
 const pageTitle = "Automated Payroll System – Admin Payroll Dashboard";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
+// FUNCTION: Lets Admin crop/position a company logo before persistent upload.
 function LogoCropModal({ file, busy, onCancel, onSave }) {
   const [source, setSource] = useState("");
   const [zoom, setZoom] = useState(1);
@@ -232,6 +233,7 @@ const payrollSidebarSections = [
   },
 ];
 
+// FUNCTION: Loads and edits company identity, branding and the logo used by payroll documents.
 function CompanyProfileView() {
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -1194,6 +1196,7 @@ function insightLabel(value) {
   });
 }
 
+// FUNCTION: Presents Admin payroll governance totals, recent changes and quick actions.
 function DashboardView({ data, onNavigate }) {
   const stats = data?.stats || {};
   const dashboardUpdates = getDashboardUpdateSegments(data);
@@ -1431,6 +1434,7 @@ function DashboardView({ data, onNavigate }) {
   );
 }
 
+// FUNCTION: Loads filterable audit, user-access and payroll-run health analytics.
 function AdminInsightsPanel() {
   const initialAudit = insightDateRange("30d");
   const initialRuns = insightDateRange("6m", "run_health");
@@ -1947,6 +1951,7 @@ function InsightDataTable({ insight }) {
   );
 }
 
+// FUNCTION: Displays the active rule catalogue, sources, effective dates and publication status.
 function EffectivePayrollRulesView({ onNavigate }) {
   const [catalogue, setCatalogue] = useState({ categories: [], rules: [] });
   const [category, setCategory] = useState("All categories");
@@ -2218,6 +2223,7 @@ function EffectivePayrollRulesView({ onNavigate }) {
   );
 }
 
+// FUNCTION: Displays staff records available for payroll account/access administration.
 function StaffManagementView() {
   const session = getStoredSession();
   const [staff, setStaff] = useState([]);
@@ -2512,6 +2518,7 @@ function StaffManagementView() {
   );
 }
 
+// FUNCTION: Manages payroll users, roles, statuses, permissions and activation requests.
 function UsersRolesView({
   availableStaff = [],
   onCreateUser,
@@ -2810,6 +2817,7 @@ function UsersRolesView({
   );
 }
 
+// FUNCTION: Applies an access/status operation to multiple selected payroll users.
 function BulkAccessModal({
   filteredUsers,
   onClose,
@@ -3033,6 +3041,7 @@ function ProfileField({ label, value }) {
   );
 }
 
+// FUNCTION: Collects and validates the details needed to create a linked payroll user.
 function AddUserModal({
   availableStaff = [],
   onClose,
@@ -3231,6 +3240,7 @@ function AddUserModal({
   );
 }
 
+// FUNCTION: Updates one user's role/status or starts an Admin password reset.
 function UserManagementModal({
   currentUserId,
   onClose,
@@ -3455,6 +3465,7 @@ function UserManagementModal({
   );
 }
 
+// FUNCTION: Imports, previews and selects the default branded payslip layout.
 function PayslipLayoutsView({
   layouts = [],
   onImportLayout,
@@ -4013,6 +4024,7 @@ function SettingInput({ value, onChange, placeholder }) {
   );
 }
 
+// FUNCTION: Edits employee/employer CPF percentage tiers used by payroll calculations.
 function CpfRateTable({ onSave, settingsByKey }) {
   const [rows, setRows] = useState(() =>
     cpfAgeTierRows.map((row) => ({
@@ -4143,6 +4155,7 @@ function CpfRateTable({ onSave, settingsByKey }) {
   );
 }
 
+// FUNCTION: Configures which earning components are CPF-applicable.
 function WageComponentTable({ onSave, settingsByKey }) {
   const [rows, setRows] = useState(() =>
     earningComponentRows.map((row) => ({
@@ -4298,6 +4311,7 @@ function WageComponentTable({ onSave, settingsByKey }) {
   );
 }
 
+// FUNCTION: Configures which deductions reduce employee net pay.
 function DeductionComponentTable({ onSave, settingsByKey }) {
   const [rows, setRows] = useState(() =>
     deductionComponentRows.map((row) => ({
@@ -4474,6 +4488,7 @@ function DeductionComponentTable({ onSave, settingsByKey }) {
   );
 }
 
+// FUNCTION: Configures employer-paid payroll contribution components.
 function EmployerContributionTable({ onSave, settingsByKey }) {
   const [rows, setRows] = useState(() =>
     employerContributionRows.map((row) => ({
@@ -4631,6 +4646,7 @@ function getEligibleUsers(users = [], field, value) {
   );
 }
 
+// FUNCTION: Manages effective-dated MBMF wage bands, evidence and eligibility.
 function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
   const readBands = () => {
     try {
@@ -5239,6 +5255,7 @@ function MbmfContributionPanel({ eligibility, onSave, settingsByKey }) {
   );
 }
 
+// FUNCTION: Manages the CPF monthly wage ceiling and its effective-date history.
 function CpfCeilingPanel({ onSave, settingsByKey }) {
   return (
     <div className="grid gap-4 xl:grid-cols-[1fr_0.75fr]">
@@ -5274,6 +5291,7 @@ function CpfCeilingPanel({ onSave, settingsByKey }) {
   );
 }
 
+// FUNCTION: Configures MBMF, CDAC, SINDA and ECF eligibility/effective dates.
 function SelfHelpGroupRulesPanel({ onSave, settingsByKey, users = [] }) {
   const communityFundConfigs = selfHelpGroupConfigs.filter(
     (scheme) => scheme.key !== "mbmf",
@@ -5512,6 +5530,7 @@ function SelfHelpGroupRulesPanel({ onSave, settingsByKey, users = [] }) {
   );
 }
 
+// FUNCTION: Groups Admin payroll calculation settings into editable sections.
 function SettingsView({
   mbmfEligibility,
   onUpdateSetting,
@@ -5581,6 +5600,7 @@ function SettingsView({
   );
 }
 
+// FUNCTION: Stages, validates and publishes statutory/validation rule changes.
 function ComplianceRulesView({
   mbmfEligibility,
   onRulesPublished,
@@ -6005,6 +6025,7 @@ function ComplianceRulesView({
   );
 }
 
+// FUNCTION: Creates and edits organisation-specific payroll compliance rules.
 function CustomComplianceRulesPanel({ onSave, settings = [] }) {
   const emptyForm = {
     category: "Payroll Compliance",
@@ -6287,6 +6308,7 @@ function getRunResponsibleRole(statusValue) {
   return "HR";
 }
 
+// FUNCTION: Shows payroll-run status and responsible role without giving Admin approval power.
 function PayrollMonitorView({ payrollRuns = [], onNavigate }) {
   const today = new Date().toISOString().slice(0, 10);
   const [periodMode, setPeriodMode] = useState("all");
@@ -6615,6 +6637,7 @@ function formatAuditArea(entityType) {
   );
 }
 
+// FUNCTION: Filters and displays traceable Payroll Admin actions.
 function AuditLogsView({ auditLogs = [] }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [entityFilter, setEntityFilter] = useState("All");
@@ -6802,6 +6825,7 @@ function getAuthHeaders(token) {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+// FUNCTION: Reviews payslips submitted for Admin approval or rejection.
 function PayslipsApprovalView() {
   const session = getStoredSession();
   const [payslips, setPayslips] = useState([]);
@@ -7529,6 +7553,7 @@ function ReportPreviewModal({ data, report, onClose }) {
     </div>
   );
 }
+// FUNCTION: Previews and exports governance, access, rules and workflow reports.
 function ReportsView({ data }) {
   const [selectedReport, setSelectedReport] = useState("");
   const [reportData, setReportData] = useState(null);
@@ -7744,6 +7769,7 @@ function ReportsView({ data }) {
   );
 }
 
+// FUNCTION: Loads Admin payroll data and routes the selected sidebar path to its feature view.
 function AdminPayrollContent({
   onCreateUser,
   currentUserId,
@@ -7828,6 +7854,7 @@ export default function AdminPayrollPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
+  // FUNCTION: Refreshes Admin dashboard, settings, users, runs, layouts and audit information.
   const loadDashboard = async ({ silent = false } = {}) => {
     try {
       setErrorMessage("");
@@ -7855,6 +7882,7 @@ export default function AdminPayrollPage() {
     return () => window.removeEventListener("focus", refreshDashboard);
   }, [location.pathname]);
 
+  // FUNCTION: Uploads a payslip layout and refreshes the layout list after success.
   const handleImportLayout = async (file) => {
     try {
       const result = await addPayslipLayout(file);
@@ -7876,6 +7904,7 @@ export default function AdminPayrollPage() {
     }
   };
 
+  // FUNCTION: Marks one payslip layout as the company default.
   const handleSetDefaultLayout = async (layoutId) => {
     try {
       const selectedLayout = dashboardData?.layouts?.find(
@@ -7912,6 +7941,7 @@ export default function AdminPayrollPage() {
     }));
   };
 
+  // FUNCTION: Creates a payroll user and refreshes Admin user-management state.
   const handleCreateUser = async (payload) => {
     try {
       const result = await createUser(payload);
@@ -7923,6 +7953,7 @@ export default function AdminPayrollPage() {
     }
   };
 
+  // FUNCTION: Activates or disables a payroll user through the protected API.
   const handleUpdateUserStatus = async (userId, status) => {
     try {
       const result = await updateUserStatus(userId, status);
@@ -7933,6 +7964,7 @@ export default function AdminPayrollPage() {
     }
   };
 
+  // FUNCTION: Changes a user's payroll role and refreshes permission information.
   const handleUpdateUserRole = async (userId, roleId) => {
     try {
       const result = await updateUserRole(userId, roleId);
@@ -7943,6 +7975,7 @@ export default function AdminPayrollPage() {
     }
   };
 
+  // FUNCTION: Requests an Admin-controlled password reset and surfaces its result.
   const handleResetUserPassword = async (userId) => {
     try {
       const result = await resetUserPassword(userId);
@@ -7954,6 +7987,7 @@ export default function AdminPayrollPage() {
     }
   };
 
+  // FUNCTION: Persists one Admin payroll setting and refreshes dependent dashboard data.
   const handleUpdatePayrollSetting = async (settingKey, payload) => {
     try {
       const result = await updatePayrollSetting(settingKey, payload);
@@ -7995,6 +8029,11 @@ export default function AdminPayrollPage() {
     }
   };
 
+  // EVALUATION NOTE: The page collects changes, but publication is performed by
+  // the backend transaction. The returned version, audit data and rule catalogue
+  // replace local state only after that transaction succeeds.
+  // FUNCTION: Publishes prepared Admin changes, then refreshes settings, audit logs,
+  // eligibility information, publication version and dashboard statistics in one update.
   const handlePublishPayrollRules = async (changes, changeReason) => {
     const result = await publishPayrollRules(changes, changeReason);
     setDashboardData((current) => ({

@@ -121,6 +121,7 @@ function completeRunBuckets(rows, filters) {
   return output;
 }
 
+// FUNCTION: Validates insight filters and returns Admin audit/access/run-health analytics.
 async function getAdminPayrollInsights(req, res) {
   const filters = normalizeInsightQuery(req.query);
   if (filters.error) return res.status(400).json({ message: filters.error });
@@ -156,6 +157,7 @@ async function getAdminPayrollInsights(req, res) {
   }
 }
 
+// FUNCTION: Returns database-backed datasets available to Admin payroll reports.
 async function getAdminPayrollReports(req, res) {
   try {
     res.json(await getAdminPayrollReportData());
@@ -181,6 +183,7 @@ function withinDateRange(value, from, to) {
   return Number.isFinite(time) && time >= start && time <= end;
 }
 
+// FUNCTION: Builds and downloads the selected Admin payroll report.
 async function exportAdminPayrollReport(req, res) {
   try {
     const reportType = String(req.query.reportType || "");
@@ -208,6 +211,7 @@ async function exportAdminPayrollReport(req, res) {
   }
 }
 
+// FUNCTION: Returns the effective rule catalogue plus publication/acknowledgement state.
 async function getAdminEffectivePayrollRules(req, res) {
   try {
     const [catalogue, publication] = await Promise.all([getEffectivePayrollRules(), getPublishedRuleState()]);
@@ -223,6 +227,7 @@ function normalizeFileType(fileType) {
   return String(fileType || "").trim().toUpperCase();
 }
 
+// FUNCTION: Aggregates Admin statistics, users, settings, runs, layouts and audit records.
 async function getAdminPayrollDashboard(req, res) {
   try {
     const [stats, layouts, settings, payrollRuns, auditLogs, auditTrends, roleSummary, users, mbmfEligibility, availableStaff, rulePublication] = await Promise.all([
@@ -259,6 +264,7 @@ async function getAdminPayrollDashboard(req, res) {
   }
 }
 
+// FUNCTION: Returns company payslip layouts and their default/preview metadata.
 async function getPayslipLayouts(req, res) {
   try {
     const layouts = await listPayslipLayouts();
@@ -270,6 +276,7 @@ async function getPayslipLayouts(req, res) {
   }
 }
 
+// FUNCTION: Returns normalized active payroll calculation configuration.
 async function getPayrollRuleConfig(req, res) {
   try {
     const [settings, mbmfEligibility] = await Promise.all([
@@ -288,6 +295,7 @@ async function getPayrollRuleConfig(req, res) {
   }
 }
 
+// FUNCTION: Validates and stores an uploaded payslip template record.
 async function addPayslipLayout(req, res) {
   const uploadedFile = req.file;
   try {
@@ -338,6 +346,7 @@ async function addPayslipLayout(req, res) {
   }
 }
 
+// FUNCTION: Selects one company payslip layout as the default.
 async function makeDefaultPayslipLayout(req, res) {
   try {
     const layoutId = Number(req.params.layoutId);
@@ -366,6 +375,7 @@ async function makeDefaultPayslipLayout(req, res) {
   }
 }
 
+// FUNCTION: Generates a safe preview for a stored payslip layout.
 async function previewPayslipLayout(req, res) {
   try {
     const layoutId = Number(req.params.layoutId);
@@ -386,6 +396,7 @@ async function previewPayslipLayout(req, res) {
   }
 }
 
+// FUNCTION: Generates a sample payslip preview using current branding/rules.
 async function previewSamplePayslip(req, res) {
   try {
     const company = await getCompany(currentCompanyId());
@@ -420,6 +431,7 @@ async function refreshUserManagementPayload() {
   };
 }
 
+// FUNCTION: Validates, creates and audits an Admin-managed payroll user account.
 async function addUser(req, res) {
   try {
     const email = String(req.body.email || "").trim().toLowerCase();
@@ -494,6 +506,7 @@ async function addUser(req, res) {
   }
 }
 
+// FUNCTION: Enables/disables a payroll account and returns refreshed user data.
 async function changeUserStatus(req, res) {
   try {
     const userId = Number(req.params.userId);
@@ -533,6 +546,7 @@ async function changeUserStatus(req, res) {
   }
 }
 
+// FUNCTION: Changes payroll role/permissions and records the Admin action.
 async function changeUserRole(req, res) {
   try {
     const userId = Number(req.params.userId);
@@ -572,6 +586,7 @@ async function changeUserRole(req, res) {
   }
 }
 
+// FUNCTION: Creates a temporary password flow for an Admin-managed account.
 async function resetUserPassword(req, res) {
   try {
     const userId = Number(req.params.userId);
@@ -610,6 +625,7 @@ async function resetUserPassword(req, res) {
   }
 }
 
+// FUNCTION: Validates and saves one configuration value with audit metadata.
 async function updatePayrollSetting(req, res) {
   try {
     const settingKey = String(req.params.settingKey || "").trim();
@@ -679,6 +695,7 @@ async function updatePayrollSetting(req, res) {
   }
 }
 
+// FUNCTION: Publishes a versioned rule batch and returns refreshed Admin data.
 async function publishPayrollRuleChanges(req, res) {
   try {
     const result = await publishPayrollRules({

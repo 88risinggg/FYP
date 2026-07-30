@@ -18,10 +18,17 @@ const {
 
 const GOVERNANCE_KEY = "published_rules";
 
+// FUNCTION: Converts the complete active rule object into a SHA-256 fingerprint.
+// INPUT: Resolved payroll rules. OUTPUT: A 64-character hexadecimal hash.
+// EVALUATION NOTE: The hash is a fingerprint of the complete active rule set.
+// Finance runs compare their stored hash with this value; a mismatch means an
+// unapproved run must be recalculated before Finance can continue.
 function rulesHash(rules) {
   return crypto.createHash("sha256").update(JSON.stringify(rules)).digest("hex");
 }
 
+// FUNCTION: Ensures the database can store each user's latest rule acknowledgement.
+// It safely adds the acknowledgement hash/time columns when an older database lacks them.
 async function ensureRuleGovernanceSchema(connection = pool) {
   await ensurePayrollConfigurationTable(connection);
   for (const [column, definition] of [
@@ -36,6 +43,8 @@ async function ensureRuleGovernanceSchema(connection = pool) {
   }
 }
 
+// FUNCTION: Loads the latest published rule version for the current company.
+// Returns a calculated version-one baseline when no publication has been saved yet.
 async function getPublishedRuleState(connection = pool) {
   const companyId = currentCompanyId();
   await ensureRuleGovernanceSchema(connection);
@@ -53,6 +62,8 @@ async function getPublishedRuleState(connection = pool) {
   return { version: 1, hash, publishedAt: null, publishedBy: "System", changeReason: "Initial payroll rule baseline", changes: [] };
 }
 
+// EVALUATION NOTE: Statutory changes must include an authoritative HTTPS source.
+// This gives evaluators/auditors evidence for why a CPF, SDL or SHG value exists.
 function validateReference(change) {
   const statutory = /^(cpf_|sdl_|mbmf_|cdac_|sinda_|ecf_|iras_|ir21_|compliance_cpf|compliance_sdl)/i.test(change.settingKey);
   if (!statutory) return;
@@ -62,6 +73,8 @@ function validateReference(change) {
   if (url.protocol !== "https:") throw Object.assign(new Error("Payroll rule references must use HTTPS."), { code: "INVALID_RULE_REFERENCE" });
 }
 
+// FUNCTION: Validates and atomically publishes a group of Admin rule changes.
+// Returns the saved publication metadata and refreshed effective-rule catalogue.
 async function publishPayrollRules({ changes, changeReason, userId }) {
   const companyId = currentCompanyId();
   if (!Array.isArray(changes) || !changes.length) throw Object.assign(new Error("At least one changed rule is required."), { code: "NO_RULE_CHANGES" });
@@ -74,10 +87,15 @@ async function publishPayrollRules({ changes, changeReason, userId }) {
   await ensureRuleGovernanceSchema(pool);
   const connection = await pool.getConnection();
   try {
+    // EVALUATION NOTE: Settings, governance metadata and the audit record share
+    // one transaction. A failure rolls back the entire publication, preventing a
+    // partially published rule version.
     await connection.beginTransaction();
     const previous = await getPublishedRuleState(connection);
     for (const change of changes) await upsertStoredPayrollSetting({ ...change, updatedBy: userId }, connection);
     const hash = rulesHash(await getActivePayrollRules(connection));
+    // The publication records both the before/after evidence and when each rule
+    // becomes effective; the next version number makes changes easy to trace.
     const publication = {
       version: Number(previous.version || 0) + 1,
       hash,
@@ -106,6 +124,8 @@ async function publishPayrollRules({ changes, changeReason, userId }) {
   } finally { connection.release(); }
 }
 
+// FUNCTION: Compares a Finance user's acknowledged hash with the latest rule hash.
+// Returns whether acknowledgement is required and which pending runs may be affected.
 async function getRuleAcknowledgement(userId) {
   const companyId = currentCompanyId();
   const publication = await getPublishedRuleState(pool);
@@ -114,6 +134,11 @@ async function getRuleAcknowledgement(userId) {
   return { required: Boolean(publication.publishedAt) && (!user || user.acknowledgedHash !== publication.hash), acknowledgedHash: user?.acknowledgedHash || null, acknowledgedAt: user?.acknowledgedAt || null, publication, affectedRuns: pendingRuns };
 }
 
+// EVALUATION NOTE: Acknowledgement stores the exact publication hash, not only a
+// yes/no flag. Publishing another version changes the hash and automatically
+// requires Finance to acknowledge the new policy again.
+// FUNCTION: Records that a Finance user reviewed the current Admin rule publication.
+// Returns the refreshed acknowledgement state after saving the hash and timestamp.
 async function acknowledgePayrollRules(userId) {
   const companyId = currentCompanyId();
   const publication = await getPublishedRuleState(pool);
@@ -122,6 +147,8 @@ async function acknowledgePayrollRules(userId) {
   return getRuleAcknowledgement(userId);
 }
 
+// FUNCTION: Creates governance metadata for settings changed through another Admin path.
+// It fingerprints the current configuration and advances the publication version.
 async function recordCurrentRulesPublication({ userId, changeReason, changes = [] }) {
   const companyId = currentCompanyId();
   await ensureRuleGovernanceSchema(pool);

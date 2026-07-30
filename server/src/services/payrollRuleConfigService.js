@@ -83,6 +83,8 @@ CPF_FULL_RATE_TIERS_2026.forEach((tier, index) => {
   );
 });
 
+// FUNCTION: Creates/upgrades the company-scoped payroll configuration table.
+// This keeps older deployed databases compatible with effective-dated rule metadata.
 async function ensurePayrollConfigurationTable(connection = getPool()) {
   await connection.execute(
     `CREATE TABLE IF NOT EXISTS payroll_configuration (
@@ -123,6 +125,8 @@ async function ensurePayrollConfigurationTable(connection = getPool()) {
   }
 }
 
+// FUNCTION: Loads the current company's stored settings and fills missing entries
+// with safe system defaults, returning one sorted list for the Admin interface.
 async function listStoredPayrollSettings(connection = getPool()) {
   await ensurePayrollConfigurationTable(connection);
   const companyId = require("./tenantContext").currentCompanyId();
@@ -160,6 +164,8 @@ async function listStoredPayrollSettings(connection = getPool()) {
   return [...rows, ...defaults].sort((a, b) => a.setting_key.localeCompare(b.setting_key));
 }
 
+// FUNCTION: Inserts a new payroll setting or updates the matching company/key row.
+// The caller may pass a transaction so several settings publish atomically.
 async function upsertStoredPayrollSetting({ settingKey, settingValue, description, referenceTitle, referenceUrl, effectiveFrom, ruleCategory, usageType, isActive, updatedBy }, connection = getPool()) {
   await ensurePayrollConfigurationTable(connection);
   const companyId = require("./tenantContext").currentCompanyId();
@@ -196,6 +202,8 @@ function finiteNumber(value, fallback, minimum = 0, maximum = Number.MAX_SAFE_IN
   return Number.isFinite(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback;
 }
 
+// FUNCTION: Converts database setting rows into the normalized rule object used
+// by payroll calculations (CPF, SDL, SHG, validation, earnings and deductions).
 function resolveAppliedPayrollRules(settings = []) {
   const values = Object.fromEntries(settings.map((setting) => [setting.setting_key, setting.setting_value]));
   const get = (key, fallback) => values[key] ?? fallback;
@@ -256,6 +264,8 @@ function resolveAppliedPayrollRules(settings = []) {
   };
 }
 
+// FUNCTION: Builds the human-readable Admin/Finance rule catalogue, including
+// category, source, effective date, usage and active status as of a chosen date.
 function buildEffectiveRuleCatalogue(settings = [], asOf = new Date()) {
   const resolved = resolveAppliedPayrollRules(settings);
   const matching = (patterns) => settings.filter((setting) => patterns.some((pattern) => pattern instanceof RegExp ? pattern.test(setting.setting_key) : setting.setting_key === pattern));
@@ -313,10 +323,12 @@ function buildEffectiveRuleCatalogue(settings = [], asOf = new Date()) {
   return { asOf: asOf.toISOString(), groupCount: rules.length, activeGroupCount: rules.filter((rule) => rule.isActive).length, categories, rules };
 }
 
+// FUNCTION: Loads stored settings and returns their presentation-ready catalogue.
 async function getEffectivePayrollRules(connection = getPool()) {
   return buildEffectiveRuleCatalogue(await listStoredPayrollSettings(connection));
 }
 
+// FUNCTION: Loads stored settings and returns the normalized rules calculations use.
 async function getActivePayrollRules(connection = getPool()) {
   return resolveAppliedPayrollRules(await listStoredPayrollSettings(connection));
 }

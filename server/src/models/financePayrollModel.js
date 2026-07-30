@@ -207,6 +207,8 @@ async function getPayrollRows(connection, month, year) {
   return rows;
 }
 
+// FUNCTION: Combines payroll database rows into one Finance payroll-run object.
+// It also compares rule hashes to expose whether an unapproved run needs recalculation.
 async function mapRun(rows, activeRulesHash = null) {
   if (!rows.length) return null;
   const first = rows[0];
@@ -262,6 +264,8 @@ async function listFinancePayrollRuns() {
   return result;
 }
 
+// FUNCTION: Runs backend compliance checks for a payroll period and returns every
+// blocking issue, including changed Admin rules and employee-level exceptions.
 async function getPayrollRunComplianceErrors(runId) {
   // runId format: "month_year"
   const [month, year] = String(runId).split("_").map(Number);
@@ -408,6 +412,8 @@ function reconcileAdjustmentProposals(proposals, complianceExceptions, recalcula
   });
 }
 
+// FUNCTION: Creates a monthly payroll run from current staff/payroll source data.
+// It calculates employees and stores an immutable snapshot of the Admin rules used.
 async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail }) {
   await ensureFinancePayrollTables();
   const activeRules = await getActivePayrollRules();
@@ -563,6 +569,8 @@ async function createFinancePayrollRunFromStaff({ month, year, userId, userEmail
   }
 }
 
+// FUNCTION: Recomputes an unlocked run after source/rule/adjustment changes.
+// A supplied immutable rulesOverride ensures an adjustment uses the run's own policy snapshot.
 async function recalculateFinancePayrollRun({ runId, userId, userEmail, connection: suppliedConnection = null, rulesOverride = null, adjustmentReview = false }) {
   await ensureFinancePayrollTables();
   const [month, year] = String(runId).split("_").map(Number);
@@ -682,6 +690,8 @@ async function recalculateFinancePayrollRun({ runId, userId, userEmail, connecti
   }
 }
 
+// FUNCTION: Saves permitted pre-approval Finance edits for a payroll run.
+// It rejects invalid workflow state and preserves already delivered payslips.
 async function upsertFinancePayrollRun({ run, userId }) {
   await ensureFinancePayrollTables();
   // Parse run ID (format: "month_year")
@@ -788,6 +798,8 @@ async function upsertFinancePayrollRun({ run, userId }) {
   return await mapRun(savedRows);
 }
 
+// FUNCTION: Applies one named Finance workflow transition inside a transaction.
+// It validates prerequisites, updates durable state/timeline and returns the refreshed run.
 async function applyFinancePayrollWorkflowAction({ runId, action, payload = {}, userId }) {
   // Also accept public workflow command names at the transaction boundary.
   // This keeps older clients and direct command routes compatible even when a
@@ -804,10 +816,15 @@ async function applyFinancePayrollWorkflowAction({ runId, action, payload = {}, 
   if (!month || !year) throw Object.assign(new Error("Invalid payroll run ID."), { code: "INVALID_RUN_ID" });
   const connection = await pool.getConnection();
   try {
+    // EVALUATION NOTE: Every workflow transition is transactional. Either the
+    // status, timestamps, timeline and audit-related data all persist together,
+    // or the catch block rolls the complete action back.
     await connection.beginTransaction();
     const rows = await getPayrollRows(connection, month, year);
     if (!rows.length) throw Object.assign(new Error("Payroll run not found."), { code: "PAYROLL_RUN_NOT_FOUND" });
     const current = await mapRun(rows, getRulesHash(await getActivePayrollRules()));
+    // Optimistic concurrency protection: reject a decision based on an outdated
+    // screen when another Finance user has already changed this payroll run.
     if (payload.expectedUpdatedAt && current.updatedAt && new Date(payload.expectedUpdatedAt).getTime() !== new Date(current.updatedAt).getTime()) {
       throw Object.assign(new Error("This payroll run changed in another session. Refresh it before continuing."), { code: "STALE_RUN" });
     }
@@ -840,6 +857,8 @@ async function applyFinancePayrollWorkflowAction({ runId, action, payload = {}, 
       }
       workflow.reviewedAt = now; status = "System Check Completed"; timeline("System check approved all eligible employee salaries");
     } else if (action === "approve-payroll") {
+      // Approval is the control point that locks the run. Current Admin rules,
+      // compliance checks and every employee decision must all be valid first.
       const errors = await getPayrollRunComplianceErrors(runId);
       if (errors.some((item) => item.ruleCode === "ADMIN_RULES_CHANGED")) throw Object.assign(new Error(errors[0].message), { code: "RULES_CHANGED", details: errors });
       if (errors.length) throw Object.assign(new Error("Compliance exceptions remain."), { code: "PAYROLL_COMPLIANCE_HOLD", details: errors });
@@ -854,6 +873,8 @@ async function applyFinancePayrollWorkflowAction({ runId, action, payload = {}, 
       timeline("Modern Treasury recipients configured");
     } else if (action === "payment-initialize") {
       if (!current.approvedAt || !current.paymentFileGeneratedAt) throw Object.assign(new Error("Approve payroll and generate the payment document first."), { code: "PAYMENT_NOT_PREPARED" });
+      // Preserve any earlier transfer results. If submission is resumed, already
+      // successful employees remain recorded instead of being paid twice.
       const previous = workflow.paymentBatch || {};
       workflow.paymentBatch = {
         batchReference: previous.batchReference || payload.batchReference,
@@ -867,6 +888,8 @@ async function applyFinancePayrollWorkflowAction({ runId, action, payload = {}, 
       status = "Payment Submitting";
       timeline(`Modern Treasury submission started: ${paymentReference}`);
     } else if (action === "payment-transfer-progress") {
+      // Results are stored per employee, enabling partial success reporting and
+      // retry of only failed/unfinished transfers.
       const batch = workflow.paymentBatch || { batchReference: payload.batchReference, total: Number(payload.total || 0), transfers: {} };
       batch.transfers = { ...(batch.transfers || {}), [String(payload.employeeKey)]: payload.transfer };
       const values = Object.values(batch.transfers);

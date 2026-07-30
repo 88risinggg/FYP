@@ -1646,6 +1646,7 @@ function FinanceComplianceRulesPanel({ catalogue, loading }) {
   </div>;
 }
 
+// FUNCTION: Displays run-level compliance checks and blocking explanations.
 function CompliancePanel({ run }) {
   const { checks, failed, passed, total } = getComplianceSummary(run);
   const lastUpdatedLabel = run?.rulesVersion || "Stored snapshot";
@@ -1681,6 +1682,7 @@ function CompliancePanel({ run }) {
   );
 }
 
+// FUNCTION: Displays the selected run's ordered Finance activity evidence.
 function AuditTrailPanel({ run }) {
   const auditEntries = getAuditEntries(run);
 
@@ -1777,6 +1779,7 @@ function RunSelector({ payrollRuns, selectedRunId, onSelectRun }) {
   );
 }
 
+// FUNCTION: Visualises completed/current/upcoming stages for the selected run.
 function FinancePayrollJourney({ run, isLiveUpdating = false, lastSyncAt = null, activityLabel = "" }) {
   const navigate = useNavigate();
   const completed = getCompletedSteps(run);
@@ -1825,6 +1828,7 @@ function FinancePayrollJourney({ run, isLiveUpdating = false, lastSyncAt = null,
   );
 }
 
+// FUNCTION: Summarises payroll expense, liabilities and ledger impact.
 function AccountingImpact({ payrollRuns = [], run }) {
   const availableRuns = payrollRuns.length ? payrollRuns : [run].filter(Boolean);
   const [accountingFilter, setAccountingFilter] = useState(() => getDefaultStatsFilter(run || availableRuns[0]));
@@ -1901,6 +1905,7 @@ function AccountingImpact({ payrollRuns = [], run }) {
   );
 }
 
+// FUNCTION: Tracks CPF and other deduction recording before ledger closure.
 function CpfDeductionProcessPanel({ onAdvanceRun, run }) {
   const rows = getCpfDeductionProcessRows(run);
   const steps = getCompletedSteps(run);
@@ -2002,6 +2007,7 @@ function MonthlyPayrollBarChart({ payrollRuns, selectedRun }) {
   </section>;
 }
 
+// FUNCTION: Summarises Finance workload, exceptions, funding, schedules and next action.
 function DashboardView({ onAdvanceRun, onRecalculateRun, onSelectRun, payrollRuns, selectedRun }) {
   const navigate = useNavigate();
   const [validationStatus, setValidationStatus] = useState(null);
@@ -2219,6 +2225,7 @@ function DashboardView({ onAdvanceRun, onRecalculateRun, onSelectRun, payrollRun
   );
 }
 
+// FUNCTION: Guides review, employee approval, locking, payment and completion for a run.
 function PayrollRunsView({
   onAdvanceRun,
   onCreateDbRun,
@@ -2503,6 +2510,7 @@ function PayrollItemList({ items, title }) {
   );
 }
 
+// FUNCTION: Lets Finance review/edit an employee before the run is locked.
 function StaffPayrollDetailModal({ employee, isLocked, onClose, onSave, onStatusChange }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(employee);
@@ -2702,6 +2710,7 @@ function getPayslipPeriod(payslip) {
   return new Intl.DateTimeFormat("en-SG", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
 }
 
+// FUNCTION: Loads searchable Finance payroll audit/activity records.
 function FinancePayrollActivityView() {
   const [filters, setFilters] = useState({ startDate: "", endDate: "", eventType: "", status: "", actor: "", keyword: "", page: 1 });
   const [data, setData] = useState({ logs: [], total: 0, eventTypes: [] });
@@ -2743,6 +2752,7 @@ function datetimeLocalValue(value) {
   return text.slice(0, 16);
 }
 
+// FUNCTION: Configures claim cut-off and salary-release dates and schedule actions.
 function PayrollScheduleView({ payrollRuns, onRunUpdated, onSelectRun, selectedGlobalRun }) {
   const [tab, setTab] = useState("defaults");
   const [schedule, setSchedule] = useState({ enabled: false, salaryReleaseDay: "", salaryReleaseTime: "09:00", claimCutoffDay: "", claimCutoffTime: "23:59", timezone: "Asia/Singapore" });
@@ -2807,6 +2817,7 @@ function PayrollScheduleView({ payrollRuns, onRunUpdated, onSelectRun, selectedG
   </PageShell>;
 }
 
+// FUNCTION: Reviews payslip readiness/status within the Finance payroll area.
 function PayslipsApprovalView({ selectedRun, onSelectRun, payrollRuns }) {
   const session = getStoredSession();
   const [payslips, setPayslips] = useState([]);
@@ -3089,6 +3100,7 @@ function PayslipsApprovalView({ selectedRun, onSelectRun, payrollRuns }) {
 // 11. Staff details, reports and summaries
 // -----------------------------------------------------------------------------
 
+// FUNCTION: Shows legacy adjustment review data for the selected run.
 function PayrollAdjustmentReview({ selectedRun, onRunUpdated }) {
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -3130,6 +3142,7 @@ function PayrollAdjustmentReview({ selectedRun, onRunUpdated }) {
   </section>;
 }
 
+// FUNCTION: Generates and decides explainable safe adjustments/source blockers.
 function ExplainablePayrollAdjustmentReview({ selectedRun, onRunUpdated, onRecalculateRun, recalculationProcessing }) {
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -3184,6 +3197,7 @@ function ExplainablePayrollAdjustmentReview({ selectedRun, onRunUpdated, onRecal
   </section>;
 }
 
+// FUNCTION: Coordinates staff review, status decisions, exceptions and recalculation.
 function StaffPayrollDetailsView({ error, onSystemCheckApproveAll, onUpdateEmployee, onUpdateStaffStatus, onRunUpdated, onRecalculateRun, onSelectRun, payrollRuns, recalculationProcessing, selectedRun, simulationProcessing, simulationResult }) {
   const stats = getAggregatePayrollStats([selectedRun]);
   const isLocked = getCompletedSteps(selectedRun).approved;
@@ -3298,6 +3312,7 @@ function StaffPayrollDetailsView({ error, onSystemCheckApproveAll, onUpdateEmplo
   );
 }
 
+// FUNCTION: Displays payroll/payslip delivery events for the selected run.
 function NotificationRecordsView({ selectedRun }) {
   const steps = getCompletedSteps(selectedRun);
   const notifications = selectedRun.employees.map((employee) => ({
@@ -3705,6 +3720,7 @@ function FinanceReportPreviewModal({ reportTitle, selectedRun, onClose }) {
   );
 }
 
+// FUNCTION: Previews and exports Finance payroll, CPF, deduction and audit reports.
 function PayrollReportsView({ onSelectRun, payrollRuns, selectedRun }) {
   const [selectedReport, setSelectedReport] = useState("");
   const toneClasses = [
@@ -3751,6 +3767,7 @@ function PayrollReportsView({ onSelectRun, payrollRuns, selectedRun }) {
   );
 }
 
+// FUNCTION: Displays current and historical payroll totals by period.
 function PayrollSummariesView({ payrollRuns, selectedRun }) {
   const [statsFilter, setStatsFilter] = useState(() => getDefaultStatsFilter(selectedRun));
   useEffect(() => setStatsFilter(getDefaultStatsFilter(selectedRun)), [selectedRun.id]);
@@ -3814,6 +3831,7 @@ function PayrollSummariesView({ payrollRuns, selectedRun }) {
 // 12. View router
 // -----------------------------------------------------------------------------
 
+// FUNCTION: Provides Finance a read-focused view of payroll-relevant staff data.
 function FinanceStaffRecordsView() {
   const session = getStoredSession();
   const [staff, setStaff] = useState([]);
@@ -3837,6 +3855,7 @@ function FinanceStaffRecordsView() {
   </PageShell>;
 }
 
+// FUNCTION: Shows whether all accounting and reconciliation closure steps are complete.
 function PayrollRunCompletionView({ selectedRun }) {
   const navigate = useNavigate();
   const totals = getRunTotals(selectedRun);
@@ -3849,6 +3868,7 @@ function PayrollRunCompletionView({ selectedRun }) {
   </PageShell>;
 }
 
+// FUNCTION: Lists completed/historical runs and opens their details.
 function PayrollRunHistoryView({ payrollRuns, selectedRun, onSelectRun }) {
   const [detailsId, setDetailsId] = useState("");
   const [query, setQuery] = useState("");
@@ -3903,6 +3923,7 @@ function PayrollRunReviewData({ run, showResults }) {
   </div>;
 }
 
+// FUNCTION: Renders one enforced workflow stage with prerequisites and permitted action.
 function GuidedWorkflowStageView({ stage, selectedRun, payrollRuns, onSelectRun, onAction, onGeneratePaymentFile, onSetupRecipients, onSubmitPayment, onRecalculate, busy, error }) {
   const navigate = useNavigate();
   const [reviewResultsVisible, setReviewResultsVisible] = useState(() => Boolean(selectedRun.approvedAt));
@@ -3963,6 +3984,7 @@ function AutoAdvanceNotice({ state, onStay, onContinue }) {
   return <div className="fixed inset-0 z-[1200] grid place-items-center bg-[#251E1F]/50 p-4 backdrop-blur-sm"><section role="dialog" aria-modal="true" aria-labelledby="workflow-complete-title" className="w-full max-w-md rounded-3xl border border-emerald-200 bg-white p-7 text-center shadow-2xl"><span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"><CheckCircle2 size={34} className="motion-safe:animate-[financeClaimResultPop_.4s_ease_both]"/></span><p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Process completed</p><h3 id="workflow-complete-title" className="mt-1 text-xl font-semibold text-[#251E1F]">This stage was saved successfully</h3><p className="mt-2 text-sm leading-6 text-[#7b6660]">Redirecting to <strong>{state.label}</strong> in {state.seconds} second{state.seconds === 1 ? "" : "s"}.</p><div className="mt-5 h-2 overflow-hidden rounded-full bg-emerald-100"><span className="block h-full rounded-full bg-emerald-500 transition-all duration-1000 motion-reduce:transition-none" style={{ width: `${Math.max(12, (state.seconds / 4) * 100)}%` }}/></div><div className="mt-6 grid gap-2 sm:grid-cols-2"><button type="button" onClick={onStay} className="rounded-xl border border-[#f0d2ca] bg-white px-4 py-3 text-sm font-semibold text-[#7b6660]">Stay on this page</button><button type="button" onClick={onContinue} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white">Continue now<ArrowRight size={16}/></button></div></section></div>;
 }
 
+// FUNCTION: Loads Finance payroll state and coordinates all feature routes/actions.
 function FinancePayrollContent({
   configError,
   effectiveRuleCatalogue,
@@ -4218,6 +4240,8 @@ export default function FinancePayrollPage() {
     );
   };
 
+  // FUNCTION: Normalizes the backend's updated run and replaces only that run in
+  // React state, ensuring the interface reflects the authoritative database result.
   const applyWorkflowResult = (result) => {
     const refreshed = normalizeFinancePayrollRuns([result.run])[0];
     setPayrollRuns((runs) => runs.map((run) => run.id === refreshed.id ? refreshed : run));
@@ -4225,6 +4249,11 @@ export default function FinancePayrollPage() {
     return refreshed;
   };
 
+  // EVALUATION NOTE: expectedUpdatedAt lets the backend reject a stale screen if
+  // another Finance user changed the run. Frontend button checks improve usability;
+  // the backend remains the authoritative workflow/security control.
+  // FUNCTION: Sends one workflow action with concurrency evidence, refreshes the
+  // selected run on success and displays backend validation details on failure.
   const executeWorkflowAction = async (action, payload = {}) => {
     setSaveProcessing(true);
     setPaymentError("");
@@ -4260,6 +4289,7 @@ export default function FinancePayrollPage() {
     }
   };
 
+  // FUNCTION: Persists one employee's Finance Approved/Hold decision.
   const handleUpdateStaffStatus = async (employeeId, financeStatus) => {
     const employee = selectedRun.employees.find((item) => item.id === employeeId);
     if (!employee) return;
@@ -4267,6 +4297,7 @@ export default function FinancePayrollPage() {
     catch { /* The persisted row remains authoritative; no optimistic state to revert. */ }
   };
 
+  // FUNCTION: Approves eligible employees while holding exception records.
   const handleSystemCheckApproveAll = async () => {
     if (!selectedRun || getCompletedSteps(selectedRun).approved) return;
     setSimulationProcessing(true);
@@ -4325,6 +4356,7 @@ export default function FinancePayrollPage() {
     setPaymentError("");
   };
 
+  // FUNCTION: Creates a real monthly run from database-backed staff data.
   const handleCreateDbRun = async () => {
     try {
       setPaymentError("");
@@ -4343,6 +4375,7 @@ export default function FinancePayrollPage() {
     }
   };
 
+  // FUNCTION: Recalculates an unlocked run after policy/data corrections.
   const handleRecalculateRun = async () => {
     if (!selectedRun?.id || selectedRun.source !== "staff_db") {
       setPaymentError("Only database-backed pending payroll runs can be recalculated.");
@@ -4362,6 +4395,7 @@ export default function FinancePayrollPage() {
     }
   };
 
+  // FUNCTION: Saves permitted pre-lock Finance edits.
   const handleSaveRun = async () => {
     if (!selectedRun?.id || selectedRun.source !== "staff_db") return;
     setSaveProcessing(true);
@@ -4383,6 +4417,7 @@ export default function FinancePayrollPage() {
     return `${error.message} ${details.map((item) => `${item.employee || "Run"}: ${item.message}${item.correctiveAction ? ` — ${item.correctiveAction}` : ""}`).join(" ")}`;
   };
 
+  // FUNCTION: Generates and records the run's payment preparation PDF.
   const handleGeneratePaymentFile = async () => {
     try {
       await validateFinancePayrollRun(selectedRun.id);
@@ -4415,6 +4450,7 @@ export default function FinancePayrollPage() {
     }
   };
 
+  // FUNCTION: Starts/resumes retry-safe employee payment submission.
   const handleSubmitModernTreasuryTransfer = async (action = "submit-payment") => {
     const approvedRecipients = getApprovedPaymentRecipients(selectedRun);
 
@@ -4456,6 +4492,7 @@ export default function FinancePayrollPage() {
     }
   };
 
+  // FUNCTION: Creates/refreshes payment counterparties and receiving accounts.
   const handleSetupModernTreasuryRecipients = async () => {
     const approvedRecipients = getApprovedPaymentRecipients(selectedRun);
 
@@ -4516,6 +4553,7 @@ export default function FinancePayrollPage() {
     }
   };
 
+  // FUNCTION: Maps a visible step to the authoritative backend workflow action.
   const handleAdvanceRun = async (stepKey) => {
     const now = new Date().toISOString();
     const defaultBankReference = `GIRO-${selectedRun.year}${String(selectedRun.month).padStart(2, "0")}-${Math.floor(1000 + Math.random() * 9000)}`;

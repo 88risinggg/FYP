@@ -9,6 +9,7 @@ const { processDueScheduledReleases } = require("../services/financePayrollSched
 
 const INTERVAL_MS = Number(process.env.PAYROLL_RELEASE_SCHEDULER_INTERVAL_MS || 60000);
 
+// FUNCTION: Starts the recurring background check for confirmed payroll releases.
 function startPayrollReleaseScheduler() {
   if (process.env.PAYROLL_RELEASE_SCHEDULER_ENABLED === "false") return null;
   const run = () => processDueScheduledReleases().catch((error) => console.error("Payroll release scheduler failed:", error.message));

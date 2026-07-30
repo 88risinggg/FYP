@@ -164,6 +164,8 @@ function fallbackExplanation(row) {
   };
 }
 
+// FUNCTION: Loads the run, stored immutable rules and payroll rows; optionally
+// locks them for a decision transaction. Throws when the run is already locked.
 async function loadRunContext(connection, runId, lock = false) {
   const companyId = currentCompanyId();
   if (!companyId) throw Object.assign(new Error("A company workspace is required."), { code: "TENANT_REQUIRED" });
@@ -196,6 +198,8 @@ async function loadRunContext(connection, runId, lock = false) {
   return { month, year, rows, configuration, rules, run: rows[0] };
 }
 
+// FUNCTION: Loads approved loan/salary-advance instalments that may be deducted
+// from this employee while respecting the outstanding balance.
 async function recoveriesForStaff(connection, employeeId) {
   const companyId = currentCompanyId();
   const [rows] = await connection.query(
@@ -222,6 +226,8 @@ function allowancesFromRow(row) {
   return { reimbursements, allowances: allowance ? [{ label: "Allowance", amount: allowance }] : [] };
 }
 
+// FUNCTION: Compares stored pay with a fresh calculation using the run's rule
+// snapshot, then stores explainable safe proposals or source-data blockers.
 async function generateAdjustmentProposals(runId, userId) {
   await ensureAdjustmentTable();
   const connection = await pool.getConnection();
@@ -243,6 +249,9 @@ async function generateAdjustmentProposals(runId, userId) {
         positiveNetContext = { netWithoutRecoveries: statutoryWithoutRecoveries.netSalary, maximumSafeRecovery: positiveLimit };
         calculation = calculateEmployeePayroll({ staff: row, month: context.month, year: context.year, allowances, reimbursements, otherDeductions: capDeductions(capped, positiveLimit), configuration: context.rules });
       }
+      // EVALUATION NOTE: The system separates missing/incorrect source data from
+      // values that can be safely recalculated. It never invents employee master
+      // data simply to make an exception disappear.
       const blockers = exceptions.map((exception) => ({ exception, blocker: blockerFor(exception) })).filter(({ blocker }) => Boolean(blocker));
       const original = {
         grossPay: money(row.gross_salary), totalDeductions: money(row.total_deductions), employeeCpf: money(row.employee_cpf),
@@ -255,6 +264,8 @@ async function generateAdjustmentProposals(runId, userId) {
         || recoveries.some((item, index) => money(item.amount) !== money(proposed.otherDeductions?.[index]?.amount));
       const cappedByPercentage = recoveries.some((item, index) => money(item.amount) !== money(capped[index]?.amount));
       const adjustmentCode = positiveNetContext ? "POSITIVE_NET_PROTECTION" : cappedByPercentage ? "DEDUCTION_CAP" : "STATUTORY_RECALCULATION";
+      // A source_blocker names the responsible role and field. A safe_recalculation
+      // contains original/proposed figures plus the stored Admin-rule reference.
       const proposals = [
         ...blockers.map(({ blocker, exception }) => ({
           type: "source_blocker", code: blocker.code, actionable: 0, source: "staff", sourceId: String(row.employee_id),
@@ -290,6 +301,8 @@ async function generateAdjustmentProposals(runId, userId) {
   finally { connection.release(); }
 }
 
+// FUNCTION: Reads all stored proposals for a run and normalizes legacy/current
+// explanation formats for display in the Finance review screen.
 async function listAdjustmentProposals(runId) {
   const companyId = currentCompanyId();
   const [month, year] = String(runId).split("_").map(Number);
@@ -309,6 +322,8 @@ async function listAdjustmentProposals(runId) {
   })).sort((a, b) => Number(b.actionable) - Number(a.actionable) || a.employee.localeCompare(b.employee));
 }
 
+// FUNCTION: Approves or rejects selected pending proposals after stale-state checks.
+// Approval triggers recalculation; rejection stores the required Finance reason.
 async function reviewAdjustmentProposals({ runId, ids, action, reason, userId, recalculate }) {
   await ensureAdjustmentTable();
   if (!Array.isArray(ids) || !ids.length) throw new Error("Select at least one adjustment proposal.");
@@ -322,6 +337,8 @@ async function reviewAdjustmentProposals({ runId, ids, action, reason, userId, r
     const proposalRows = context.rows.map((row) => ({ row, configuration: parseJson(row.configuration_json, {}) }));
     const proposals = proposalRows.flatMap(({ configuration }) => configuration.financeAdjustments || []).filter((item) => wanted.has(String(item.id)));
     if (proposals.length !== ids.length || proposals.some((item) => item.status !== 'Pending')) throw Object.assign(new Error("One or more proposals are no longer pending."), { code: 'STALE_ADJUSTMENT' });
+    // EVALUATION NOTE: A proposal is invalidated when either payroll data or its
+    // rule fingerprint changes. This prevents approval of an outdated correction.
     if (proposals.some((item) => new Date(item.runUpdatedAt || item.run_updated_at).getTime() !== new Date(context.run.updated_at).getTime() || (item.rulesHash || item.rules_hash) !== rulesHash(context.rules))) throw Object.assign(new Error("The payroll run changed. Regenerate adjustment proposals."), { code: 'STALE_ADJUSTMENT' });
     if (action === 'approve' && proposals.some((item) => !item.actionable)) throw new Error("Source-data blockers cannot be approved as automatic adjustments.");
     const reviewedAt = new Date().toISOString();
@@ -336,6 +353,8 @@ async function reviewAdjustmentProposals({ runId, ids, action, reason, userId, r
       if (changed) await connection.execute("UPDATE payroll SET configuration_json = ? WHERE payroll_id = ?", [JSON.stringify(configuration), row.payroll_id]);
     }
     let run = null;
+    // Approved safe proposals recalculate using the run's immutable rule snapshot,
+    // rather than silently switching to whatever rules happen to be current today.
     if (action === 'approve') run = await recalculate({ runId, userId, connection, rulesOverride: context.rules, adjustmentReview: true });
     await connection.commit();
     return { proposals: await listAdjustmentProposals(runId), run };
