@@ -21,7 +21,8 @@ const {
 const { getActivePayrollRules } = require("../services/payrollRuleConfigService");
 const { currentCompanyId } = require("../services/tenantContext");
 const { postPayrollRecoveries } = require("../services/payrollRecoveryPostingService");
-const { getUnpaidLeaveDaysForMonth, calculateUnpaidLeaveDeduction } = require("../controllers/leaveController");
+const { getUnpaidLeaveDaysForMonth, calculateUnpaidLeaveDeduction, calculateWorkingDays } = require("../controllers/leaveController");
+const { getActiveHolidaysInRange } = require("../models/publicHolidayModel");
 
 const WORKFLOW_FIELDS = [
   "reviewedAt",
@@ -100,6 +101,29 @@ async function buildEmployeeFromPayroll(row, paymentRecipient = {}) {
   const grossSalary = toMoney(row.gross_salary || (Number(row.net_salary) + Number(row.total_deductions)));
   const basicSalary = toMoney(grossSalary - totalAllowances);
   const employeeId = row.employee_code || `EMP-${String(row.employee_id).padStart(3, "0")}`;
+  const payrollMonth = Number(row.payroll_month);
+  const payrollYear = Number(row.payroll_year);
+
+  const workingDays = await (async () => {
+    if (!payrollMonth || !payrollYear) return 26;
+    try {
+      const firstDay = `${payrollYear}-${String(payrollMonth).padStart(2, "0")}-01`;
+      const lastDay = new Date(payrollYear, payrollMonth, 0);
+      const lastDayStr = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, "0")}-${String(lastDay.getDate()).padStart(2, "0")}`;
+      const holidays = await getActiveHolidaysInRange(firstDay, lastDayStr).catch(() => []);
+      return calculateWorkingDays(new Date(firstDay), new Date(lastDayStr), holidays || []);
+    } catch {
+      return 26;
+    }
+  })();
+
+  const noPayLeaveDays = await (async () => {
+    try {
+      return await getUnpaidLeaveDaysForMonth(row.employee_id, row.payroll_month, row.payroll_year);
+    } catch {
+      return 0;
+    }
+  })();
 
   return {
     id: employeeId,
@@ -110,14 +134,8 @@ async function buildEmployeeFromPayroll(row, paymentRecipient = {}) {
     email: row.email,
     department: row.department_name || "",
     workLocation: "Singapore",
-    workingDays: 26,
-    noPayLeave: await (async () => {
-      try {
-        return await getUnpaidLeaveDaysForMonth(row.employee_id, row.payroll_month, row.payroll_year);
-      } catch {
-        return 0;
-      }
-    })(),
+    workingDays,
+    noPayLeave: noPayLeaveDays,
     cpfAgeGroup: breakdown.cpfTier || "Manual review",
     cpfWageBase: toMoney(breakdown.cpfWageBase),
     storedGrossPay: grossSalary,
@@ -125,14 +143,7 @@ async function buildEmployeeFromPayroll(row, paymentRecipient = {}) {
     storedNetPay: toMoney(row.net_salary),
     grossPay: basicSalary,
     previousGrossPay: basicSalary,
-    unpaidLeaveDeduction: await (async () => {
-      try {
-        const unpaidDays = await getUnpaidLeaveDaysForMonth(row.employee_id, row.payroll_month, row.payroll_year);
-        return unpaidDays > 0 ? calculateUnpaidLeaveDeduction(Number(row.base_salary || 0), 26, unpaidDays) : 0;
-      } catch {
-        return 0;
-      }
-    })(),
+    unpaidLeaveDeduction: noPayLeaveDays > 0 ? calculateUnpaidLeaveDeduction(Number(row.base_salary || 0), workingDays, noPayLeaveDays) : 0,
     religion: row.religion || "",
     race: row.race || "",
     allowances: totalAllowances,

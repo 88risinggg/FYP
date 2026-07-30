@@ -13,6 +13,8 @@ const { listPayslipLayouts } = require("../models/adminPayrollModel");
 const { generatePayslipPDF } = require("./payslipPdfService");
 const { sendPayslipEmail } = require("./emailService");
 const { currentCompanyId } = require("./tenantContext");
+const { calculateWorkingDays } = require("../controllers/leaveController");
+const { getActiveHolidaysInRange } = require("../models/publicHolidayModel");
 
 const OUTPUT_ROOT = path.join(__dirname, "..", "..", "uploads", "payslips");
 
@@ -55,6 +57,23 @@ async function getPayslipDataset(payrollId) {
   if (!rows.length) return null;
   const payslip = rows[0];
   payslip.claims = await getIncludedClaims(payslip.payroll_id);
+  // Ensure working days is present on the payslip dataset. Some payroll rows
+  // do not persist a working_days/payable_days field; compute a sensible
+  // default from the payroll month/year and active public holidays when
+  // it's missing so frontends and PDF templates display it.
+  if ((payslip.working_days === undefined || payslip.working_days === null || payslip.working_days === "" ) && payslip.payroll_month && payslip.payroll_year) {
+    try {
+      const month = Number(payslip.payroll_month);
+      const year = Number(payslip.payroll_year);
+      const firstDay = `${year}-${String(month).padStart(2, "0")}-01`;
+      const lastDay = new Date(year, month, 0);
+      const lastDayStr = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, "0")}-${String(lastDay.getDate()).padStart(2, "0")}`;
+      const holidays = await getActiveHolidaysInRange(firstDay, lastDayStr).catch(() => []);
+      payslip.working_days = calculateWorkingDays(new Date(firstDay), new Date(lastDayStr), holidays || []);
+    } catch (e) {
+      payslip.working_days = "-";
+    }
+  }
   const layouts = await listPayslipLayouts();
   payslip.layout = layouts.find((layout) => Number(layout.is_default) === 1) || null;
   return payslip;

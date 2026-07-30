@@ -198,7 +198,9 @@ function LoanRequestForm() {
       window.dispatchEvent(new Event("loan-request-created"));
     } catch (err) {
       console.error(err);
-      const message = err?.message || "Failed to submit loan request. Please try again.";
+      let message = err?.message || "Failed to submit loan request. Please try again.";
+      if (err?.code) message += ` (${err.code})`;
+      if (err?.fixSql) message += ` — Action: ${err.fixSql}`;
       showToast(message, "error");
     } finally {
       setSubmitting(false);

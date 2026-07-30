@@ -697,7 +697,10 @@ function AdvancePaymentView({ session, payrollInfo, profile, formatCurrency }) {
       fetchRequests();
     } catch (err) {
       console.error(err);
-      showToast(err.message || "Failed to submit request. Please try again.", "error");
+      let message = err?.message || "Failed to submit request. Please try again.";
+      if (err?.code) message += ` (${err.code})`;
+      if (err?.fixSql) message += ` — Action: ${err.fixSql}`;
+      showToast(message, "error");
     } finally {
       setSubmitting(false);
     }

@@ -252,6 +252,9 @@ async function notifyOwner(row, companyId, title, message, actorUserId) {
     });
 }
 
+// Staff and HR: list payroll requests / claims. Staff users see only their own requests;
+// HR and Finance users can see company-level requests. Used by `client/src/pages/payroll/StaffClaimsPage.jsx`
+// and `client/src/pages/payroll/ClaimManagementPage.jsx`.
 router.get(
   "/",
   authenticateToken,
@@ -270,6 +273,8 @@ router.get(
     res.json(rows.map(unified));
   },
 );
+// Submit a payroll request with evidence. This is the staff-facing claims endpoint used by
+// `client/src/pages/payroll/StaffClaimsPage.jsx` through `client/src/services/payrollRequestService.js`.
 router.post(
   "/",
   authenticateToken,
@@ -328,6 +333,8 @@ router.post(
         .json({ message: "Repayment period must be between 1 and 36 months" });
     }
     const attachments = files.map(attachment);
+    const rawClaimCategory = String(purpose || "").split("–")[0].trim() || String(purpose || "").trim();
+    const claimCategory = rawClaimCategory.slice(0, 64);
     const metadata = {
       created_by: req.user.userId,
       custom_purpose: purpose,
@@ -339,7 +346,15 @@ router.post(
     };
     let connection;
     try {
-      await ensureEvidenceStorage();
+      // Ensure database column exists. If this fails (lack of permission),
+      // continue but mark evidence storage as unavailable so we skip chunked BLOB updates.
+      let evidenceStorageAvailable = true;
+      try {
+        await ensureEvidenceStorage();
+      } catch (err) {
+        evidenceStorageAvailable = false;
+        console.error("ensureEvidenceStorage failed — continuing without DB blob storage:", err);
+      }
       const evidencePayload = encodeEvidence(files, attachments);
       connection = await pool.getConnection();
       await connection.beginTransaction();
@@ -347,18 +362,31 @@ router.post(
         "SELECT employee_id FROM staff WHERE employee_id=? AND company_id=? LIMIT 1",
         [req.user.staffId, req.user.companyId],
       );
-      if (!ownedStaff)
-        throw Object.assign(
-          new Error("Your staff profile is not linked to this workspace."),
-          { code: "STAFF_TENANT_MISMATCH" },
+      if (!ownedStaff) {
+        // Helpful diagnostic: check whether a staff row exists with this employee_id for a different company
+        const [[foundOther]] = await connection.query(
+          "SELECT company_id FROM staff WHERE employee_id=? LIMIT 1",
+          [req.user.staffId],
         );
+        await connection.rollback().catch(() => {});
+        try { connection.release(); } catch(_) {}
+        cleanup();
+        if (foundOther) {
+          return res.status(409).json({
+            message: "Your staff profile exists but is linked to a different workspace/company.",
+            detail: `Found staff.company_id=${foundOther.company_id}. The logged-in user expects company_id=${req.user.companyId}.`,
+            fixSql: `-- Run as DBA to re-link staff to this workspace:\nUPDATE staff SET company_id = ${req.user.companyId} WHERE employee_id = '${req.user.staffId}';`
+          });
+        }
+        return res.status(400).json({ message: "No staff profile is linked to this account" });
+      }
       await connection.query(
         `INSERT INTO claims_and_loans(company_id,record_id,type,claim_category,amount,status,description,expense_date,proof_path,request_metadata,evidence_payload,created_by,staff_employee_id,outstanding_balance) VALUES(?,?,?,?,?,'pending_hr',?,?,?,?,?,?,?,?)`,
         [
           req.user.companyId,
           id,
           dbType,
-          purpose,
+          claimCategory,
           amount,
           description,
           req.body.expenseDate || null,
@@ -371,19 +399,26 @@ router.post(
         ],
       );
       const chunkSize = 512 * 1024;
-      for (
-        let offset = 0;
-        offset < evidencePayload.length;
-        offset += chunkSize
-      ) {
-        await connection.query(
-          "UPDATE claims_and_loans SET evidence_payload=CONCAT(COALESCE(evidence_payload,''),?) WHERE record_id=? AND company_id=?",
-          [
-            evidencePayload.subarray(offset, offset + chunkSize),
-            id,
-            req.user.companyId,
-          ],
-        );
+      // If evidence storage is available, append the compressed payload in chunks to avoid
+      // packet-size problems. If unavailable, skip this step (file paths are still stored).
+      if (evidenceStorageAvailable && evidencePayload && evidencePayload.length) {
+        for (
+          let offset = 0;
+          offset < evidencePayload.length;
+          offset += chunkSize
+        ) {
+          await connection.query(
+            "UPDATE claims_and_loans SET evidence_payload=CONCAT(COALESCE(evidence_payload,''),?) WHERE record_id=? AND company_id=?",
+            [
+              evidencePayload.subarray(offset, offset + chunkSize),
+              id,
+              req.user.companyId,
+            ],
+          );
+        }
+      } else if (!evidenceStorageAvailable) {
+        // Log that payload was skipped due to DB limitations
+        console.warn(`Skipping evidence_payload DB update for ${id} — evidence_storage unavailable`);
       }
       await connection.commit();
       connection.release();
@@ -399,18 +434,17 @@ router.post(
       });
       res.status(201).json(unified(await find(id, req.user.companyId)));
     } catch (error) {
+      console.error("PAYROLL REQUEST STORAGE ERROR:", error);
       if (connection) {
-        await connection.rollback().catch(() => {});
-        connection.release();
+        try { await connection.rollback(); } catch (_) {}
+        try { connection.release(); } catch (_) {}
       }
       cleanup();
-      res
-        .status(500)
-        .json({
-          message:
-            "Failed to store the payroll request and supporting documents in the database",
-          error: error.message,
-        });
+      res.status(500).json({
+        message: "Failed to store the payroll request and supporting documents in the database",
+        error: error?.message || String(error),
+        code: error?.code || null,
+      });
     }
   },
 );
@@ -463,6 +497,8 @@ router.get(
     });
   },
 );
+// HR review endpoint for payroll requests / claims. Called from HR claims management UI.
+// This handles approve/reject actions from `client/src/pages/payroll/ClaimManagementPage.jsx`.
 router.put(
   "/:id/hr/:action",
   authenticateToken,
@@ -522,6 +558,8 @@ router.put(
     res.json(unified(await find(row.record_id, req.user.companyId)));
   },
 );
+// Finance review endpoint for payroll requests after HR approval. Used by Finance pages such as
+// `client/src/pages/payroll/FinanceRequestsPage.jsx` and the shared service `client/src/services/payrollRequestService.js`.
 router.put(
   "/:id/finance/:action",
   authenticateToken,
