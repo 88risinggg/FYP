@@ -91,14 +91,7 @@ export default function PaymentSuccessPage() {
               S${Number(invoice.total_amount).toFixed(2)}
             </p>
           )}
-          <div className="mt-8 space-y-3">
-            <Link
-              to={`/invoice/view/${invoiceId}`}
-              className="block w-full rounded-xl bg-[#F38978] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#E87562]"
-            >
-              View Invoice
-            </Link>
-          </div>
+
           <p className="mt-6 text-xs text-[#7b6660]/50">Powered by Stripe • PayNivo Invoicing</p>
         </div>
       </div>
