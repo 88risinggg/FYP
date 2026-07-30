@@ -84,13 +84,17 @@ export default function HRLeaveManagement() {
     fetchData();
   }, [allAppsPage]);
 
+  // ── On mount (and page change): load all HR leave data in parallel ─────────
+  // Backend: GET /api/leave/applications/pending → leaveController.getPendingApplications
+  // Backend: GET /api/leave/applications/all     → leaveController.getAllApplications (paginated)
+  // Backend: GET /api/leave/types                → leaveController.getLeaveTypes
   async function fetchData() {
     setLoading(true);
     try {
       const [pendingData, allData, typesData] = await Promise.all([
-        getPendingApplications(),
-        getAllApplications({ page: allAppsPage, pageSize: PAGE_SIZE }),
-        getLeaveTypes()
+        getPendingApplications(),                                          // → leaveController.getPendingApplications
+        getAllApplications({ page: allAppsPage, pageSize: PAGE_SIZE }),    // → leaveController.getAllApplications
+        getLeaveTypes()                                                    // → leaveController.getLeaveTypes
       ]);
       setPendingApps(Array.isArray(pendingData) ? pendingData : []);
       const appsArray = Array.isArray(allData) ? allData : (allData?.applications ?? []);
@@ -110,6 +114,9 @@ export default function HRLeaveManagement() {
     setTimeout(() => setToast(null), 4000);
   }
 
+  // ── HR approve or reject a leave application ───────────────────────────────
+  // Backend: PUT /api/leave/applications/:id/status → leaveController.updateLeaveStatus
+  // Restores balance on rejection; notifies the staff member
   async function handleAction(applicationId, status) {
     setProcessing(true);
     try {
@@ -142,6 +149,9 @@ export default function HRLeaveManagement() {
     setActionComment("");
   }
 
+  // ── HR save leave type config changes ──────────────────────────────────────
+  // Backend: PUT /api/leave/types/:id → leaveController.updateLeaveType
+  // Note: changes are in-memory only on the server (not persisted to DB)
   async function handleSaveLeaveType(typeId) {
     setSavingType(true);
     try {
@@ -171,6 +181,9 @@ export default function HRLeaveManagement() {
     );
   }
 
+  // ── HR run annual carry-forward ─────────────────────────────────────────────
+  // Backend: POST /api/leave/carry-forward → leaveController.runCarryForward
+  // Rolls unused Annual Leave (up to cap) into the next year for all active staff
   async function handleRunCarryForward() {
     setCarryForwardProcessing(true);
     try {

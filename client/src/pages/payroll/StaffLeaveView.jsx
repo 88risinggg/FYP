@@ -65,13 +65,17 @@ export default function StaffLeaveView() {
     fetchData();
   }, []);
 
+  // ── On mount: load balances, applications and leave type list in parallel ──
+  // Backend: GET /api/leave/my-balance       → leaveController.getMyBalance
+  // Backend: GET /api/leave/my-applications  → leaveController.getMyApplications
+  // Backend: GET /api/leave/types            → leaveController.getLeaveTypes (gender-filtered)
   async function fetchData() {
     setLoading(true);
     try {
       const [balanceData, appData, typesData] = await Promise.all([
-        getMyBalance(),
-        getMyApplications(),
-        getLeaveTypes()
+        getMyBalance(),       // → server/src/controllers/leaveController.js → getMyBalance
+        getMyApplications(),  // → server/src/controllers/leaveController.js → getMyApplications
+        getLeaveTypes()       // → server/src/controllers/leaveController.js → getLeaveTypes (filters by gender)
       ]);
       setBalances(Array.isArray(balanceData) ? balanceData : []);
       setApplications(Array.isArray(appData) ? appData : []);
@@ -93,6 +97,9 @@ export default function StaffLeaveView() {
   const selectedType = leaveTypes.find(t => String(t.id) === String(selectedTypeId));
   const requiresAttachment = selectedType?.requires_attachment === 1 || selectedType?.requires_attachment === true;
 
+  // ── Submit leave application form ──────────────────────────────────────────
+  // Backend: POST /api/leave/apply → leaveController.applyLeave
+  // Validates balance, deducts from leave_balance_json, notifies HR
   async function handleApply(e) {
     e.preventDefault();
 
@@ -132,6 +139,9 @@ export default function StaffLeaveView() {
     }
   }
 
+  // ── Cancel a pending leave application ─────────────────────────────────────
+  // Backend: PUT /api/leave/applications/:id/cancel → leaveController.cancelLeave
+  // Restores leave balance for paid leave types
   async function handleCancel(applicationId) {
     if (!window.confirm("Are you sure you want to cancel this leave application?")) return;
 

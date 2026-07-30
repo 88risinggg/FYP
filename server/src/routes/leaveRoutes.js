@@ -77,21 +77,28 @@ router.use((req, _res, next) => {
   next();
 });
 
-// Self-service endpoints for Staff and HR users
-router.post("/apply", authenticateToken, allowRoles("Staff", "HR"), upload.single("attachment"), applyLeave);
-router.get("/my-applications", authenticateToken, allowRoles("Staff", "HR"), getMyApplications);
-router.get("/my-balance", authenticateToken, allowRoles("Staff", "HR"), getMyBalance);
-router.put("/applications/:id/cancel", authenticateToken, allowRoles("Staff", "HR"), cancelLeave);
+// ── STAFF + HR: self-service leave actions ───────────────────────────────────
+// Used by: client/src/pages/payroll/StaffLeaveView.jsx  (staff dashboard)
+//          client/src/pages/payroll/HRLeaveManagement.jsx (HR can also apply)
+// Service: client/src/services/leaveService.js → applyLeave / getMyApplications / getMyBalance / cancelLeave
+router.post("/apply",                    authenticateToken, allowRoles("Staff", "HR"), upload.single("attachment"), applyLeave);       // POST /api/leave/apply
+router.get("/my-applications",           authenticateToken, allowRoles("Staff", "HR"), getMyApplications);                             // GET  /api/leave/my-applications
+router.get("/my-balance",                authenticateToken, allowRoles("Staff", "HR"), getMyBalance);                                  // GET  /api/leave/my-balance
+router.put("/applications/:id/cancel",   authenticateToken, allowRoles("Staff", "HR"), cancelLeave);                                   // PUT  /api/leave/applications/:id/cancel
 
-// Shared endpoints (Staff and HR)
-router.get("/types", authenticateToken, allowRoles("Staff", "HR"), getLeaveTypes);
+// ── STAFF + HR: shared read ───────────────────────────────────────────────────
+// Returns leave types filtered by the requesting user's gender (Maternity/Paternity logic)
+// Controller: leaveController.js → getLeaveTypes  reads staff.gender from DB
+router.get("/types",                     authenticateToken, allowRoles("Staff", "HR"), getLeaveTypes);                                 // GET  /api/leave/types
 
-// HR endpoints
-router.get("/applications/pending", authenticateToken, allowRoles("HR"), getPendingApplications);
-router.get("/applications/all", authenticateToken, allowRoles("HR"), getAllApplications);
-router.put("/applications/:id/status", authenticateToken, allowRoles("HR"), updateLeaveStatus);
-router.get("/balances/all", authenticateToken, allowRoles("HR"), getAllBalances);
-router.put("/types/:id", authenticateToken, allowRoles("HR"), updateLeaveType);
-router.post("/carry-forward", authenticateToken, allowRoles("HR"), runCarryForward);
+// ── HR ONLY: approval and management ─────────────────────────────────────────
+// Used by: client/src/pages/payroll/HRLeaveManagement.jsx
+// Service: client/src/services/leaveService.js → getPendingApplications / getAllApplications / updateLeaveStatus / getAllBalances / updateLeaveType / runCarryForward
+router.get("/applications/pending",      authenticateToken, allowRoles("HR"), getPendingApplications);                                 // GET  /api/leave/applications/pending
+router.get("/applications/all",          authenticateToken, allowRoles("HR"), getAllApplications);                                     // GET  /api/leave/applications/all?page=&pageSize=
+router.put("/applications/:id/status",   authenticateToken, allowRoles("HR"), updateLeaveStatus);                                     // PUT  /api/leave/applications/:id/status
+router.get("/balances/all",              authenticateToken, allowRoles("HR"), getAllBalances);                                         // GET  /api/leave/balances/all
+router.put("/types/:id",                 authenticateToken, allowRoles("HR"), updateLeaveType);                                       // PUT  /api/leave/types/:id
+router.post("/carry-forward",            authenticateToken, allowRoles("HR"), runCarryForward);                                       // POST /api/leave/carry-forward
 
 module.exports = router;

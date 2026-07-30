@@ -99,6 +99,7 @@ function makeLeaveId() {
 
 // ---------------------------------------------------------------------------
 // POST /api/leave/apply
+// Called by: StaffLeaveView.jsx → handleApply()  |  leaveService.js → applyLeave()
 // ---------------------------------------------------------------------------
 async function applyLeave(req, res) {
   try {
@@ -170,6 +171,7 @@ async function applyLeave(req, res) {
 
 // ---------------------------------------------------------------------------
 // PUT /api/leave/applications/:id/cancel
+// Called by: StaffLeaveView.jsx → handleCancel()  |  leaveService.js → cancelLeave()
 // ---------------------------------------------------------------------------
 async function cancelLeave(req, res) {
   try {
@@ -208,6 +210,7 @@ async function cancelLeave(req, res) {
 
 // ---------------------------------------------------------------------------
 // PUT /api/leave/applications/:id/status  (HR approve/reject)
+// Called by: HRLeaveManagement.jsx → handleAction()  |  leaveService.js → updateLeaveStatus()
 // ---------------------------------------------------------------------------
 async function updateLeaveStatus(req, res) {
   try {
@@ -274,6 +277,7 @@ async function updateLeaveStatus(req, res) {
 
 // ---------------------------------------------------------------------------
 // GET /api/leave/my-applications
+// Called by: StaffLeaveView.jsx → fetchData()  |  leaveService.js → getMyApplications()
 // ---------------------------------------------------------------------------
 async function getMyApplications(req, res) {
   try {
@@ -296,6 +300,8 @@ async function getMyApplications(req, res) {
 
 // ---------------------------------------------------------------------------
 // GET /api/leave/my-balance
+// Called by: StaffLeaveView.jsx → fetchData()  |  leaveService.js → getMyBalance()
+// Filters leave types by staff.gender — Female sees Maternity, Male sees Paternity
 // ---------------------------------------------------------------------------
 async function getMyBalance(req, res) {
   try {
@@ -330,6 +336,8 @@ async function getMyBalance(req, res) {
 
 // ---------------------------------------------------------------------------
 // GET /api/leave/types
+// Called by: StaffLeaveView.jsx + HRLeaveManagement.jsx → fetchData()  |  leaveService.js → getLeaveTypes()
+// Filters by staff.gender when staffId is present (Staff/HR self-service)
 // ---------------------------------------------------------------------------
 async function getLeaveTypes(req, res) {
   try {
@@ -352,6 +360,7 @@ async function getLeaveTypes(req, res) {
 
 // ---------------------------------------------------------------------------
 // GET /api/leave/applications/pending  (HR)
+// Called by: HRLeaveManagement.jsx → fetchData()  |  leaveService.js → getPendingApplications()
 // ---------------------------------------------------------------------------
 async function getPendingApplications(req, res) {
   try {
@@ -375,6 +384,7 @@ async function getPendingApplications(req, res) {
 
 // ---------------------------------------------------------------------------
 // GET /api/leave/applications/all  (HR, paginated)
+// Called by: HRLeaveManagement.jsx → fetchData()  |  leaveService.js → getAllApplications()
 // ---------------------------------------------------------------------------
 async function getAllApplications(req, res) {
   try {
@@ -410,6 +420,7 @@ async function getAllApplications(req, res) {
 
 // ---------------------------------------------------------------------------
 // GET /api/leave/balances/all  (HR)
+// Called by: HRLeaveManagement.jsx (balances tab)  |  leaveService.js → getAllBalances()
 // ---------------------------------------------------------------------------
 async function getAllBalances(req, res) {
   try {
@@ -457,6 +468,7 @@ async function getAllBalances(req, res) {
 // ---------------------------------------------------------------------------
 // PUT /api/leave/types/:id  (HR — update in-memory config is not persistent,
 // but we keep the endpoint functional so the UI doesn't 500)
+// Called by: HRLeaveManagement.jsx → handleSaveLeaveType()  |  leaveService.js → updateLeaveType()
 // ---------------------------------------------------------------------------
 async function updateLeaveType(req, res) {
   try {
@@ -478,6 +490,7 @@ async function updateLeaveType(req, res) {
 
 // ---------------------------------------------------------------------------
 // POST /api/leave/carry-forward  (HR)
+// Called by: HRLeaveManagement.jsx → handleRunCarryForward()  |  leaveService.js → runCarryForward()
 // ---------------------------------------------------------------------------
 async function runCarryForward(req, res) {
   try {
