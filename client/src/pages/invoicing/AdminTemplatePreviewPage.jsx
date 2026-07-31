@@ -70,7 +70,7 @@ function buildPreviewInvoiceNumber(settings, previewDate) {
     : String(settings?.invoiceYear || selectedYear);
   const sequence = String(Number(settings?.nextInvoiceNumber) || 1).padStart(4, "0");
 
-  return String(settings?.invoiceFormat || "{PREFIX}-{YYYY}-{NNNN}")
+  return String(settings?.invoiceFormat || "{PREFIX}-{NNNN}-{YYYY}-SG")
     .replaceAll("{PREFIX}", settings?.invoicePrefix || "INV")
     .replaceAll("{YYYY}", fullYear)
     .replaceAll("{YY}", fullYear.slice(-2))
@@ -109,7 +109,7 @@ export default function AdminTemplatePreviewPage() {
           gstRegistrationNumber: s.gstRegistrationNumber || s.gst_registration_number || "",
           companyAddress: s.companyAddress || s.company_address || "",
           companyPhone: s.companyPhone || s.company_phone || "",
-          companyEmail: s.companyEmail || s.company_email || s.financeEmail || "",
+          companyEmail: s.companyEmail || s.company_email || "",
           companyRegistrationNumber: s.companyRegistrationNumber || s.company_registration_number || "",
           companyWebsite: s.companyWebsite || "",
           primaryColor: s.primaryColor || s.primary_color || "#251E1F",
@@ -118,7 +118,7 @@ export default function AdminTemplatePreviewPage() {
           fontSizeBase: s.fontSizeBase || s.font_size_base || 12,
           invoicePrefix: s.invoicePrefix || s.invoice_prefix || "INV",
           invoiceYear: s.invoiceYear || s.invoice_year || "",
-          invoiceFormat: s.invoiceFormat || s.invoice_format || "{PREFIX}-{YYYY}-{NNNN}",
+          invoiceFormat: s.invoiceFormat || s.invoice_format || "{PREFIX}-{NNNN}-{YYYY}-SG",
           nextInvoiceNumber: s.nextInvoiceNumber ?? s.next_invoice_number ?? 1,
           sequenceRules: s.sequenceRules || { yearlyReset: true },
           currencySymbol: s.currencySymbol || s.currency_symbol || "S$",
@@ -282,6 +282,10 @@ export default function AdminTemplatePreviewPage() {
               className="mt-1 block rounded-lg border border-[#F0D2CA] bg-white px-3 py-2 text-sm font-semibold text-[#251E1F]"
             />
           </label>
+        </div>
+
+        <div className="mt-3 rounded-lg border border-[#F0D2CA] bg-[#FFF6F2] px-3 py-2 text-xs font-semibold text-[#6f5b55]">
+          Preview uses {effectiveGstRate ? `${effectiveGstRate.taxName || "GST"} ${Number(effectiveGstRate.ratePercentage)}%` : "the saved GST setting"} for the selected invoice date. Invoices remain tax exclusive.
         </div>
 
         {loadError && (

@@ -791,6 +791,76 @@ async function sendInvoice(req, res) {
 }
 
 /**
+ * PUT /api/invoices/:id/status
+ *
+ * Updates an invoice status directly. Used by admin/finance invoice workflows
+ * for state transitions that do not need the email-delivery side effects of
+ * POST /api/invoices/:id/send.
+ */
+async function updateInvoiceStatus(req, res) {
+  const invoiceId = Number(req.params.id);
+  const companyId = getCompanyId(req);
+  const status = String(req.body?.status || "").trim();
+
+  if (!invoiceId) {
+    return res.status(400).json({ message: "Invalid invoice id." });
+  }
+
+  if (!VALID_STATUSES.has(status)) {
+    return res.status(400).json({ message: "Invalid invoice status." });
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query(
+      `SELECT invoice_id, invoiceId, status
+       FROM invoice
+       WHERE invoice_id = ?
+         ${companyId ? "AND company_id = ?" : ""}
+       LIMIT 1
+       FOR UPDATE`,
+      companyId ? [invoiceId, companyId] : [invoiceId]
+    );
+
+    const invoice = rows[0];
+    if (!invoice) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Invoice not found." });
+    }
+
+    await connection.query(
+      "UPDATE invoice SET status = ?, scheduled_at = CASE WHEN ? = 'Sent' THEN NULL ELSE scheduled_at END WHERE invoice_id = ?",
+      [status, status, invoiceId]
+    );
+
+    await writeAuditLog(connection, `${STATUS_AUDIT_PREFIX}${status}`, "invoice", invoiceId, req.user?.userId, {
+      previousValue: invoice.status,
+      newValue: status
+    });
+
+    await connection.commit();
+
+    res.json({
+      message: "Invoice status updated.",
+      invoice_id: invoiceId,
+      invoiceId: invoice.invoiceId,
+      status
+    });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({
+      message: "Failed to update invoice status.",
+      detail: error.message
+    });
+  } finally {
+    connection.release();
+  }
+}
+
+/**
  * PATCH /api/invoices/:id/void
  * Retains an officially-created invoice for audit while removing it from active totals.
  */
@@ -964,6 +1034,7 @@ module.exports = {
   getNextInvoiceNumber,
   scheduleInvoices,
   sendInvoice,
+  updateInvoiceStatus,
   voidInvoice,
   toCurrencyNumber,
   STATUS_AUDIT_PREFIX,

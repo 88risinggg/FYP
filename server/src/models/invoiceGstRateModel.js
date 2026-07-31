@@ -42,6 +42,40 @@ function taxCodeFor(rate) {
   return `GST_${Number.isInteger(normalized) ? normalized : String(normalized).replace(".", "_")}`;
 }
 
+function validateGstScheduleInput(data) {
+  const rawRate = String(data.ratePercentage ?? data.rate_percentage ?? "").trim();
+  const rate = Number(rawRate);
+  const effectiveFrom = toDateOnly(data.effectiveFrom ?? data.effective_from);
+  const effectiveTo = toDateOnly(data.effectiveTo ?? data.effective_to);
+  const taxName = String(data.taxName || data.tax_name || "GST").trim() || "GST";
+
+  if (!/^(?:\d{1,2}(?:\.\d{1,2})?|100(?:\.0{1,2})?)$/.test(rawRate) || !Number.isFinite(rate)) {
+    const error = new Error("GST rate must be between 0 and 100 with no more than two decimal places.");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!effectiveFrom) {
+    const error = new Error("Effective from date is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const earliestEffectiveFrom = toDateOnly(tomorrow);
+  if (effectiveFrom < earliestEffectiveFrom) {
+    const error = new Error("GST effective date must be at least one day after today. Schedule tomorrow or a later date only.");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (effectiveTo && effectiveTo < effectiveFrom) {
+    const error = new Error("Effective to date cannot be before effective from date.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return { rawRate, rate, effectiveFrom, effectiveTo, taxName };
+}
+
 function mapRow(row) {
   if (!row) return null;
   return {
@@ -195,27 +229,7 @@ async function getNextScheduledGstRate(companyId = null, asOf = new Date()) {
 
 async function createGstRate(data, companyId = null, createdBy = "Admin") {
   await ensureGstRatesTable();
-  const rawRate = String(data.ratePercentage ?? data.rate_percentage ?? "").trim();
-  const rate = Number(rawRate);
-  const effectiveFrom = toDateOnly(data.effectiveFrom ?? data.effective_from);
-  const effectiveTo = toDateOnly(data.effectiveTo ?? data.effective_to);
-  const taxName = String(data.taxName || data.tax_name || "GST").trim() || "GST";
-
-  if (!/^(?:\d{1,2}(?:\.\d{1,2})?|100(?:\.0{1,2})?)$/.test(rawRate) || !Number.isFinite(rate)) {
-    const error = new Error("GST rate must be between 0 and 100 with no more than two decimal places.");
-    error.statusCode = 400;
-    throw error;
-  }
-  if (!effectiveFrom) {
-    const error = new Error("Effective from date is required.");
-    error.statusCode = 400;
-    throw error;
-  }
-  if (effectiveTo && effectiveTo < effectiveFrom) {
-    const error = new Error("Effective to date cannot be before effective from date.");
-    error.statusCode = 400;
-    throw error;
-  }
+  const { rate, effectiveFrom, effectiveTo, taxName } = validateGstScheduleInput(data);
 
   const previousEffectiveTo = new Date(`${effectiveFrom}T00:00:00.000Z`);
   previousEffectiveTo.setUTCDate(previousEffectiveTo.getUTCDate() - 1);
@@ -275,6 +289,97 @@ async function createGstRate(data, companyId = null, createdBy = "Admin") {
   return listGstRates(companyId);
 }
 
+async function updateGstRate(gstRateId, data, companyId = null) {
+  await ensureGstRatesTable();
+  const id = Number(gstRateId);
+  if (!Number.isInteger(id) || id <= 0) {
+    const error = new Error("GST rate ID is invalid.");
+    error.statusCode = 400;
+    throw error;
+  }
+  const { rate, effectiveFrom, effectiveTo, taxName } = validateGstScheduleInput(data);
+  const taxCode = taxCodeFor(rate);
+  const today = toDateOnly(new Date());
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [existingRows] = await connection.query(
+      `SELECT * FROM invoice_gst_rates
+       WHERE gst_rate_id = ?
+         AND is_active = 1
+         AND ${companyId ? "company_id = ?" : "company_id IS NULL"}
+       LIMIT 1 FOR UPDATE`,
+      companyId ? [id, companyId] : [id]
+    );
+    const existing = existingRows[0];
+    if (!existing) {
+      const error = new Error("GST schedule was not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+    if (toDateOnly(existing.effective_from) <= today) {
+      const error = new Error("Only upcoming GST schedules can be edited.");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const previousEffectiveTo = new Date(`${effectiveFrom}T00:00:00.000Z`);
+    previousEffectiveTo.setUTCDate(previousEffectiveTo.getUTCDate() - 1);
+    const previousEffectiveToValue = previousEffectiveTo.toISOString().slice(0, 10);
+    const [previousRows] = await connection.query(
+      `SELECT gst_rate_id FROM invoice_gst_rates
+       WHERE is_active = 1
+         AND gst_rate_id <> ?
+         AND ${companyId ? "company_id = ?" : "company_id IS NULL"}
+         AND effective_from < ?
+       ORDER BY effective_from DESC, gst_rate_id DESC
+       LIMIT 1 FOR UPDATE`,
+      companyId ? [id, companyId, effectiveFrom] : [id, effectiveFrom]
+    );
+    const previousRate = previousRows[0];
+    if (previousRate) {
+      await connection.query(
+        `UPDATE invoice_gst_rates SET effective_to = ? WHERE gst_rate_id = ?`,
+        [previousEffectiveToValue, previousRate.gst_rate_id]
+      );
+    }
+
+    const [overlaps] = await connection.query(
+      `SELECT gst_rate_id FROM invoice_gst_rates
+       WHERE is_active = 1
+         AND gst_rate_id <> ?
+         AND ${companyId ? "company_id = ?" : "company_id IS NULL"}
+         AND effective_from <= COALESCE(?, '9999-12-31')
+         AND COALESCE(effective_to, '9999-12-31') >= ?
+       LIMIT 1`,
+      companyId ? [id, companyId, effectiveTo, effectiveFrom] : [id, effectiveTo, effectiveFrom]
+    );
+
+    if (overlaps.length > 0) {
+      const error = new Error("GST effective dates cannot overlap an existing GST rate.");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    await connection.query(
+      `UPDATE invoice_gst_rates
+       SET tax_code = ?, tax_name = ?, rate_percentage = ?, effective_from = ?, effective_to = ?
+       WHERE gst_rate_id = ?`,
+      [taxCode, taxName, rate, effectiveFrom, effectiveTo, id]
+    );
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  return listGstRates(companyId);
+}
+
 function gstRateToSettings(rate) {
   const effective = rate || DEFAULT_GST_RATE;
   return {
@@ -308,5 +413,6 @@ module.exports = {
   gstRateToSettings,
   listGstRates,
   taxCodeFor,
-  toDateOnly
+  toDateOnly,
+  updateGstRate
 };

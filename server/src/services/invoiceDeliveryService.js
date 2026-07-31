@@ -25,6 +25,17 @@ const invoiceEmailPlaceholders = new Map([
   ["payment_url", "Payment Link"]
 ]);
 
+const receiptPlaceholders = new Map([
+  ["customer_name", "Customer Name"],
+  ["invoice_number", "Invoice Number"],
+  ["amount_paid", "Amount Paid"],
+  ["payment_date", "Payment Date"],
+  ["payment_method", "Payment Method"],
+  ["company_name", "Company Name"],
+  ["receipt_number", "Receipt Number"],
+  ["online_invoice_url", "Online Invoice"]
+]);
+
 function formatEmailDate(value) {
   const source = String(value || "").trim();
   if (!source) return "N/A";
@@ -151,6 +162,62 @@ function renderTemplate(template, values) {
   return String(template || "").replace(/\{\{([a-z_]+)\}\}/g, (match, key) => (
     Object.prototype.hasOwnProperty.call(values, key) ? String(values[key] ?? "") : match
   ));
+}
+
+function validateReceiptTemplates(subjectTemplate, bodyTemplate) {
+  const allowedPlaceholders = new Set(receiptPlaceholders.keys());
+  const errors = [];
+
+  if (!String(subjectTemplate || "").trim()) errors.push("Receipt email subject is required.");
+  if (!String(bodyTemplate || "").trim()) errors.push("Receipt message body is required.");
+
+  for (const { location, value } of [
+    { location: "Receipt Email Subject", value: subjectTemplate },
+    { location: "Receipt Message Body", value: bodyTemplate }
+  ]) {
+    for (const match of String(value || "").matchAll(/\{\{([^{}]+)\}\}/g)) {
+      if (!allowedPlaceholders.has(match[1])) {
+        errors.push(`Unsupported receipt placeholder "{{${match[1]}}}" in ${location}.`);
+      }
+    }
+  }
+
+  return [...new Set(errors)];
+}
+
+function receiptTemplateValues(invoice, settings, transactionId, options = {}) {
+  const currency = settings.defaultCurrency || settings.general?.defaultCurrency || "SGD";
+  const amount = Number(invoice.total_amount || invoice.amount_paid || options.amountPaid || 0).toFixed(2);
+  return {
+    customer_name: invoice.customer_name || "Customer",
+    invoice_number: invoice.invoiceId || "",
+    amount_paid: `${currency} ${amount}`,
+    payment_date: formatEmailDate(options.paymentDate || new Date().toISOString()),
+    payment_method: options.paymentMethod || invoice.payment_method || "Online payment",
+    company_name: settings.companyName || "PayNivo",
+    receipt_number: transactionId || options.receiptNumber || "",
+    online_invoice_url: `${publicClientUrl()}/invoice/view/${invoice.invoiceId}`
+  };
+}
+
+function buildPaymentReceiptContent(invoice, settings, transactionId, options = {}) {
+  const template = {
+    ...defaultSettings.receiptTemplate,
+    ...(settings.receiptTemplate || {})
+  };
+  const values = receiptTemplateValues(invoice, settings, transactionId, options);
+  const subject = renderTemplate(template.subject, values);
+  const body = renderTemplate(template.body, values);
+  const htmlBody = body.split(/\n{2,}/).map((paragraph) => (
+    `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`
+  )).join("");
+  const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px">
+    <h1>${escapeHtml(values.company_name)}</h1>
+    <h2>Payment received</h2>
+    ${htmlBody}
+  </div>`;
+
+  return { subject, body, html };
 }
 
 function buildInvoiceEmailHtml(invoice, settings, options = {}) {
@@ -304,26 +371,9 @@ async function sendPaymentReceiptEmail(invoice, transactionId) {
 
   const transporter = createEmailTransport();
   const settings = { ...defaultSettings, ...((await getInvoiceSettings(invoice.company_id || invoice.companyId || null)) || {}) };
-  const amount = Number(invoice.total_amount || 0).toFixed(2);
-  const currency = settings.defaultCurrency || "SGD";
-  const subject = `Payment Receipt - Invoice ${invoice.invoiceId}`;
+  const receiptContent = buildPaymentReceiptContent(invoice, settings, transactionId);
+  const subject = receiptContent.subject;
   const recipient = invoice.customer_email;
-
-  const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px">
-    <h1>${escapeHtml(settings.companyName || "Payment Receipt")}</h1>
-    <h2>Payment received</h2>
-    <p>Dear ${escapeHtml(invoice.customer_name || "Customer")},</p>
-    <p>We have received your payment. Here are the details:</p>
-    <table style="width:100%;border-collapse:collapse;margin:16px 0">
-      <tr><td style="padding:8px 0;color:#7b6660">Invoice:</td><td style="padding:8px 0;font-weight:700">${escapeHtml(invoice.invoiceId)}</td></tr>
-      <tr><td style="padding:8px 0;color:#7b6660">Amount paid:</td><td style="padding:8px 0;font-weight:700">${escapeHtml(currency)} ${escapeHtml(amount)}</td></tr>
-      <tr><td style="padding:8px 0;color:#7b6660">Transaction ID:</td><td style="padding:8px 0;font-weight:700">${escapeHtml(transactionId)}</td></tr>
-      <tr><td style="padding:8px 0;color:#7b6660">Date:</td><td style="padding:8px 0">${new Date().toLocaleDateString("en-SG", { day: "2-digit", month: "short", year: "numeric" })}</td></tr>
-    </table>
-    <p style="color:#7b6660">Thank you for your payment.</p>
-    <hr style="border:none;border-top:1px solid #f0e8e5;margin:20px 0" />
-    <p style="font-size:12px;color:#9e8e89">${escapeHtml(settings.companyName || "PayNivo")}</p>
-  </div>`;
 
   // Create email log entry
   const logId = await createEmailLog({
@@ -351,8 +401,8 @@ async function sendPaymentReceiptEmail(invoice, transactionId) {
       replyTo: settings.replyToEmail || settings.financeEmail || undefined,
       to: recipient,
       subject,
-      html,
-      text: `Payment Receipt\n\nInvoice: ${invoice.invoiceId}\nAmount: ${currency} ${amount}\nTransaction: ${transactionId}\n\nThank you for your payment.`
+      html: receiptContent.html,
+      text: receiptContent.body
     });
 
     if (logId) await markEmailSent(logId, info.messageId);
@@ -364,6 +414,49 @@ async function sendPaymentReceiptEmail(invoice, transactionId) {
     await logPaymentReceiptDelivery(invoice, transactionId, "Failed", { subject, errorMessage: error.message, errorCode: error.code });
     throw error;
   }
+}
+
+async function sendPaymentReceiptTestEmail(recipient, settingsOverride = {}) {
+  const recipientEmail = String(recipient || "").trim();
+  if (!recipientEmail) {
+    const error = new Error("Test recipient email is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+  const settings = { ...defaultSettings, ...settingsOverride };
+  const errors = validateReceiptTemplates(
+    settings.receiptTemplate?.subject,
+    settings.receiptTemplate?.body
+  );
+  if (errors.length > 0) {
+    const error = new Error(errors[0]);
+    error.statusCode = 400;
+    error.validationErrors = errors;
+    throw error;
+  }
+  const receiptContent = buildPaymentReceiptContent({
+    invoiceId: "INV-2026-0001",
+    total_amount: 109,
+    customer_name: "Sample Customer"
+  }, settings, "RCPT-2026-0001", {
+    paymentDate: "2026-07-31",
+    paymentMethod: "Online payment"
+  });
+  const transporter = createEmailTransport();
+  const smtpFrom = emailFrom();
+  if (!transporter) {
+    console.log(`[EMAIL] Test payment receipt -> ${recipientEmail}`);
+    return { provider: "console", recipientEmail, subject: receiptContent.subject };
+  }
+  const info = await transporter.sendMail({
+    from: settings.senderName ? `"${String(settings.senderName).replaceAll('"', "")}" <${smtpFrom}>` : smtpFrom,
+    replyTo: settings.replyToEmail || settings.financeEmail || undefined,
+    to: recipientEmail,
+    subject: receiptContent.subject,
+    html: receiptContent.html,
+    text: receiptContent.body
+  });
+  return { provider: "smtp", messageId: info.messageId, recipientEmail, subject: receiptContent.subject };
 }
 
 async function logPaymentReceiptDelivery(invoice, transactionId, deliveryStatus, metadata) {
@@ -396,10 +489,13 @@ async function logPaymentReceiptDelivery(invoice, transactionId, deliveryStatus,
 module.exports = {
   assertInvoiceEmailTemplatesValid,
   buildInvoiceEmailHtml,
+  buildPaymentReceiptContent,
   formatEmailDate,
   renderTemplate,
   sendInvoiceEmail,
   sendInvoiceSettingsTestEmail,
   sendPaymentReceiptEmail,
+  sendPaymentReceiptTestEmail,
+  validateReceiptTemplates,
   validateInvoiceEmailTemplates
 };

@@ -547,14 +547,10 @@ function buildFooterSection(invoice, settings) {
   }
 
   let registeredOfficeHtml = "";
-  if (settings.registeredOfficeAddress || settings.financeEmail) {
-    const officeLine = [
-      settings.financeEmail ? `Attention: ${settings.financeEmail}` : "",
-      settings.registeredOfficeAddress || settings.companyAddress
-    ].filter(Boolean).join(", ");
+  if (settings.registeredOfficeAddress) {
     registeredOfficeHtml = `<div style="display:grid;grid-template-columns:12mm 1fr;align-items:start;margin-top:3mm;padding-top:3mm;border-top:.3mm solid ${primary};">
       <div style="width:8mm;height:8mm;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${secondary};color:white;"><svg viewBox="0 0 24 24" width="4mm" height="4mm" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
-      <p style="margin:0;font-size:6.5pt;color:#555;padding-top:1.5mm;"><strong>Registered Office:</strong> ${escapeHtml(officeLine)}</p>
+      <p style="margin:0;font-size:6.5pt;color:#555;padding-top:1.5mm;"><strong>Registered Office:</strong> ${escapeHtml(settings.registeredOfficeAddress)}</p>
     </div>`;
   }
 

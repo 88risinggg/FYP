@@ -63,6 +63,40 @@ export function createInvoiceGstRate(payload, options = {}) {
   });
 }
 
+export function updateInvoiceGstRate(id, payload, options = {}) {
+  const query = new URLSearchParams();
+  if (options.limit) query.set("limit", String(options.limit));
+  if (options.order) query.set("order", options.order);
+  const suffix = query.size ? `?${query}` : "";
+  return apiRequest(`/api/admin/invoicing/invoice-settings/gst-rates/${id}${suffix}`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getReceiptSettings() {
+  return apiRequest("/api/admin/invoicing/receipt-settings", {
+    headers: authHeaders()
+  });
+}
+
+export function updateReceiptSettings(payload) {
+  return apiRequest("/api/admin/invoicing/receipt-settings", {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  });
+}
+
+export function sendReceiptSettingsTestEmail(payload) {
+  return apiRequest("/api/admin/invoicing/receipt-settings/test-email", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  });
+}
+
 export function uploadInvoiceLogo(payload) {
   return apiRequest("/api/admin/invoicing/invoice-settings/logo", {
     method: "POST",

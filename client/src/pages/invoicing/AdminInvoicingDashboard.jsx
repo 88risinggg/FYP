@@ -11,6 +11,7 @@ import {
   FileBarChart,
   LayoutDashboard,
   MessageSquare,
+  ReceiptText,
   Settings
 } from "lucide-react";
 import { Navigate, useLocation } from "react-router-dom";
@@ -25,6 +26,7 @@ import AdminInvoiceSettingsPage, { AdminGstManagementPage } from "./AdminInvoice
 import AdminPaymentReminderSummaryPage from "./AdminPaymentReminderSummaryPage.jsx";
 import AdminReportsPage from "./AdminReportsPage.jsx";
 import AdminReminderSettingsPage from "./AdminReminderSettingsPage.jsx";
+import AdminReceiptSettingsPage from "./AdminReceiptSettingsPage.jsx";
 import AdminValidationSummaryPage from "./AdminValidationSummaryPage.jsx";
 import AdminTemplatePreviewPage from "./AdminTemplatePreviewPage.jsx";
 import AdminSubscriptionSettingsPage from "./AdminSubscriptionSettingsPage.jsx";
@@ -89,6 +91,23 @@ const invoicingSidebarSections = [
           {
             label: "Template Preview",
             path: "/dashboard/invoicing/admin/template-preview",
+            end: true
+          }
+        ]
+      },
+      {
+        label: "Receipt Settings",
+        icon: ReceiptText,
+        path: "/dashboard/invoicing/admin/receipt-settings",
+        children: [
+          {
+            label: "Settings",
+            path: "/dashboard/invoicing/admin/receipt-settings",
+            end: true
+          },
+          {
+            label: "Receipt Preview",
+            path: "/dashboard/invoicing/admin/receipt-settings/preview",
             end: true
           }
         ]
@@ -167,6 +186,8 @@ const routeHeadings = {
   "/dashboard/invoicing/admin/invoice-settings/email": "Invoice Settings",
   "/dashboard/invoicing/admin/invoice-settings/payments": "Invoice Settings",
   "/dashboard/invoicing/admin/reminder-settings": "Reminder Settings",
+  "/dashboard/invoicing/admin/receipt-settings": "Receipt Settings",
+  "/dashboard/invoicing/admin/receipt-settings/preview": "Receipt Preview",
   "/dashboard/invoicing/admin/integrations/whatsapp": "WhatsApp Integration",
   "/dashboard/invoicing/admin/template-preview": "Template Preview",
   "/dashboard/invoicing/admin/subscription-settings": "Subscription Settings",
@@ -203,6 +224,8 @@ export default function AdminInvoicingDashboard() {
   // When the admin clicks "Reminder Settings" in the sidebar, this becomes true.
   // The page rendered below is AdminReminderSettingsPage.jsx.
   const isReminderSettings = normalizedPath === "/dashboard/invoicing/admin/reminder-settings";
+  const isReceiptSettings = normalizedPath === "/dashboard/invoicing/admin/receipt-settings";
+  const isReceiptPreview = normalizedPath === "/dashboard/invoicing/admin/receipt-settings/preview";
   const isWhatsAppSettings = normalizedPath === "/dashboard/invoicing/admin/integrations/whatsapp";
   const isTemplatePreview = normalizedPath === "/dashboard/invoicing/admin/template-preview";
   const isSubscriptionSettings =
@@ -227,6 +250,8 @@ export default function AdminInvoicingDashboard() {
       ? "Automated Invoicing System - Subscription Settings"
     : isReminderSettings
       ? "Automated Invoicing System - Reminder Settings"
+    : isReceiptSettings || isReceiptPreview
+      ? "Automated Invoicing System - Receipt Settings"
     : isWhatsAppSettings
       ? "Automated Invoicing System - WhatsApp Settings"
     : isReports
@@ -271,6 +296,10 @@ export default function AdminInvoicingDashboard() {
               This is where the Automatic Customer Reminder Policy layout is built. */}
           <AdminReminderSettingsPage />
         </>
+      ) : isReceiptSettings ? (
+        <AdminReceiptSettingsPage activeView="settings" />
+      ) : isReceiptPreview ? (
+        <AdminReceiptSettingsPage activeView="preview" />
       ) : isWhatsAppSettings ? (
         <AdminWhatsAppIntegrationPage />
       ) : isTemplatePreview ? (

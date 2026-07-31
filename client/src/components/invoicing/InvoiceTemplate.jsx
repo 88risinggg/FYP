@@ -444,13 +444,13 @@ function FooterSection({ invoice: _invoice, settings }) {
           <p style={{ margin: 0, fontSize: "7pt", color: "#7B6660", paddingTop: "1.5mm" }}>{settings.computerGeneratedStatement}</p>
         </div>
       )}
-      {(settings.registeredOfficeAddress || settings.financeEmail) && (
+      {settings.registeredOfficeAddress && (
         <div style={{ display: "grid", gridTemplateColumns: "12mm 1fr", alignItems: "start", marginTop: "3mm", paddingTop: "3mm", borderTop: `0.3mm solid ${primary}` }}>
           <div style={{ width: "8mm", height: "8mm", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: secondary, color: "white" }}>
             <svg viewBox="0 0 24 24" width="4mm" height="4mm" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
           </div>
           <p style={{ margin: 0, fontSize: "6.5pt", color: "#7B6660", paddingTop: "1.5mm" }}>
-            <strong>Registered Office:</strong> {[settings.financeEmail ? `Attention: ${settings.financeEmail}` : "", settings.registeredOfficeAddress || settings.companyAddress].filter(Boolean).join(", ")}
+            <strong>Registered Office:</strong> {settings.registeredOfficeAddress}
           </p>
         </div>
       )}

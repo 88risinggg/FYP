@@ -29,11 +29,15 @@ const {
 const {
   getGstRates,
   getNumberingActivity,
+  getReceiptSettings,
   getSettings,
   postGstRate,
   postInvoiceLogo,
   postInvoicePreview,
+  postTestReceiptEmail,
   postTestInvoiceEmail,
+  putReceiptSettings,
+  putGstRate,
   putSettings
 } = require("../controllers/invoiceSettingsController");
 const { getTemplatePreview } = require("../controllers/invoicePreviewController");
@@ -64,6 +68,10 @@ router.put("/invoice-settings", putSettings);
 router.get("/invoice-settings/numbering-activity", getNumberingActivity);
 router.get("/invoice-settings/gst-rates", getGstRates);
 router.post("/invoice-settings/gst-rates", postGstRate);
+router.put("/invoice-settings/gst-rates/:id", putGstRate);
+router.get("/receipt-settings", getReceiptSettings);
+router.put("/receipt-settings", putReceiptSettings);
+router.post("/receipt-settings/test-email", postTestReceiptEmail);
 router.post("/invoice-settings/logo", postInvoiceLogo);
 router.post("/invoice-settings/preview", postInvoicePreview);
 router.post("/invoice-settings/template-preview", getTemplatePreview);

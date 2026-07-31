@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS invoice_settings (
   invoice_prefix VARCHAR(20) NOT NULL DEFAULT 'INV',
   invoice_year VARCHAR(4) NOT NULL DEFAULT '',
   separator_style VARCHAR(20) NOT NULL DEFAULT 'hyphen',
-  invoice_format VARCHAR(60) NOT NULL DEFAULT '{PREFIX}-{YYYY}-{NNNN}',
+  invoice_format VARCHAR(60) NOT NULL DEFAULT '{PREFIX}-{NNNN}-{YYYY}-SG',
   next_invoice_number INT NOT NULL DEFAULT 1,
   numbering_style VARCHAR(40) NOT NULL DEFAULT 'PREFIX-DATE-NUMBER',
   date_format VARCHAR(20) NOT NULL DEFAULT 'YYYYMM',

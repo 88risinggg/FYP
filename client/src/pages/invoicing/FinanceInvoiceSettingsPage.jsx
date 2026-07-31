@@ -158,7 +158,6 @@ export default function FinanceInvoiceSettingsPage() {
   const s = settings || {};
   const general = s.general || {};
   const branding = s.branding || {};
-  const seqRules = s.sequenceRules || {};
   const reminderPolicy = reminderRules[0] || null;
   const updatedAt = activeTab === "reminders"
     ? reminderPolicy?.updatedAt || reminderPolicy?.updated_at
@@ -227,7 +226,7 @@ export default function FinanceInvoiceSettingsPage() {
                 <ReadOnlyField label="Default Currency" value={general.defaultCurrency || s.defaultCurrency || "SGD"} />
                 <ReadOnlyField label="Default Language" value="English" />
                 <ReadOnlyField label="Default Tax" value={general.defaultTax || "GST_9"} />
-                <ReadOnlyField label="Price Display" value={general.priceDisplay || "tax_exclusive"} />
+                <ReadOnlyField label="Price Display" value="Tax Exclusive" />
                 <ReadOnlyField label="Payment Terms" value={general.paymentTerms || s.paymentTerms || "Net 30"} />
                 <ReadOnlyField label="Due Period" value={`${s.dueDays ?? 30} days`} />
                 <ReadOnlyField label="Late Fee" value={`${general.lateFeeValue ?? s.lateFeePercent ?? 0}% (${general.lateFeeType || "percent"})`} />
@@ -255,20 +254,13 @@ export default function FinanceInvoiceSettingsPage() {
                 <ReadOnlyField label="Invoice Prefix" value={s.invoicePrefix || "INV"} />
                 <ReadOnlyField label="Invoice Year" value={s.invoiceYear || new Date().getFullYear()} />
                 <ReadOnlyField label="Separator Style" value={s.separatorStyle || "hyphen"} />
-                <ReadOnlyField label="Invoice Format" value={s.invoiceFormat || "{PREFIX}-{YYYY}-{NNNN}"} />
+                <ReadOnlyField label="Invoice Format" value={s.invoiceFormat || "{PREFIX}-{NNNN}-{YYYY}-SG"} />
                 <ReadOnlyField label="Next Invoice Number" value={s.nextInvoiceNumber || 1} />
                 <ReadOnlyField
                   label="Preview"
                   value={s.previewInvoiceNumber || buildPreview(s)}
                   note="Next invoice will use this number."
                 />
-              </div>
-            </SettingsCard>
-
-            <SettingsCard title="Sequence Rules" icon={Settings2}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <ReadOnlyField label="Yearly Reset" value={seqRules.yearlyReset ? "Enabled" : "Disabled"} note="Restart numbering when year changes." />
-                <ReadOnlyField label="Allow Manual Override" value={seqRules.allowManualOverride ? "Enabled" : "Disabled"} note="Admins can adjust numbers before sending." />
               </div>
             </SettingsCard>
           </div>
@@ -283,7 +275,6 @@ export default function FinanceInvoiceSettingsPage() {
                 <ReadOnlyField label="Reply-To Email" value={s.replyToEmail} />
                 <ReadOnlyField label="Finance Email" value={s.financeEmail} />
                 <ReadOnlyField label="Support Email (Optional)" value={s.supportEmail} note="Finance Email is used when this is empty." />
-                <ReadOnlyField label="Attach PDF Invoice" value={s.attachPdfInvoice !== false ? "Yes" : "No"} />
               </div>
             </SettingsCard>
 
@@ -356,10 +347,9 @@ export default function FinanceInvoiceSettingsPage() {
         {activeTab === "gst" && (
           <div className="space-y-5">
             <SettingsCard title="Tax Configuration" icon={FileText}>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <ReadOnlyField label="Tax Type" value={s.taxType || s.taxName || "GST"} />
                 <ReadOnlyField label="Tax Rate" value={`${s.defaultTaxRate ?? s.taxPercentage ?? 9}%`} />
-                <ReadOnlyField label="Tax Inclusive" value={s.taxInclusive || general.priceDisplay === "tax_inclusive" ? "Yes" : "No"} />
                 <ReadOnlyField label="Tax Enabled" value={s.taxEnabled !== false ? "Yes" : "No"} />
               </div>
             </SettingsCard>
@@ -612,7 +602,7 @@ export default function FinanceInvoiceSettingsPage() {
 function buildPreview(settings) {
   const prefix = settings.invoicePrefix || "INV";
   const year = String(settings.invoiceYear || new Date().getFullYear());
-  const format = settings.invoiceFormat || "{PREFIX}-{YYYY}-{NNNN}";
+  const format = settings.invoiceFormat || "{PREFIX}-{NNNN}-{YYYY}-SG";
   const num = String(settings.nextInvoiceNumber || 1).padStart(4, "0");
 
   return format

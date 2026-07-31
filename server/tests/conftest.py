@@ -1,7 +1,7 @@
 import pytest
 import requests
 
-BASE_URL = "http://localhost:5000"
+BASE_URL = "http://localhost:5002"
 
 
 @pytest.fixture(scope="session")

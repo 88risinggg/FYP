@@ -13,6 +13,7 @@ const {
   getNextInvoiceNumber,
   scheduleInvoices,
   sendInvoice,
+  updateInvoiceStatus,
   voidInvoice
 } = require("../controllers/invoiceController");
 const { exportInvoicesExcel } = require("../controllers/exportController");
@@ -66,6 +67,7 @@ router.get("/export/excel", exportInvoicesExcel);
 router.post("/", createInvoice);
 router.post("/schedule", scheduleInvoices);
 router.post("/:id/send", sendInvoice);
+router.put("/:id/status", updateInvoiceStatus);
 router.patch("/:id/void", allowRoles("Finance"), voidInvoice);
 
 /**

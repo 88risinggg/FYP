@@ -9,7 +9,8 @@ const { pool } = require("../config/db");
 const {
   createGstRate,
   getEffectiveGstRate,
-  toDateOnly
+  toDateOnly,
+  updateGstRate
 } = require("./invoiceGstRateModel");
 
 beforeEach(() => {
@@ -115,6 +116,122 @@ test("schedules GST transactionally and returns the authenticated admin name", a
     createdByUserId: 12,
     createdBy: "Admin User"
   });
+});
+
+test("rejects GST schedules for today or earlier", async () => {
+  pool.query
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([[{ Field: "created_by_user_id" }]])
+    .mockResolvedValueOnce([[{ count: 1 }]]);
+
+  await expect(createGstRate({
+    ratePercentage: "9.50",
+    effectiveFrom: toDateOnly(new Date())
+  }, 7, {
+    userId: 12,
+    email: "admin@example.com"
+  })).rejects.toMatchObject({
+    message: "GST effective date must be at least one day after today. Schedule tomorrow or a later date only.",
+    statusCode: 400
+  });
+
+  expect(pool.getConnection).not.toHaveBeenCalled();
+});
+
+test("updates only upcoming GST schedules", async () => {
+  const connection = {
+    beginTransaction: jest.fn().mockResolvedValue(),
+    query: jest.fn()
+      .mockResolvedValueOnce([[{
+        gst_rate_id: 42,
+        company_id: 7,
+        effective_from: "2027-01-01",
+        effective_to: null,
+        is_active: 1
+      }]])
+      .mockResolvedValueOnce([[{ gst_rate_id: 9 }]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }]),
+    commit: jest.fn().mockResolvedValue(),
+    rollback: jest.fn().mockResolvedValue(),
+    release: jest.fn()
+  };
+
+  pool.getConnection.mockResolvedValue(connection);
+  pool.query
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([[{ Field: "created_by_user_id" }]])
+    .mockResolvedValueOnce([[{ count: 1 }]])
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([[{ Field: "created_by_user_id" }]])
+    .mockResolvedValueOnce([[{ count: 1 }]])
+    .mockResolvedValueOnce([[{
+      gst_rate_id: 42,
+      company_id: 7,
+      tax_code: "GST_8_5",
+      tax_name: "GST",
+      rate_percentage: "8.50",
+      effective_from: "2027-02-01",
+      effective_to: null,
+      is_active: 1
+    }]]);
+
+  const rates = await updateGstRate(42, {
+    ratePercentage: "8.50",
+    effectiveFrom: "2027-02-01"
+  }, 7);
+
+  expect(connection.commit).toHaveBeenCalledTimes(1);
+  expect(connection.rollback).not.toHaveBeenCalled();
+  expect(connection.query.mock.calls[2][1]).toEqual(["2027-01-31", 9]);
+  expect(connection.query.mock.calls[4][1]).toEqual([
+    "GST_8_5",
+    "GST",
+    8.5,
+    "2027-02-01",
+    null,
+    42
+  ]);
+  expect(rates[0]).toMatchObject({
+    id: 42,
+    ratePercentage: 8.5,
+    effectiveFrom: "2027-02-01"
+  });
+});
+
+test("rejects edits to current GST schedules", async () => {
+  const connection = {
+    beginTransaction: jest.fn().mockResolvedValue(),
+    query: jest.fn().mockResolvedValueOnce([[{
+      gst_rate_id: 9,
+      company_id: 7,
+      effective_from: "2024-01-01",
+      effective_to: null,
+      is_active: 1
+    }]]),
+    commit: jest.fn().mockResolvedValue(),
+    rollback: jest.fn().mockResolvedValue(),
+    release: jest.fn()
+  };
+
+  pool.getConnection.mockResolvedValue(connection);
+  pool.query
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([[{ Field: "created_by_user_id" }]])
+    .mockResolvedValueOnce([[{ count: 1 }]]);
+
+  await expect(updateGstRate(9, {
+    ratePercentage: "8.50",
+    effectiveFrom: "2027-02-01"
+  }, 7)).rejects.toMatchObject({
+    message: "Only upcoming GST schedules can be edited.",
+    statusCode: 400
+  });
+
+  expect(connection.commit).not.toHaveBeenCalled();
+  expect(connection.rollback).toHaveBeenCalledTimes(1);
+  expect(connection.release).toHaveBeenCalledTimes(1);
 });
 
 test("rolls back all GST date changes when a schedule overlaps", async () => {

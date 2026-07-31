@@ -14,7 +14,6 @@ import {
   FileText,
   Hash,
   Info,
-  ListChecks,
   Loader2,
   Mail,
   Landmark,
@@ -31,6 +30,7 @@ import {
   getInvoiceGstRates,
   getInvoiceSettings,
   sendInvoiceSettingsTestEmail,
+  updateInvoiceGstRate,
   updateInvoiceSettings
 } from "../../services/adminInvoiceSettingsService.js";
 
@@ -92,8 +92,7 @@ const invoiceSectionRootFields = {
     "replyToEmail",
     "supportEmail",
     "emailSubjectTemplate",
-    "emailBodyTemplate",
-    "attachPdfInvoice"
+    "emailBodyTemplate"
   ],
   payments: [
     "bankAccountHolderName",
@@ -231,8 +230,10 @@ function validateInvoiceSection(section, form) {
   }
 
   if (section === "numbering") {
+    const currentYear = new Date().getFullYear();
     const valid = hasText(form.invoicePrefix)
       && /^\d{4}$/.test(String(form.invoiceYear || ""))
+      && Number(form.invoiceYear) >= currentYear
       && hasText(form.separatorStyle)
       && hasText(form.invoiceFormat)
       && Number.isInteger(Number(form.nextInvoiceNumber))
@@ -369,19 +370,6 @@ const generalToggles = [
   }
 ];
 
-const sequenceRuleFields = [
-  {
-    label: "Yearly Reset",
-    note: "Start the first invoice of each new year at 0001. The full invoice number still includes the year.",
-    field: "yearlyReset"
-  },
-  {
-    label: "Allow Manual Override",
-    note: "Allow Admin to adjust the next number that will be generated. Existing invoice numbers remain unchanged.",
-    field: "allowManualOverride"
-  }
-];
-
 const buttonClasses = {
   primary:
     "flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#F38978] px-4 py-3 text-sm font-bold text-white shadow-[0_12px_25px_rgba(243,137,120,0.35)] transition hover:bg-[#e87562] disabled:cursor-not-allowed disabled:opacity-70",
@@ -402,6 +390,7 @@ function normalizeSettings(settings) {
   return {
     ...defaultForm,
     ...(settings || {}),
+    invoiceFormat: ensureSingaporeInvoiceFormat(settings?.invoiceFormat || defaultForm.invoiceFormat),
     general: { ...defaultForm.general, ...(settings?.general || {}) },
     branding: { ...defaultForm.branding, ...(settings?.branding || {}) },
     sequenceRules: { ...defaultForm.sequenceRules, ...(settings?.sequenceRules || {}) }
@@ -426,6 +415,25 @@ function buildInvoiceNumber(settings, nextNumber = settings.nextInvoiceNumber) {
     .replaceAll("{NNNN}", padInvoiceNumber(nextNumber));
 }
 
+function ensureSingaporeInvoiceFormat(format) {
+  const text = String(format || "").trim();
+  if (!text) return text;
+  const withSuffix = /SG$/i.test(text)
+    ? text
+    : text.includes("/")
+      ? `${text}/SG`
+      : text.includes("-")
+        ? `${text}-SG`
+        : `${text}SG`;
+
+  return withSuffix
+    .replace("{PREFIX}-{YYYY}-{NNNN}", "{PREFIX}-{NNNN}-{YYYY}")
+    .replace("{PREFIX}/{YYYY}/{NNNN}", "{PREFIX}/{NNNN}/{YYYY}")
+    .replace("{PREFIX}{YYYY}{NNNN}", "{PREFIX}{NNNN}{YYYY}")
+    .replace("{PREFIX}-{YY}-{NNNN}", "{PREFIX}-{NNNN}-{YY}")
+    .replace("{YYYY}-{PREFIX}-{NNNN}", "{NNNN}-{YYYY}-{PREFIX}");
+}
+
 function separatorFromFormat(format) {
   if (format?.includes("/")) return "slash";
   if (format?.includes("-")) return "hyphen";
@@ -433,14 +441,15 @@ function separatorFromFormat(format) {
 }
 
 function formatForSeparator(currentFormat, separatorStyle) {
-  if (separatorStyle === "none") return "{PREFIX}{YYYY}{NNNN}";
+  if (separatorStyle === "none") return "{PREFIX}{NNNN}{YYYY}SG";
 
   const separator = separatorStyle === "slash" ? "/" : "-";
   const usesShortYear = currentFormat?.includes("{YY}") && !currentFormat?.includes("{YYYY}");
-  const startsWithYear = separatorStyle === "hyphen" && currentFormat?.startsWith("{YYYY}");
+  const startsWithSequence = separatorStyle === "hyphen" && currentFormat?.startsWith("{NNNN}");
+  const suffix = separatorStyle === "slash" ? "/SG" : "-SG";
 
-  if (startsWithYear) return `{YYYY}${separator}{PREFIX}${separator}{NNNN}`;
-  return `{PREFIX}${separator}${usesShortYear ? "{YY}" : "{YYYY}"}${separator}{NNNN}`;
+  if (startsWithSequence) return `{NNNN}${separator}${usesShortYear ? "{YY}" : "{YYYY}"}${separator}{PREFIX}${suffix}`;
+  return `{PREFIX}${separator}{NNNN}${separator}${usesShortYear ? "{YY}" : "{YYYY}"}${suffix}`;
 }
 
 function formatDateTime(value) {
@@ -586,6 +595,19 @@ function SettingsSelect({ config, options, value, onChange }) {
     );
   }
 
+  if (config.field === "priceDisplay") {
+    return (
+      <Field label={config.label} note="This company issues GST-exclusive invoices.">
+        <input
+          type="text"
+          readOnly
+          value="Tax Exclusive"
+          className="h-11 w-full rounded-lg border border-[#ead3cc] bg-[#fff8f5] px-3 text-sm font-semibold text-[#251E1F] outline-none"
+        />
+      </Field>
+    );
+  }
+
   return (
     <Field label={config.label}>
       <SelectField
@@ -647,8 +669,16 @@ function shortDate(value) {
   }).format(date);
 }
 
+function tomorrowDateInputValue() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return offsetDate.toISOString().slice(0, 10);
+}
+
 function GstManagementTab() {
   const navigate = useNavigate();
+  const earliestEffectiveDate = tomorrowDateInputValue();
   const [data, setData] = useState({ rates: [], currentRate: null, nextRate: null });
   const [form, setForm] = useState({
     ratePercentage: "",
@@ -677,18 +707,29 @@ function GstManagementTab() {
   }, []);
 
   async function submitGstRate() {
+    if (form.effectiveFrom && form.effectiveFrom < earliestEffectiveDate) {
+      setError("GST effective date must be at least one day after today. Choose tomorrow or a later date so current and historical invoice data is not affected.");
+      return;
+    }
     setSaving(true);
     setMessage("");
     setError("");
     try {
-      const nextData = await createInvoiceGstRate({
+      const payload = {
         taxName: "GST",
         ratePercentage: form.ratePercentage,
         effectiveFrom: form.effectiveFrom,
         effectiveTo: form.effectiveTo || null
-      }, { limit: 5, order: "latest" });
-      setData(nextData);
-      setMessage(`GST ${form.ratePercentage}% scheduled to start on ${shortDate(form.effectiveFrom)}.`);
+      };
+      const upcomingScheduleId = data.nextRate?.id;
+      const savedMessage = upcomingScheduleId
+        ? `Scheduled GST updated to ${form.ratePercentage}% from ${shortDate(form.effectiveFrom)}.`
+        : `GST ${form.ratePercentage}% scheduled to start on ${shortDate(form.effectiveFrom)}.`;
+      const savedData = upcomingScheduleId
+        ? await updateInvoiceGstRate(upcomingScheduleId, payload, { limit: 5, order: "latest" })
+        : await createInvoiceGstRate(payload, { limit: 5, order: "latest" });
+      setData(savedData);
+      setMessage(savedMessage);
       setForm({ ratePercentage: "", effectiveFrom: "", effectiveTo: "" });
     } catch (requestError) {
       setError(requestError.message);
@@ -701,6 +742,15 @@ function GstManagementTab() {
     setForm({ ratePercentage: "", effectiveFrom: "", effectiveTo: "" });
     setMessage("");
     setError("");
+  }
+
+  function updateScheduleDate(field, value) {
+    if (value && value < earliestEffectiveDate) {
+      setError("GST effective date must be at least one day after today. Choose tomorrow or a later date so current and historical invoice data is not affected.");
+      return;
+    }
+    setError("");
+    setForm((current) => ({ ...current, [field]: value }));
   }
 
   if (loading) {
@@ -757,6 +807,10 @@ function GstManagementTab() {
       </section>
 
       <SettingsCard title="Schedule GST Rate" icon={FileText}>
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+          GST schedules can only start from tomorrow or a later date. Today and past dates are blocked to keep current and historical invoice records stable.
+          {data.nextRate ? " A new schedule submission will update the existing upcoming GST schedule." : ""}
+        </div>
         <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-start">
           <Field label="GST Rate (%)">
             <input
@@ -774,16 +828,18 @@ function GstManagementTab() {
             <input
               type="date"
               required
+              min={earliestEffectiveDate}
               value={form.effectiveFrom}
-              onChange={(event) => setForm((current) => ({ ...current, effectiveFrom: event.target.value }))}
+              onChange={(event) => updateScheduleDate("effectiveFrom", event.target.value)}
               className="h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm font-semibold text-[#251E1F] outline-none focus:border-[#F38978]"
             />
           </Field>
           <Field label="Effective To" note="Leave empty for ongoing.">
             <input
               type="date"
+              min={form.effectiveFrom || earliestEffectiveDate}
               value={form.effectiveTo}
-              onChange={(event) => setForm((current) => ({ ...current, effectiveTo: event.target.value }))}
+              onChange={(event) => updateScheduleDate("effectiveTo", event.target.value)}
               className="h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm font-semibold text-[#251E1F] outline-none focus:border-[#F38978]"
             />
           </Field>
@@ -794,7 +850,7 @@ function GstManagementTab() {
             className="primary-button mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold disabled:opacity-60 xl:mt-5"
           >
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            {saving ? "Saving..." : "Schedule"}
+            {saving ? "Saving..." : data.nextRate ? "Update Schedule" : "Schedule"}
           </button>
         </div>
         <div className="mt-3 flex justify-end">
@@ -1164,10 +1220,12 @@ function NumberingTab({
   activity,
   onRootFieldChange,
   onSeparatorChange,
-  onFormatChange,
-  onSequenceRuleChange
+  onFormatChange
 }) {
   const examplePreview = buildInvoiceNumber(form);
+  const currentYear = new Date().getFullYear();
+  const yearValue = String(form.invoiceYear || "");
+  const isPastYear = /^\d{4}$/.test(yearValue) && Number(yearValue) < currentYear;
 
   return (
     <div className="space-y-5">
@@ -1184,12 +1242,23 @@ function NumberingTab({
           <Field label="Year">
             <input
               type="number"
-              min="1900"
+              min={currentYear}
               max="9999"
               value={form.invoiceYear}
               onChange={(event) => onRootFieldChange("invoiceYear", event.target.value)}
+              onBlur={(event) => {
+                if (Number(event.target.value) < currentYear) {
+                  onRootFieldChange("invoiceYear", String(currentYear));
+                }
+              }}
               className="h-11 w-full rounded-lg border border-[#ead3cc] bg-white px-3 text-sm font-semibold text-[#251E1F] outline-none transition focus:border-[#F38978] focus:ring-2 focus:ring-[#F38978]/20"
             />
+            {isPastYear ? (
+              <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                <span>Invoice year cannot be before {currentYear}.</span>
+              </div>
+            ) : null}
           </Field>
           <Field label="Separator Style">
             <SelectField
@@ -1205,7 +1274,7 @@ function NumberingTab({
               options={options.invoiceFormats}
             />
           </Field>
-          <Field label="Next Invoice Number" note="The server advances this automatically. Enable Manual Override only for an approved correction.">
+          <Field label="Next Invoice Number">
             <input
               type="number"
               min="1"
@@ -1222,23 +1291,6 @@ function NumberingTab({
               {examplePreview}
             </div>
           </Field>
-        </div>
-      </SettingsCard>
-
-      <SettingsCard title="Sequence Rules" icon={ListChecks}>
-        <div className="grid gap-4 lg:grid-cols-2">
-          {sequenceRuleFields.map((rule) => (
-            <Toggle
-              key={rule.field}
-              label={rule.label}
-              note={rule.note}
-              checked={rule.locked ? true : form.sequenceRules[rule.field]}
-              disabled={rule.locked}
-              onChange={(value) => {
-                if (!rule.locked) onSequenceRuleChange(rule.field, value);
-              }}
-            />
-          ))}
         </div>
       </SettingsCard>
 
@@ -1266,7 +1318,13 @@ function PaymentSettingsTab({ form, onChange }) {
       <SettingsCard title="Bank Transfer & PayNow" icon={Landmark}>
         <div className="grid gap-4 lg:grid-cols-2">
           <TextSetting label="Bank Account Holder" field="bankAccountHolderName" form={form} onChange={onChange} />
-          <TextSetting label="Bank Name" field="bankName" form={form} onChange={onChange} />
+          <Field label="Bank Name">
+            <SelectField
+              value={form.bankName || ""}
+              onChange={(value) => onChange("bankName", value)}
+              options={[{ value: "OCBC", label: "OCBC" }]}
+            />
+          </Field>
           <TextSetting label="Bank Account Number" field="bankAccountNumber" form={form} onChange={onChange} />
           <TextSetting label="BIC / SWIFT" field="bicSwift" form={form} onChange={onChange} />
           <TextSetting label="PayNow Identifier" field="paynowIdentifier" form={form} onChange={onChange} />
@@ -1405,7 +1463,6 @@ function EmailSettingsTab({ form, onChange }) {
               />
             </Field>
           </div>
-          <Toggle label="Attach PDF Invoice" note="Attach the fixed approved invoice PDF to outgoing invoice emails." checked={form.attachPdfInvoice !== false} onChange={(value) => onChange("attachPdfInvoice", value)} />
         </div>
         <div className="mt-5 rounded-xl border border-[#ead3cc] bg-[#fff8f5] p-4">
           <p className="text-xs font-bold text-[#251E1F]">Send Test Email</p>
@@ -1448,9 +1505,6 @@ function EmailSettingsTab({ form, onChange }) {
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-[#6f5b55]">
-          <span className="rounded-full bg-[#fff1ec] px-3 py-1.5">
-            PDF attachment: {form.attachPdfInvoice !== false ? "Included" : "Not included"}
-          </span>
           <span className="rounded-full bg-[#fff1ec] px-3 py-1.5">
             Sample due date: {previewValues.due_date}
           </span>
@@ -1621,16 +1675,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
     }));
   }
 
-  function setSequenceRule(field, value) {
-    setForm((current) => ({
-      ...current,
-      sequenceRules: {
-        ...current.sequenceRules,
-        [field]: value
-      }
-    }));
-  }
-
   function handleSeparatorChange(value) {
     setForm((current) => ({
       ...current,
@@ -1662,6 +1706,9 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
     }
     if (!form.invoicePrefix) nextErrors.push("Invoice prefix is required.");
     if (!/^\d{4}$/.test(String(form.invoiceYear || ""))) nextErrors.push("Enter a valid four-digit invoice year.");
+    if (/^\d{4}$/.test(String(form.invoiceYear || "")) && Number(form.invoiceYear) < new Date().getFullYear()) {
+      nextErrors.push("Invoice year cannot be before the current year.");
+    }
     if (!form.separatorStyle) nextErrors.push("Separator style is required.");
     if (!form.invoiceFormat) nextErrors.push("Invoice format is required.");
     if (!Number.isInteger(Number(form.nextInvoiceNumber)) || Number(form.nextInvoiceNumber) < 1) {
@@ -1801,7 +1848,6 @@ export default function AdminInvoiceSettingsPage({ activeTab = "general" }) {
               onRootFieldChange={setRootField}
               onSeparatorChange={handleSeparatorChange}
               onFormatChange={handleFormatChange}
-              onSequenceRuleChange={setSequenceRule}
             />
           </SettingsTabLayout>
         ) : currentTab === "email" ? (

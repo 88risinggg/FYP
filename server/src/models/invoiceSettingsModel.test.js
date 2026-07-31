@@ -17,12 +17,34 @@ test("invoice settings offer English as the only language", () => {
   expect(optionLists.languages).toEqual([{ value: "en", label: "English" }]);
 });
 
+test("all invoice format options include the SG suffix", () => {
+  expect(optionLists.invoiceFormats.every((option) => option.value.endsWith("SG"))).toBe(true);
+});
+
+test("all invoice format options place the sequence before the year", () => {
+  expect(optionLists.invoiceFormats.every((option) => {
+    const sequenceIndex = option.value.indexOf("{NNNN}");
+    const yearIndex = option.value.includes("{YYYY}")
+      ? option.value.indexOf("{YYYY}")
+      : option.value.indexOf("{YY}");
+    return sequenceIndex !== -1 && yearIndex !== -1 && sequenceIndex < yearIndex;
+  })).toBe(true);
+});
+
 test("saved prefix and sequence produce a four-digit invoice number", () => {
   expect(buildInvoiceNumber({
     invoicePrefix: "TAX",
     invoiceYear: "2026",
-    invoiceFormat: "{PREFIX}-{YYYY}-{NNNN}"
-  }, new Date("2026-07-20"), 12)).toBe("TAX-2026-0012");
+    invoiceFormat: "{PREFIX}-{NNNN}-{YYYY}-SG"
+  }, new Date("2026-07-20"), 12)).toBe("TAX-0012-2026-SG");
+});
+
+test("SG suffix format places the sequence before the year", () => {
+  expect(buildInvoiceNumber({
+    invoicePrefix: "IN",
+    invoiceYear: "2026",
+    invoiceFormat: "{PREFIX}-{NNNN}-{YYYY}-SG"
+  }, new Date("2026-07-20"), 15730)).toBe("IN-15730-2026-SG");
 });
 
 test("due date follows the configured due days", () => {
@@ -75,7 +97,7 @@ test("yearly reset starts the first sequence of a new year at one", () => {
     invoicePrefix: "INV",
     invoiceYear: "2026",
     lastSequenceYear: "2026",
-    invoiceFormat: "{PREFIX}-{YYYY}-{NNNN}",
+    invoiceFormat: "{PREFIX}-{NNNN}-{YYYY}-SG",
     nextInvoiceNumber: 87,
     sequenceRules: { yearlyReset: true }
   };
@@ -84,7 +106,7 @@ test("yearly reset starts the first sequence of a new year at one", () => {
   expect(resolved.didReset).toBe(true);
   expect(resolved.startNumber).toBe(1);
   expect(buildInvoiceNumber(resolved.effectiveSettings, new Date("2027-01-01T00:00:00Z"), 1))
-    .toBe("INV-2027-0001");
+    .toBe("INV-0001-2027-SG");
 });
 
 test("yearly reset keeps advancing within the same year", () => {

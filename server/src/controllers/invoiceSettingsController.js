@@ -27,11 +27,14 @@ const {
   createGstRate,
   getEffectiveGstRate,
   getNextScheduledGstRate,
-  listGstRates
+  listGstRates,
+  updateGstRate
 } = require("../models/invoiceGstRateModel");
 const { getClientIp, logAuditEvent } = require("../models/auditLogModel");
 const {
+  sendPaymentReceiptTestEmail,
   sendInvoiceSettingsTestEmail,
+  validateReceiptTemplates,
   validateInvoiceEmailTemplates
 } = require("../services/invoiceDeliveryService");
 const { generateInvoicePDF } = require("../services/pdfService");
@@ -59,6 +62,20 @@ function normalizeSettings(body) {
 
   const paymentTerms = String(general.paymentTerms || "").trim();
   const dueDays = derivePaymentTermDays({ general: { paymentTerms } });
+  const rawInvoiceFormat = String(body.invoiceFormat || defaultSettings.invoiceFormat).trim();
+  const invoiceFormatWithSuffix = /SG$/i.test(rawInvoiceFormat)
+    ? rawInvoiceFormat
+    : rawInvoiceFormat.includes("/")
+      ? `${rawInvoiceFormat}/SG`
+      : rawInvoiceFormat.includes("-")
+        ? `${rawInvoiceFormat}-SG`
+        : `${rawInvoiceFormat}SG`;
+  const invoiceFormat = invoiceFormatWithSuffix
+    .replace("{PREFIX}-{YYYY}-{NNNN}", "{PREFIX}-{NNNN}-{YYYY}")
+    .replace("{PREFIX}/{YYYY}/{NNNN}", "{PREFIX}/{NNNN}/{YYYY}")
+    .replace("{PREFIX}{YYYY}{NNNN}", "{PREFIX}{NNNN}{YYYY}")
+    .replace("{PREFIX}-{YY}-{NNNN}", "{PREFIX}-{NNNN}-{YY}")
+    .replace("{YYYY}-{PREFIX}-{NNNN}", "{NNNN}-{YYYY}-{PREFIX}");
 
   return {
     ...defaultSettings,
@@ -66,7 +83,7 @@ function normalizeSettings(body) {
     invoicePrefix: String(body.invoicePrefix || defaultSettings.invoicePrefix).trim().toUpperCase(),
     invoiceYear: String(body.invoiceYear || defaultSettings.invoiceYear).replace(/\D/g, ""),
     separatorStyle: String(body.separatorStyle || defaultSettings.separatorStyle).trim(),
-    invoiceFormat: String(body.invoiceFormat || defaultSettings.invoiceFormat).trim(),
+    invoiceFormat,
     nextInvoiceNumber: Number(body.nextInvoiceNumber),
     companyName: String(body.companyName || "").trim(),
     companyRegistrationNumber: String(body.companyRegistrationNumber || "").trim(),
@@ -95,7 +112,7 @@ function normalizeSettings(body) {
       defaultCurrency: String(general.defaultCurrency || "").trim().toUpperCase(),
       defaultLanguage: "en",
       defaultTax: String(general.defaultTax || "").trim(),
-      priceDisplay: String(general.priceDisplay || "").trim(),
+      priceDisplay: "tax_exclusive",
       paymentTerms,
       lateFeeValue: Number(general.lateFeeValue),
       lateFeeType: String(general.lateFeeType || "percent").trim(),
@@ -174,6 +191,9 @@ function validateSettings(settings, options) {
   }
   if (!/^\d{4}$/.test(String(settings.invoiceYear || ""))) {
     errors.push("Enter a valid four-digit invoice year.");
+  }
+  if (/^\d{4}$/.test(String(settings.invoiceYear || "")) && Number(settings.invoiceYear) < new Date().getFullYear()) {
+    errors.push("Invoice year cannot be before the current year.");
   }
   if (!hasOption(options.separatorStyles, settings.separatorStyle)) {
     errors.push("Separator style is invalid.");
@@ -545,13 +565,118 @@ async function postGstRate(req, res) {
   }
 }
 
+function normalizeReceiptTemplate(body) {
+  return {
+    subject: String(body.subject || "").trim(),
+    body: String(body.body || "").trim()
+  };
+}
+
+async function getReceiptSettings(req, res) {
+  try {
+    const companyId = getCompanyId(req);
+    const settings = await getInvoiceSettings(companyId);
+    res.json({
+      receiptTemplate: {
+        ...defaultSettings.receiptTemplate,
+        ...(settings.receiptTemplate || {})
+      },
+      updatedAt: settings.updatedAt || settings.updated_at || null
+    });
+  } catch (error) {
+    handleSettingsError(error, res, "Unable to load receipt settings.");
+  }
+}
+
+async function putReceiptSettings(req, res) {
+  try {
+    const companyId = getCompanyId(req);
+    const receiptTemplate = normalizeReceiptTemplate(req.body.receiptTemplate || req.body);
+    const errors = validateReceiptTemplates(receiptTemplate.subject, receiptTemplate.body);
+    if (errors.length > 0) {
+      return res.status(400).json({ message: errors[0], errors });
+    }
+
+    const current = await getInvoiceSettings(companyId);
+    const saved = await saveInvoiceSettings({
+      ...current,
+      receiptTemplate
+    }, companyId);
+
+    await logAuditEvent({
+      userId: req.user?.userId,
+      userName: req.user?.email || "Admin",
+      activityType: "Receipt Settings",
+      actionDescription: "Updated payment receipt template",
+      affectedRecord: "receipt-template",
+      status: "Success",
+      ipAddress: getClientIp(req)
+    });
+
+    res.json({
+      receiptTemplate: {
+        ...defaultSettings.receiptTemplate,
+        ...(saved.receiptTemplate || {})
+      },
+      message: "Receipt settings saved."
+    });
+  } catch (error) {
+    handleSettingsError(error, res, "Unable to save receipt settings.");
+  }
+}
+
+async function postTestReceiptEmail(req, res) {
+  try {
+    const companyId = getCompanyId(req);
+    const recipient = String(req.body.recipient || req.user?.email || "").trim();
+    const receiptTemplate = normalizeReceiptTemplate(req.body.receiptTemplate || {});
+    const errors = validateReceiptTemplates(receiptTemplate.subject, receiptTemplate.body);
+    if (errors.length > 0) {
+      return res.status(400).json({ message: errors[0], errors });
+    }
+    const settings = {
+      ...(await getInvoiceSettings(companyId)),
+      receiptTemplate
+    };
+    const result = await sendPaymentReceiptTestEmail(recipient, settings);
+    res.json({ message: `Test receipt sent to ${recipient}.`, result });
+  } catch (error) {
+    handleSettingsError(error, res, "Unable to send test receipt.");
+  }
+}
+
+async function putGstRate(req, res) {
+  try {
+    const companyId = getCompanyId(req);
+    await updateGstRate(req.params.id, req.body, companyId);
+    await logAuditEvent({
+      userId: req.user?.userId,
+      userName: req.user?.email || "Admin",
+      activityType: "Invoice GST",
+      actionDescription: "Updated scheduled invoice GST rate",
+      affectedRecord: String(req.params.id),
+      status: "Success",
+      previousValue: "",
+      newValue: JSON.stringify(req.body),
+      ipAddress: getClientIp(req)
+    });
+    return getGstRates(req, res);
+  } catch (error) {
+    handleSettingsError(error, res, "Unable to update GST rate.");
+  }
+}
+
 module.exports = {
   getSettings,
+  getReceiptSettings,
   getGstRates,
   getNumberingActivity,
   postInvoiceLogo,
   postInvoicePreview,
+  postTestReceiptEmail,
   postGstRate,
   postTestInvoiceEmail,
+  putReceiptSettings,
+  putGstRate,
   putSettings
 };

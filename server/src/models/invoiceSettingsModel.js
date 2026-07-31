@@ -46,8 +46,7 @@ const optionLists = {
     { value: "NONE", label: "No Tax", rate: 0, type: "None" }
   ],
   priceDisplayOptions: [
-    { value: "tax_exclusive", label: "Tax Exclusive" },
-    { value: "tax_inclusive", label: "Tax Inclusive" }
+    { value: "tax_exclusive", label: "Tax Exclusive" }
   ],
   paymentTerms: [
     { value: "Net 7", label: "Net 7" },
@@ -62,11 +61,11 @@ const optionLists = {
     { value: "none", label: "No separator" }
   ],
   invoiceFormats: [
-    { value: "{PREFIX}-{YYYY}-{NNNN}", label: "{PREFIX}-{YYYY}-{NNNN}" },
-    { value: "{PREFIX}/{YYYY}/{NNNN}", label: "{PREFIX}/{YYYY}/{NNNN}" },
-    { value: "{PREFIX}{YYYY}{NNNN}", label: "{PREFIX}{YYYY}{NNNN}" },
-    { value: "{PREFIX}-{YY}-{NNNN}", label: "{PREFIX}-{YY}-{NNNN}" },
-    { value: "{YYYY}-{PREFIX}-{NNNN}", label: "{YYYY}-{PREFIX}-{NNNN}" }
+    { value: "{PREFIX}-{NNNN}-{YYYY}-SG", label: "{PREFIX}-{NNNN}-{YYYY}-SG" },
+    { value: "{PREFIX}/{NNNN}/{YYYY}/SG", label: "{PREFIX}/{NNNN}/{YYYY}/SG" },
+    { value: "{PREFIX}{NNNN}{YYYY}SG", label: "{PREFIX}{NNNN}{YYYY}SG" },
+    { value: "{PREFIX}-{NNNN}-{YY}-SG", label: "{PREFIX}-{NNNN}-{YY}-SG" },
+    { value: "{NNNN}-{YYYY}-{PREFIX}-SG", label: "{NNNN}-{YYYY}-{PREFIX}-SG" }
   ]
 };
 
@@ -90,7 +89,7 @@ const defaultSettings = {
   invoiceYear: String(new Date().getFullYear()),
   lastSequenceYear: String(new Date().getFullYear()),
   separatorStyle: "hyphen",
-  invoiceFormat: "{PREFIX}-{YYYY}-{NNNN}",
+  invoiceFormat: "{PREFIX}-{NNNN}-{YYYY}-SG",
   nextInvoiceNumber: 1,
   numberingStyle: "PREFIX-DATE-NUMBER",
   dateFormat: "YYYYMM",
@@ -120,6 +119,10 @@ const defaultSettings = {
   replyToEmail: "",
   emailSubjectTemplate: "Invoice {{invoice_number}} from {{company_name}}",
   emailBodyTemplate: "Dear {{customer_name}},\n\nYour invoice {{invoice_number}} for {{amount_due}} is due on {{due_date}}.\n\nThank you,\n{{company_name}}",
+  receiptTemplate: {
+    subject: "Payment received for invoice {{invoice_number}}",
+    body: "Dear {{customer_name}},\n\nWe have received your payment of {{amount_paid}} for invoice {{invoice_number}} on {{payment_date}}.\n\nThank you for your payment.\n\n{{company_name}}"
+  },
   attachPdfInvoice: true,
   footerNote: "Thank you for your business.",
   templateName: "Default Template",
@@ -208,6 +211,24 @@ function boolValue(value, fallback = false) {
 function normalizeInvoiceYear(value) {
   const cleanValue = String(value || "").replace(/\D/g, "");
   return cleanValue || String(new Date().getFullYear());
+}
+
+function ensureSingaporeInvoiceFormat(format) {
+  const text = String(format || defaultSettings.invoiceFormat).trim();
+  const withSuffix = /SG$/i.test(text)
+    ? text
+    : text.includes("/")
+      ? `${text}/SG`
+      : text.includes("-")
+        ? `${text}-SG`
+        : `${text}SG`;
+
+  return withSuffix
+    .replace("{PREFIX}-{YYYY}-{NNNN}", "{PREFIX}-{NNNN}-{YYYY}")
+    .replace("{PREFIX}/{YYYY}/{NNNN}", "{PREFIX}/{NNNN}/{YYYY}")
+    .replace("{PREFIX}{YYYY}{NNNN}", "{PREFIX}{NNNN}{YYYY}")
+    .replace("{PREFIX}-{YY}-{NNNN}", "{PREFIX}-{NNNN}-{YY}")
+    .replace("{YYYY}-{PREFIX}-{NNNN}", "{NNNN}-{YYYY}-{PREFIX}");
 }
 
 function numberToken(value) {
@@ -391,6 +412,7 @@ function mapRawToSettings(raw) {
     const settings = {
       ...defaultSettings,
       ...raw,
+      invoiceFormat: ensureSingaporeInvoiceFormat(raw.invoiceFormat),
       lastSequenceYear: normalizeInvoiceYear(
         raw.lastSequenceYear || raw.invoiceYear || defaultSettings.lastSequenceYear
       ),
@@ -421,7 +443,7 @@ function mapRawToSettings(raw) {
     invoiceYear: normalizeInvoiceYear(raw.invoice_year || defaultSettings.invoiceYear),
     lastSequenceYear: normalizeInvoiceYear(raw.invoice_year || defaultSettings.lastSequenceYear),
     separatorStyle: raw.separator_style || defaultSettings.separatorStyle,
-    invoiceFormat: raw.invoice_format || defaultSettings.invoiceFormat,
+    invoiceFormat: ensureSingaporeInvoiceFormat(raw.invoice_format),
     nextInvoiceNumber: numberValue(raw.next_invoice_number, defaultSettings.nextInvoiceNumber),
     numberingStyle: raw.numbering_style || defaultSettings.numberingStyle,
     dateFormat: raw.date_format || defaultSettings.dateFormat,
@@ -534,7 +556,7 @@ function mapRawToSettings(raw) {
 function applyGeneralSettings(settings) {
   const general = settings.general || {};
   const defaultCurrency = general.defaultCurrency || settings.defaultCurrency || defaultSettings.defaultCurrency;
-  const priceDisplay = general.priceDisplay || defaultSettings.general.priceDisplay;
+  const priceDisplay = "tax_exclusive";
   const paymentTerms = general.paymentTerms || settings.paymentTerms || defaultSettings.general.paymentTerms;
   const dueDays = derivePaymentTermDays({ ...settings, general: { ...general, paymentTerms } });
   const lateFeeValue = Number(general.lateFeeValue ?? settings.lateFeePercent ?? defaultSettings.general.lateFeeValue);
@@ -549,8 +571,8 @@ function applyGeneralSettings(settings) {
     lateFeePercent: Number.isFinite(lateFeeValue) ? lateFeeValue : defaultSettings.general.lateFeeValue,
     currencySymbol: meta.symbol,
     currencyLocale: meta.locale,
-    pricesIncludeTax: priceDisplay === "tax_inclusive",
-    taxInclusive: priceDisplay === "tax_inclusive",
+    pricesIncludeTax: false,
+    taxInclusive: false,
     general: {
       ...general,
       defaultCurrency,
@@ -653,6 +675,7 @@ async function saveInvoiceSettings(settings, companyId = null) {
   const toSave = {
     ...defaultSettings,
     ...applyGeneralSettings(settings),
+    invoiceFormat: ensureSingaporeInvoiceFormat(settings.invoiceFormat),
     ...gstSettings,
     updatedAt: new Date().toISOString(),
     general: {
