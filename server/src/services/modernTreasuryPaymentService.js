@@ -51,9 +51,22 @@ function ensureModernTreasuryCredentials(config) {
   }
 }
 
-const TRANSIENT_STATUS = new Set([429, 500, 502, 503, 504]);
+const TRANSIENT_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
-async function modernTreasuryRequest(path, { method = "GET", body, idempotencyKey, maxAttempts = 3 } = {}) {
+function retryDelay(response, attempt) {
+  const retryAfter = response.headers.get("retry-after");
+  const retryAfterSeconds = Number(retryAfter);
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0) {
+    return Math.min(retryAfterSeconds * 1000, 10000);
+  }
+  const retryAfterDate = Date.parse(retryAfter);
+  if (Number.isFinite(retryAfterDate)) {
+    return Math.min(Math.max(0, retryAfterDate - Date.now()), 10000);
+  }
+  return Math.min(500 * (2 ** (attempt - 1)), 5000);
+}
+
+async function modernTreasuryRequest(path, { method = "GET", body, idempotencyKey, maxAttempts = 5 } = {}) {
   const config = getModernTreasuryConfig();
 
   ensureModernTreasuryCredentials(config);
@@ -74,7 +87,7 @@ async function modernTreasuryRequest(path, { method = "GET", body, idempotencyKe
       });
     } catch (error) {
       if (attempt < maxAttempts && ["AbortError", "TimeoutError", "TypeError"].includes(error.name)) {
-        await new Promise((resolve) => setTimeout(resolve, 250 * (2 ** (attempt - 1))));
+        await new Promise((resolve) => setTimeout(resolve, Math.min(500 * (2 ** (attempt - 1)), 5000)));
         continue;
       }
       throw error;
@@ -83,11 +96,10 @@ async function modernTreasuryRequest(path, { method = "GET", body, idempotencyKe
     if (response.ok) return data;
     const errorDetails = [data.message, data.error, data.errors ? JSON.stringify(data.errors) : "", data.details ? JSON.stringify(data.details) : ""].filter(Boolean).join(" ");
     if (TRANSIENT_STATUS.has(response.status) && attempt < maxAttempts) {
-      const retryAfter = Number(response.headers.get("retry-after"));
-      await new Promise((resolve) => setTimeout(resolve, Number.isFinite(retryAfter) ? Math.min(retryAfter * 1000, 5000) : 250 * (2 ** (attempt - 1))));
+      await new Promise((resolve) => setTimeout(resolve, retryDelay(response, attempt)));
       continue;
     }
-    const error = new Error(errorDetails || `Modern Treasury request failed: ${method} ${path}`);
+    const error = new Error(errorDetails || `Modern Treasury request failed with HTTP ${response.status}: ${method} ${path}`);
     error.status = response.status;
     throw error;
   }
