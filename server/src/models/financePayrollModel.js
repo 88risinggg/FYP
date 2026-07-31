@@ -21,7 +21,7 @@ const {
 const { getActivePayrollRules } = require("../services/payrollRuleConfigService");
 const { currentCompanyId } = require("../services/tenantContext");
 const { postPayrollRecoveries } = require("../services/payrollRecoveryPostingService");
-const { getUnpaidLeaveDaysForMonth, calculateUnpaidLeaveDeduction, calculateWorkingDays } = require("../controllers/leaveController");
+const { calculateUnpaidLeaveDeduction, calculateWorkingDays } = require("../controllers/leaveController");
 const { getActiveHolidaysInRange } = require("../models/publicHolidayModel");
 
 const WORKFLOW_FIELDS = [
@@ -92,7 +92,7 @@ function pickWorkflow(run) {
   return Object.fromEntries(WORKFLOW_FIELDS.filter((field) => run[field] !== undefined).map((field) => [field, run[field]]));
 }
 
-async function buildEmployeeFromPayroll(row, paymentRecipient = {}) {
+async function buildEmployeeFromPayroll(row, paymentRecipient = {}, periodContext = {}) {
   const breakdown = parseJson(row.deduction_breakdown, {});
   const selfHelpGroups = Array.isArray(breakdown.selfHelpGroups) ? breakdown.selfHelpGroups : [];
   const otherDeductions = Array.isArray(breakdown.otherDeductions) ? breakdown.otherDeductions : [];
@@ -104,7 +104,7 @@ async function buildEmployeeFromPayroll(row, paymentRecipient = {}) {
   const payrollMonth = Number(row.payroll_month);
   const payrollYear = Number(row.payroll_year);
 
-  const workingDays = await (async () => {
+  const workingDays = periodContext.workingDays ?? await (async () => {
     if (!payrollMonth || !payrollYear) return 26;
     try {
       const firstDay = `${payrollYear}-${String(payrollMonth).padStart(2, "0")}-01`;
@@ -117,13 +117,7 @@ async function buildEmployeeFromPayroll(row, paymentRecipient = {}) {
     }
   })();
 
-  const noPayLeaveDays = await (async () => {
-    try {
-      return await getUnpaidLeaveDaysForMonth(row.employee_id, row.payroll_month, row.payroll_year);
-    } catch {
-      return 0;
-    }
-  })();
+  const noPayLeaveDays = periodContext.unpaidLeaveByEmployee?.get(Number(row.employee_id)) || 0;
 
   return {
     id: employeeId,
@@ -180,8 +174,12 @@ async function buildEmployeeFromPayroll(row, paymentRecipient = {}) {
   };
 }
 
-async function getPayrollRows(connection, month, year) {
+async function getPayrollRows(connection, month = null, year = null) {
   const companyId = currentCompanyId();
+  const periodFilter = month == null || year == null ? "" : "p.payroll_month = ? AND p.payroll_year = ? AND";
+  const params = month == null || year == null
+    ? [companyId, companyId, companyId]
+    : [month, year, companyId, companyId, companyId];
   const [rows] = await connection.execute(
     `SELECT
       p.*, s.employee_id, s.employee_code, s.name, s.email, s.base_salary, s.department_name,
@@ -199,17 +197,17 @@ async function getPayrollRows(connection, month, year) {
      LEFT JOIN payroll_run pr ON pr.payroll_run_id = p.payroll_run_id
      LEFT JOIN payroll_configuration pc
        ON pc.configuration_id = pr.configuration_id AND pc.configuration_type = 'rules_snapshot'
-     WHERE p.payroll_month = ? AND p.payroll_year = ? AND p.company_id = ?
+     WHERE ${periodFilter} p.company_id = ?
        AND s.company_id = ? AND pr.company_id = ?
-     ORDER BY s.name`,
-    [month, year, companyId, companyId, companyId]
+     ORDER BY p.payroll_year DESC, p.payroll_month DESC, s.name`,
+    params
   );
   return rows;
 }
 
 // FUNCTION: Combines payroll database rows into one Finance payroll-run object.
 // It also compares rule hashes to expose whether an unapproved run needs recalculation.
-async function mapRun(rows, activeRulesHash = null) {
+async function mapRun(rows, activeRulesHash = null, periodContext = {}) {
   if (!rows.length) return null;
   const first = rows[0];
   const stored = parseJson(first.header_configuration_json || first.configuration_json, {});
@@ -243,7 +241,11 @@ async function mapRun(rows, activeRulesHash = null) {
     paymentAttemptedAt: first.payment_attempted_at || null,
     releaseFailureReason: first.release_failure_reason || null,
     updatedAt: first.header_updated_at || first.header_created_at || null,
-    employees: await Promise.all(rows.map((row) => buildEmployeeFromPayroll(row, paymentRecipients[String(row.employee_id)] || {}))),
+    employees: await Promise.all(rows.map((row) => buildEmployeeFromPayroll(
+      row,
+      paymentRecipients[String(row.employee_id)] || {},
+      periodContext
+    ))),
     ...workflow
   };
 }
@@ -251,17 +253,58 @@ async function mapRun(rows, activeRulesHash = null) {
 async function listFinancePayrollRuns() {
   await ensureFinancePayrollTables();
   const activeRulesHash = getRulesHash(await getActivePayrollRules());
-  // Get distinct runs by month/year
+  const companyId = currentCompanyId();
   const [periods] = await pool.execute(
-    `SELECT DISTINCT payroll_month, payroll_year FROM payroll WHERE company_id=? ORDER BY payroll_year DESC, payroll_month DESC`, [currentCompanyId()]
+    `SELECT DISTINCT payroll_month, payroll_year FROM payroll WHERE company_id=? ORDER BY payroll_year DESC, payroll_month DESC`,
+    [companyId]
   );
-  const result = [];
-  for (const period of periods) {
-    const rows = await getPayrollRows(pool, period.payroll_month, period.payroll_year);
-    const run = await mapRun(rows, activeRulesHash);
-    if (run) result.push(run);
+  if (!periods.length) return [];
+
+  const oldest = periods[periods.length - 1];
+  const newest = periods[0];
+  const startDate = `${oldest.payroll_year}-${String(oldest.payroll_month).padStart(2, "0")}-01`;
+  const endDate = new Date(newest.payroll_year, newest.payroll_month, 0);
+  const endDateString = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
+  const [payrollRows, holidays, unpaidLeaveRows] = await Promise.all([
+    getPayrollRows(pool),
+    getActiveHolidaysInRange(startDate, endDateString).catch(() => []),
+    pool.execute(
+      `SELECT staff_employee_id, MONTH(start_date) AS payroll_month, YEAR(start_date) AS payroll_year,
+              SUM(total_days) AS total_unpaid_days
+       FROM claims_and_loans
+       WHERE company_id = ? AND type = 'leave' AND status = 'approved'
+         AND leave_type_name = 'Unpaid Leave' AND start_date BETWEEN ? AND ?
+       GROUP BY staff_employee_id, MONTH(start_date), YEAR(start_date)`,
+      [companyId, startDate, endDateString]
+    ).then(([rows]) => rows).catch(() => [])
+  ]);
+  const payrollRowsByPeriod = new Map();
+  for (const row of payrollRows) {
+    const periodKey = `${Number(row.payroll_month)}_${Number(row.payroll_year)}`;
+    if (!payrollRowsByPeriod.has(periodKey)) payrollRowsByPeriod.set(periodKey, []);
+    payrollRowsByPeriod.get(periodKey).push(row);
   }
-  return result;
+  const unpaidLeaveByPeriod = buildUnpaidLeaveLookup(unpaidLeaveRows);
+
+  return (await Promise.all(periods.map(async (period) => {
+    const periodKey = `${period.payroll_month}_${period.payroll_year}`;
+    const firstDay = new Date(period.payroll_year, period.payroll_month - 1, 1);
+    const lastDay = new Date(period.payroll_year, period.payroll_month, 0);
+    return mapRun(payrollRowsByPeriod.get(periodKey) || [], activeRulesHash, {
+      workingDays: calculateWorkingDays(firstDay, lastDay, holidays),
+      unpaidLeaveByEmployee: unpaidLeaveByPeriod.get(periodKey) || new Map()
+    });
+  }))).filter(Boolean);
+}
+
+function buildUnpaidLeaveLookup(rows) {
+  const lookup = new Map();
+  for (const row of rows) {
+    const periodKey = `${Number(row.payroll_month)}_${Number(row.payroll_year)}`;
+    if (!lookup.has(periodKey)) lookup.set(periodKey, new Map());
+    lookup.get(periodKey).set(Number(row.staff_employee_id), Number(row.total_unpaid_days || 0));
+  }
+  return lookup;
 }
 
 // FUNCTION: Runs backend compliance checks for a payroll period and returns every
@@ -960,7 +1003,7 @@ module.exports = {
   getPayrollRunComplianceErrors,
   listFinancePayrollRuns,
   recalculateFinancePayrollRun,
-  _test: { adjustmentExceptionCode, reconcileAdjustmentProposals },
+  _test: { adjustmentExceptionCode, buildUnpaidLeaveLookup, reconcileAdjustmentProposals },
   applyFinancePayrollWorkflowAction,
   upsertFinancePayrollRun
 };
