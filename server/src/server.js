@@ -60,6 +60,10 @@ async function initializeDatabaseServices() {
     const { startSubscriptionScheduler } = require("./workers/subscriptionScheduler");
 
     startInvoiceScheduler();
+    // PRESENTATION NOTE:
+    // Admin-side invoicing automatic reminder policy starts here.
+    // Next file to open:
+    // server/src/services/reminderScheduler.js
     await startReminderScheduler();
     startOverdueScheduler();
     startReminderNotificationScheduler();

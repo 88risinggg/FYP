@@ -47,6 +47,9 @@ const router = express.Router();
 
 router.use(authenticateToken, requireRole("Admin"));
 
+// PRESENTATION NOTE:
+// These routes are the backend entry points for admin-side invoicing pages.
+// Frontend services call /api/admin/invoicing/... and app.js forwards them here.
 router.get("/dashboard", getAdminInvoicingDashboard);
 router.get("/dashboard/invoice-performance", getInvoicePerformance);
 router.get("/dashboard/invoice-performance/export", exportInvoicePerformance);
@@ -67,6 +70,13 @@ router.post("/invoice-settings/template-preview", getTemplatePreview);
 router.post("/invoice-settings/test-email", postTestInvoiceEmail);
 router.get("/subscription-settings", getAdminSubscriptionSettings);
 router.put("/subscription-settings", putAdminSubscriptionSettings);
+
+// PRESENTATION NOTE:
+// Automatic Customer Reminder Policy routes.
+// Frontend file:
+// client/src/services/adminReminderService.js
+// Controller file:
+// server/src/controllers/reminderController.js
 router.get("/reminder-settings", getReminderSettings);
 router.post("/reminder-settings", postReminderSetting);
 router.put("/reminder-settings/:id", putReminderSetting);

@@ -32,6 +32,11 @@ import AdminWhatsAppIntegrationPage from "./AdminWhatsAppIntegrationPage.jsx";
 
 const pageTitle = "Automated Invoicing System - Admin Dashboard";
 
+// PRESENTATION START POINT:
+// This file is the admin invoicing "shell". It designs the left sidebar and
+// decides which admin invoicing page to show based on the browser path.
+// Example path for the reminder policy page:
+// /dashboard/invoicing/admin/reminder-settings
 const invoicingSidebarSections = [
   {
     label: "MAIN",
@@ -194,6 +199,9 @@ export default function AdminInvoicingDashboard() {
   );
   const isGstManagement = normalizedPath === "/dashboard/invoicing/admin/gst-management";
   const isInvoiceSettings = Boolean(invoiceSettingsMatch) && !isGstManagement;
+  // PRESENTATION NOTE:
+  // When the admin clicks "Reminder Settings" in the sidebar, this becomes true.
+  // The page rendered below is AdminReminderSettingsPage.jsx.
   const isReminderSettings = normalizedPath === "/dashboard/invoicing/admin/reminder-settings";
   const isWhatsAppSettings = normalizedPath === "/dashboard/invoicing/admin/integrations/whatsapp";
   const isTemplatePreview = normalizedPath === "/dashboard/invoicing/admin/template-preview";
@@ -257,7 +265,12 @@ export default function AdminInvoicingDashboard() {
       ) : isSubscriptionSettings ? (
         <AdminSubscriptionSettingsPage />
       ) : isReminderSettings ? (
-        <AdminReminderSettingsPage />
+        <>
+          {/* NEXT FILE TO OPEN:
+              client/src/pages/invoicing/AdminReminderSettingsPage.jsx
+              This is where the Automatic Customer Reminder Policy layout is built. */}
+          <AdminReminderSettingsPage />
+        </>
       ) : isWhatsAppSettings ? (
         <AdminWhatsAppIntegrationPage />
       ) : isTemplatePreview ? (

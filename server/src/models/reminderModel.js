@@ -66,6 +66,10 @@ function mapLog(row) {
   };
 }
 
+// PRESENTATION NOTE:
+// Reads saved admin reminder policies from reminder_settings.
+// Called by reminderController.js when the page loads, and by
+// reminderScheduler.js when the automatic scheduler runs.
 async function listReminderSettings(companyId = null) {
   try {
     const [rows] = await pool.execute(
@@ -81,6 +85,9 @@ async function listReminderSettings(companyId = null) {
   }
 }
 
+// PRESENTATION NOTE:
+// Finds one reminder policy by id and company. Used before updating so one
+// company cannot update another company's policy.
 async function findReminderSettingById(id, companyId) {
   try {
     const [rows] = await pool.execute(
@@ -93,6 +100,10 @@ async function findReminderSettingById(id, companyId) {
   }
 }
 
+// PRESENTATION NOTE:
+// Creates the first reminder policy for a company.
+// This writes firstReminderDays, secondReminderDays, finalReminderDays,
+// emailSubject, and emailBody into the reminder_settings table.
 async function createReminderSetting(setting, companyId, userId = null) {
   try {
     const [result] = await pool.execute(
@@ -131,6 +142,9 @@ async function createReminderSetting(setting, companyId, userId = null) {
   }
 }
 
+// PRESENTATION NOTE:
+// Updates an existing admin reminder policy in reminder_settings after the
+// admin clicks "Save Reminder Policy".
 async function updateReminderSetting(id, setting, companyId, userId = null) {
   try {
     const [result] = await pool.execute(
@@ -177,6 +191,8 @@ async function updateReminderSetting(id, setting, companyId, userId = null) {
   }
 }
 
+// PRESENTATION NOTE:
+// Saves only the enabled/disabled status for a reminder policy.
 async function updateReminderStatus(id, enabled, companyId, userId = null) {
   try {
     const [result] = await pool.execute(
@@ -191,6 +207,8 @@ async function updateReminderStatus(id, enabled, companyId, userId = null) {
   }
 }
 
+// PRESENTATION NOTE:
+// Reads sent/failed reminder records from reminder_logs for admin review.
 async function listReminderLogs(companyId, limit = 100) {
   try {
     const safeLimit = Math.max(1, Math.min(Number(limit) || 100, 500));
@@ -208,6 +226,9 @@ async function listReminderLogs(companyId, limit = 100) {
   }
 }
 
+// PRESENTATION NOTE:
+// Writes one delivery result into reminder_logs after the scheduler sends or
+// fails to send a reminder email.
 async function createReminderLog(log) {
   try {
     const dedupeKey = log.deliveryStatus === "Sent" && log.reminderType !== "Manual Reminder"
@@ -238,6 +259,10 @@ async function createReminderLog(log) {
   }
 }
 
+// PRESENTATION NOTE:
+// This is the main database query used by the automatic scheduler.
+// It finds unpaid overdue invoices for one reminder stage and skips invoices
+// that already have a successful reminder log for the same policy and stage.
 async function findDueInvoicesForRule(rule, reminderType, overdueDays) {
   try {
     const [rows] = await pool.execute(
@@ -277,6 +302,9 @@ async function findDueInvoicesForRule(rule, reminderType, overdueDays) {
   }
 }
 
+// PRESENTATION NOTE:
+// Builds the three summary cards on the admin reminder page:
+// reminders sent today, failed deliveries, and customers missing email.
 async function getReminderSummary(companyId) {
   try {
     const [[settingsRow]] = await pool.execute(

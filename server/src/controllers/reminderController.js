@@ -21,6 +21,8 @@ const { requireCompanyId } = require("../utils/companyScope");
 
 const requiredPlaceholders = ["{{client_name}}", "{{invoice_number}}", "{{amount_due}}", "{{due_date}}"];
 
+// PRESENTATION NOTE:
+// Converts checkbox-like values from the frontend into true/false.
 function toBoolean(value, defaultValue = false) {
   if (value === undefined || value === null) {
     return defaultValue;
@@ -29,6 +31,10 @@ function toBoolean(value, defaultValue = false) {
   return value === true || value === 1 || value === "1";
 }
 
+// PRESENTATION NOTE:
+// Converts the frontend request body into the backend reminder policy shape.
+// This keeps admin policy fixed to Email, Asia/Singapore, unpaid-only, and
+// stop-when-paid rules.
 function normalizeReminderSetting(body) {
   const intervals = body.intervals || {};
   return {
@@ -54,6 +60,9 @@ function normalizeReminderSetting(body) {
   };
 }
 
+// PRESENTATION NOTE:
+// Backend validation. Even if frontend validation is bypassed, backend still
+// checks reminder days, email subject/body, and required placeholders.
 function validateReminderSetting(setting) {
   const errors = [];
 
@@ -93,6 +102,11 @@ function handleReminderError(error, res, fallbackMessage) {
   });
 }
 
+// PRESENTATION NOTE:
+// GET /api/admin/invoicing/reminder-settings
+// Called when AdminReminderSettingsPage.jsx first loads.
+// Next file:
+// server/src/models/reminderModel.js -> listReminderSettings/listReminderLogs/getReminderSummary
 async function getReminderSettings(req, res) {
   try {
     const companyId = requireCompanyId(req);
@@ -108,6 +122,10 @@ async function getReminderSettings(req, res) {
   }
 }
 
+// PRESENTATION NOTE:
+// POST /api/admin/invoicing/reminder-settings
+// Called when admin saves a policy for the first time.
+// It writes to reminder_settings and also records audit/notification events.
 async function postReminderSetting(req, res) {
   try {
     const companyId = requireCompanyId(req);
@@ -146,6 +164,10 @@ async function postReminderSetting(req, res) {
   }
 }
 
+// PRESENTATION NOTE:
+// PUT /api/admin/invoicing/reminder-settings/:id
+// Called when admin edits an existing policy and clicks Save.
+// It updates reminder_settings through reminderModel.js.
 async function putReminderSetting(req, res) {
   try {
     const companyId = requireCompanyId(req);
@@ -188,6 +210,9 @@ async function putReminderSetting(req, res) {
   }
 }
 
+// PRESENTATION NOTE:
+// PATCH /api/admin/invoicing/reminder-settings/:id/status
+// Used when a page needs to enable or disable a saved reminder policy.
 async function patchReminderStatus(req, res) {
   try {
     const companyId = requireCompanyId(req);
@@ -224,6 +249,9 @@ async function patchReminderStatus(req, res) {
   }
 }
 
+// PRESENTATION NOTE:
+// GET /api/admin/invoicing/reminder-logs
+// Reads reminder_logs so admin can review sent/failed deliveries.
 async function getReminderLogs(req, res) {
   try {
     const companyId = requireCompanyId(req);
@@ -234,6 +262,10 @@ async function getReminderLogs(req, res) {
   }
 }
 
+// PRESENTATION NOTE:
+// POST /api/admin/invoicing/reminders/test
+// Called by "Send Test Email". It sends a sample email using the current form
+// values without saving the policy to the database.
 async function postTestReminder(req, res) {
   try {
     const to = String(req.body.to || "").trim();

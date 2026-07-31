@@ -36,6 +36,11 @@ const placeholders = [
   "{{payment_link}}"
 ];
 
+// PRESENTATION NOTE:
+// These are the default values shown when the page has no saved database policy yet.
+// The three important input fields are firstReminderDays, secondReminderDays,
+// and finalReminderDays. Changing an input updates this form state first; it is
+// saved to the database only after clicking "Save Reminder Policy".
 const defaultForm = {
   id: null,
   ruleName: "Invoice reminder policy",
@@ -55,6 +60,9 @@ const defaultForm = {
   testEmail: ""
 };
 
+// PRESENTATION NOTE:
+// This creates the right-side preview. It replaces placeholders with sample
+// values so admin can see how the customer's email will look before saving.
 function renderPreview(text, form) {
   return String(text || "")
     .replaceAll("{{client_name}}", "Acme Supplies")
@@ -66,6 +74,9 @@ function renderPreview(text, form) {
     .replaceAll("{{payment_link}}", "https://pay.example.com/INV-2026-001");
 }
 
+// PRESENTATION NOTE:
+// Small reusable card for the top summary numbers:
+// reminders sent today, failed deliveries, and customers missing email.
 function SummaryCard({ label, value, icon: Icon, tone = "coral" }) {
   const tones = {
     coral: "bg-[#fff3ee] text-[#E8573D]",
@@ -89,6 +100,10 @@ function SummaryCard({ label, value, icon: Icon, tone = "coral" }) {
   );
 }
 
+// PRESENTATION NOTE:
+// This designs each number input in the Reminder Timeline section.
+// Example: the first input is rendered with field="firstReminderDays".
+// If admin types 1, onChange calls setField("firstReminderDays", "1").
 function ReminderStage({ number, title, field, value, onChange, minimum }) {
   return (
     <div className="relative flex gap-4 pb-6 last:pb-0">
@@ -135,6 +150,13 @@ export default function AdminReminderSettingsPage() {
   const [errors, setErrors] = useState([]);
   const [showPreview, setShowPreview] = useState(true);
 
+  // PRESENTATION NOTE:
+  // This runs when the page first opens. It calls the frontend service:
+  // client/src/services/adminReminderService.js -> fetchReminderSettings()
+  // Backend path:
+  // GET /api/admin/invoicing/reminder-settings
+  // Backend files:
+  // server/src/routes/adminReminderRoutes.js -> reminderController.js -> reminderModel.js
   async function loadReminderData() {
     setLoading(true);
     try {
@@ -160,12 +182,18 @@ export default function AdminReminderSettingsPage() {
     loadReminderData();
   }, []);
 
+  // PRESENTATION NOTE:
+  // This updates React state only. For example, typing 1 into the first reminder
+  // input changes form.firstReminderDays on screen, but does not save to MySQL yet.
   function setField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
     setErrors([]);
     setMessage("");
   }
 
+  // PRESENTATION NOTE:
+  // This helper inserts placeholders such as {{client_name}} into the email body.
+  // It affects the textarea value only, then Save will send the final body to backend.
   function insertEmailPlaceholder(placeholder) {
     const textarea = emailBodyRef.current;
     if (!textarea) {
@@ -186,6 +214,10 @@ export default function AdminReminderSettingsPage() {
     });
   }
 
+  // PRESENTATION NOTE:
+  // This validates the admin's form before saving or sending a test email.
+  // It checks that reminder days are in order and that required placeholders
+  // are included in the email message.
   function validateForm(requireTestEmail = false) {
     const nextErrors = [];
     const first = Number(form.firstReminderDays);
@@ -215,6 +247,9 @@ export default function AdminReminderSettingsPage() {
     return nextErrors;
   }
 
+  // PRESENTATION NOTE:
+  // This converts the form into the exact payload sent to backend.
+  // testEmail is removed because it is only used for the test button.
   function policyPayload() {
     const payload = {
       ...form,
@@ -232,6 +267,14 @@ export default function AdminReminderSettingsPage() {
     return payload;
   }
 
+  // PRESENTATION NOTE:
+  // This is triggered by the "Save Reminder Policy" button.
+  // If form.id exists, it updates the existing policy:
+  // adminReminderService.js -> updateReminderSetting() -> PUT /api/admin/invoicing/reminder-settings/:id
+  // If form.id does not exist, it creates a new policy:
+  // adminReminderService.js -> createReminderSetting() -> POST /api/admin/invoicing/reminder-settings
+  // Backend continues in:
+  // server/src/routes/adminReminderRoutes.js -> server/src/controllers/reminderController.js
   async function savePolicy() {
     const nextErrors = validateForm();
     setErrors(nextErrors);
@@ -252,6 +295,11 @@ export default function AdminReminderSettingsPage() {
     }
   }
 
+  // PRESENTATION NOTE:
+  // This is triggered by the "Send Test Email" button.
+  // It sends the current email subject/body to backend without saving the policy.
+  // Next file:
+  // client/src/services/adminReminderService.js -> sendTestReminder()
   async function handleTestEmail() {
     const nextErrors = validateForm(true);
     setErrors(nextErrors);
@@ -334,6 +382,9 @@ export default function AdminReminderSettingsPage() {
       ) : null}
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        {/* PRESENTATION NOTE:
+            Left side layout: Reminder Timeline.
+            These three ReminderStage components are the 1st, 2nd, and Final reminder inputs. */}
         <div className="rounded-2xl border border-[#f0d2ca] bg-white/90 p-5 shadow-sm sm:p-6">
           <div className="mb-5 flex items-start gap-3 border-b border-[#f0d2ca] pb-4">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F38978]/15 text-[#F38978]">
@@ -373,6 +424,9 @@ export default function AdminReminderSettingsPage() {
           />
         </div>
 
+        {/* PRESENTATION NOTE:
+            Right side layout: automatic rules admin cannot accidentally break.
+            Backend also enforces these rules when finding due invoices. */}
         <div className="rounded-2xl border border-[#f0d2ca] bg-white/90 p-5 shadow-sm">
           <div className="flex items-start gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
@@ -406,6 +460,8 @@ export default function AdminReminderSettingsPage() {
       </div>
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+        {/* PRESENTATION NOTE:
+            Email template layout. Admin edits subject/body here, then Save sends it to backend. */}
         <div className="rounded-2xl border border-[#f0d2ca] bg-white/90 p-5 shadow-sm sm:p-6">
           <div className="mb-5 flex flex-col gap-3 border-b border-[#f0d2ca] pb-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-3">
@@ -469,6 +525,8 @@ export default function AdminReminderSettingsPage() {
 
         <div className="space-y-5">
           {showPreview ? (
+            /* PRESENTATION NOTE:
+               Preview layout. This uses renderPreview() above and does not call backend. */
             <div className="rounded-2xl border border-[#f0d2ca] bg-white/90 p-5 shadow-sm">
               <div className="flex items-center gap-2">
                 <Eye size={18} className="text-[#F38978]" />
