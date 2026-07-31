@@ -12,28 +12,20 @@
  * Only Admin users can access this page.
  *
  * Features:
- *   - View the backend-managed WhatsApp connection
  *   - Enable/Disable toggle
- *   - Test Twilio Connection
- *   - Send Test Message
  *   - Message Template Management
- *   - Default Notification Rules
  *   - Integration Logs
  */
 
 import { useEffect, useState } from "react";
 import {
   AlertCircle,
-  Bell,
   CheckCircle2,
   FileText,
   Loader2,
   MessageCircle,
-  Send,
   Settings2,
-  Shield,
-  Star,
-  Wifi
+  Star
 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -76,21 +68,16 @@ function maskWhatsAppNumber(value) {
 export default function AdminWhatsAppIntegrationPage() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [testing, setTesting] = useState(false);
-  const [testingMessage, setTestingMessage] = useState(false);
-  const [testPhone, setTestPhone] = useState("");
   const [message, setMessage] = useState(null);
-  const [activeTab, setActiveTab] = useState("credentials");
+  const [activeTab, setActiveTab] = useState("templates");
   const [templates, setTemplates] = useState([]);
   const [placeholders, setPlaceholders] = useState([]);
-  const [rules, setRules] = useState([]);
   const [logs, setLogs] = useState([]);
   const [logsTotal, setLogsTotal] = useState(0);
 
   useEffect(() => {
     loadConfig();
     loadTemplates();
-    loadRules();
     loadLogs();
   }, []);
 
@@ -120,16 +107,6 @@ export default function AdminWhatsAppIntegrationPage() {
         const data = await res.json();
         setTemplates(data.templates || []);
         setPlaceholders(data.placeholders || []);
-      }
-    } catch { /* non-critical */ }
-  }
-
-  async function loadRules() {
-    try {
-      const res = await fetch(`${API_BASE}/api/whatsapp/admin/notification-rules`, { headers: getHeaders() });
-      if (res.ok) {
-        const data = await res.json();
-        setRules(data.rules || []);
       }
     } catch { /* non-critical */ }
   }
@@ -165,62 +142,6 @@ export default function AdminWhatsAppIntegrationPage() {
     }
   }
 
-  async function handleTestConnection() {
-    setTesting(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/whatsapp/admin/test-connection`, {
-        method: "POST",
-        headers: getHeaders()
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showMessage(`Connected: ${data.accountName} (${data.status})`);
-        loadConfig();
-        loadLogs();
-      } else {
-        showMessage(data.error || data.message || "Connection failed.", "error");
-      }
-    } catch (err) {
-      showMessage(err.message, "error");
-    } finally {
-      setTesting(false);
-    }
-  }
-
-  async function handleTestMessage() {
-    if (!testPhone.trim()) { showMessage("Enter a phone number.", "error"); return; }
-    setTestingMessage(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/whatsapp/admin/test-message`, {
-        method: "POST",
-        headers: getHeaders(),
-        body: JSON.stringify({ phone: testPhone.trim() })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showMessage("Test message sent successfully.");
-        loadLogs();
-      } else {
-        showMessage(data.error || data.message || "Test failed.", "error");
-      }
-    } catch (err) {
-      showMessage(err.message, "error");
-    } finally {
-      setTestingMessage(false);
-    }
-  }
-
-  async function handleRuleToggle(ruleType, enabled) {
-    try {
-      const res = await fetch(`${API_BASE}/api/whatsapp/admin/notification-rules/${ruleType}`, {
-        method: "PUT",
-        headers: getHeaders(),
-        body: JSON.stringify({ is_enabled: enabled })
-      });
-      if (res.ok) { loadRules(); }
-    } catch { /* non-critical */ }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-3 rounded-xl border border-[#f0d2ca] px-5 py-16 text-[#7b6660]">
@@ -230,9 +151,7 @@ export default function AdminWhatsAppIntegrationPage() {
   }
 
   const tabs = [
-    { key: "credentials", label: "Overview", icon: Shield },
     { key: "templates", label: "Templates", icon: FileText },
-    { key: "rules", label: "Notification Rules", icon: Bell },
     { key: "logs", label: "Integration Logs", icon: Settings2 }
   ];
 
@@ -299,65 +218,6 @@ export default function AdminWhatsAppIntegrationPage() {
         })}
       </div>
 
-      {/* Overview Tab */}
-      {activeTab === "credentials" && (
-        <div className="space-y-6">
-          {/* Backend-managed connection */}
-          <div className="rounded-xl border border-[#f0d2ca] bg-white p-6">
-            <div className="flex items-center gap-3 mb-5">
-              <Shield size={20} className="text-[#F38978]" />
-              <div>
-                <h3 className="text-base font-bold text-[#251E1F]">Company WhatsApp Connection</h3>
-                <p className="text-xs text-[#7b6660]">Technical credentials are managed securely by the backend and are never exposed to Admin or Finance.</p>
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-4 py-3">
-                <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">Connection</p>
-                <p className="mt-1 text-sm font-semibold capitalize text-[#251E1F]">{config?.connection_status || "untested"}</p>
-              </div>
-              <div className="rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-4 py-3">
-                <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">Integration</p>
-                <p className="mt-1 text-sm font-semibold text-[#251E1F]">{config?.is_enabled ? "Enabled" : "Disabled"}</p>
-              </div>
-              <div className="rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-4 py-3">
-                <p className="text-xs font-bold uppercase tracking-wide text-[#7b6660]">Sender Number</p>
-                <p className="mt-1 text-sm font-semibold text-[#251E1F]">{maskWhatsAppNumber(config?.whatsapp_number)}</p>
-              </div>
-            </div>
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <button type="button" onClick={handleTestConnection} disabled={testing || !config?.configured}
-                className="inline-flex items-center gap-2 rounded-xl border border-[#f0d2ca] px-5 py-2.5 text-sm font-semibold text-[#251E1F] transition hover:bg-[#FDD9CD]/30 disabled:opacity-50">
-                {testing ? <Loader2 size={15} className="animate-spin" /> : <Wifi size={15} />}
-                Test Connection
-              </button>
-            </div>
-          </div>
-
-          {/* Test Message */}
-          <div className="rounded-xl border border-[#f0d2ca] bg-white p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <Send size={20} className="text-[#F38978]" />
-              <div>
-                <h3 className="text-base font-bold text-[#251E1F]">Send Test Message</h3>
-                <p className="text-xs text-[#7b6660]">Verify WhatsApp delivery by sending a test message.</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <input type="text" value={testPhone} onChange={(e) => setTestPhone(e.target.value)}
-                placeholder="+6591234567"
-                className="flex-1 max-w-xs rounded-lg border border-[#f0d2ca] bg-white px-3 py-2.5 text-sm text-[#251E1F] outline-none placeholder:text-[#7b6660]/50 focus:border-[#F38978]" />
-              <button type="button" onClick={handleTestMessage} disabled={testingMessage || !config?.configured}
-                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50">
-                {testingMessage ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-                Send Test
-              </button>
-            </div>
-          </div>
-
-        </div>
-      )}
-
       {/* Templates Tab */}
       {activeTab === "templates" && (
         <div className="rounded-xl border border-[#f0d2ca] bg-white p-6">
@@ -396,35 +256,6 @@ export default function AdminWhatsAppIntegrationPage() {
             ))}
             {templates.length === 0 && (
               <p className="text-center text-sm text-[#7b6660] py-8">No templates configured. Run the migration to seed defaults.</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Notification Rules Tab */}
-      {activeTab === "rules" && (
-        <div className="rounded-xl border border-[#f0d2ca] bg-white p-6">
-          <div className="flex items-center gap-3 mb-5">
-            <Bell size={20} className="text-[#F38978]" />
-            <div>
-              <h3 className="text-base font-bold text-[#251E1F]">Default Notification Rules</h3>
-              <p className="text-xs text-[#7b6660]">Configure which events automatically trigger WhatsApp messages.</p>
-            </div>
-          </div>
-          <div className="space-y-3">
-            {rules.map((rule) => (
-              <div key={rule.id} className="flex items-center justify-between rounded-lg border border-[#f0d2ca] bg-[#fff8f5] px-4 py-3">
-                <div>
-                  <p className="text-sm font-semibold text-[#251E1F] capitalize">{rule.rule_type.replace(/_/g, " ")}</p>
-                  {rule.reminder_days_before && (
-                    <p className="text-xs text-[#7b6660]">Reminder days: {JSON.stringify(rule.reminder_days_before)}</p>
-                  )}
-                </div>
-                <Toggle checked={rule.is_enabled} onChange={(val) => handleRuleToggle(rule.rule_type, val)} />
-              </div>
-            ))}
-            {rules.length === 0 && (
-              <p className="text-center text-sm text-[#7b6660] py-8">No notification rules found.</p>
             )}
           </div>
         </div>

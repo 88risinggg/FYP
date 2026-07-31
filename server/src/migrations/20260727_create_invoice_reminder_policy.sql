@@ -1,3 +1,8 @@
+-- PRESENTATION NOTE:
+-- This migration creates the two database tables used by the admin
+-- Automatic Customer Reminder Policy page.
+-- reminder_settings stores the saved policy.
+-- reminder_logs stores sent/failed delivery history.
 CREATE TABLE IF NOT EXISTS reminder_settings (
   reminder_setting_id INT NOT NULL AUTO_INCREMENT,
   company_id INT NOT NULL,

@@ -21,7 +21,9 @@ const { runWithTenant } = require("./tenantContext");
 let schedulerStarted = false;
 let schedulerRunning = false;
 
-// Run every 60 seconds
+// PRESENTATION NOTE:
+// The automatic reminder scheduler wakes up every 60 seconds. It only sends
+// reminders when the saved policy time matches the current Singapore time.
 const SCHEDULER_INTERVAL_MS = 60 * 1000;
 
 function getTimeInTimezone(timezone) {
@@ -75,6 +77,11 @@ function getReminderIntervals(rule) {
   return intervals.filter((interval) => Number(interval.days) > 0);
 }
 
+// PRESENTATION NOTE:
+// This processes one company's saved reminder policy.
+// Path:
+// reminder_settings -> processReminderRule -> findDueInvoicesForRule()
+// -> sendReminderEmail() -> createReminderLog()
 async function processReminderRule(rule) {
   if (!rule.enabled || rule.deliveryChannel !== "Email") {
     return;
@@ -136,6 +143,9 @@ async function processReminderRule(rule) {
   }
 }
 
+// PRESENTATION NOTE:
+// This starts the automatic customer reminder scheduler.
+// It is called from server/src/server.js after the database is ready.
 async function startReminderScheduler() {
   if (schedulerStarted) {
     return true;
