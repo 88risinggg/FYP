@@ -15,6 +15,8 @@ const {
   isDuplicateEmail
 } = require("./integrationLogService");
 
+const INVOICE_QR_CID = "invoice-qrcode@paynivo.local";
+
 const invoiceEmailPlaceholders = new Map([
   ["invoice_number", "Invoice Number"],
   ["customer_name", "Customer Name"],
@@ -145,7 +147,11 @@ function assertInvoiceEmailTemplatesValid(settings) {
 }
 
 function templateValues(invoice, settings, options = {}) {
-  const viewUrl = `${publicClientUrl()}/invoice/view/${invoice.invoiceId}`;
+  const encodedInvoiceId = encodeURIComponent(invoice.invoiceId || "");
+  const viewUrl = `${publicClientUrl()}/invoice/view/${encodedInvoiceId}`;
+  const serverUrl = String(process.env.APP_BASE_URL || process.env.CLIENT_URL || "http://localhost:5002")
+    .trim()
+    .replace(/\/+$/, "");
   const currency = settings.defaultCurrency || settings.general?.defaultCurrency || "SGD";
   return {
     invoice_number: invoice.invoiceId || "",
@@ -154,6 +160,7 @@ function templateValues(invoice, settings, options = {}) {
     due_date: formatEmailDate(invoice.due_date),
     company_name: settings.companyName || "",
     online_view_url: viewUrl,
+    pdf_url: `${serverUrl}/api/public/invoice/${encodedInvoiceId}/pdf`,
     payment_url: options.paymentUrl || viewUrl
   };
 }
@@ -228,35 +235,49 @@ function buildInvoiceEmailHtml(invoice, settings, options = {}) {
     ? options.paymentUrl
     : null;
   const viewUrl = values.online_view_url;
+  const pdfUrl = values.pdf_url;
   const invoiceLink = viewUrl;
   const primaryCta = stripeUrl || viewUrl;
 
   const secondary = "#ff5a52";
   const primary = "#061e4b";
 
-  // QR code block — uses CID inline image if available
-  const qrBlock = (stripeUrl && options.qrCodeDataUri)
-    ? `<div style="margin:20px 0;padding:20px;border:1px solid #e8ddd9;border-radius:8px;background:#fafafa;text-align:center">
-        <p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:${primary}">Scan to Pay</p>
-        <p style="margin:0 0 12px;font-size:11px;color:#7b6660">Point your phone camera at the QR code below</p>
-        <img src="cid:qrcode@invoice" alt="Scan to pay" width="140" height="140"
-          style="display:block;margin:0 auto;border:4px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.12)" />
-        <p style="margin:12px 0 0;font-size:10px;color:#9e8e89;word-break:break-all">${escapeHtml(stripeUrl)}</p>
+  // QR code block - uses CID inline image and keeps the same PNG attached.
+  const paymentBlock = stripeUrl
+    ? `<div style="padding:18px;border:1px solid #e8ddd9;border-radius:8px;background:#fafafa">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:${primary}">Payment Link</p>
+        <p style="margin:0 0 14px;font-size:11px;color:#7b6660">Open the secure payment page from the link below.</p>
+        <a href="${escapeHtml(stripeUrl)}"
+          style="display:inline-block;background:${secondary};color:#fff;padding:10px 18px;
+                 text-decoration:none;font-weight:700;font-size:12px;border-radius:4px">
+          Pay Invoice Now
+        </a>
       </div>`
-    : stripeUrl
-      ? `<div style="margin:16px 0;padding:14px 16px;border:1px solid #e8ddd9;border-radius:6px;background:#fafafa">
-          <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:${primary}">Payment Link</p>
-          <p style="margin:0;font-size:10px;color:#7b6660;word-break:break-all">${escapeHtml(stripeUrl)}</p>
-        </div>`
-      : "";
+    : `<div style="padding:18px;border:1px solid #e8ddd9;border-radius:8px;background:#fafafa">
+      <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:${primary}">Online Invoice</p>
+      <p style="margin:0;font-size:10px;color:#7b6660;word-break:break-all">${escapeHtml(viewUrl)}</p>
+    </div>`;
+  const pdfBlock = `<div style="padding:18px;border:1px solid #e8ddd9;border-radius:8px;background:#fff;text-align:center">
+        <p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:${primary}">PDF Invoice</p>
+        <p style="margin:0 0 14px;font-size:11px;color:#7b6660">The PDF is attached below. You can also open it here.</p>
+        <a href="${escapeHtml(pdfUrl)}"
+          style="display:inline-block;background:${primary};color:#fff;padding:10px 18px;
+                 text-decoration:none;font-weight:700;font-size:12px;border-radius:4px">
+          Open PDF Invoice
+        </a>
+      </div>`;
+  const actionGrid = `<div style="margin:20px 0;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    ${paymentBlock}
+    ${pdfBlock}
+  </div>`;
 
   return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:32px;color:#251E1F">
     <h1 style="margin:0 0 4px;font-size:22px;color:${primary}">${escapeHtml(values.company_name)}</h1>
     <div style="width:36px;height:3px;background:${secondary};margin-bottom:24px"></div>
 
-    <div style="white-space:pre-line;line-height:1.65;margin-bottom:20px">${escapeHtml(body)}</div>
+    ${actionGrid}
 
-    ${qrBlock}
+    <div style="white-space:pre-line;line-height:1.65;margin-bottom:20px">${escapeHtml(body)}</div>
 
     <div style="margin:24px 0">
       <a href="${escapeHtml(primaryCta)}"
@@ -294,7 +315,7 @@ async function sendInvoiceEmail(invoice, options = {}) {
   let pdfBuffer = options.pdfBuffer || null;
 
   if (settings.attachPdfInvoice !== false && !pdfBuffer) {
-    pdfBuffer = await generateInvoicePDF(hydratedInvoice, options);
+    pdfBuffer = await generateInvoicePDF(hydratedInvoice, { ...options, companyId });
   }
 
   const attachments = [];
@@ -304,18 +325,6 @@ async function sendInvoiceEmail(invoice, options = {}) {
       content: pdfBuffer,
       contentType: "application/pdf"
     });
-  }
-
-  if (options.qrCodeDataUri) {
-    const base64Data = String(options.qrCodeDataUri).split(",")[1];
-    if (base64Data) {
-      attachments.push({
-        filename: "qrcode.png",
-        content: Buffer.from(base64Data, "base64"),
-        contentType: "image/png",
-        cid: "qrcode@invoice"
-      });
-    }
   }
 
   const values = templateValues(hydratedInvoice, settings, options);

@@ -68,7 +68,8 @@ router.get("/invoice/:invoiceId/pdf", async (req, res) => {
 
   try {
     const [rows] = await pool.query(`
-      SELECT i.invoice_id, i.invoiceId, i.status, i.total_amount,
+      SELECT i.invoice_id, i.invoiceId, i.status, i.company_id,
+             i.subtotal_amount, i.tax_name, i.tax_rate, i.tax_amount, i.total_amount,
              i.issue_date, i.due_date, i.payment_url, i.qr_code_url,
              c.name AS customer_name, c.email AS customer_email, c.address AS customer_address
       FROM invoice i
@@ -108,7 +109,11 @@ router.get("/invoice/:invoiceId/pdf", async (req, res) => {
     invoice.items = items;
 
     const { generateInvoicePDF } = require("../services/pdfService");
-    const pdfBuffer = await generateInvoicePDF(invoice, { paymentUrl: invoice.payment_url });
+    const pdfBuffer = await generateInvoicePDF(invoice, {
+      paymentUrl: invoice.payment_url,
+      qrCodeDataUri: invoice.qr_code_url,
+      companyId: invoice.company_id
+    });
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${invoice.invoiceId}.pdf"`);

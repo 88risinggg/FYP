@@ -58,6 +58,34 @@ function formatMoney(value, settings = {}) {
   return `${symbol}${formatted}`;
 }
 
+function toCurrencyNumber(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? Number(numberValue.toFixed(2)) : 0;
+}
+
+function calculateInvoiceLateFee(invoice, settings, asOf = new Date()) {
+  const status = String(invoice?.status || "");
+  const dueDate = invoice?.due_date || invoice?.dueDate;
+  const isClosed = ["Paid", "Void", "Cancelled", "Refunded"].includes(status);
+  const parsedDueDate = dueDate ? new Date(dueDate) : null;
+  if (parsedDueDate) parsedDueDate.setHours(23, 59, 59, 999);
+  const dueTimestamp = parsedDueDate ? parsedDueDate.getTime() : Number.NaN;
+
+  if (isClosed || Number.isNaN(dueTimestamp) || new Date(asOf).getTime() <= dueTimestamp) {
+    return { lateFeeRate: 0, lateFeeAmount: 0, amountDue: toCurrencyNumber(invoice?.total_amount) };
+  }
+
+  const rate = Number(settings?.general?.lateFeeValue ?? settings?.lateFeePercent ?? 0);
+  const baseAmount = toCurrencyNumber(invoice?.total_amount);
+  const lateFeeAmount = rate > 0 ? toCurrencyNumber(baseAmount * (rate / 100)) : 0;
+
+  return {
+    lateFeeRate: rate > 0 ? rate : 0,
+    lateFeeAmount,
+    amountDue: toCurrencyNumber(baseAmount + lateFeeAmount),
+  };
+}
+
 // =====================================================
 // Sub-components
 // =====================================================
@@ -236,8 +264,9 @@ function SummarySection({ invoice, settings }) {
 
   const total = settings.taxInclusive ? subtotal : subtotal + taxAmount;
   const displayTotal = Number(invoice.total_amount || total);
-  const amountPaid = Math.min(displayTotal, Math.max(0, Number(invoice.amount_paid || 0)));
-  const amountDue = Math.max(0, displayTotal - amountPaid);
+  const lateFee = calculateInvoiceLateFee({ ...invoice, total_amount: displayTotal }, settings);
+  const amountPaid = Math.min(lateFee.amountDue, Math.max(0, Number(invoice.amount_paid || 0)));
+  const amountDue = Math.max(0, lateFee.amountDue - amountPaid);
   const dueDate = formatDate(invoice.due_date, settings.displayDateFormat);
   const paymentTerms = settings.paymentTerms || "Net 30";
 
@@ -268,6 +297,12 @@ function SummarySection({ invoice, settings }) {
             <td style={{ height: "10mm", padding: "2.6mm 3.5mm", border: "0.3mm solid #F0D2CA", fontSize: "7.3pt", fontWeight: 800, textTransform: "uppercase" }}>Total {currency}</td>
             <td style={{ height: "10mm", padding: "2.6mm 3.5mm", border: "0.3mm solid #F0D2CA", fontSize: "7.3pt", textAlign: "right" }}><strong>{formatMoney(displayTotal, settings)}</strong></td>
           </tr>
+          {lateFee.lateFeeAmount > 0 && (
+            <tr>
+              <td style={{ height: "10mm", padding: "2.6mm 3.5mm", border: "0.3mm solid #F0D2CA", fontSize: "7.3pt", fontWeight: 800, textTransform: "uppercase" }}>Late Fee ({lateFee.lateFeeRate}%)</td>
+              <td style={{ height: "10mm", padding: "2.6mm 3.5mm", border: "0.3mm solid #F0D2CA", fontSize: "7.3pt", textAlign: "right" }}>{formatMoney(lateFee.lateFeeAmount, settings)}</td>
+            </tr>
+          )}
           <tr>
             <td style={{ height: "10mm", padding: "2.6mm 3.5mm", border: "0.3mm solid #F0D2CA", fontSize: "7.3pt", fontWeight: 800, textTransform: "uppercase" }}>Less Amount Paid</td>
             <td style={{ height: "10mm", padding: "2.6mm 3.5mm", border: "0.3mm solid #F0D2CA", fontSize: "7.3pt", textAlign: "right" }}>{formatMoney(amountPaid, settings)}</td>
@@ -436,6 +471,14 @@ function FooterSection({ invoice: _invoice, settings }) {
           <p style={{ margin: 0, fontSize: "7pt", color: "#251E1F", paddingTop: "1.5mm" }}>{settings.paymentReferenceInstruction}</p>
         </div>
       )}
+      {settings.payoutStatement && (
+        <div style={{ display: "grid", gridTemplateColumns: "12mm 1fr", alignItems: "start", minHeight: "10mm", borderBottom: "0.3mm solid #F0D2CA", padding: "2.5mm 0" }}>
+          <div style={{ width: "8mm", height: "8mm", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "#F0D2CA", color: "#7B6660" }}>
+            <svg viewBox="0 0 24 24" width="4mm" height="4mm" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+          </div>
+          <p style={{ margin: 0, fontSize: "7pt", color: "#7B6660", paddingTop: "1.5mm" }}>{settings.payoutStatement}</p>
+        </div>
+      )}
       {settings.computerGeneratedStatement && (
         <div style={{ display: "grid", gridTemplateColumns: "12mm 1fr", alignItems: "start", minHeight: "10mm", borderBottom: "0.3mm solid #F0D2CA", padding: "2.5mm 0" }}>
           <div style={{ width: "8mm", height: "8mm", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "#F0D2CA", color: "#7B6660" }}>
@@ -464,8 +507,8 @@ function FooterSection({ invoice: _invoice, settings }) {
 
 export default function InvoiceTemplate({ invoice, settings, options = {} }) {
   const mergedSettings = useMemo(() => ({
-    primaryColor: "#251E1F",
-    secondaryColor: "#F38978",
+    primaryColor: "#061e4b",
+    secondaryColor: "#ff5a52",
     fontFamily: "Arial, Helvetica, sans-serif",
     fontSizeBase: 12,
     currencySymbol: "S$",
@@ -498,6 +541,7 @@ export default function InvoiceTemplate({ invoice, settings, options = {} }) {
     bicSwift: "",
     paynowIdentifier: "",
     paymentReferenceInstruction: "",
+    payoutStatement: "",
     computerGeneratedStatement: "",
     registeredOfficeAddress: "",
     financeEmail: "",

@@ -362,18 +362,24 @@ function buildSummarySection(invoice, settings) {
   const items = Array.isArray(invoice.items) ? invoice.items : [];
   const currency = settings.defaultCurrency || "SGD";
 
-  const subtotal = items.length
-    ? items.reduce((sum, item) => sum + Number(item.amount ?? Number(item.quantity || 0) * Number(item.unit_price || 0)), 0)
-    : Number(invoice.total_amount || 0);
+  const hasStoredSubtotal = invoice.subtotal_amount !== undefined
+    && invoice.subtotal_amount !== null
+    && invoice.subtotal_amount !== "";
+  const subtotal = hasStoredSubtotal
+    ? Number(invoice.subtotal_amount)
+    : items.length
+      ? items.reduce((sum, item) => sum + Number(item.amount ?? Number(item.quantity || 0) * Number(item.unit_price || 0)), 0)
+      : Number(invoice.total_amount || 0);
 
   const appliedTaxName = invoice.tax_name || settings.taxName || "GST";
   const appliedTaxRate = Number(invoice.tax_rate ?? settings.taxPercentage ?? 0);
   const hasStoredTaxAmount = invoice.tax_amount !== undefined && invoice.tax_amount !== null && invoice.tax_amount !== "";
+  const showTax = appliedTaxRate > 0 && (invoice.tax_rate !== undefined || settings.taxEnabled);
 
   let taxAmount = 0;
   if (hasStoredTaxAmount) {
     taxAmount = Number(invoice.tax_amount || 0);
-  } else if (settings.taxEnabled && appliedTaxRate > 0) {
+  } else if (showTax) {
     if (settings.taxInclusive) {
       taxAmount = subtotal - (subtotal / (1 + appliedTaxRate / 100));
     } else {
@@ -390,7 +396,7 @@ function buildSummarySection(invoice, settings) {
   const paymentTerms = settings.paymentTerms || "Net 30";
 
   let taxRow = "";
-  if (settings.taxEnabled && appliedTaxRate > 0) {
+  if (showTax) {
     taxRow = `<tr><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;font-weight:800;text-transform:uppercase;">${escapeHtml(appliedTaxName)} (${appliedTaxRate}%)</td><td style="height:10mm;padding:2.6mm 3.5mm;border:.3mm solid #e0e3e8;font-size:7.3pt;text-align:right;">${formatMoney(taxAmount, settings)}</td></tr>`;
   }
 
@@ -459,10 +465,8 @@ function buildStripeSection(invoice, settings, options) {
 function buildPaymentSection(invoice, settings, options) {
   const primary = settings.primaryColor || "#061e4b";
   const secondary = settings.secondaryColor || "#ff5a52";
-  const qrCode = safeUrl(options.qrCodeDataUri);
   const showBank = settings.bankDetailsDisplay;
-  const showPaynow = settings.paynowDisplay;
-  const showQr = settings.qrCodeDisplay && qrCode;
+  const showPaynow = settings.paynowDisplay && settings.paynowIdentifier;
 
   if (!showBank && !showPaynow) return "";
 
@@ -483,10 +487,7 @@ function buildPaymentSection(invoice, settings, options) {
     <div style="width:10mm;height:10mm;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${secondary};color:white;">
       <svg viewBox="0 0 24 24" width="5mm" height="5mm" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 6h6M8 10h8M8 14h5M10 18h4"/></svg>
     </div>
-    <div style="display:flex;align-items:center;gap:3mm;">
-      <p style="margin:0;font-size:7pt;">Payment via PayNow to <strong>${escapeHtml(settings.paynowIdentifier)}</strong></p>
-      ${showQr ? `<img src="${escapeHtml(qrCode)}" alt="QR" style="width:18mm;height:18mm;object-fit:contain;">` : ""}
-    </div>
+    <p style="margin:0;font-size:7pt;">Payment via PayNow to <strong>${escapeHtml(settings.paynowIdentifier)}</strong></p>
   </div>` : "";
 
   return `<section style="break-inside:avoid;border-bottom:.3mm solid #d8dce3;">
@@ -615,9 +616,10 @@ function buildInvoiceHtml(invoice, settings = defaultSettings, options = {}) {
 async function generateInvoicePDF(invoice, options = {}) {
   const puppeteer = await import("puppeteer-core");
   const hydratedInvoice = await hydrateInvoice(invoice);
+  const companyId = options.companyId || hydratedInvoice.company_id || hydratedInvoice.companyId || null;
   const settings = {
     ...defaultSettings,
-    ...(options.settings || (await getInvoiceSettings()) || {})
+    ...(options.settings || (await getInvoiceSettings(companyId)) || {})
   };
   const logoDataUri = await resolveLogoDataUri(settings.branding?.companyLogoUrl || settings.companyLogoUrl);
   const signatureDataUri = await resolveImageDataUri(settings.signatureUrl);

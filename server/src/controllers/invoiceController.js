@@ -20,6 +20,7 @@ const {
   assertInvoiceEmailTemplatesValid,
   sendInvoiceEmail
 } = require("../services/invoiceDeliveryService");
+const { publicClientUrl } = require("../services/emailTransportService");
 const { getCompanyId } = require("../utils/companyScope");
 const {
   calculateInvoiceLateFee,
@@ -92,6 +93,47 @@ function toOperationalInvoiceStatus(rowStatus, auditStatus) {
   }
 
   return "Draft";
+}
+
+function isStripeConfigurationError(error) {
+  return [
+    "StripeAuthenticationError",
+    "StripePermissionError",
+    "StripeInvalidRequestError"
+  ].includes(error?.type) || [
+    "api_key_expired",
+    "secret_key_required"
+  ].includes(error?.code);
+}
+
+function fallbackPaymentUrl(invoice) {
+  return `${publicClientUrl()}/invoice/view/${invoice.invoiceId}`;
+}
+
+async function resolveInvoicePaymentLink(invoice) {
+  const { createCheckoutSession } = require("../services/stripeService");
+
+  try {
+    const stripeResult = await createCheckoutSession(invoice);
+    return {
+      paymentUrl: stripeResult.paymentUrl,
+      sessionId: stripeResult.sessionId,
+      provider: stripeResult.provider || "stripe",
+      warning: null
+    };
+  } catch (error) {
+    if (!isStripeConfigurationError(error)) {
+      throw error;
+    }
+
+    console.warn(`[SEND] Stripe payment link unavailable for ${invoice.invoiceId}: ${error.message}`);
+    return {
+      paymentUrl: fallbackPaymentUrl(invoice),
+      sessionId: null,
+      provider: "invoice_view",
+      warning: "Stripe payment link could not be created, so the invoice view link was sent instead."
+    };
+  }
 }
 
 /**
@@ -636,6 +678,10 @@ async function sendInvoice(req, res) {
           i.invoiceId,
           i.status,
           i.company_id,
+          i.subtotal_amount,
+          i.tax_name,
+          i.tax_rate,
+          i.tax_amount,
           i.total_amount,
           i.due_date,
           i.customer_id,
@@ -695,11 +741,11 @@ async function sendInvoice(req, res) {
     const adminSettings = (await getInvoiceSettings(companyId)) || invoiceDefaults;
     assertInvoiceEmailTemplatesValid(adminSettings);
 
-    // Create Stripe Checkout Session (only if online payments enabled)
-    const { createCheckoutSession } = require("../services/stripeService");
-    const stripeResult = await createCheckoutSession(invoice);
-    const paymentUrl = stripeResult.paymentUrl;
-    const sessionId = stripeResult.sessionId;
+    // Create Stripe Checkout Session when available. During testing, an invalid
+    // Stripe key should not block real SMTP delivery of the invoice email.
+    const paymentLink = await resolveInvoicePaymentLink(invoice);
+    const paymentUrl = paymentLink.paymentUrl;
+    const sessionId = paymentLink.sessionId;
 
     // Generate QR Code (only if Admin has enabled QR display)
     const { generateQRCode } = require("../services/qrCodeService");
@@ -723,7 +769,7 @@ async function sendInvoice(req, res) {
     const { generateInvoicePDF } = require("../services/pdfService");
     let pdfBuffer = null;
     try {
-      pdfBuffer = await generateInvoicePDF(invoice, { paymentUrl, qrCodeDataUri });
+      pdfBuffer = await generateInvoicePDF(invoice, { paymentUrl, qrCodeDataUri, companyId });
     } catch (pdfError) {
       console.error("[SEND] PDF generation failed:", pdfError.message);
     }
@@ -732,7 +778,8 @@ async function sendInvoice(req, res) {
     const delivery = await sendInvoiceEmail(invoice, {
       pdfBuffer,
       paymentUrl,
-      qrCodeDataUri
+      qrCodeDataUri,
+      companyId
     });
 
     // Update status to Sent and clear schedule
@@ -745,7 +792,13 @@ async function sendInvoice(req, res) {
       newValue: "Sent"
     });
     await writeAuditLog(connection, "invoice_sent", "invoice", invoiceId, req.user?.userId, {
-      newValue: JSON.stringify({ ...delivery, emailType: "Invoice Issued", triggerSource: "Finance" })
+      newValue: JSON.stringify({
+        ...delivery,
+        emailType: "Invoice Issued",
+        triggerSource: "Finance",
+        paymentLinkProvider: paymentLink.provider,
+        paymentLinkWarning: paymentLink.warning
+      })
     });
 
     await connection.commit();
@@ -763,6 +816,8 @@ async function sendInvoice(req, res) {
       invoice_id: invoiceId,
       status: "Sent",
       payment_url: paymentUrl,
+      payment_link_provider: paymentLink.provider,
+      payment_link_warning: paymentLink.warning,
       qr_code: qrCodeDataUri ? true : false
     });
   } catch (error) {

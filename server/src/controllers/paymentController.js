@@ -157,7 +157,7 @@ async function createStripePaymentLink(req, res) {
 
   try {
     const [rows] = await pool.query(
-      `SELECT i.invoice_id, i.invoiceId, i.total_amount, i.status, i.payment_url, c.email
+      `SELECT i.invoice_id, i.invoiceId, i.company_id, i.total_amount, i.status, i.payment_url, c.email
        FROM invoice i INNER JOIN customer c ON c.customer_id = i.customer_id
        WHERE i.invoice_id = ? LIMIT 1`,
       [invoiceId]
@@ -167,7 +167,7 @@ async function createStripePaymentLink(req, res) {
     const invoice = rows[0];
     const paymentCheck = await ensureInvoiceCanBePaid(pool, invoiceId);
     if (!paymentCheck.allowed) return res.status(400).json({ message: paymentCheck.message });
-    const settings = await getInvoiceSettings();
+    const settings = await getInvoiceSettings(invoice.company_id || null);
     const lateFee = calculateInvoiceLateFee(invoice, settings);
     const payableAmount = lateFee.amountDue;
 
